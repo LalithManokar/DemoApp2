@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_handling_based_cost_get_info" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_anna_privilege_check"/>
+  <localVariables>
+    <variable id="COST_DATASET_ID" parameter="true">
+      <descriptions defaultDescription="COST_DATASET_ID"/>
+      <variableProperties datatype="BIGINT" defaultValue="" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_NAME" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="HANDLING_TYPE" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="HANDLING_TYPE_DESC" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="FROM_MOT" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="FROM_MOT_DESC" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="TO_MOT" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="TO_MOT_DESC" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_TYPE" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="UOM_CODE" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="UOM_DESC" length="200"/>
+        <viewAttribute datatype="DECIMAL" id="COST" length="13" scale="3"/>
+        <viewAttribute datatype="VARCHAR" id="DATA_SOURCE_CODE" length="20"/>
+        <viewAttribute datatype="TIMESTAMP" id="LAST_MODIFIED_ON"/>
+        <viewAttribute datatype="INTEGER" id="WILD_STAR_COUNT"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#COST_DATASET_ID</localVariable>
+      <definition> 
+  
+ BEGIN
+ 
+    VAR_OUT = SELECT T1.LOCATION_NAME,
+    T1.HANDLING_TYPE, T5.DESC AS HANDLING_TYPE_DESC,
+    T1.FROM_MOT,T6.DESC AS FROM_MOT_DESC,
+    T1.TO_MOT,T7.DESC AS TO_MOT_DESC,
+    T1.RESOURCE_TYPE,
+    T1.UOM_CODE,T8.DESC AS UOM_DESC,
+    T1.COST,T1.DATA_SOURCE_CODE,
+    T1.LAST_MODIFIED_ON,T1.WILD_STAR_COUNT
+    FROM &quot;sap.tm.trp.db.costmodel::t_handling_based_cost&quot; T1
+    INNER JOIN
+    (
+            SELECT T2.CODE,IFNULL(A.DESC,T2.DESC) AS DESC
+            FROM &quot;sap.tm.trp.db.costmodel::t_handling_type&quot; T2
+            LEFT OUTER JOIN  
+            (
+	             SELECT T3.HANDLING_TYPE_CODE,T3.DESC
+	             FROM &quot;sap.tm.trp.db.costmodel::t_handling_type_t&quot; T3 
+	             INNER JOIN &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot; T4 ON (T3.LANG_CODE = T4.SPRAS)
+             )A ON (T2.CODE = A.HANDLING_TYPE_CODE)
+     )T5 ON (T1.HANDLING_TYPE = T5.CODE)
+    INNER JOIN
+    (
+            SELECT CODE,DESC
+           FROM &quot;sap.tm.trp.db.semantic.common::v_transportation_means&quot; 
+           UNION SELECT '*' AS CODE, '*' AS DESC FROM DUMMY
+           UNION SELECT '' AS CODE, '' AS DESC FROM DUMMY
+     )T6 ON (T1.FROM_MOT = T6.CODE)
+     INNER JOIN
+    (
+           SELECT CODE,DESC
+           FROM &quot;sap.tm.trp.db.semantic.common::v_transportation_means&quot; 
+           UNION SELECT '*' AS CODE, '*' AS DESC FROM DUMMY
+           UNION SELECT '' AS CODE, '' AS DESC FROM DUMMY
+     )T7 ON (T1.TO_MOT = T7.CODE)
+    INNER JOIN
+    (
+           SELECT T2.CODE,IFNULL(A.DESC ,T2.DESC) AS DESC
+            FROM &quot;sap.tm.trp.db.costmodel::t_uom&quot; T2
+            LEFT OUTER JOIN 
+            ( 
+	                SELECT T3.UOM_CODE,T3.DESC
+	                FROM &quot;sap.tm.trp.db.costmodel::t_uom_t&quot; T3 
+	                INNER JOIN &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot; T4 ON (T3.LANG_CODE = T4.SPRAS)
+             )A ON (T2.CODE = A.UOM_CODE)
+     )T8 ON (T1.UOM_CODE = T8.CODE)
+    WHERE COST_DATASET_ID = :COST_DATASET_ID;
+
+END 
+</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="LOCATION_NAME" order="1">
+        <descriptions defaultDescription="FROM_LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_NAME"/>
+      </attribute>
+      <attribute id="HANDLING_TYPE" order="2">
+        <descriptions defaultDescription="TO_LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="HANDLING_TYPE"/>
+      </attribute>
+      <attribute id="HANDLING_TYPE_DESC" order="3">
+        <descriptions defaultDescription="HANDLING_TYPE_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="HANDLING_TYPE_DESC"/>
+      </attribute>
+      <attribute id="FROM_MOT" order="4">
+        <descriptions defaultDescription="TRANSPORTATION_MODE_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="FROM_MOT"/>
+      </attribute>
+      <attribute id="FROM_MOT_DESC" order="5">
+        <descriptions defaultDescription="FROM_MOT_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="FROM_MOT_DESC"/>
+      </attribute>
+      <attribute id="TO_MOT" order="6">
+        <descriptions defaultDescription="RESOURCE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="TO_MOT"/>
+      </attribute>
+      <attribute id="TO_MOT_DESC" order="7">
+        <descriptions defaultDescription="TO_MOT_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="TO_MOT_DESC"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE" order="8">
+        <descriptions defaultDescription="CARRIER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE"/>
+      </attribute>
+      <attribute id="UOM_CODE" order="9">
+        <descriptions defaultDescription="UOM_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="UOM_CODE"/>
+      </attribute>
+      <attribute id="UOM_DESC" order="10">
+        <descriptions defaultDescription="UOM_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="UOM_DESC"/>
+      </attribute>
+      <attribute id="DATA_SOURCE_CODE" order="12">
+        <descriptions defaultDescription="DATA_SOURCE_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="DATA_SOURCE_CODE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="COST" order="11" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="COST"/>
+        <measureMapping columnObjectName="Script_View" columnName="COST"/>
+      </measure>
+      <measure id="LAST_MODIFIED_ON" order="13" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="LAST_MODIFIED_ON"/>
+        <measureMapping columnObjectName="Script_View" columnName="LAST_MODIFIED_ON"/>
+      </measure>
+      <measure id="WILD_STAR_COUNT" order="14" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="WILD_STAR_COUNT"/>
+        <measureMapping columnObjectName="Script_View" columnName="WILD_STAR_COUNT"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

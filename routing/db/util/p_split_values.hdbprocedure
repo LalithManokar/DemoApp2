@@ -1,0 +1,41 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.util::p_split_values" ( 
+    IN str VARCHAR(255),
+    IN separator CHAR,
+	OUT str_tab TABLE(sequence INTEGER, VALUE VARCHAR(50))
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING"
+   READS SQL DATA AS
+BEGIN
+    
+    -- Start from the second value
+    DECLARE start_pos INTEGER = 1;
+    DECLARE length INTEGER;
+    DECLARE end_pos INTEGER;
+    DECLARE index INTEGER;
+    
+    SELECT LENGTH(:str) INTO length FROM DUMMY;
+    
+    index = 1;
+	WHILE :start_pos <= :length DO
+	
+		SELECT LOCATE(:str, :separator, :start_pos) INTO end_pos
+		FROM DUMMY;
+		
+		-- Return all the rest
+		IF :end_pos = 0 THEN
+		    end_pos = length + 1;
+		END IF;
+		
+		str_tab = SELECT index AS sequence, 
+		SUBSTR(:str, :start_pos, :end_pos - :start_pos) AS value
+		FROM DUMMY
+		UNION ALL
+		SELECT *
+		FROM :str_tab;
+		index = index + 1;
+		start_pos = :end_pos + 1;
+	END WHILE;
+    
+END

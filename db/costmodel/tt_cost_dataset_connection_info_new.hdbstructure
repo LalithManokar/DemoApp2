@@ -1,0 +1,14 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "used for validate equipment types";
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; },
+    {name = "CURRENCY_CODE"; sqlType = NVARCHAR; length = 20; nullable = false;},
+    {name = "CONNECTION_TYPE_CODE"; sqlType = NVARCHAR; length = 20; nullable = true;},
+    {name = "DEFAULT_UOM_CODE"; sqlType = NVARCHAR; length = 20; nullable = true;},
+    {name = "PURCHASE_ORG_ID"; sqlType = NVARCHAR; length = 20; nullable = true;},
+    {name = "AGREEMENT_ID"; sqlType = NVARCHAR; length = 20; nullable = true;},
+    {name = "PROFILE_ID"; sqlType = NVARCHAR; length = 40; nullable = true;},
+    {name = "PRIORITY"; sqlType = INTEGER; },
+    {name = "COST_TYPE_CODE"; sqlType = VARCHAR; length = 20;}
+];

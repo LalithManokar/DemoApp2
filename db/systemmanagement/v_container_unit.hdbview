@@ -1,0 +1,7 @@
+schema = "SAP_TM_TRP"; 
+     
+query = "SELECT UNIT_CODE 
+         FROM \"sap.tm.trp.db.systemmanagement.user::t_unit_configuration\"
+         WHERE UNIT_TYPE = 'CONTAINER_PC'";
+
+depends_on_table = ["sap.tm.trp.db.systemmanagement.user::t_unit_configuration"];

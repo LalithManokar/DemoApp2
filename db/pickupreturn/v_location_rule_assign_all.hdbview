@@ -1,0 +1,76 @@
+schema="SAP_TM_TRP";
+query="SELECT 
+		a.RUN_ID,
+		a.RULE_ID,
+		a.TU_ID,
+		a.USER,
+		a.EXECUTION_STATUS_CODE,
+		a.SHIPPER_ID,
+		a.CONSIGNEE_ID,
+		a.RESOURCE_TYPE,
+		a.QUANTITY,
+		a.SOURCE_LOCATION_ID,
+		a.DESTINATION_LOCATION_ID,
+		a.STREETTURN_TU_ID,
+		a.POL,
+		a.POD,
+		a.DATE,
+		a.PRE_LOCATION_ID,
+		a.CUR_LOCATION_ID,
+		a.PRE_DATE,
+		a.CUR_DATE,
+		a.FLAG,
+		a.OP_SETTING_TYPE,
+		a.EXECUTION_TIME,
+		a.SCHEDULE_TIME_TYPE,
+		a.EXECUTION_BY,
+		a.AYSNC_TM_UPD,		
+		b.STATUS,
+		b.MESSAGE,
+		a.status as PROCESS_STATUS,
+		a.CUR_LOCATION,
+		a.PRE_LOCATION
+		FROM \"sap.tm.trp.db.pickupreturn::t_location_rule_assign_result\" a
+		LEFT JOIN \"sap.tm.trp.db.semantic.order::v_log_update\" b
+		on a.RUN_ID = b.RUN_ID and a.RULE_ID = b.RULE_ID and a.TU_ID = b.TU_ID and a.USER = b.CREATED_BY
+		--WHERE (a.RUN_ID,a.RULE_ID,a.TU_ID) NOT IN (select RUN_ID,RULE_ID,TU_ID from \"sap.tm.trp.db.pickupreturn::t_location_rule_assign_error\")
+		WHERE (a.AYSNC_TM_UPD <> 2 or a.AYSNC_TM_UPD is null)
+		UNION ALL
+		SELECT 
+		a.RUN_ID,
+		a.RULE_ID,
+		a.TU_ID,
+		a.USER,
+		a.EXECUTION_STATUS_CODE,
+		a.SHIPPER_ID,
+		a.CONSIGNEE_ID,
+		a.RESOURCE_TYPE,
+		a.QUANTITY,
+		a.SOURCE_LOCATION_ID,
+		a.DESTINATION_LOCATION_ID,
+		a.STREETTURN_TU_ID,
+		a.POL,
+		a.POD,
+		a.DATE,
+		a.PRE_LOCATION_ID,
+		a.CUR_LOCATION_ID,
+		a.PRE_DATE,
+		a.CUR_DATE,
+		a.FLAG,
+		a.OP_SETTING_TYPE,
+		a.EXECUTION_TIME,
+		a.SCHEDULE_TIME_TYPE,
+		a.EXECUTION_BY,	
+		NULL AS AYSNC_TM_UPD,	
+		'F' AS STATUS,
+		a.ERROR_MMESSAGE AS MESSAGE,
+		NULL as PROCESS_STATUS,
+		NULL as CUR_LOCATION, 
+		NULL as PRE_LOCATION 
+		FROM \"sap.tm.trp.db.pickupreturn::t_location_rule_assign_error\" a";
+
+depends_on_table=[    
+    "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result",
+    "sap.tm.trp.db.pickupreturn::t_location_rule_assign_error"];
+depends_on_view=[    
+    "sap.tm.trp.db.semantic.order::v_log_update"];

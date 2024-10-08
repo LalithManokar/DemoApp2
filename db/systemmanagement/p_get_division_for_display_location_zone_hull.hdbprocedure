@@ -1,0 +1,46 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_get_division_for_display_location_zone_hull" (
+    IN IN_POLYGON CLOB,
+    IN IN_CURRENT_ID VARCHAR(32),
+    --20150108 change dynamic sql to normal
+    OUT DIVISION_POINT "sap.tm.trp.db.systemmanagement::tt_division_point",
+    OUT OUT_LOCATIONS_XPOS_YPOS_INVALID  "sap.tm.trp.db.pipeline::tt_location_info_list" 
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+    DECLARE TMP_MULTIPOINTS CLOB;
+    DECLARE LOC_NO INTEGER;
+    DECLARE has_output INTEGER;
+    
+    SELECTED_IDS = SELECT LOCATION_ID AS ID
+                   FROM "sap.tm.trp.db.semantic.location::v_zone_location"
+                   WHERE ZONE_ID = :IN_CURRENT_ID;
+                   
+     OUT_LOCATIONS_XPOS_YPOS_INVALID =
+    SELECT T2.ID AS LOCATION_ID,T2.NAME AS LOCATION_NAME, T2.XPOS, T2.YPOS
+      FROM
+		:SELECTED_IDS T1 
+		INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T2 ON (T1.ID = T2.ID)
+		WHERE (T2.XPOS IS NULL OR T2.YPOS IS NULL) OR (ABS(T2.XPOS) + ABS(T2.YPOS) =0);
+    
+    tmp1 = SELECT NULL AS COUNTRY_CODE, NULL AS STATE_CODE FROM DUMMY;
+    tmp2 = SELECT NULL AS COUNTRY_CODE,NULL AS POSTAL_CODE_FROM, NULL AS POSTAL_CODE_TO FROM DUMMY;
+    tmp3 = SELECT NULL AS ZONEID FROM DUMMY;    
+    CALL "sap.tm.trp.db.systemmanagement::p_get_boundary_for_zone"(1,:SELECTED_IDS,:tmp1,:tmp2,:tmp3,TMP_MULTIPOINTS_TAB);      
+    
+    SELECT COUNT(1) INTO has_output FROM :tmp_multipoints_tab;
+    
+    IF has_output != 0 THEN
+    
+	    SELECT GEOTEXT,NUM INTO TMP_MULTIPOINTS,LOC_NO FROM :TMP_MULTIPOINTS_TAB;   
+		
+		
+	    DIVISION_POINT = SELECT NEW ST_MultiPoint(TO_VARCHAR( :TMP_MULTIPOINTS )).ST_ConvexHull().ST_AsText() AS BOUNDARY,  TO_VARCHAR( :LOC_NO) AS LOCATION_NO 
+	            FROM DUMMY WHERE NEW ST_MultiPoint(TO_VARCHAR( :TMP_MULTIPOINTS )).ST_INTERSECTS(ST_GeomFromText( :IN_POLYGON)) = 1 ;
+	ELSE
+		DIVISION_POINT = SELECT NULL AS BOUNDARY, NULL AS LOCATION_NO FROM DUMMY;
+    
+    END IF; 
+END;

@@ -1,0 +1,24 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_get_default_node_by_executionids" (
+IN EXECUTION_ID_LIST "sap.tm.trp.db.pipeline::tt_id_list",
+OUT NODE_ID_LIST "sap.tm.trp.db.pipeline::tt_execution_node_id_list") 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+	-- To avoid double maintain the logic, here call the sap.tm.trp.db.pipeline::p_get_default_node_by_executionid direclty.
+	DECLARE CURSOR EXECUTION_ID_CUR FOR SELECT ID FROM :EXECUTION_ID_LIST;
+	DECLARE FLAG INTEGER := 0;
+	DECLARE NODE_ID BIGINT;
+	
+	FOR EXECUTION AS EXECUTION_ID_CUR DO
+		CALL "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid"(EXECUTION.ID, NODE_ID);
+		IF (:FLAG = 0) THEN
+			NODE_ID_LIST = SELECT EXECUTION.ID AS EXECUTION_ID, :NODE_ID AS NODE_ID FROM DUMMY;
+			FLAG := 1;
+		ELSE
+			NODE_ID_LIST = (SELECT EXECUTION.ID AS EXECUTION_ID, :NODE_ID AS NODE_ID  FROM DUMMY ) UNION (SELECT EXECUTION_ID, NODE_ID FROM :NODE_ID_LIST);
+		END IF;
+	END FOR;
+	
+END;

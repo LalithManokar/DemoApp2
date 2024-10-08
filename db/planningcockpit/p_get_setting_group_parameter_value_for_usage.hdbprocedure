@@ -1,0 +1,74 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_setting_group_parameter_value_for_usage" (
+	IN NETWORK_SETTING_GROUP_ID BIGINT,
+	IN USAGE VARCHAR(50),
+	OUT OUTPUT TABLE (NAME NVARCHAR(50), VALUE NVARCHAR(50))
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA 
+AS
+BEGIN
+    DECLARE SEARCH_STR VARCHAR(50);
+    DECLARE USAGE_PATH VARCHAR(10) = 'PATH';
+    DECLARE USAGE_ROUTE VARCHAR(10) = 'ROUTE';
+    DECLARE PARAM_NAME_COST_MODEL_ID NVARCHAR(50) = 'COST_MODEL_ID';
+    DECLARE PARAM_NAME_OPTIONAL_COST_MODEL_ID NVARCHAR(50) = 'OPTIONAL_COST_MODEL_ID';
+    DECLARE PARAM_NAME_BASE_RESOURCE_TYPE NVARCHAR(50) = 'BASE_RESOURCE_TYPE';
+    DECLARE DATA_TYPE_BOOLEAN VARCHAR(20) = 'Boolean'; -- Be careful to the case
+    DECLARE V_RESOURCE_CATEGORY_TYPE VARCHAR(5);
+    
+    SELECT '%' || :USAGE || '%' INTO SEARCH_STR FROM DUMMY;    
+    
+        SELECT RESOURCE_CATEGORY_TYPE INTO V_RESOURCE_CATEGORY_TYPE 
+          FROM "sap.tm.trp.db.planningcockpit::t_network_setting_group" A
+    INNER JOIN "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings" B
+            ON A.RESOURCE_CATEGORY=B.CODE
+         WHERE A.ID = :NETWORK_SETTING_GROUP_ID;   
+           
+    
+    -- Get parameter values match usage type
+    -- For path usage, always return mandatory(primary) cost model
+    -- Returns optional cost model for other usage type and if the value is maintained
+    OUTPUT =
+	SELECT T1.CODE AS NAME, T0.VALUE
+	FROM "sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_value" T0
+	INNER JOIN "sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter" T1
+	ON T1.ID = T0.PARAMETER_ID
+	WHERE T0.NETWORK_SETTING_GROUP_ID = :NETWORK_SETTING_GROUP_ID AND 
+	(T1.USAGE = :USAGE OR T1.USAGE LIKE :SEARCH_STR)
+	AND (T1.VALUE_TYPE <> :DATA_TYPE_BOOLEAN OR T0.VALUE <> '0')
+	UNION ALL
+	SELECT PARAM_NAME_COST_MODEL_ID AS NAME, 
+	CASE :USAGE WHEN :USAGE_PATH THEN TO_NVARCHAR(MANDATORY_COST_MODEL_ID) 
+	ELSE TO_NVARCHAR(IFNULL(OPTIONAL_COST_MODEL_ID, MANDATORY_COST_MODEL_ID)) 
+	END AS VALUE
+	FROM "sap.tm.trp.db.planningcockpit::t_network_setting_group" T0
+    WHERE T0.ID = :NETWORK_SETTING_GROUP_ID
+    UNION ALL
+    SELECT PARAM_NAME_OPTIONAL_COST_MODEL_ID AS NAME, 
+    TO_NVARCHAR(OPTIONAL_COST_MODEL_ID) AS VALUE
+	FROM "sap.tm.trp.db.planningcockpit::t_network_setting_group" T0
+    WHERE T0.ID = :NETWORK_SETTING_GROUP_ID
+    UNION ALL
+    SELECT :PARAM_NAME_BASE_RESOURCE_TYPE AS NAME, 
+	T0.BASE_RESOURCE_TYPE AS VALUE
+	FROM "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings" T0
+	INNER JOIN "sap.tm.trp.db.planningcockpit::t_network_setting_group" T1 ON T1.RESOURCE_CATEGORY = T0.CODE AND T1.ID = :NETWORK_SETTING_GROUP_ID
+    WHERE T0.BASE_RESOURCE_TYPE IS NOT NULL AND T0.BASE_RESOURCE_TYPE <> '';
+    
+   IF  :V_RESOURCE_CATEGORY_TYPE='RC'
+   
+   THEN OUTPUT = SELECT NAME , VALUE 
+                   FROM :OUTPUT 
+                  UNION 
+                 SELECT 'MTR' AS NAME,A.CODE AS VALUE
+                   FROM "sap.tm.trp.db.planningcockpit.railcarmtr::v_transportation_means_railcar"  A
+             INNER JOIN "sap.tm.trp.db.planningcockpit::t_network_setting_group" B
+                     ON A.RESOURCE_CATEGORY=B.RESOURCE_CATEGORY
+                  WHERE B.ID = :NETWORK_SETTING_GROUP_ID;   
+                  
+   END IF;               
+    
+
+END;

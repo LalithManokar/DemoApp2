@@ -1,0 +1,17 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_ext_geo_group_delete"(
+    IN ID VARCHAR(22),
+    IN TYPE INTEGER
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    IF :TYPE = 1 THEN
+        CALL "sap.tm.trp.db.systemmanagement::p_ext_location_group_delete"(:ID);
+    ELSEIF :TYPE = 2 THEN
+        CALL "sap.tm.trp.db.systemmanagement::p_ext_zone_group_delete"(:ID);
+    ELSEIF :TYPE = 3 THEN
+        CALL "sap.tm.trp.db.systemmanagement::p_ext_region_group_delete"(:ID);
+    END IF;
+END;

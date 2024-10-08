@@ -1,0 +1,17 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+  {name = "ID"; sqlType = VARCHAR; length = 22; nullable = false;},
+  {name = "DESC"; sqlType = VARCHAR; length = 50; nullable = false;},
+  {name = "VISIBLE_FLAG"; sqlType = VARCHAR; length = 3; nullable = false; comment="'P' for personal limit, 'G' for global visibility.";},
+  {name = "CREATE_BY"; sqlType = BIGINT; comment="create user id";},
+  {name = "CREATE_AT"; sqlType = TIMESTAMP;},
+  {name = "LAST_MODIFIED_BY"; sqlType = BIGINT;},
+  {name = "LAST_MODIFIED_AT"; sqlType = TIMESTAMP;},
+  {name = "CODE";sqlType = NVARCHAR; length = 20; nullable = true;unique = true;},
+  {name = "RESOURCE_CATEGORY";sqlType = VARCHAR; length = 50;}
+];
+table.indexes = [
+  {name = "EQUIPMENT_GROUP_DESC_INDEX"; unique = true; indexColumns = ["DESC"];}
+];
+table.primaryKey.pkcolumns = ["ID", "RESOURCE_CATEGORY"];

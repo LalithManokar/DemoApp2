@@ -1,0 +1,185 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline.operator.instant::p_calc_provisional_stock" ( 
+IN demand "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+IN stock "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+IN supply "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+IN time_interval "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+OUT balance "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets")
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+ DECLARE v_first_time_interval BIGINT;
+ SELECT TOP 1 time_interval_id INTO v_first_time_interval FROM :time_interval ORDER BY SEQUENCE;
+ 
+   -- The way to calculate provisional stock is as following(for each location&equip type):
+    -- ASSUME 7 time intervals being passed
+   -- step 1 - add supply and demand records and Fill in for missing value with zero(0) 
+   -- TIME_INTERVAL_ID, SUPPLY_VALUE, DEMAND_VALUE  
+   --       1            S1                0                
+   --       1            0                 D1    
+   --       4            0                 D2    
+   --       6            S2                0 
+   --step 2 - find difference between
+   -- TIME_INTERVAL_ID, SD_SUB
+   --       1            S1-D1
+   --       4            0-D2
+   --       6            S2-0
+   --step 3 - find unquie location, resource combination  record from all 3 inputs - SUPPLY, DEMAND, STOCK
+   --step 4 - combine location,resource of SUPPLY DEMAND STOCK to fill gap 
+   --step 5 - generate time interval records for missing nodes with output_value zero(0)
+   -- TIME_INTERVAL_ID, SD_SUB
+   --       2            0
+   --       3            0
+   --       5            0
+   --       7            0
+   --step 6 - add gap filer records with SUPPLY and DEMAND agrregated records
+   -- TIME_INTERVAL_ID, SD_SUB
+   --       1            S1-D1
+   --       2              0
+   --       3              0
+   --       4            0-D2
+   --       5              0
+   --       6            S2-0
+   --       7              0
+   --step 7 - applying functions to calculate cummulative sum 
+   -- TIME_INTERVAL_ID,  LEAD_SD_SUB , CUM_SD_SUB
+   --       1              0                0
+   --       2            S1-D1            (S1-D1)
+   --       3              0              (S1-D1) + 0 
+   --       4              0              (S1-D1) + 0 + 0
+   --       5            0-D2             (S1-D1) + 0 + 0 + (0-D2)
+   --       6              0              (S1-D1) + 0 + 0 + (0-D2) + 0
+   --       7            S2-0             (S1-D1) + 0 + 0 + (0-D2) + 0 + (S2-0)
+   --step 8 - join STOCK - add the CURRENT_STOCK to each CUM_SD_SUB
+    -- TIME_INTERVAL_ID,  CUM_SD_SUB                    STOCK 
+   --       1              0                              STO1  
+   --       2            (S1-D1)                        (S1-D1) + ST01    
+   --       3            (S1-D1)                        (S1-D1) + ST01    
+   --       4            (S1-D1)                        (S1-D1) + ST01    
+   --       5            (S1-D1) + (0-D2)               (S1-D1) + (0-D2) + ST01
+   --       6            (S1-D1) + (0-D2)               (S1-D1) + (0-D2) + ST01
+   --       7            (S1-D1) + (0-D2) + (S2-0)      (S1-D1) + (0-D2) + (S2-0) + ST01
+   
+--STEP 1
+--add supply and demand records and Fill in for missing value with zero(0) 
+lt_sup_dem=SELECT GEO_ID,
+                    GEO_NAME,GEO_FILTER_TYPE,
+                    EQUIP_TYPE,EQUIP_NAME,EQUIP_FILTER_TYPE,
+                    TIME_INTERVAL_ID,SEQUENCE,
+                    START_TIME,END_TIME,INTER_SECONDS,
+                    OUTPUT_VALUE as SUPPLY_VALUE, 
+                    0 as DEMAND_VALUE, 
+                    UNIT
+                FROM :supply
+                    UNION 
+                SELECT GEO_ID,
+                    GEO_NAME,GEO_FILTER_TYPE,
+                    EQUIP_TYPE,EQUIP_NAME,EQUIP_FILTER_TYPE,
+                    TIME_INTERVAL_ID,SEQUENCE,
+                    START_TIME,END_TIME,INTER_SECONDS,
+                    0 as SUPPLY_VALUE, 
+                    OUTPUT_VALUE as DEMAND_VALUE,
+                    UNIT
+                FROM :demand;
+
+--STEP 2
+--aggregate supply,demand then sum it and find difference between
+lt_sup_dem_agg=SELECT GEO_ID,GEO_NAME,GEO_FILTER_TYPE,
+                        EQUIP_TYPE,EQUIP_NAME,EQUIP_FILTER_TYPE,
+                        TIME_INTERVAL_ID,SEQUENCE,
+                        START_TIME,END_TIME,INTER_SECONDS,
+                        (SUM(SUPPLY_VALUE) - SUM(DEMAND_VALUE)) as SD_SUB,
+                        UNIT
+                    FROM :lt_sup_dem
+                    GROUP BY GEO_ID,GEO_NAME,GEO_FILTER_TYPE,
+                            EQUIP_TYPE,EQUIP_NAME,EQUIP_FILTER_TYPE,TIME_INTERVAL_ID, 
+                            SEQUENCE,START_TIME,END_TIME,INTER_SECONDS,UNIT;
+
+--STEP 3
+--find unique location,resource of SUPPLY and DEMAND agrregated records
+lt_sup_dem_uniq=
+                SELECT DISTINCT GEO_ID,GEO_NAME,GEO_FILTER_TYPE,
+                        EQUIP_TYPE,EQUIP_NAME,EQUIP_FILTER_TYPE,UNIT
+                    FROM :lt_sup_dem_agg;
+                                
+----find unique location,resource of STOCK excluding location,resource combination records already exist in SUPPLY and DEMAND agrregated records
+lt_stock_uniq=
+                    SELECT DISTINCT T1.GEO_ID,T1.GEO_NAME,T1.GEO_FILTER_TYPE,
+                            T1.EQUIP_TYPE,T1.EQUIP_NAME,T1.EQUIP_FILTER_TYPE,T1.UNIT
+                        FROM :stock AS T1
+                        WHERE NOT EXISTS ( SELECT 1 FROM :lt_sup_dem_uniq T2 
+                                            WHERE T1.GEO_ID=T2.GEO_ID 
+                                            AND T1.EQUIP_TYPE=T2.EQUIP_TYPE
+                                        );
+--STEP 4
+-- combine location,resource of SUPPLY DEMAND STOCK to fill gap
+lt_sup_dem_stock_uniq=
+                    SELECT * FROM :lt_sup_dem_uniq
+                        UNION ALL 
+                    SELECT * FROM :lt_stock_uniq;
+                    
+--STEP 5
+--generate time interval records for missing nodes with output_value zero(0)
+lt_sup_dem_stock_gap=
+                    SELECT T2.GEO_ID,T2.GEO_NAME,T2.GEO_FILTER_TYPE,
+                        T2.EQUIP_TYPE,T2.EQUIP_NAME,T2.EQUIP_FILTER_TYPE,
+                        T1.TIME_INTERVAL_ID,T1.SEQUENCE,T1.START_TIME,T1.END_TIME,T1.INTER_SECONDS,
+                        0 AS SD_SUB,
+                        T2.UNIT
+                        FROM :time_interval AS T1,
+                            :lt_sup_dem_stock_uniq AS T2
+                        WHERE NOT EXISTS(SELECT 1 FROM :lt_sup_dem_agg AS T3 
+                                                    WHERE T2.GEO_ID=T3.GEO_ID 
+                                                    AND T2.EQUIP_TYPE=T3.EQUIP_TYPE
+                                                    AND T1.TIME_INTERVAL_ID=T3.TIME_INTERVAL_ID
+                                        );
+
+--STEP 6
+--add gap filer records with SUPPLY and DEMAND agrregated records
+lt_sup_dem_full = SELECT GEO_ID,GEO_NAME,GEO_FILTER_TYPE,
+                            EQUIP_TYPE,EQUIP_NAME,EQUIP_FILTER_TYPE,
+                            TIME_INTERVAL_ID,SEQUENCE,START_TIME,END_TIME,INTER_SECONDS,
+                            SD_SUB,UNIT 
+                        FROM :lt_sup_dem_agg
+                        UNION ALL
+                        SELECT GEO_ID,GEO_NAME,GEO_FILTER_TYPE,
+                            EQUIP_TYPE,EQUIP_NAME,EQUIP_FILTER_TYPE,
+                            TIME_INTERVAL_ID,SEQUENCE,START_TIME,END_TIME,INTER_SECONDS,
+                            SD_SUB,UNIT 
+                        FROM :lt_sup_dem_stock_gap;
+                        
+--STEP 7
+--applying functions to calculate cummulative sum 
+lt_sup_dem_full_with_lead = SELECT GEO_ID,GEO_NAME,GEO_FILTER_TYPE, 
+                                EQUIP_TYPE,EQUIP_NAME,EQUIP_FILTER_TYPE,
+                                TIME_INTERVAL_ID,SEQUENCE,START_TIME,END_TIME,INTER_SECONDS,
+                                LAG(SD_SUB) OVER (PARTITION BY GEO_ID, EQUIP_TYPE ORDER BY SEQUENCE) AS LEAD_SD_SUB,
+                                UNIT
+                            FROM :lt_sup_dem_full;
+
+lt_sup_dem_full_cum = SELECT GEO_ID,GEO_NAME,GEO_FILTER_TYPE,
+                                EQUIP_TYPE,EQUIP_NAME,EQUIP_FILTER_TYPE,
+                                TIME_INTERVAL_ID,SEQUENCE,START_TIME,END_TIME,INTER_SECONDS,
+                                SUM(LEAD_SD_SUB) OVER (PARTITION BY GEO_ID, EQUIP_TYPE ORDER BY SEQUENCE) AS CUM_SD_SUB,
+                                UNIT
+                            FROM :lt_sup_dem_full_with_lead;
+                            
+--STEP 8
+--join STOCK - add the CURRENT_STOCK to each CUM_SD_SUB
+balance = SELECT 'PROVISIONAL_STOCK' as NODE_ID, 
+                T1.GEO_ID,T1.GEO_NAME,T1.GEO_FILTER_TYPE,
+                T1.EQUIP_TYPE,T1.EQUIP_NAME,T1.EQUIP_FILTER_TYPE,
+                T1.TIME_INTERVAL_ID,T1.SEQUENCE,T1.START_TIME,T1.END_TIME,T1.INTER_SECONDS,
+                'STOCK' AS OUTPUT_KEY,
+                CASE WHEN T1.TIME_INTERVAL_ID = :v_first_time_interval THEN 
+                            IFNULL(T2.output_value,0) 
+                        ELSE 
+                            (IFNULL(T1.CUM_SD_SUB,0) + IFNULL(T2.output_value,0)) 
+                        END AS OUTPUT_VALUE, 
+                T1.UNIT
+                FROM :lt_sup_dem_full_cum AS T1 
+                LEFT OUTER JOIN :stock AS T2
+                    ON T1.GEO_ID = T2.GEO_ID 
+                    AND T1.EQUIP_TYPE = T2.EQUIP_TYPE;
+END;

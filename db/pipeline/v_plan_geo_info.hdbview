@@ -1,0 +1,84 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT DISTINCT T1.ID,
+                 --TO_VARCHAR(T8.ID) AS GEO_ID,
+                 T8.ID AS GEO_ID,
+                 T8.DESC AS GEO_NAME,
+                 2 AS TYPE,
+                 T8.DESC AS DISPLAY_NAME
+            FROM \"sap.tm.trp.db.pipeline::t_plan_model\" AS T1
+                 INNER JOIN \"sap.tm.trp.db.filter::t_filter_location_filter\" AS T3
+                 ON T1.FILTER_GROUP_ID = T3.FILTER_GROUP_ID
+                 INNER JOIN \"sap.tm.trp.db.filter::t_location_filter_location\" AS T2
+                 ON T3.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID
+                 INNER JOIN \"sap.tm.trp.db.systemmanagement::t_location_group\" AS T8
+                 ON T2.LOCATION_GROUP_ID = T8.ID
+           UNION
+          SELECT DISTINCT T1.ID,
+                 T9.ID AS GEO_ID,
+                 T9.NAME AS GEO_NAME,
+                 1 AS TYPE,
+                 T9.NAME AS DISPLAY_NAME
+            FROM \"sap.tm.trp.db.pipeline::t_plan_model\" AS T1
+                 INNER JOIN \"sap.tm.trp.db.filter::t_filter_location_filter\" AS T3
+                 ON T1.FILTER_GROUP_ID = T3.FILTER_GROUP_ID
+                 INNER JOIN \"sap.tm.trp.db.filter::t_location_filter_location\" AS T2
+                 ON T3.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID
+                 INNER JOIN \"sap.tm.trp.db.semantic.location::v_location\" AS T9
+                 ON T2.LOCATION_ID = T9.ID
+           UNION
+          SELECT DISTINCT T1.ID,
+                 --TO_VARCHAR(T11.ID) AS GEO_ID,
+                 T11.ID AS GEO_ID,
+                 T11.DESC AS GEO_NAME,
+                 4 AS TYPE,
+                 T11.DESC AS DISPLAY_NAME
+            FROM \"sap.tm.trp.db.pipeline::t_plan_model\" AS T1
+                 INNER JOIN \"sap.tm.trp.db.filter::t_filter_location_filter\" AS T3
+                 ON T1.FILTER_GROUP_ID = T3.FILTER_GROUP_ID
+                 INNER JOIN \"sap.tm.trp.db.filter::t_location_filter_zone\" AS T2
+                 ON T3.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID
+                 INNER JOIN \"sap.tm.trp.db.systemmanagement::t_zone_group\" AS T11
+                 ON T2.ZONE_GROUP_ID = T11.ID
+           UNION
+          SELECT DISTINCT T1.ID,
+                 T12.ID AS GEO_ID,
+                 T12.NAME AS GEO_NAME,
+                 3 AS TYPE,
+                 T12.NAME AS DISPLAY_NAME
+            FROM \"sap.tm.trp.db.pipeline::t_plan_model\" AS T1
+                 INNER JOIN \"sap.tm.trp.db.filter::t_filter_location_filter\" AS T3
+                 ON T1.FILTER_GROUP_ID = T3.FILTER_GROUP_ID
+                 INNER JOIN \"sap.tm.trp.db.filter::t_location_filter_zone\" AS T2
+                 ON T3.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID
+                 INNER JOIN \"sap.tm.trp.db.semantic.location::v_zone\" AS T12
+                 ON T2.ZONE_ID = T12.ID
+           UNION
+          SELECT DISTINCT T1.ID,
+                 --TO_VARCHAR(T14.ID) AS GEO_ID,
+                 T14.ID AS GEO_ID,
+                 T14.DESC AS GEO_NAME,
+                 6 AS TYPE,
+                 T14.DESC AS DISPLAY_NAME
+            FROM \"sap.tm.trp.db.pipeline::t_plan_model\" AS T1
+                 INNER JOIN \"sap.tm.trp.db.filter::t_filter_location_filter\" AS T3
+                 ON T1.FILTER_GROUP_ID = T3.FILTER_GROUP_ID
+                 INNER JOIN \"sap.tm.trp.db.filter::t_location_filter_region\" AS T2
+                 ON T3.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID
+                 INNER JOIN \"sap.tm.trp.db.systemmanagement::t_region_group\" AS T14
+                 ON T2.REGION_GROUP_ID = T14.ID
+           UNION
+          SELECT DISTINCT T1.ID,
+                 T15.ID AS GEO_ID,
+                 T15.NAME AS GEO_NAME,
+                 5 AS TYPE,
+                 T15.NAME AS DISPLAY_NAME
+            FROM \"sap.tm.trp.db.pipeline::t_plan_model\" AS T1
+                 INNER JOIN \"sap.tm.trp.db.filter::t_filter_location_filter\" AS T3
+                 ON T1.FILTER_GROUP_ID = T3.FILTER_GROUP_ID
+                 INNER JOIN \"sap.tm.trp.db.filter::t_location_filter_region\" AS T2
+                 ON T3.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID
+                 INNER JOIN \"sap.tm.trp.db.semantic.location::v_zone\" AS T15
+                 ON T2.ZONE_ID = T15.ID";
+
+depends_on_view = ["sap.tm.trp.db.semantic.location::v_location", "sap.tm.trp.db.semantic.location::v_zone"];
+depends_on_table = ["sap.tm.trp.db.pipeline::t_plan_model","sap.tm.trp.db.filter::t_location_filter_location","sap.tm.trp.db.filter::t_location_filter_zone","sap.tm.trp.db.filter::t_location_filter_region","sap.tm.trp.db.filter::t_filter_location_filter", "sap.tm.trp.db.systemmanagement::t_location_group", "sap.tm.trp.db.systemmanagement::t_zone_group", "sap.tm.trp.db.systemmanagement::t_region_group"];

@@ -1,0 +1,23 @@
+schema = "SAP_TM_TRP";
+query = "SELECT CASE B.S_FLAG
+                  WHEN 'S' THEN B.COUNTRY_CODE
+                  ELSE A.CODE
+                END AS COUNTRY_CODE,
+                CASE B.S_FLAG
+                  WHEN 'S' THEN B.CODE
+                  ELSE ''
+                END AS REGION_CODE,
+                CASE B.S_FLAG
+                  WHEN 'S' THEN B.NAME
+                  ELSE ''
+                END AS STATE_NAME,
+                CASE B.S_FLAG
+                  WHEN 'S' THEN B.COUNTRY_NAME
+                  ELSE A.COUNTRY_NAME
+                END AS COUNTRY_NAME
+                
+           FROM (SELECT *, 'C' AS C_FLAG FROM \"sap.tm.trp.db.systemmanagement.location::v_country_ui\") AS A
+                FULL OUTER JOIN (SELECT *, 'S' AS S_FLAG FROM \"sap.tm.trp.db.systemmanagement.location::v_state_ui\") AS B
+                ON A.C_FLAG = B.S_FLAG AND A.CODE = B.COUNTRY_CODE";
+                
+depends_on_view = ["sap.tm.trp.db.systemmanagement.location::v_country_ui", "sap.tm.trp.db.systemmanagement.location::v_state_ui"];                

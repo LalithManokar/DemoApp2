@@ -1,0 +1,19 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "CODE"; sqlType = NVARCHAR; length = 200; nullable = false;},
+    {name = "NAME"; sqlType = VARCHAR; length = 200; nullable = true;},
+    {name = "PLAN_STATUS"; sqlType = INTEGER;  nullable = true;},
+    {name = "SD_PLAN_ID"; sqlType = BIGINT; nullable = true;},
+    {name = "EXCUTE_ID"; sqlType = BIGINT; nullable = true;},
+    {name = "COST_MODEL_ID"; sqlType = BIGINT; nullable = true;},
+    {name = "NETWORK_SETTING_GROUP_ID"; sqlType = BIGINT; nullable = true;},    
+    {name = "CREATED_BY"; sqlType = BIGINT; nullable = true;},
+    {name = "MODIFIED_BY"; sqlType = BIGINT; nullable = true;},
+    {name = "CREATED_ON"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "MODIFIED_ON"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "STATUS"; sqlType = SMALLINT; comment = "0 for Valid; 1 for Need Check; 2 for Invalid";},
+    {name = "RESOURCE_CATEGORY";sqlType = VARCHAR; length = 50;}
+];
+table.primaryKey.pkcolumns = ["ID"];

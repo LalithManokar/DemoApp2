@@ -1,0 +1,50 @@
+schema = "SAP_TM_TRP";
+query  = "
+SELECT
+     ext.ID
+    ,ext.PAGE_ID
+    ,CASE
+        WHEN ext.PAGE_ID = 1 THEN 'Transportation Demand' 
+        WHEN ext.PAGE_ID = 3 THEN 'Attributes for SD'
+        WHEN ext.PAGE_ID = 103 THEN 'Pick-Up'
+        WHEN ext.PAGE_ID = 104 THEN 'Return'        
+        ELSE 'Resources'
+    END AS PAGE_DESC
+    ,ext.NAME
+    ,ext.DISPLAY_NAME
+    ,ext.MAPPED_NAME
+    ,ext.DATA_TYPE
+    ,ext.LENGTH
+    ,ext.SEARCHABLE
+    ,ext.FILTERABLE
+    ,2 as TYPE
+    ,CASE 
+        WHEN (ext.PAGE_ID = 103 OR ext.PAGE_ID = 104) THEN DESC.DESC
+        ELSE ext.DESCRIPTION
+    END AS DESCRIPTION
+    ,CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+          WHEN (ext.ADDED_BY <> 0 AND ext.ADDED_BY IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+		  WHEN ext.ADDED_BY = 0 OR ext.ADDED_BY IS NULL THEN ''
+		  ELSE '***' END AS ADDED_BY
+    ,ext.ADDED_ON
+    ,CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+          WHEN (ext.EDITED_BY <> 0 AND ext.EDITED_BY IS NOT NULL) AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+		  WHEN ext.EDITED_BY = 0 OR ext.EDITED_BY IS NULL THEN ''
+		  ELSE '***' END AS EDITED_BY
+    ,CASE WHEN LENGTH(TO_VARCHAR(ext.EDITED_ON)) = 0 THEN ext.ADDED_ON ELSE ext.EDITED_ON END AS EDITED_ON
+FROM \"sap.tm.trp.db.common::t_extended_fields\" ext
+LEFT JOIN (select ID, desc from \"sap.tm.trp.db.common::t_extended_fields_t\" ext_desc 
+    INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" lang ON (ext_desc.SPRAS = lang.SPRAS) ) DESC
+    ON ext.ID = DESC.ID
+LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" au ON au.ID= ext.ADDED_BY
+LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" eu ON eu.ID= ext.EDITED_BY
+LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T9  ON au.USERNAME = T9.USERNAME
+LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T10  ON eu.USERNAME = T10.USERNAME  
+CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE";
+
+depends_on_table = ["sap.tm.trp.db.common::t_extended_fields",
+					"sap.tm.trp.db.common::t_extended_fields_t"];
+depends_on_view=["sap.tm.trp.db.dataprotectionprivacy::v_unblock_users",
+				 "sap.tm.trp.db.semantic.common::v_lang_code",
+                 "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege",
+                 "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];  

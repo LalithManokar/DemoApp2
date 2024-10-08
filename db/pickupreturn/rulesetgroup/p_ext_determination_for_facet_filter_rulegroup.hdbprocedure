@@ -1,0 +1,697 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_ext_determination_for_facet_filter_rulegroup" ( 
+    IN RULE_GROUP_ID BIGINT,
+    IN EXECUTION_ID VARCHAR(200) 
+   )
+     LANGUAGE SQLSCRIPT
+     SQL SECURITY INVOKER
+     DEFAULT SCHEMA SAP_TM_TRP
+     AS 
+BEGIN
+
+    DECLARE V_USER_ID                  BIGINT;
+    DECLARE V_USERNAME                 VARCHAR(60);
+    DECLARE V_TIME_ZONE_ID VARCHAR(20);   
+    DECLARE V_RULE_TYPE                INTEGER;
+    DECLARE V_SD_PLAN_ID               BIGINT;
+    DECLARE V_TIME_RANGE_ID            INTEGER;
+    DECLARE V_EQUIP_FILTER_ID          BIGINT;
+    DECLARE V_LOCATION_FILTER_ID       BIGINT;
+    DECLARE V_NETWORK_SETTING_GROUP_ID BIGINT;
+    DECLARE V_OP_SETTING_TYPE          INTEGER;
+    DECLARE V_OPTIMIZATION             INTEGER;
+    DECLARE V_SCHEDULE_TIME_TYPE       INTEGER;
+    DECLARE V_LDR_RULE_ID              INTEGER;
+    DECLARE V_OPTIMIZATION_OPTION      VARCHAR(50);
+    DECLARE V_EXCLUSIVE_RULE_ID        INTEGER;
+    DECLARE V_FILTER_EXECUTION         SMALLINT;
+    DECLARE PLAN_ID BIGINT ;
+    DECLARE USER_ID BIGINT;
+    DECLARE V_NODE_ID                  BIGINT;
+    DECLARE TMP_PROV_STOCK_NODE_FLAG   INTEGER;
+    DECLARE V_SUCCESS_FLAG             INTEGER;
+    DECLARE  MIN_SAFETY_KEY            VARCHAR(20) := 'MIN_SAFETY_STOCK';
+    DECLARE MAX_SAFETY_KEY             VARCHAR(20) := 'MAX_SAFETY_STOCK';
+    DECLARE MAX_CAPACITY_KEY           VARCHAR(20) := 'MAX_CAPACITY';
+    DECLARE MIN_SAFETY_DEFAULT         INTEGER;
+    DECLARE MAX_SAFETY_DEFAULT         INTEGER;
+    DECLARE MAX_CAPACITY_DEFAULT       INTEGER;
+    DECLARE DATE_OFFSET                INTEGER;
+    DECLARE COUNT_DATEOFFSET           INTEGER;
+    DECLARE SCRIPT                     VARCHAR(5000);
+    DECLARE RULE_SP                    VARCHAR(200);
+    DECLARE DRAFT_FLAG                 INTEGER;
+    DECLARE RESOURCE_CATEGORY          VARCHAR(20);
+    DECLARE PICKUPRETURN_MODE          VARCHAR(2);
+    DECLARE TOTAL_COUNT                INTEGER;
+    DECLARE MANDATORY_COST_MODEL_ID    INTEGER;
+	DECLARE V_MAX_COST                 DOUBLE;
+	DECLARE V_MIN_INTERVAL_ID          INT;
+	DECLARE shift_c                    INT;
+	DECLARE shift                      INT;
+	DECLARE V_PLAN_TYPE                INTEGER;
+    DECLARE MAX_INTERVAL_BEFORE_CUTOFF BIGINT;
+    DECLARE MIN_TIME_INTERVAL          BIGINT;
+    DECLARE HANDLING_CAPA              INTEGER;
+    DECLARE LDR_ID INTEGER;
+    DECLARE i INTEGER := 0;
+    DECLARE OFFSET INTEGER;
+    DECLARE TU_COUNT INTEGER;
+
+    -- average stay
+    DECLARE END_TIME TIMESTAMP;
+    DECLARE START_TIME TIMESTAMP;
+    DECLARE IN_START_TIME TIMESTAMP;
+    DECLARE IN_END_TIME TIMESTAMP;
+    DECLARE IN_RUN_ID_STAMP VARCHAR(30);
+    
+    SELECT RULESET_TYPE INTO V_RULE_TYPE FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group"
+    WHERE ID = :RULE_GROUP_ID; 
+    
+    ------------------------------------**START**---FETCH TU DATA FOR ALL RULESETS IN RULEGROUP---------------------------------------
+    IF :V_RULE_TYPE = 1 THEN
+    
+    TU_INFO = SELECT * FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_tu_pickup_list_rulegroup"
+              WHERE RULE_ID IN (SELECT DISTINCT RULE_ID from "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" where RULE_GROUP_ID = :RULE_GROUP_ID);
+    
+    ELSE
+    
+    TU_INFO = SELECT * FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_tu_return_list_rulegroup"
+              WHERE RULE_ID IN (SELECT DISTINCT RULE_ID from "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" where RULE_GROUP_ID = :RULE_GROUP_ID);
+    
+    END IF;
+    ----------------------------------**END**-----FETCH TU DATA FOR ALL RULESETS IN RULEGROUP----------------------------------------
+    
+    SELECT COUNT(*) INTO TU_COUNT FROM :TU_INFO;
+    
+    IF :TU_COUNT > 0 THEN	
+    
+    IN_START_TIME :=current_UTCtimestamp;
+    
+    TU_IDS = SELECT TU_ID FROM :TU_INFO;
+    
+    --rule sd plan mapping--
+    RULE_PLAN_ID = SELECT SD_PLAN_ID,ID FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID in (SELECT RULE_ID from "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" where RULE_GROUP_ID = :RULE_GROUP_ID);
+  
+    --Optimization options details
+    SELECT IFNULL ((CASE OPTIMIZATION WHEN 1 THEN 'COST' ELSE 'BALANCE' END),'') AS OPTIMIZATION_OPTION,
+            NETWORK_SETTING_GROUP_ID,
+            OP_SETTING_TYPE, 
+            RESOURCE_CATEGORY 
+            INTO 
+            V_OPTIMIZATION_OPTION,
+            V_NETWORK_SETTING_GROUP_ID,
+            V_OP_SETTING_TYPE,
+            RESOURCE_CATEGORY
+    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID in (SELECT TOP 1 RULE_ID from "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" where RULE_GROUP_ID = :RULE_GROUP_ID);
+
+    --Get SD plans of Rules in Rulegroup
+    PLAN_ID_GROUP = SELECT DISTINCT SD_PLAN_ID AS PLAN_ID FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID in (SELECT RULE_ID from "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" where RULE_GROUP_ID = :RULE_GROUP_ID);
+    
+    --sd plan location mapping-- 
+    CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_get_locations_sdplan_rulegroup" (:PLAN_ID_GROUP,LOCATIONS,RESOURCES);
+ 
+    --rule/sd/location
+    RULE_PLAN_LOC = SELECT T1.ID AS RULE_ID, T2.PLAN_ID, T2.LOCATION_ID,T3.RESOURCE_ID
+                    FROM :RULE_PLAN_ID T1 
+                    INNER JOIN :LOCATIONS T2 ON (T1.SD_PLAN_ID = T2.PLAN_ID)
+                    INNER JOIN :RESOURCES T3 ON (T1.SD_PLAN_ID = T3.PLAN_ID);
+                    
+    LOC_RES_MAPPING = SELECT DISTINCT PLAN_ID, LOCATION_ID , RESOURCE_ID FROM :RULE_PLAN_LOC;
+    
+    SELECT PLAN_MODEL_TYPE_ID INTO V_PLAN_TYPE FROM "sap.tm.trp.db.pipeline::t_plan_model"
+    WHERE ID IN ( SELECT TOP 1 PLAN_ID FROM :PLAN_ID_GROUP) ;
+    
+    SELECT IFNULL(MAX(CASE RULESET_TYPE WHEN 1 THEN 'EP' WHEN 2 THEN 'ER' END),'') INTO PICKUPRETURN_MODE
+    FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group"
+    WHERE ID=:RULE_GROUP_ID;
+  
+    --DATEOFFSET OF THIS USER TO QUERY OLD INFO
+    SELECT IFNULL(MAX (DATE_OFFSET), 0) INTO DATE_OFFSET
+    FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+    WHERE USER = :V_USERNAME;
+
+    --Check the PLAN is Virtual Plan or Scheudled SD Plan
+    SELECT PLAN_MODEL_TYPE_ID
+    INTO  V_PLAN_TYPE
+    FROM "sap.tm.trp.db.pipeline::t_plan_model" 
+    WHERE ID in (SELECT TOP 1 PLAN_ID FROM :PLAN_ID_GROUP) ;
+    
+    --Get cost model
+    SELECT IFNULL (MAX (MANDATORY_COST_MODEL_ID),0) INTO MANDATORY_COST_MODEL_ID
+    FROM "sap.tm.trp.db.planningcockpit::v_network_setting_group"
+    WHERE ID = :V_NETWORK_SETTING_GROUP_ID;
+    
+	-- get the default stock threshold  
+    SELECT IFNULL(MAX(T1.DEFAULT_VALUE),0) INTO MIN_SAFETY_DEFAULT
+    FROM "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+    WHERE T1.DEFAULT_KEY = :MIN_SAFETY_KEY;
+    
+    SELECT IFNULL(MAX(T1.DEFAULT_VALUE),999999) INTO MAX_SAFETY_DEFAULT
+    FROM "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+    WHERE T1.DEFAULT_KEY = :MAX_SAFETY_KEY; 
+    
+    SELECT IFNULL(MAX(T1.DEFAULT_VALUE),999999) into MAX_CAPACITY_DEFAULT
+    FROM "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+    WHERE T1.DEFAULT_KEY = :MAX_CAPACITY_KEY;
+    
+	--Get Pure SD data 
+    IF V_PLAN_TYPE = 1 THEN 
+
+        CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_get_plan_data_by_sd_planid_rulegroup"
+        (:PLAN_ID_GROUP,:LOC_RES_MAPPING,'', 'X',V_SD_LF_ID, V_SD_EF_ID, V_EXECUTION_ID, V_NODE_ID,plan_data_from_cv,SD_EXECUTIION_RESULT);
+        
+        CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_origin_sd_stock_cutoff_rulegroup" 
+          (
+            :SD_EXECUTIION_RESULT,
+            :V_EXECUTION_ID,
+            :PLAN_ID_GROUP,
+            :V_NODE_ID,
+            PURE_SD,
+            INITIAL_STOCK
+           );
+            
+    	SELECT MIN(TIME_INTERVAL_ID) INTO V_MIN_INTERVAL_ID FROM :PURE_SD;
+    	
+    	PURE_SD =   SELECT 
+    	                   T0.PLAN_ID,
+    	                   T0.LOCATION_ID,
+    					   T0.LOCATION_NAME,
+    					   T0.EQUIP_TYPE_ID,      
+    					   T0.TIME_INTERVAL_ID,
+    					   T0.START_TIME,
+    					   T0.END_TIME,
+    					   IFNULL(T0.SUPPLY-T1.INIT_STOCK,SUPPLY) AS SUPPLY,
+    					   DEMAND
+    				FROM   :PURE_SD T0
+    				LEFT JOIN :INITIAL_STOCK T1	ON  T0.LOCATION_ID      = T1.LOCATION_ID
+                                		    	AND T0.EQUIP_TYPE_ID    = T1.RESOURCE_TYPE
+                                				AND T0.TIME_INTERVAL_ID =:V_MIN_INTERVAL_ID;
+                                				
+                                                           
+        PLAN_DATA  = SELECT 
+                        T0.PLAN_ID,
+                        0 AS PLAN_EXECUTION_ID,
+                        V_NODE_ID AS NODE_ID,
+                        T0.EQUIP_TYPE_ID,
+                        T0.EQUIP_TYPE_NAME,
+                        T0.LOCATION_ID,
+                        T0.LOCATION_NAME,
+                        T0.SUPPLY,
+                        T0.DEMAND,
+                        T0.BALANCE_SUPPLY_DEMAND,
+                        T0.BALANCE_STOCK_SUPPLY_DEMAND,
+                        IFNULL (T0.MIN_SAFETY_STOCK,0) AS MIN_SAFETY_STOCK,
+                        T0.MAX_SAFETY_STOCK,
+                        T0.MAX_CAPACITY,
+                        T0.MIN_SAFETY_STOCK_HEADER,
+                        T0.MAX_SAFETY_STOCK_HEADER,
+                        T0.MAX_CAPACITY_HEADER,
+                        T0.STOCK_BALANCE_HEADER,
+					    T0.START_TIME,
+					    T0.END_TIME           
+                      FROM :plan_data_from_cv T0;                                      
+    
+    ELSE 
+   
+        CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_get_plan_data_by_sd_planid_rulegroup"
+        (:PLAN_ID_GROUP,:LOC_RES_MAPPING,'', '',V_SD_LF_ID, V_SD_EF_ID, V_EXECUTION_ID, V_NODE_ID,PURE_VSD,SD_EXECUTIION_RESULT);
+          
+        SELECT MIN(TIME_INTERVAL_ID) INTO V_MIN_INTERVAL_ID FROM :PURE_VSD;
+
+        
+        INITIAL_STOCK = SELECT
+        	                 T0.LOCATION_ID,
+    					     T0.LOCATION_NAME,
+    					     T0.EQUIP_TYPE_ID AS RESOURCE_TYPE,
+    					     T0.TIME_INTERVAL_ID,
+    					     T0.STOCK AS INIT_STOCK
+    					  FROM :PURE_VSD T0
+    					 WHERE TIME_INTERVAL_ID = V_MIN_INTERVAL_ID AND
+    					       STOCK > 0;
+
+    	PRE_TIMEINTERVAL_SD = SELECT 
+    	                   T0.LOCATION_ID,
+    					   T0.LOCATION_NAME,
+    					   T0.EQUIP_TYPE_ID,      
+    					   T0.TIME_INTERVAL_ID+1 AS TIME_INTERVAL_ID,
+    					   T0.START_TIME,
+    					   T0.END_TIME,
+    					   T0.SUPPLY,
+    					   T0.DEMAND,
+    					   T0.BALANCE_SUPPLY_DEMAND
+    				FROM   :PURE_VSD T0
+    			    WHERE  TIME_INTERVAL_ID > :V_MIN_INTERVAL_ID;
+    	
+        SELECT MIN(TIME_INTERVAL_ID) INTO MIN_TIME_INTERVAL FROM :PURE_VSD;
+  
+        SELECT IFNULL(MAX(TIME_INTERVAL_ID),:MIN_TIME_INTERVAL - 1) INTO MAX_INTERVAL_BEFORE_CUTOFF FROM
+          (SELECT *, ADD_SECONDS(START_TIME, SECONDS_BETWEEN(START_TIME,END_TIME)/2) AS MIDDLE_TIME
+           FROM :PURE_VSD
+          ) WHERE MIDDLE_TIME <= CURRENT_UTCTIMESTAMP;
+          
+          
+    	IF V_MIN_INTERVAL_ID > MAX_INTERVAL_BEFORE_CUTOFF THEN  --Execution date is same date for run automatic optimization date
+        	PURE_SD =   SELECT T0.PLAN_ID,
+        	                   T0.LOCATION_ID,
+        					   T0.LOCATION_NAME,
+        					   T0.EQUIP_TYPE_ID,      
+        					   T0.TIME_INTERVAL_ID,
+        					   T0.START_TIME,
+        					   T0.END_TIME,
+        					   CASE WHEN  T0.TIME_INTERVAL_ID =:V_MIN_INTERVAL_ID THEN IFNULL(T0.SUPPLY-T0.STOCK,T0.SUPPLY) 
+        					        WHEN  T0.DEMAND = -T2.BALANCE_SUPPLY_DEMAND THEN IFNULL(T0.SUPPLY,0)
+        					        WHEN  (T0.SUPPLY = T2.BALANCE_SUPPLY_DEMAND OR T0.SUPPLY = 0) THEN 0
+        					        WHEN  (T0.SUPPLY <> T2.BALANCE_SUPPLY_DEMAND AND T0.DEMAND <> -T2.BALANCE_SUPPLY_DEMAND) THEN T0.SUPPLY - IFNULL(T2.BALANCE_SUPPLY_DEMAND,0)
+        					        ELSE  0
+        					   END AS SUPPLY,
+        					   CASE WHEN  T0.TIME_INTERVAL_ID =:V_MIN_INTERVAL_ID THEN IFNULL(T0.DEMAND,0)
+        					        WHEN  T0.SUPPLY = T2.BALANCE_SUPPLY_DEMAND THEN IFNULL(T0.DEMAND,0)
+        					        WHEN  (T0.DEMAND = -T2.BALANCE_SUPPLY_DEMAND OR T0.DEMAND = 0) THEN 0
+        					        WHEN  (T0.SUPPLY <> T2.BALANCE_SUPPLY_DEMAND AND T0.DEMAND <> -T2.BALANCE_SUPPLY_DEMAND) THEN T0.DEMAND + IFNULL(T2.BALANCE_SUPPLY_DEMAND,0)
+        					        
+        					        ELSE  0
+        					   END AS DEMAND
+        				FROM   :PURE_VSD T0
+                        LEFT JOIN :PRE_TIMEINTERVAL_SD T2 ON   T0.LOCATION_ID      = T2.LOCATION_ID
+                                    		    	AND T0.EQUIP_TYPE_ID    = T2.EQUIP_TYPE_ID
+                                    				AND T0.TIME_INTERVAL_ID = T2.TIME_INTERVAL_ID;
+                                    				
+    	ELSE        --Execution date is before run automatic optimiation date
+        	PURE_SD =   SELECT T0.PLAN_ID,
+        	                   T0.LOCATION_ID,
+        					   T0.LOCATION_NAME,
+        					   T0.EQUIP_TYPE_ID,      
+        					   T0.TIME_INTERVAL_ID,
+        					   T0.START_TIME,
+        					   T0.END_TIME,
+        					   CASE WHEN  T0.TIME_INTERVAL_ID =:MAX_INTERVAL_BEFORE_CUTOFF+1 THEN IFNULL(T0.SUPPLY-T1.INIT_STOCK,T0.SUPPLY) 
+        					        WHEN  T0.DEMAND = -T2.BALANCE_SUPPLY_DEMAND THEN IFNULL(T0.SUPPLY,0)
+        					        WHEN  (T0.SUPPLY = T2.BALANCE_SUPPLY_DEMAND OR T0.SUPPLY = 0) THEN 0
+        					        WHEN  (T0.SUPPLY <> T2.BALANCE_SUPPLY_DEMAND AND T0.DEMAND <> -T2.BALANCE_SUPPLY_DEMAND) THEN T0.SUPPLY - IFNULL(T2.BALANCE_SUPPLY_DEMAND,0)
+        					        ELSE  0
+        					        --ELSE IF T0.SUPPLY -T2.--IFNULL(T0.SUPPLY-T0.DEMAND-T0.BALANCE_SUPPLY_DEMAND,T0.SUPPLY)
+        					   END AS SUPPLY,
+        					   CASE --WHEN  T0.TIME_INTERVAL_ID =:MAX_INTERVAL_BEFORE_CUTOFF+1 THEN IFNULL(T0.DEMAND,0)
+        					        WHEN  T0.SUPPLY = T2.BALANCE_SUPPLY_DEMAND THEN IFNULL(T0.DEMAND,0)
+        					        WHEN  (T0.DEMAND = -T2.BALANCE_SUPPLY_DEMAND OR T0.DEMAND = 0) THEN 0
+        					        WHEN  (T0.SUPPLY <> T2.BALANCE_SUPPLY_DEMAND AND T0.DEMAND <> -T2.BALANCE_SUPPLY_DEMAND) THEN T0.DEMAND + IFNULL(T2.BALANCE_SUPPLY_DEMAND,0)
+        					        --ELSE  T0.DEMAND+T0.BALANCE_SUPPLY_DEMAND-T0.SUPPLY
+        					        ELSE  0
+        					   END AS DEMAND
+        				FROM   :PURE_VSD T0 
+        				LEFT JOIN :INITIAL_STOCK T1	ON  T0.LOCATION_ID      = T1.LOCATION_ID
+                                    		    	AND T0.EQUIP_TYPE_ID    = T1.RESOURCE_TYPE
+                                    			--	AND T0.TIME_INTERVAL_ID =:V_MIN_INTERVAL_ID
+                        LEFT JOIN :PRE_TIMEINTERVAL_SD T2 ON   T0.LOCATION_ID      = T2.LOCATION_ID
+                                    		    	AND T0.EQUIP_TYPE_ID    = T2.EQUIP_TYPE_ID
+                                    				AND T0.TIME_INTERVAL_ID = T2.TIME_INTERVAL_ID
+                        WHERE T0.TIME_INTERVAL_ID >= :MAX_INTERVAL_BEFORE_CUTOFF + 1;    		
+    	END IF;
+          
+        PLAN_DATA  = SELECT 
+                        T0.PLAN_ID,
+                        0 AS PLAN_EXECUTION_ID,
+                        V_NODE_ID AS NODE_ID,
+                        T0.EQUIP_TYPE_ID,
+                        T0.EQUIP_TYPE_NAME,
+                        T0.LOCATION_ID,
+                        T0.LOCATION_NAME,
+                        T0.SUPPLY, 
+                        T0.DEMAND,
+                        T0.BALANCE_SUPPLY_DEMAND,
+                        T0.BALANCE_STOCK_SUPPLY_DEMAND,
+                        IFNULL (T0.MIN_SAFETY_STOCK,0) AS MIN_SAFETY_STOCK,
+                        T0.MAX_SAFETY_STOCK,
+                        T0.MAX_CAPACITY,
+                        T0.MIN_SAFETY_STOCK_HEADER,
+                        T0.MAX_SAFETY_STOCK_HEADER,
+                        T0.MAX_CAPACITY_HEADER,
+                        T0.STOCK_BALANCE_HEADER,
+					    T0.START_TIME,
+					    T0.END_TIME           
+                      FROM :PURE_VSD T0;
+        
+    END IF;
+       
+          
+    --lane info FROM/TO LOCATIONS--
+    SELECTED_TU = SELECT DISTINCT
+                           RULE_ID,
+                           SOURCE_LOCATION_ID,
+                           SOURCE_LOCATION,
+                           POD,
+                           POD_NAME,
+                           DESTINATION_LOCATION_ID,
+                           DESTINATION_LOCATION,
+                           POL, 
+                           POL_NAME 
+                    FROM :TU_INFO;
+    
+    SD_PLAN_LOCATION_LIST = SELECT DISTINCT C.RULE_ID,B.NAME AS LOCATION
+                            FROM :LOCATIONS AS A
+                            INNER JOIN :RULE_PLAN_LOC C
+                            ON (C.PLAN_ID = A.PLAN_ID)
+                            INNER JOIN "sap.tm.trp.db.semantic.location::v_location" AS B
+                            ON (A.LOCATION_ID = B.ID);
+    
+    -- If return, pod as the from location and SD locations as the to locations. 
+    -- Else, pol as the to location and SD locations as the from locations
+    IF :V_RULE_TYPE=2 THEN
+    
+      from_location_list = SELECT DISTINCT (CASE IFNULL(SOURCE_LOCATION, '') 
+                                              WHEN '' THEN POD_NAME ELSE SOURCE_LOCATION END) AS LOCATION
+                                              
+                           FROM :SELECTED_TU;
+                                   
+      to_location_list = SELECT DISTINCT LOCATION  FROM :SD_PLAN_LOCATION_LIST;
+      
+    ELSE 
+         
+      to_location_list = SELECT DISTINCT
+                                         (CASE IFNULL(DESTINATION_LOCATION, '') 
+                                              WHEN '' THEN POL_NAME ELSE DESTINATION_LOCATION END) AS LOCATION
+                         FROM :SELECTED_TU;
+                                   
+      from_location_list = SELECT DISTINCT LOCATION FROM :SD_PLAN_LOCATION_LIST;
+         
+    END IF;
+    
+    --FROM/TO LOCATIONS
+    IF :V_RULE_TYPE=2 THEN
+    
+      from_locations = SELECT DISTINCT RULE_ID,(CASE IFNULL(SOURCE_LOCATION, '') 
+                                              WHEN '' THEN POD_NAME ELSE SOURCE_LOCATION END) AS LOCATION
+                                              
+                           FROM :SELECTED_TU;
+                                   
+      to_locations = SELECT DISTINCT RULE_ID,LOCATION  FROM :SD_PLAN_LOCATION_LIST;
+      
+      FROM_TO_INFO = SELECT A.LOCATION AS FROM_LOCATION, B.LOCATION AS TO_LOCATION FROM :from_locations A
+                     INNER JOIN :to_locations B ON (A.RULE_ID = B.RULE_ID);
+      
+    ELSE 
+         
+      to_locations = SELECT DISTINCT RULE_ID,
+                                         (CASE IFNULL(DESTINATION_LOCATION, '') 
+                                              WHEN '' THEN POL_NAME ELSE DESTINATION_LOCATION END) AS LOCATION
+                         FROM :SELECTED_TU;
+                                   
+      from_locations = SELECT DISTINCT RULE_ID, LOCATION FROM :SD_PLAN_LOCATION_LIST;
+       
+      FROM_TO_INFO = SELECT A.LOCATION AS FROM_LOCATION, B.LOCATION AS TO_LOCATION FROM :from_locations A
+                     INNER JOIN :to_locations B ON (A.RULE_ID = B.RULE_ID);
+         
+    END IF;
+    
+    
+    -------------------------------------------LANE WRAPPER AND RELATED PROCEDURES CALL---------------------------------------------- 
+    
+    IF (SELECT COUNT(*) FROM :from_location_list) >0 AND (SELECT COUNT(*) FROM :to_location_list) >0 THEN
+  
+    CALL "sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_get_lanes_wrapper" (:from_location_list, :to_location_list, LANE_LIST, CARRIER_LIST);
+   
+    CALL "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_ext_prepare_info_for_cost_rulegroup" 
+    (:V_NETWORK_SETTING_GROUP_ID,:V_RULE_TYPE,:TU_INFO,:LANE_LIST,:CARRIER_LIST,DATASET_CONNECTION_INFO ,MISSING_COST,MISSING_FILTER_MESSAGE ,LANE_OUTPUT );
+   
+    LOCATION_BASED_COST = SELECT * FROM :LANE_OUTPUT WHERE (FROM_LOCATION,TO_LOCATION) IN (SELECT DISTINCT FROM_LOCATION, TO_LOCATION FROM :FROM_TO_INFO);
+   
+    END IF;
+   
+    CALL "sap.tm.trp.db.pickupreturn.settings::p_check_lane_for_location_pair_group"(:LOCATION_BASED_COST, LOCATION_BASED_COST);
+
+    
+    -------------------------------------------RESOURCE_TYPES_CODE_TEU_COUNT---------------------------------------------- 
+    RESOURCE_TYPES_CODE_TEU_COUNT=SELECT DISTINCT T1.RESOURCE_TYPE_CODE,T3.TEU_COUNT
+                     FROM "sap.tm.trp.db.semantic.resource::v_resource_type_with_category" T1
+                     INNER JOIN "sap.tm.trp.db.costmodel::v_cost_model" T2
+                     ON (T1.RESOURCE_CATEGORY = T2.RESOURCE_CATEGORY)
+                     INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_type" T3
+                     ON (T1.RESOURCE_TYPE_CODE = T3.RESOURCE_TYPE_CODE)-- and T1.EQUI_TYPE = T3.EQUI_TYPE)
+                     WHERE T2.ID = :MANDATORY_COST_MODEL_ID;
+
+    -------------------------------------------TRANSPORTATION COST---------------------------------------------- 
+    LOCATION_BASED_COST_TMP = SELECT FROM_LOCATION,
+                                     TO_LOCATION,
+                                     MTR,
+                                     CARRIER,
+                                     RESOURCE_TYPE,
+                                     DISTANCE,
+                                     DURATION
+                              FROM :LOCATION_BASED_COST;
+    
+    --Get transportation cost by cost model
+    CALL "sap.tm.trp.routing.db.cost::p_calculate_connection_transport_cost_new"(
+      :MANDATORY_COST_MODEL_ID,
+      :RESOURCE_TYPES_CODE_TEU_COUNT,
+      :LOCATION_BASED_COST_TMP,
+     CALCULATED_TRANSPORT_COST
+    );
+  
+    SELECT MAX(COST) INTO V_MAX_COST FROM :CALCULATED_TRANSPORT_COST;			   
+    --TRANSPORTATION COST
+    t_transportation_cost = SELECT DISTINCT  T1.FROM_LOCATION,
+            							     T1.TO_LOCATION,
+            							     T2.RESOURCE_TYPE,
+            							     T1.MTR,
+            							     T2.DURATION,
+            							     IFNULL (T1.COST,:V_MAX_COST) AS COST
+						   FROM :CALCULATED_TRANSPORT_COST T1
+						   INNER JOIN :LOCATION_BASED_COST T2 ON  (T1.FROM_LOCATION   = T2.FROM_LOCATION 
+                                						       AND T1.TO_LOCATION = T2.TO_LOCATION
+                                						       AND T1.MTR = T2.MTR);
+  
+    -------------------------------------------HANDLING COST---------------------------------------------- 
+	
+		--Get handling cost by cost model
+	prepare_direction = SELECT DISTINCT 
+	                           CASE :V_RULE_TYPE WHEN 1 THEN FROM_LOCATION
+	                                             WHEN 2 THEN TO_LOCATION 
+	                           END AS LOCATION,
+	                           CASE :V_RULE_TYPE WHEN 1 THEN ''
+							                     WHEN 2 THEN MTR 
+							   END AS FROM_MTR,
+	                           CASE :V_RULE_TYPE WHEN 1 THEN MTR
+							                     WHEN 2 THEN '' 
+							   END AS TO_MTR,
+	                           RESOURCE_TYPE
+	                    FROM :LOCATION_BASED_COST;
+
+    CALL "sap.tm.trp.routing.db.cost::p_calculate_location_handling_cost_new"(
+      :MANDATORY_COST_MODEL_ID,
+      :RESOURCE_TYPES_CODE_TEU_COUNT,
+      :PREPARE_DIRECTION,
+      HANDLING_COST
+    );
+    
+          
+    --HANDLING COST
+    t_handling_cost  = SELECT DISTINCT LOCATION,
+                                       RESOURCE_TYPE,
+                                       AVG(COST) AS COST
+                       FROM :HANDLING_COST
+                       GROUP BY LOCATION,
+                                RESOURCE_TYPE;
+    ------------------------------------------AVERAGE STAY DAYS ----------------------------------------------     
+    -- Get average stay days
+    loc_equip = SELECT DISTINCT EQUIP_TYPE_ID AS RESOURCE_TYPE, EQUIP_TYPE_NAME AS RESOURCE_TYPE_NAME,
+                  LOCATION_ID, LOCATION_NAME FROM :PLAN_DATA;
+                  
+    CALL "sap.tm.trp.db.pickupreturn::p_get_average_stay_day"(
+               :loc_equip,
+               :START_TIME,
+               :END_TIME,
+               :RESOURCE_CATEGORY,
+               t_average_stay_days
+    );
+ 
+    ------------------------------------------STORAGE COST ---------------------------------------------- 
+    
+	t_current_stock = SELECT LOCATION_NAME AS LOCATION,EQUIP_TYPE_ID AS RESOURCE_TYPE, START_TIME, END_TIME, SUPPLY, DEMAND, 0 AS STOCK
+    FROM :PLAN_DATA;
+    
+    STORAGE_TIME = SELECT LOCATION, RESOURCE_TYPE, :START_TIME AS START_TIME, 
+                   ADD_SECONDS(:START_TIME, AVERAGE_STAY_DAYS*24*3600) AS END_TIME, 1 AS QUANTITY FROM :t_average_stay_days;
+                   
+     SELECT TOP 1 PLAN_ID INTO PLAN_ID FROM :PLAN_ID_GROUP;
+    
+    --check stock flag
+    SELECT COUNT(*) 
+    INTO TMP_PROV_STOCK_NODE_FLAG
+    FROM "sap.tm.trp.db.pipeline::t_plan_model" AS A
+    INNER JOIN "sap.tm.trp.db.pipeline::v_pipeline_node" B
+            ON (A.PIPELINE_MODEL_ID = B.PIPELINE_MODEL_ID AND 
+                UPPER (B.NAME) LIKE '%PROVISIONAL_STOCK%')
+    WHERE B.RESULT_VISIBLE = 1 AND 
+          A.ID = :PLAN_ID;
+
+    SELECT ADD_DAYS(CURRENT_UTCTIMESTAMP, :DATE_OFFSET), ADD_DAYS(CURRENT_UTCTIMESTAMP, :DATE_OFFSET - 180)
+    INTO END_TIME, START_TIME FROM DUMMY;
+    
+    CALL "sap.tm.trp.db.costmodel.storagecost::p_get_cost_for_pr_new" 
+        (:PLAN_ID,
+         :RESOURCE_CATEGORY,
+         :MANDATORY_COST_MODEL_ID,
+         :RESOURCE_TYPES_CODE_TEU_COUNT,
+         :STORAGE_TIME,
+         :t_current_stock,
+         t_storage_cost); 
+ 
+    --------------------------------------------HANDLING CAPACITY---------------------------------------------- 
+    
+      --Patch8 new functionality to consider handling capacity
+	  CALL "sap.tm.trp.db.planningcockpit::p_get_network_setting_handling_capacity_value" ( 
+	      :V_NETWORK_SETTING_GROUP_ID,
+	      :PLAN_ID,
+	      HANDLING_CAPA
+	  );
+
+  IF (HANDLING_CAPA = 1 ) THEN  --ONLY Days time interval consider the handling capacity
+  
+    --Get the timezone id of the location filter of SD Plan 
+	SELECT T3.TIMEZONE_ID INTO V_TIME_ZONE_ID 
+		FROM "sap.tm.trp.db.pipeline::t_plan_model" T1 
+		INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2 ON T2.ID = T1.FILTER_GROUP_ID
+		INNER JOIN "sap.tm.trp.db.filter::t_time_filter" T3 ON T2.TIME_FILTER_ID = T3.ID
+		WHERE T1.ID = :PLAN_ID; 
+		   
+    CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_origin_sd_stock_cutoff_pure_transportation_rulegroup"
+    (
+        :SD_EXECUTIION_RESULT,
+        :V_EXECUTION_ID,
+        :V_NETWORK_SETTING_GROUP_ID,
+        :PURE_SD,
+        LT_PURE_SD
+    ); 
+
+    CALL "sap.tm.trp.db.planningcockpit::p_get_location_handling_capacity" (
+      :LT_PURE_SD,
+      :V_TIME_ZONE_ID,
+      :RESOURCE_CATEGORY,
+      T_HANDLING_CAPACITY
+    );
+
+    ELSE   --to do: check if works fine
+     T_HANDLING_CAPACITY = SELECT NULL AS LOCATION_ID,
+                                 NULL AS LOCATION_NAME,
+                                 NULL AS TIME_INTERVAL_ID,
+                                 NULL AS START_TIME,
+                                 NULL AS END_TIME,
+                                 NULL AS SUPPLY,
+                                 NULL AS DEMAND,
+                                 NULL AS HANDLING_CAPACITY
+                            FROM DUMMY;  
+	  END IF; 
+    
+    
+    ---------------------------------------------PASSED PARAAMETR PREPARATION---------------------------------------------- 
+    t_supply_demand_p = SELECT DISTINCT t1.PLAN_ID,
+                                        t1.START_TIME,
+                                        t1.END_TIME,
+                                        t1.LOCATION_NAME AS LOCATION, 
+                                        t1.LOCATION_ID,
+                                        t1.EQUIP_TYPE_ID AS CONTAINER_TYPE,
+                                        t1.SUPPLY,
+                                        t1.DEMAND
+                        FROM :PURE_SD t1;
+                        
+      --Stock configuration
+    t_stock_configuration_p = SELECT DISTINCT 
+                                       T1.LOCATION_NAME AS LOCATION,--LOC.NAME AS LOCATION,
+                                       T1.RESOURCE_TYPE AS CONTAINER_TYPE,
+                                       IFNULL (T1.INIT_STOCK,0) AS CURRENT_STOCK,
+                                       IFNULL (T2.MIN_SAFETY_STOCK,:MIN_SAFETY_DEFAULT) AS MIN_STOCK,
+                                       IFNULL (T2.MAX_SAFETY_STOCK,:MAX_SAFETY_DEFAULT) AS MAX_STOCK,
+                                       IFNULL (T2.MAX_PHYSICAL_STOCK,:MAX_CAPACITY_DEFAULT) AS MAX_PHY_CAPACITY
+                                FROM :INITIAL_STOCK T1
+                                INNER JOIN "sap.tm.trp.db.stock::v_location_stock_location" T2
+                                ON (T1.LOCATION_ID = T2.ID AND T1.RESOURCE_TYPE = T2.RESOURCE_ID);
+
+    
+      --Pickup used provisioning location and resource
+    --  TMP_PROV_STOCK_NODE_FLAG = 1;  --comment as it's just temparory setting
+    IF :TMP_PROV_STOCK_NODE_FLAG > 0 THEN
+        t_pro_loc_res = SELECT DISTINCT T0.LOCATION_NAME      AS LOCATION, --LOC.NAME AS LOCATION,
+                                        T0.EQUIP_TYPE_ID      AS CONTAINER_TYPE,
+                                        (T0.SUPPLY-T0.DEMAND) AS MIN_PROVISION_STOCK
+                        FROM :PLAN_DATA T0;  --:plan_data_from_cv T0;
+                       
+    ELSE
+        t_pro_loc_res = SELECT TOP 0 '' AS LOCATION,
+                                     '' AS CONTAINER_TYPE,
+                                     0 AS MIN_PROVISION_STOCK
+                        FROM :t_transportation_cost;
+    END IF ;
+	---------------------------------------------OPTIMISATION TECHNIQUES---------------------------------------------- 
+        --PICKUP
+    IF :V_RULE_TYPE =1  THEN
+    
+        --Optimized by ldr
+        IF :V_OP_SETTING_TYPE = 1 THEN
+      
+            call "sap.tm.trp.db.pickupreturn.rulesetgroup::p_ext_determination_for_pickup_op_1_rulegroup"(:rule_group_id,:execution_id,:V_NODE_ID,
+                :IN_START_TIME, :t_transportation_cost, :t_handling_cost, :t_storage_cost, :TU_INFO, :t_handling_capacity, :PLAN_DATA, :RULE_PLAN_LOC);
+      
+	    END IF;
+	    
+        IF :V_OP_SETTING_TYPE = 2 THEN
+       
+	        call "sap.tm.trp.db.pickupreturn.rulesetgroup::p_ext_determination_for_pickup_op_2_rulegroup"(:rule_group_id,:execution_id,:HANDLING_CAPA,
+                :IN_START_TIME, :t_transportation_cost, :t_handling_cost, :TU_INFO, :t_handling_capacity, :t_supply_demand_p, :t_stock_configuration_p, 
+	            :RULE_PLAN_LOC, :T_PRO_LOC_RES);
+	  
+	   END IF;
+	   
+        IF :V_OP_SETTING_TYPE = 3 THEN
+        
+            call "sap.tm.trp.db.pickupreturn.rulesetgroup::p_ext_determination_for_pickup_op_3_rulegroup"(:rule_group_id,:execution_id,:V_NODE_ID,:HANDLING_CAPA,
+                :IN_START_TIME, :t_transportation_cost, :t_handling_cost, :t_storage_cost, :TU_INFO, :t_handling_capacity, :t_supply_demand_p, :t_stock_configuration_p, 
+	            :PLAN_DATA, :RULE_PLAN_LOC, :T_PRO_LOC_RES); 
+        
+        END IF;
+    
+    ELSE
+        
+        IF :V_OP_SETTING_TYPE = 1 THEN
+        
+            CALL "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_ext_determination_for_return_op_1_rulegroup"(
+                :RULE_GROUP_ID, :V_NODE_ID, :EXECUTION_ID, :IN_START_TIME, :RULE_PLAN_LOC, :PLAN_DATA, :TU_INFO, 
+                :T_TRANSPORTATION_COST, :T_HANDLING_COST, :T_STORAGE_COST, :T_HANDLING_CAPACITY
+            );
+        
+        END IF;
+        
+        IF :V_OP_SETTING_TYPE = 2 THEN
+        
+            CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_ext_determination_for_return_op_2_rulegroup" (
+                :RULE_GROUP_ID, :HANDLING_CAPA, :EXECUTION_ID, :IN_START_TIME, :RULE_PLAN_LOC, 
+                :TU_INFO, :T_TRANSPORTATION_COST, :T_SUPPLY_DEMAND_P, :T_STOCK_CONFIGURATION_P,  :T_HANDLING_COST, :T_HANDLING_CAPACITY
+            );
+        
+        END IF;
+        
+        IF :V_OP_SETTING_TYPE = 3 THEN
+        
+            CALL "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_ext_determination_for_return_op_3_rulegroup"(
+                :RULE_GROUP_ID,  :V_NODE_ID, :HANDLING_CAPA, :EXECUTION_ID, :IN_START_TIME, :RULE_PLAN_LOC, :PLAN_DATA,
+                :TU_INFO, :T_TRANSPORTATION_COST, :T_SUPPLY_DEMAND_P, :T_STOCK_CONFIGURATION_P,  :T_HANDLING_COST, :T_HANDLING_CAPACITY, :T_STORAGE_COST
+            );
+            
+        END IF;
+        
+	END IF;
+
+IF :V_RULE_TYPE = 1 THEN	  
+
+DELETE FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_tu_pickup_list_rulegroup"
+WHERE (EXECUTION_ID,RULE_ID) IN (SELECT DISTINCT EXECUTION_ID,RULE_ID FROM :TU_INFO);
+
+ELSE
+DELETE FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_tu_return_list_rulegroup"
+WHERE (EXECUTION_ID,RULE_ID) IN (SELECT DISTINCT EXECUTION_ID,RULE_ID FROM :TU_INFO);
+
+END IF;
+END IF;
+END;

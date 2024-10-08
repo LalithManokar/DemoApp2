@@ -1,0 +1,11 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::p_basic_node_clean" ( ) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+
+DELETE FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node";
+DELETE FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node_attribute";
+
+END;

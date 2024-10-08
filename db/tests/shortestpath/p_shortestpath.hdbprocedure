@@ -1,0 +1,24 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.tests.shortestpath::p_shortestpath" (
+in t_network "sap.tm.trp.db.tests.shortestpath::tt_network",
+in t_start_id integer,
+in t_end_id integer,
+out t_path "sap.tm.trp.db.tests.shortestpath::tt_path"
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	--DEFAULT SCHEMA <default_schema_name>
+	READS SQL DATA AS
+BEGIN
+
+t_sd = select :t_start_id as "NODE_ID", 1 as "SUPPLY_DEMAND" from dummy
+			union all
+			select :t_end_id as "NODE_ID", -1 as "SUPPLY_DEMAND" from dummy;
+			
+t_graph = select "FROM_ID","TO_ID",0 as "LOWER",1 as "CAPACITY", "DISTANCE" as "COST" from :t_network;
+
+call "_SYS_AFL"."OFL_AREA_NETWORK_SIMPLEX_SOLVE_PROC"(:t_sd, :t_graph, t_flow);
+
+t_path = select "FROM_ID","TO_ID" from :t_flow;
+
+
+END;

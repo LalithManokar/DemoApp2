@@ -1,0 +1,28 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_supplydemand_location_filter_check" (
+    IN IN_RULE_ID INTEGER,
+    OUT STATUS INTEGER,  --0 error  1 success
+    OUT MESSAGE VARCHAR(200)
+ ) 
+	LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+    
+BEGIN
+  DECLARE SUPPLYDEMAND_ID INTEGER;
+  
+  SELECT IFNULL (MAX (T1.ID),0) INTO SUPPLYDEMAND_ID
+  FROM "sap.tm.trp.db.pipeline::cv_get_plan_list" T1
+  INNER JOIN "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" T2
+  ON (T1.ID = T2.SD_PLAN_ID AND T2.ID = :IN_RULE_ID)
+  WHERE T1.LOCATION_FILTER_TYPE = 1;
+  
+  IF :SUPPLYDEMAND_ID >0 THEN
+    STATUS := 1;
+    MESSAGE := 'MSG_SUCCESS_STATUS';
+  ELSE
+    STATUS := 0;
+    MESSAGE := 'MSG_ERROR_SUPPLYDEMAND_NEED_BASED_LOCATIONS';
+  END IF ;
+  
+END;

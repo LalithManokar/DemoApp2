@@ -1,0 +1,23 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT 
+	T1.ID,
+	T1.SCHEDULE_ID AS RUN_ID,
+	T1.MODEL_ID AS GROUP_ID,
+	CASE WHEN T3.STATUS = 'SUCCESS' THEN 1 ELSE -1 END AS EXECUTION_STATUS,
+	CASE
+                    WHEN ( T3.STARTED_AT = '' OR T3.STARTED_AT IS NULL) THEN NULL
+                    WHEN ( T2.TIMEZONES = '' OR T2.TIMEZONES IS NULL) THEN TO_VARCHAR(UTCTOLOCAL(T3.STARTED_AT, 'UTC', 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	                ELSE TO_VARCHAR(UTCTOLOCAL(T3.STARTED_AT, T2.TIMEZONES, 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	             END AS EXECUTION_DATE,
+	SECONDS_BETWEEN(T3.STARTED_AT, T3.FINISHED_AT) AS EXECUTION_TIME
+	FROM \"sap.tm.trp.db.job::t_job_schedule\" T1
+	INNER JOIN \"sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_group_schedule\" T2 ON T1.MODEL_ID = T2.GROUP_ID
+	INNER JOIN \"_SYS_XS\".\"JOB_LOG\" T3 ON T1.SCHEDULE_ID = T3.ID AND T3.STATUS <> 'SCHEDULED' AND T3.STATUS <> 'RUNNING'
+	INNER JOIN \"sap.tm.trp.db.pickupreturn.rulesetgroup::t_job_process\" T4 ON T4.CODE = T1.SCHEDULE_TYPE";
+
+depends_on = [
+	"sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_group_schedule",
+	"sap.tm.trp.db.job::t_job_schedule",
+	"_SYS_XS::JOB_LOG",
+	"sap.tm.trp.db.pickupreturn.rulesetgroup::t_job_process"
+	];

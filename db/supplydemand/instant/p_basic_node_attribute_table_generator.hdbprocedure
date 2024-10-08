@@ -1,0 +1,28 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::p_basic_node_attribute_table_generator" ( 
+	IN OPERATION CHAR(1),
+	IN COL_NAME NVARCHAR(20),
+	IN DATA_TYPE NVARCHAR(15)
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS	
+BEGIN
+
+	DECLARE SQL_STR NVARCHAR(5000);
+	DECLARE TABLE_NAME NVARCHAR(100);
+	--DECLARE EXIT HANDLER FOR SQLEXCEPTION
+	
+	TABLE_NAME := '"sap.tm.trp.db.supplydemand.instant::t_basic_node_attribute"';
+	
+	IF :OPERATION = 'I' THEN
+		SQL_STR := 'ALTER TABLE ' ||  :TABLE_NAME || ' ADD ( "' || escape_double_quotes(:COL_NAME) || '" ' || escape_single_quotes(:DATA_TYPE) || ')';
+	ELSE
+		SQL_STR := 'ALTER TABLE ' ||  :TABLE_NAME || ' DROP ( "' || escape_double_quotes(:COL_NAME) || '" )';
+	END IF ;
+	
+	IF SQL_STR <> '' THEN
+		EXEC( :SQL_STR);
+	END IF ;
+		
+END;

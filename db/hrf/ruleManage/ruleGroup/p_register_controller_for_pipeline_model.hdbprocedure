@@ -1,0 +1,51 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_register_controller_for_pipeline_model" ( 
+IN PIPELINE_MODEL_ID BIGINT--,
+--OUT SUCCESS_FLAG INTEGER 
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+DECLARE PIPELINE_MODEL_EXISTING INTEGER;
+DECLARE DEFAULT_ALERT_RULE_GROUP_ID BIGINT;
+DECLARE SUCESS_FLAG01 INTEGER;
+
+DECLARE DEFAULT_KPI_RULE_GROUP_ID BIGINT;
+--DECLARE DEFAULT_ALERT_RULE_GROUP_NAME VARCHAR(50) := 'FIXED_SD_RULE_GROUP';
+--DECLARE DEFAULT_KPI_RULE_GROUP_NAME VARCHAR(50) := 'FIXED_KPI_RULE_GROUP';
+DECLARE PIPELINE_MODEL_TYPE_ID INTEGER;
+
+DECLARE PIPELINE_MODEL_TYPE_ID_SD INTEGER;
+DECLARE PIPELINE_MODEL_TYPE_ID_KPI INTEGER;
+
+
+    PIPELINE_MODEL_TYPE_ID_SD := 1; 
+    PIPELINE_MODEL_TYPE_ID_KPI := 2; 
+    
+   --DEFAULT_ALERT_RULE_GROUP_ID := '1';
+  -- DEFAULT_KPI_RULE_GROUP_ID := '2';
+/*  select ALERT_RULE_GROUP_ID into DEFAULT_ALERT_RULE_GROUP_ID
+    from "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group"
+    where NAME = :DEFAULT_ALERT_RULE_GROUP_NAME;
+    
+    select ALERT_RULE_GROUP_ID into DEFAULT_KPI_RULE_GROUP_ID
+    from "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group"
+    where NAME = :DEFAULT_KPI_RULE_GROUP_NAME;
+    */
+    
+    select COUNT(T1.ID) into PIPELINE_MODEL_EXISTING
+    from "sap.tm.trp.db.pipeline::t_pipeline_model" T1
+    where T1.ID = :PIPELINE_MODEL_ID;
+    
+    IF ( :PIPELINE_MODEL_EXISTING > 0)
+    THEN
+        select T1.PIPELINE_MODEL_TYPE_ID into PIPELINE_MODEL_TYPE_ID
+        from "sap.tm.trp.db.pipeline::t_pipeline_model" T1
+        where T1.ID = :PIPELINE_MODEL_ID;        
+        
+        TAB_PIPELINE_MODEL = SELECT ID FROM "sap.tm.trp.db.pipeline::t_pipeline_model" where ID = :PIPELINE_MODEL_ID;
+        call "sap.tm.trp.db.alert.alert_rule_group::p_register_pipeline_model_available_alertRuleGroup" (:PIPELINE_MODEL_TYPE_ID,:TAB_PIPELINE_MODEL,:SUCESS_FLAG01);
+        call "sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_register_pipeline_node_output_dataObject"(:PIPELINE_MODEL_ID);
+    END IF; 
+END;

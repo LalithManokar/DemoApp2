@@ -1,0 +1,140 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_cost_model_save"(
+   IN COST_MODEL_ID BIGINT, --IF NEW CREATED, PASS -1 AS COST_MODEL_ID
+    IN NAME NVARCHAR(50),
+    IN DESC VARCHAR(500),
+    IN CURRENCY_CODE NVARCHAR(20),
+    IN TRANSPORTAION_MODE_LIST "sap.tm.trp.db.costmodel::tt_transportation_means_with_dataset",
+    IN CARRIER_ID_LIST "sap.tm.trp.db.costmodel::tt_carrier_id_with_dataset",
+    IN COST_DATASET_LIST "sap.tm.trp.db.costmodel::tt_cost_dataset_info",
+    IN RESOURCE_CATEGORY NVARCHAR(20),
+    OUT ID BIGINT,
+    OUT OUT_MESSAGE VARCHAR(50)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE USER_ID BIGINT;
+    DECLARE VAR_COST_MODEL_ID BIGINT := :COST_MODEL_ID;
+    DECLARE ACTION_CREATE_CODE VARCHAR(20) := 'CREATE';
+    DECLARE ACTION_UPDATE_CODE VARCHAR(20) := 'UPDATE';
+    DECLARE RETURN_CODE TINYINT;
+    DECLARE VAR_CURRENCY_CODE VARCHAR(20);
+    DECLARE I_COUNT INTEGER;
+    DECLARE I_MANDATORY_COST_MODEL_ID INTEGER;
+    OUT_MESSAGE :='MSG_SUCCESS_STATUS';
+    
+     ID := :COST_MODEL_ID;
+     CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+   
+    
+    IF :COST_MODEL_ID = -1 THEN
+        SELECT "sap.tm.trp.db.costmodel::s_cost_model_new".NEXTVAL INTO VAR_COST_MODEL_ID 
+        FROM DUMMY;        
+        ID := :VAR_COST_MODEL_ID;
+        
+    UPSERT "sap.tm.trp.db.costmodel::t_cost_model_new"
+    (ID, NAME, DESC, CURRENCY_CODE,CREATED_BY,CREATED_ON,LAST_MODIFIED_BY,LAST_MODIFIED_ON, RESOURCE_CATEGORY)
+    SELECT :VAR_COST_MODEL_ID, UPPER(:NAME), :DESC, :CURRENCY_CODE,IFNULL(T1.CREATED_BY,:USER_ID) AS USER_ID, IFNULL(T1.CREATED_ON,CURRENT_UTCTIMESTAMP) AS CREATED_ON,:USER_ID, CURRENT_UTCTIMESTAMP, :RESOURCE_CATEGORY
+    FROM (
+	    SELECT NULL AS CREATED_BY,NULL AS CREATED_ON
+	    FROM DUMMY
+	   
+     )T1;
+  
+    
+
+  ELSE 
+  
+   --update, check if the input CURRENCY_CODE equals the currency_code in DB, if no, check if it is assigned to network setting group, if yes, return error code:
+    SELECT IFNULL(MAX(T2.CURRENCY_CODE),'') INTO VAR_CURRENCY_CODE
+    FROM "sap.tm.trp.db.whereusedlist::v_used_cost_model" T1
+    INNER JOIN "sap.tm.trp.db.costmodel::t_cost_model_new" T2 ON (T1.OBJECT_CODE = T2.NAME)
+    WHERE T2.ID = :COST_MODEL_ID; 
+  
+    
+     
+    
+    IF  VAR_CURRENCY_CODE <> '' THEN
+	    IF VAR_CURRENCY_CODE <> :CURRENCY_CODE THEN
+	         OUT_MESSAGE := 'MSG_CURRENCY_CHANGE_ERROR_COST_MODEL';
+	        RETURN;
+	    ELSE
+	       --check if the cost model is used by a network, and this cost model is the mandatory cost model of the network. if yes, should have at least one distance based cost dataset:
+	       SELECT COUNT(1) INTO I_COUNT
+	       FROM :COST_DATASET_LIST T1
+	       INNER JOIN "sap.tm.trp.db.costmodel::t_cost_dataset" T2 ON (T1.ID = T2.ID)
+	       WHERE COST_TYPE_CODE = 'DISTANCE_BASED_COST';
+	       
+	       SELECT COUNT(1) INTO I_MANDATORY_COST_MODEL_ID
+	       FROM "sap.tm.trp.db.planningcockpit::t_network_setting_group"
+	       WHERE MANDATORY_COST_MODEL_ID = :COST_MODEL_ID;
+	       
+	        IF I_COUNT = 0 AND I_MANDATORY_COST_MODEL_ID>0 THEN
+              OUT_MESSAGE := 'MSG_SHOULD_HAVE_DISTANCE_BASED_DATASET';
+              RETURN;
+            END IF;   
+	    END IF;
+    END IF; 
+    
+   
+    
+    
+     
+     -- SET INVALID FLAG IN RELATED NETWORK MODLE
+	NETWORK_SETTING_GROUP_ID_LIST =
+		    SELECT T0.USED_OBJECT_ID AS ID
+		    FROM "sap.tm.trp.db.whereusedlist::v_used_cost_model" T0
+		    INNER JOIN "sap.tm.trp.db.costmodel::t_cost_model_new" T1 ON T1.NAME = T0.OBJECT_CODE
+		    WHERE T0.CATEGORY = 'Network Setting Group' AND T1.ID = :COST_MODEL_ID
+	    ;  
+	CALL "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_invalidate_network_by_setting_group"(:NETWORK_SETTING_GROUP_ID_LIST,'C',RETURN_CODE,MESSAGE,LOG); 
+
+     
+    UPSERT "sap.tm.trp.db.costmodel::t_cost_model_new"
+    (ID, NAME, DESC, CURRENCY_CODE,CREATED_BY,CREATED_ON,LAST_MODIFIED_BY,LAST_MODIFIED_ON,RESOURCE_CATEGORY)
+    SELECT :VAR_COST_MODEL_ID, UPPER(:NAME), :DESC, :CURRENCY_CODE,IFNULL(T1.CREATED_BY,:USER_ID) AS USER_ID, IFNULL(T1.CREATED_ON,CURRENT_UTCTIMESTAMP) AS CREATED_ON,:USER_ID, CURRENT_UTCTIMESTAMP,:RESOURCE_CATEGORY
+    FROM ( 
+	    SELECT A.CREATED_BY ,A.CREATED_ON
+	    FROM "sap.tm.trp.db.costmodel::t_cost_model_new" A WHERE ID = :VAR_COST_MODEL_ID
+     )T1;
+ 
+ 
+  END IF;
+  
+  
+  DELETE FROM "sap.tm.trp.db.costmodel::t_cost_model_carrier" 
+  WHERE COST_MODEL_ID = :VAR_COST_MODEL_ID;
+  
+  INSERT INTO "sap.tm.trp.db.costmodel::t_cost_model_carrier"
+  (COST_MODEL_ID,COST_DATASET_ID,CARRIER_ID)
+  SELECT :VAR_COST_MODEL_ID, T1.COST_DATASET_ID, T1.CARRIER_ID
+  FROM :CARRIER_ID_LIST T1
+  WHERE T1.CARRIER_ID IS NOT NULL;
+  
+  DELETE FROM "sap.tm.trp.db.costmodel::t_cost_model_transportation_means" 
+  WHERE COST_MODEL_ID = :VAR_COST_MODEL_ID;
+  
+  INSERT INTO "sap.tm.trp.db.costmodel::t_cost_model_transportation_means"
+  (COST_MODEL_ID,COST_DATASET_ID,TRANSPORTATION_MODE_CODE)
+  SELECT :VAR_COST_MODEL_ID,T1.COST_DATASET_ID,T1.TRANSPORTATION_MODE_CODE
+  FROM :TRANSPORTAION_MODE_LIST T1;
+  
+  DELETE FROM "sap.tm.trp.db.costmodel::t_cost_model_dataset" 
+  WHERE COST_MODEL_ID = :VAR_COST_MODEL_ID;
+  
+  INSERT INTO "sap.tm.trp.db.costmodel::t_cost_model_dataset"
+  (COST_MODEL_ID,COST_DATASET_ID,PRIORITY)
+  SELECT :VAR_COST_MODEL_ID,T1.ID,T1.PRIORITY
+   FROM :COST_DATASET_LIST T1;
+   
+   IF :COST_MODEL_ID = -1 THEN
+	    INSERT INTO "sap.tm.trp.db.costmodel::t_cost_model_history"(ID,COST_MODEL_ID,USER_ID,ACTION_CODE,ACTION_TIME)
+	    VALUES ("sap.tm.trp.db.costmodel::s_cost_model_history".nextVal,:VAR_COST_MODEL_ID,:USER_ID,:ACTION_CREATE_CODE,CURRENT_UTCTIMESTAMP);
+    ELSE 
+      INSERT INTO "sap.tm.trp.db.costmodel::t_cost_model_history"(ID,COST_MODEL_ID,USER_ID,ACTION_CODE,ACTION_TIME)
+      VALUES ("sap.tm.trp.db.costmodel::s_cost_model_history".nextVal,:VAR_COST_MODEL_ID,:USER_ID,:ACTION_UPDATE_CODE,CURRENT_UTCTIMESTAMP);
+    END IF;
+   
+END;

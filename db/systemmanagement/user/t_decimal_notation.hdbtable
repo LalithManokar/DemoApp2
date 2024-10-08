@@ -1,0 +1,13 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = INTEGER; nullable = false;},
+    {name = "FORMAT"; sqlType = VARCHAR; length = 50; nullable = true;},
+    {name = "CODE";sqlType = NVARCHAR; length = 20; nullable = true;},
+    {name = "DESC"; sqlType = VARCHAR; length = 50; nullable = true;}
+];
+table.indexes = [
+  {name = "DECIMAL_NOTATION_INDEX"; unique = true; indexColumns = ["CODE"];}
+];
+
+table.primaryKey.pkcolumns = ["ID"];

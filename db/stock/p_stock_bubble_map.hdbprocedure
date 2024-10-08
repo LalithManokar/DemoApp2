@@ -1,0 +1,143 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.stock::p_stock_bubble_map" (
+    IN EQUIPMENT_FILTER_ID BIGINT,
+    IN LOCATION_FILTER_ID BIGINT,
+    IN XMIN DOUBLE,
+    IN XMAX DOUBLE,
+    IN YMIN DOUBLE,
+    IN YMAX DOUBLE,
+    IN HIERARCHY_LEVEL INT,
+    OUT out_stock_bubble_map "sap.tm.trp.db.stock::tt_stock_bubble_map_info",
+    OUT TOO_MUCH_LOCATION_FLAG SMALLINT,
+    OUT GIS_TYPE VARCHAR(10),
+    OUT OUT_LOCATIONS_XPOS_YPOS_INVALID  "sap.tm.trp.db.pipeline::tt_location_info_list" 
+    ) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+--LOCATION_TYPE INT;
+--EQUIP_FLAG INT;
+IN_POLYGON CLOB;
+SQL_STR CLOB;
+BEGIN
+ 
+	 DECLARE STATUS_TYPE_NOT_IN_TRANSACTION VARCHAR(10) := 'NIT';
+	-- DECLARE EQUIPMENT_TYPE_EQUIPMENT SMALLINT :=1;
+	-- DECLARE EQUIPMENT_TYPE_EQUIPMENTGROUP SMALLINT :=2;
+	 DECLARE BUBBLE_FLAG SMALLINT :=1;
+	 DECLARE MAX_LOCATION_NUM_ON_MAP INTEGER :=2000;
+	 DECLARE I_COUNT INTEGER := 0;
+	 DECLARE LOCATION_TYPE SMALLINT;					--Changed from VARCHAR(30) to SMALLINT  By Shawn	 August 4, 2016
+	 DECLARE GIS_TYPE_POINT VARCHAR(30) := 'POINT';
+	 DECLARE GIS_TYPE_POLYGON VARCHAR(30) := 'POLYGON';
+	 DECLARE MAX_LEVEL INTEGER := 0 ;
+	 DECLARE LV_RESOURCE_CATEGORY STRING;
+	 DECLARE LV_RESOURCE_CATEGORY_TYPE STRING;
+	 DECLARE VAR_LOCATION_NUM INTEGER := 0; 
+	 	 
+	TOO_MUCH_LOCATION_FLAG :=0; 
+	 	 
+	SELECT IFNULL(MAX(LOCATION_TYPE),0) INTO LOCATION_TYPE
+	FROM "sap.tm.trp.db.filter::t_location_filter" 
+	WHERE ID = :LOCATION_FILTER_ID;
+     
+   	--resource category
+	SELECT TOP 1 RESOURCE_CATEGORY, RESOURCE_CATEGORY_TYPE INTO LV_RESOURCE_CATEGORY, LV_RESOURCE_CATEGORY_TYPE 
+   	FROM "sap.tm.trp.db.filter::t_equipment_filter" T1
+   	INNER JOIN "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings" T2
+   	ON T1.RESOURCE_CATEGORY = T2.CODE
+   	WHERE T1.ID = :EQUIPMENT_FILTER_ID;
+
+	IN_POLYGON := 'Polygon(('||:xMin||' '||:yMax||','||:xMax||' '||:yMax||','||:xMax||' '||:ymin||','||:xMin||' '||:yMin||','||:xMin||' '||:yMax||'))';
+	
+	CALL "sap.tm.trp.db.stock::p_get_locations_of_location_filter" (:LOCATION_FILTER_ID,:LOCATION_TYPE,:HIERARCHY_LEVEL,TOTAL_GEO,TOTAL_GEO_ID_AND_LOCATION_IDS,GIS_TYPE);
+
+	
+	IN_LOCATION_IDS_SQL = SELECT GEO_ID AS ID FROM :TOTAL_GEO;
+	
+	--Get the locations and the polygon or xpoint ypoint info that within the input polygon:
+	CALL "sap.tm.trp.db.stock::p_get_xpos_or_polygon_info_for_location_for_stock"(:IN_LOCATION_IDS_SQL,:LOCATION_TYPE,:IN_POLYGON,:HIERARCHY_LEVEL,:LOCATION_FILTER_ID,OUT_GEO_POLYGON_INFO_SQL,GIS_TYPE,OUT_LOCATIONS_XPOS_YPOS_INVALID);
+    
+    SELECT COUNT(1) AS LOCATION_NUM INTO VAR_LOCATION_NUM FROM :OUT_GEO_POLYGON_INFO_SQL;
+                 
+    
+    IF VAR_LOCATION_NUM > :MAX_LOCATION_NUM_ON_MAP THEN
+    	out_stock_bubble_map = 
+    		SELECT NULL AS LOCATION_ID,NULL AS LOCATION_NAME,NULL AS LATITUDE,NULL AS LONGITUDE,NULL AS BOUNDARY,
+    			NULL AS SURPLUS_DEFICIT_NUM,NULL AS CURRENT_STOCK,NULL AS MESSAGE,NULL AS MIN_SAFETY,NULL AS MAX_SAFETY
+	        FROM DUMMY;
+	        
+	    TOO_MUCH_LOCATION_FLAG := 1;
+        RETURN;
+	END IF;
+
+
+		
+	SQL_LOCATION_EQUIPMENT_STORAGE_INFO = 
+		SELECT T2.GEO_ID,T2.GEO_NAME,
+		IFNULL(T12.CURRENT_STOCK,0) AS CURRENT_STOCK , T2.MIN_SAFETY,T2.MAX_SAFETY,T2.MAX_CAPACITY,:LOCATION_TYPE AS LOCATION_TYPE
+		FROM
+		(   --Get the min max safety setting info for the geo_id (location head setting):  
+			SELECT T0.GEO_ID, T0.GEO_NAME,T10.MIN_SAFETY,T10.MAX_SAFETY, T10.MAX_CAPACITY
+			FROM :TOTAL_GEO T0
+			LEFT OUTER JOIN (
+				SELECT A.LOCATION_ID,A.MIN_SAFETY,A.MAX_SAFETY,A.MAX_CAPACITY
+				FROM "sap.tm.trp.db.stock::v_stock_config_for_container" A 
+				WHERE A.LOCATION_HEAD_FLAG = 1 AND A.RESOURCE_CATEGORY = :LV_RESOURCE_CATEGORY
+			)T10 ON (T0.GEO_ID = T10.LOCATION_ID)
+		)T2
+		LEFT JOIN 
+		( --Get the current stock for each location of the locatoin filter:  
+		  --sum all the equip of the location that defined in equip filter and the attribute group as stock num of the location head, use the location head's min max setting
+			SELECT T3.GEO_ID,(CASE LV_RESOURCE_CATEGORY_TYPE WHEN 'CN' THEN SUM(T6.TEU_COUNT) ELSE COUNT(T6.RESOURCE_ID) END) AS CURRENT_STOCK 
+			FROM :TOTAL_GEO_ID_AND_LOCATION_IDS T3
+			INNER JOIN "sap.tm.trp.db.semantic.resource::v_stock_resource_last_status" T6 ON (T3.LOCATION_ID = T6.LOCATION_ID)
+			INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t8 
+			ON (t6.RESOURCE_CATEGORY = t8.MAPPING_CODE AND t8.CODE = :LV_RESOURCE_CATEGORY)		
+			GROUP BY T3.GEO_ID
+		)T12 ON (T2.GEO_ID = T12.GEO_ID );
+                    
+	
+	SQL_CALL_ALERT = 
+		SELECT GEO_ID AS LOCATION_ID,GEO_NAME AS LOCATION_NAME,LOCATION_TYPE, 
+            'N/A' AS EQUIP_TYPE_ID,'N/A' AS EQUIP_TYPE_NAME,-1 AS EQUIP_TYPE_CATEGORY,
+            CURRENT_DATE AS DATE,CURRENT_STOCK AS STOCK,MIN_SAFETY AS  MIN_SAFETY_STOCK, 
+            MAX_SAFETY AS MAX_SAFETY_STOCK,MAX_CAPACITY,
+            :LV_RESOURCE_CATEGORY AS RESOURCE_CATEGORY
+        FROM :SQL_LOCATION_EQUIPMENT_STORAGE_INFO;
+                     
+    SELECT COUNT(1) INTO I_COUNT FROM :SQL_CALL_ALERT; 
+                 
+    
+    IF :I_COUNT >0 THEN 
+        --Get the deficit surplus info for the locations: 
+        --Note: the deficit surplus info should use the total location list of the location filter, should not use the location list within the input polygon. the reason is that the alert score will use the total location to do the normalization, 
+        --if use the location within the input polygon, when move the map on the screen, the location list may be changed according to different input polygon, so the alert score after normolization will be changed. the alert score should be the same 
+        --for a specific location, it should not be changed if the moved the map.
+		CALL "sap.tm.trp.db.hrf.resourceStock::p_call_resource_stock_controller"(:BUBBLE_FLAG,:SQL_CALL_ALERT,OUT_ALERT_SQL,OUT_BUBBLE_SQL);		
+    
+		out_stock_bubble_map =
+			SELECT T1.GEO_ID AS LOCATION_ID,T1.GEO_NAME AS LOCATION_NAME,
+			    T2.XPOS AS LATITUDE,T2.YPOS AS LONGITUDE,T2.BOUNDARY,
+			    IFNULL(T3.SURPLUS_DEFICIT_NUM,0) AS SURPLUS_DEFICIT_NUM,
+			    T1.CURRENT_STOCK,T3.MESSAGE,T1.MIN_SAFETY,T1.MAX_SAFETY
+			FROM :SQL_LOCATION_EQUIPMENT_STORAGE_INFO T1
+			INNER JOIN :OUT_GEO_POLYGON_INFO_SQL T2 ON (T1.GEO_ID = T2.LOCATION_ID)
+			LEFT OUTER JOIN 
+				(SELECT * 
+				FROM :OUT_BUBBLE_SQL 
+				WHERE EQUIP_TYPE_ID = 'N/A'
+				) T3 ON (T1.GEO_ID = T3.LOCATION_ID );
+				
+	ELSE	   
+	
+		out_stock_bubble_map =  
+			SELECT T1.GEO_ID AS LOCATION_ID,T1.GEO_NAME AS LOCATION_NAME,
+			    T2.XPOS AS LATITUDE,T2.YPOS AS LONGITUDE,T2.BOUNDARY,
+			    NULL AS SURPLUS_DEFICIT_NUM,T1.CURRENT_STOCK ,NULL AS MESSAGE,T1.MIN_SAFETY,T1.MAX_SAFETY
+			FROM :SQL_LOCATION_EQUIPMENT_STORAGE_INFO T1 
+			INNER JOIN :OUT_GEO_POLYGON_INFO_SQL T2 ON (T1.GEO_ID = T2.LOCATION_ID);
+			
+	END IF;
+
+END;

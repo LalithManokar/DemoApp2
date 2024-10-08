@@ -1,0 +1,31 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::p_archive_insert_execution_detail" (
+IN JOB_META_ID BIGINT,
+IN RULE_ID BIGINT,
+IN TABLE_ID BIGINT,
+IN HANDLE_ID BIGINT,
+OUT EXECUTION_ID BIGINT
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	AS
+BEGIN
+/***************************** 
+	Write your procedure logic 
+ *****************************/
+ 
+DECLARE IN_PROGRESS INTEGER;
+DECLARE EXECUTED_BY BIGINT;
+DECLARE USERNAME VARCHAR(60);
+
+IN_PROGRESS:=3;
+
+SELECT CREATED_BY INTO USERNAME FROM "sap.tm.trp.db.common.job::t_jobs_metadata" WHERE ID = :JOB_META_ID;
+EXECUTION_ID := JOB_META_ID;
+
+SELECT IFNULL(MAX(ID),-100) INTO EXECUTED_BY FROM "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join" WHERE USERNAME = :USERNAME;
+
+ INSERT INTO "sap.tm.trp.db.archive::t_archive_execution_detail" 
+        (ID,RULE_ID,TABLE_ID,EXECUTED_BY,START_TIME,STATUS,HANDLE_ID, RECORD_COUNT)
+        VALUES(:EXECUTION_ID,:RULE_ID,:TABLE_ID,:EXECUTED_BY,CURRENT_UTCTIMESTAMP,:IN_PROGRESS,:HANDLE_ID, 0); 
+END;

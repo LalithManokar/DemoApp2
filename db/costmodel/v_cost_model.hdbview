@@ -1,0 +1,28 @@
+schema = "SAP_TM_TRP";
+
+query  = "  
+		SELECT T1.ID,T1.NAME,T1.DESC,T1.CURRENCY_CODE,
+		CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+		     WHEN T1.CREATED_BY <> 0 AND T1.CREATED_BY IS NOT NULL AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+		     WHEN T1.CREATED_BY = 0 OR T1.CREATED_BY IS NULL THEN ''
+		     ELSE '***' END AS CREATED_BY,
+		T1.CREATED_ON,
+		CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+		     WHEN T1.LAST_MODIFIED_BY <> 0 AND T1.LAST_MODIFIED_BY IS NOT NULL AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+		     WHEN T1.LAST_MODIFIED_BY = 0 OR T1.LAST_MODIFIED_BY IS NULL THEN ''
+		     ELSE '***' END AS LAST_MODIFIED_BY,
+		T1.LAST_MODIFIED_ON,
+		T1.RESOURCE_CATEGORY AS RESOURCE_CATEGORY
+		FROM \"sap.tm.trp.db.costmodel::t_cost_model_new\" T1
+		LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS T2
+		                 ON T1.CREATED_BY = T2.ID
+		LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS T3
+		                 ON T1.LAST_MODIFIED_BY = T3.ID
+		LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T9  ON T2.USERNAME = T9.USERNAME
+        LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T10  ON T3.USERNAME = T10.USERNAME               
+        CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE";
+                 
+depends_on_table = ["sap.tm.trp.db.costmodel::t_cost_model_new"]; 
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_unblock_users",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"]; 

@@ -1,0 +1,16 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT T1.ID AS OBJECT_TYPE_ID,
+                 T2.DESC AS NAME,
+                 T3.DISPLAY_FLAG
+          FROM \"sap.tm.trp.db.objectregistration::t_object_type\" AS T1
+          LEFT JOIN \"sap.tm.trp.db.objectregistration::t_object_type_t\" AS T2
+          ON (T1.ID = T2.ID)
+          LEFT JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE_T
+          ON (T2.SPRAS = LANGUAGE_T.SPRAS)
+          LEFT JOIN \"sap.tm.trp.db.objectregistration::t_object_type_display_flag\" AS T3
+          ON (T1.ID = T3.OBJECT_CODE)";
+
+depends_on_table = ["sap.tm.trp.db.objectregistration::t_object_type",
+                    "sap.tm.trp.db.objectregistration::t_object_type_t",
+                    "sap.tm.trp.db.objectregistration::t_object_type_display_flag"];
+depends_on_view  = ["sap.tm.trp.db.semantic.common::v_lang_code"];

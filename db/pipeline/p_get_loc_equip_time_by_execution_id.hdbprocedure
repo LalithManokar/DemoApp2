@@ -1,0 +1,120 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_get_loc_equip_time_by_execution_id" ( 
+  IN EXECUTION_ID BIGINT,
+  IN DFT_NODE_ID BIGINT,  
+  OUT locations "sap.tm.trp.db.pipeline::tt_filter_location",
+  OUT time_intervals "sap.tm.trp.db.pipeline::tt_filter_date",
+  OUT shift_time_intervals "sap.tm.trp.db.pipeline::tt_filter_date",
+  OUT equip_types "sap.tm.trp.db.pipeline::tt_filter_resource",
+  OUT CAL_STATUS INTEGER 
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN  
+
+   
+   DECLARE RES_EXIST INTEGER;
+   DECLARE EQUIP_FILTER_TYPE INTEGER;
+   DECLARE LOCATION_FILTER_TYPE INTEGER;
+   DECLARE DATE_OFFSET INTEGER;
+   DECLARE LOCATION_TYPE INTEGER := 1;
+   DECLARE LOCATION_GROUP_TYPE INTEGER := 2;
+   DECLARE REGION_TYPE INTEGER :=5;
+   DECLARE REGION_GROUP_TYPE INTEGER :=6;   
+   DECLARE EQUIP_TYPE INTEGER := 1;
+   DECLARE EQUIP_GROUP_TYPE INTEGER := 2;   
+   
+   CAL_STATUS := 0;
+   
+   result = SELECT LOCATION_ID, LOCATION_NAME, LOCATION_FILTER_TYPE, EQUIP_TYPE_ID, EQUIP_TYPE_NAME, EQUIP_FILTER_TYPE,
+            TIME_INTERVAL_ID, START_TIME, END_TIME, SEQUENCE, TIME_INTERVAL 
+            FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" 
+            WHERE PLAN_EXECUTION_ID = :EXECUTION_ID AND NODE_ID = :DFT_NODE_ID;
+   
+   SELECT COUNT(1) INTO RES_EXIST FROM :result;
+   
+   IF :RES_EXIST > 0 THEN 
+   
+     SELECT TOP 1 EQUIP_FILTER_TYPE, LOCATION_FILTER_TYPE INTO EQUIP_FILTER_TYPE, LOCATION_FILTER_TYPE
+     FROM :result;
+
+     -- Get date shift offset from config table
+     SELECT IFNULL(MAX(DATE_OFFSET),0) INTO DATE_OFFSET
+     FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+     WHERE USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+                      
+     tmp_intervals = SELECT DISTINCT START_TIME, END_TIME, ADD_DAYS(START_TIME,DATE_OFFSET) AS SHIFT_START_TIME,
+                     ADD_DAYS(END_TIME,DATE_OFFSET) AS SHIFT_END_TIME,TIME_INTERVAL_ID, TIME_INTERVAL AS INTER_SECONDS,
+                     SEQUENCE FROM :result;
+                                  
+     time_intervals = SELECT START_TIME AS START_TIMESTAMP, END_TIME AS END_TIMESTAMP, TIME_INTERVAL_ID, INTER_SECONDS, SEQUENCE,
+                      YEAR(START_TIME) * 10000000000 + MONTH(START_TIME) * 100000000 + DAYOFMONTH(START_TIME) * 1000000 +  
+                      HOUR(START_TIME) * 10000+ MINUTE(START_TIME) * 100 + TO_INTEGER(SECOND(START_TIME)) AS START_DECIMAL,
+                      YEAR(END_TIME) * 10000000000 + MONTH(END_TIME) * 100000000 + DAYOFMONTH(END_TIME) * 1000000 +  
+                      HOUR(END_TIME) * 10000+ MINUTE(END_TIME) * 100 + TO_INTEGER(SECOND(END_TIME)) AS END_DECIMAL
+                      FROM :tmp_intervals;
+                      
+     shift_time_intervals =
+                      SELECT SHIFT_START_TIME AS START_TIMESTAMP, SHIFT_END_TIME AS END_TIMESTAMP, TIME_INTERVAL_ID,
+                      INTER_SECONDS, SEQUENCE, 
+                      YEAR(SHIFT_START_TIME) * 10000000000 + MONTH(SHIFT_START_TIME) * 100000000 + DAYOFMONTH(SHIFT_START_TIME) * 1000000 +  
+                      HOUR(SHIFT_START_TIME) * 10000+ MINUTE(SHIFT_START_TIME) * 100 + TO_INTEGER(SECOND(SHIFT_START_TIME)) AS START_DECIMAL,
+                      YEAR(SHIFT_END_TIME) * 10000000000 + MONTH(SHIFT_END_TIME) * 100000000 + DAYOFMONTH(SHIFT_END_TIME) * 1000000 +  
+                      HOUR(SHIFT_END_TIME) * 10000+ MINUTE(SHIFT_END_TIME) * 100 + TO_INTEGER(SECOND(SHIFT_END_TIME)) AS END_DECIMAL
+                      FROM :tmp_intervals;
+                      
+     -- equip type
+     IF :EQUIP_FILTER_TYPE = :EQUIP_TYPE THEN                 
+       equip_types = SELECT DISTINCT EQUIP_TYPE_ID AS EQUIP_CODE, EQUIP_TYPE_ID AS EQUIP_GROUP_ID,
+                     EQUIP_TYPE_NAME AS EQUIP_NAME, :EQUIP_TYPE AS EQUIP_FILTER_TYPE
+                     FROM :result; 
+     -- equip group type                                   
+     ELSEIF :EQUIP_FILTER_TYPE = :EQUIP_GROUP_TYPE THEN
+       equip_types = SELECT DISTINCT T2.EQUI_CODE AS EQUIP_CODE, T1.EQUIP_TYPE_ID AS EQUIP_GROUP_ID, T1.EQUIP_TYPE_NAME AS EQUIP_NAME,
+                     :EQUIP_GROUP_TYPE AS  EQUIP_FILTER_TYPE 
+                     FROM :result T1
+                     INNER JOIN "sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth" T2 ON (T1.EQUIP_TYPE_ID = T2.EQUIPMENT_GROUP_ID);
+     ELSE 
+       equip_types = SELECT NULL AS EQUIP_CODE, NULL AS EQUIP_GROUP_ID, NULL AS EQUIP_NAME, NULL AS EQUIP_FILTER_TYPE
+                     FROM DUMMY WHERE 1 = 0;                       
+     END IF;
+
+     -- location filter 
+     IF :LOCATION_FILTER_TYPE = :LOCATION_TYPE THEN 
+        locations = SELECT DISTINCT LOCATION_ID AS GEO_ID, LOCATION_ID, :LOCATION_TYPE AS GEO_FILTER_TYPE, LOCATION_ID AS GEO_GROUP_ID, 
+                   LOCATION_NAME AS GEO_NAME
+                   FROM :result;                  
+                
+     -- location group filter           
+     ELSEIF :LOCATION_FILTER_TYPE = :LOCATION_GROUP_TYPE THEN           
+       locations = SELECT DISTINCT T2.LOCATION_ID AS GEO_ID, T2.LOCATION_ID, :LOCATION_GROUP_TYPE AS GEO_FILTER_TYPE, 
+                   T1.LOCATION_ID AS GEO_GROUP_ID, T1.LOCATION_NAME AS GEO_NAME
+                   FROM :result T1 
+                   LEFT OUTER JOIN  "sap.tm.trp.db.systemmanagement::t_location_group_item" T2 ON (T1.LOCATION_ID = T2.LOCATION_GROUP_ID); 
+             
+     -- there may be regions without any location, the UI show supply and demand values for these regions with 0
+     -- so use left outer join with v_region_location_all  
+     -- region filter(currently, there is no concept of region, that's always zone. But some region related views still can be used to 
+     -- avoid mass code changes)      
+     ELSEIF :LOCATION_FILTER_TYPE = :REGION_TYPE THEN
+       locations = SELECT DISTINCT T1.LOCATION_ID AS GEO_ID, T2.LOCATION_ID, :REGION_TYPE AS GEO_FILTER_TYPE, T1.LOCATION_ID AS GEO_GROUP_ID, 
+                   T1.LOCATION_NAME AS GEO_NAME
+                   FROM :result T1
+                   LEFT OUTER JOIN  "sap.tm.trp.db.systemmanagement.location::v_region_location_all" T2 ON (T1.LOCATION_ID = T2.ROOT_ID);
+                   
+     -- region group filter           
+     ELSEIF :LOCATION_FILTER_TYPE = :REGION_GROUP_TYPE THEN            
+       locations = SELECT DISTINCT T2.ZONE_ID AS GEO_ID, T3.LOCATION_ID, :REGION_GROUP_TYPE AS GEO_FILTER_TYPE, T1.LOCATION_ID AS GEO_GROUP_ID,
+                   T1.LOCATION_NAME AS GEO_NAME
+                   FROM :result T1             
+                   INNER JOIN "sap.tm.trp.db.systemmanagement::t_region_group_item" T2 ON  (T1.LOCATION_ID = T2.REGION_GROUP_ID)
+                   LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement.location::v_region_location_all" T3 ON (T2.ZONE_ID = T3.ROOT_ID);
+     END IF;              
+    
+     CAL_STATUS := 1;
+     
+   END IF;  
+
+    
+END;

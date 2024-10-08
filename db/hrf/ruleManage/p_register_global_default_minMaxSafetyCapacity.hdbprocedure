@@ -1,0 +1,34 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage::p_register_global_default_minMaxSafetyCapacity" ( 
+IN IN_DEFAULT_KEY VARCHAR(50),
+IN IN_DEFAULT_VALUE DOUBLE,
+OUT SUCCESS_FLAG INTEGER 
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    DECLARE EXIST_FLAG INTEGER;
+
+   
+    delete from "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity"
+    where DEFAULT_KEY = :IN_DEFAULT_KEY;
+    
+    insert into "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity"
+        (DEFAULT_KEY,
+         DEFAULT_VALUE)
+        values( :IN_DEFAULT_KEY, 
+                :IN_DEFAULT_VALUE);
+                
+    select count(*) into EXIST_FLAG
+    from  "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity"
+    where DEFAULT_KEY = :IN_DEFAULT_KEY;
+    
+    IF ( :EXIST_FLAG > 0 )
+    THEN
+        SUCCESS_FLAG := 0;
+    ELSE
+        SUCCESS_FLAG := -1;
+    END IF;
+   
+END;

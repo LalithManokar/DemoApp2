@@ -1,0 +1,49 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_distance_based_cost_trigger_refresh_info_prepare"(
+   IN COST_DATASET_ID BIGINT,
+   OUT DATASET_CONNECTION_INFO  "sap.tm.trp.db.costmodel::tt_cost_dataset_connection_info",
+   OUT DISTANCE_BASED_OUT "sap.tm.trp.db.costmodel::tt_distance_based_cost_trigger_refersh"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    READS SQL DATA 
+    AS
+BEGIN
+
+--Note the replace * using base equip type has been done by kevin in middle layer, so remove following code:
+   /* DECLARE VAR_BASE_EQUIP_TYPE VARCHAR(50);
+
+     --Get the base equip type :
+     SELECT IFNULL(MAX(BASE_EQUIP_TYPE),'') INTO VAR_BASE_EQUIP_TYPE
+     FROM "sap.tm.trp.db.systemmanagement::t_config";
+     */
+     
+   RESOURCE_TYPES = SELECT DISTINCT T1.RESOURCE_TYPE_CODE, T1.RESOURCE_CATEGORY,FIRST_VALUE(T2.EQUI_TYPE ORDER BY T2.EQUI_TYPE) AS CATEGORY
+                     FROM "sap.tm.trp.db.semantic.resource::v_resource_type_with_category" T1
+                     INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_type" T2
+                     ON (T1.RESOURCE_TYPE_CODE = T2.RESOURCE_TYPE_CODE)
+                     GROUP BY T1.RESOURCE_TYPE_CODE, T1.RESOURCE_CATEGORY;
+    
+    DISTANCE_BASED_OUT =  
+    SELECT 
+    T4.TRANSPORTATION_MODE_CODE,T4.RESOURCE_TYPE,
+	    T4.CARRIER_ID,T4.UOM_CODE,T4.COST,T4.WILD_STAR_COUNT,T5.CATEGORY AS RESOURCE_CATEGORY
+	FROM
+    (
+	    SELECT T1.TRANSPORTATION_MODE_CODE,MAP(T1.RESOURCE_TYPE,'*',T3.BASE_RESOURCE_TYPE,T1.RESOURCE_TYPE) AS RESOURCE_TYPE,
+	    T1.CARRIER_ID,T1.UOM_CODE,NULL AS COST,T1.WILD_STAR_COUNT, T2.RESOURCE_CATEGORY
+	    --FROM "sap.tm.trp.db.costmodel::t_distance_based_cost" T1
+	    FROM "sap.tm.trp.db.costmodel::cv_distance_cost_model_resource_type_explode"(PLACEHOLDER."$$IP_COST_DATASET_ID$$"=>:COST_DATASET_ID,PLACEHOLDER."$$IP_COST_MODEL_ID$$"=>0) T1
+	    INNER JOIN "sap.tm.trp.db.costmodel::t_cost_dataset" T2 ON (T1.COST_DATASET_ID = T2.ID)
+	    LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings" T3 ON T1.RESOURCE_TYPE = '*' AND T3.CODE = T2.RESOURCE_CATEGORY
+	    WHERE T1.COST_DATASET_ID  = :COST_DATASET_ID 
+        AND ADD_DAYS(T1.LAST_MODIFIED_ON,T2.EXPIRED_DURATION) < CURRENT_UTCTIMESTAMP
+    )T4
+    LEFT OUTER JOIN :RESOURCE_TYPES T5 ON (T4.RESOURCE_TYPE = T5.RESOURCE_TYPE_CODE AND T4.RESOURCE_CATEGORY = T5.RESOURCE_CATEGORY)
+     ;
+    
+    SQL_DATASET_IDS = SELECT :COST_DATASET_ID AS ID FROM DUMMY;
+    
+    CALL "sap.tm.trp.db.costmodel::sp_get_connection_info_of_dataset"(:SQL_DATASET_IDS,DATASET_CONNECTION_INFO);
+   
+END;

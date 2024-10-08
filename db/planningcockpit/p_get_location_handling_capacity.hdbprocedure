@@ -1,0 +1,86 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_location_handling_capacity" (
+	IN PURE_SD "sap.tm.trp.db.planningcockpit::tt_sd_result",
+	IN TIME_ZONE_ID VARCHAR(20),
+	IN RESOURCE_CATEGORY VARCHAR(20),
+	OUT OUTPUT "sap.tm.trp.db.planningcockpit::tt_location_handling_capacity"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA 
+AS
+BEGIN
+
+  --  DECLARE CURR_TIME      TIMESTAMP;
+    DECLARE SD_START_TIME     TIMESTAMP;
+    DECLARE PAST_TIME      INTEGER;
+    DECLARE V_COUNT        INTEGER;
+    
+    LT_LOCATION = SELECT DISTINCT LOCATION_ID FROM :PURE_SD;
+    
+    --Get handling capacity per day base on location   
+    SQL1 =  SELECT T1.LOCATION_ID,
+		    	   IFNULL (T2.HANDLING_CAPACITY, 100000000) AS HANDLING_CAPACITY
+			  FROM :LT_LOCATION AS T1
+			  LEFT JOIN "sap.tm.trp.db.stock::t_stock_config" AS T2  
+			  ON T1.LOCATION_ID = T2.LOCATION_ID AND T2.LOCATION_TYPE = 1 
+			  AND T2.LOCATION_HEAD_FLAG = 1 AND T2.RESOURCE_CATEGORY  = :RESOURCE_CATEGORY;
+		  
+	--Get the records where current time between start time and end time.
+	--As all the locations in the sd plan has same time filter, so just need to fetch the 1 record.
+	/*SD_START_TIME_TEMP = SELECT top 1 T0.START_TIME 
+                	  FROM :PURE_SD AS T0
+                	 WHERE T0.START_TIME <= CURRENT_TIMESTAMP AND
+                	       T0.END_TIME >= CURRENT_TIMESTAMP;
+                	       
+    SELECT COUNT(*)
+      INTO V_COUNT
+      FROM :SD_START_TIME_TEMP;
+      
+    IF V_COUNT = 1 THEN
+        SELECT START_TIME
+          INTO SD_START_TIME
+          FROM :SD_START_TIME_TEMP;
+    
+    	SELECT SECONDS_BETWEEN (:SD_START_TIME, CURRENT_TIMESTAMP) / 3600 
+    	  INTO PAST_TIME
+    	  FROM DUMMY;
+    */
+    
+    	  
+    --Get current time at the give timezone 
+    SELECT HOUR(UTCTOLOCAL(CURRENT_UTCTIMESTAMP, :TIME_ZONE_ID,'platform')) 
+    	INTO PAST_TIME
+    	FROM DUMMY;
+	  
+	--Calculate the remaining handling capacity for the EACH time interval
+	--AS not distinguish equipment type, sum all the supply/demand based on location
+	SQL2 = SELECT T1.LOCATION_ID         AS LOCATION_ID,
+	    			T1.LOCATION_NAME     AS LOCATION_NAME,
+	    			T1.TIME_INTERVAL_ID  AS TIME_INTERVAL_ID,
+	    		    T1.START_TIME        AS START_TIME,
+	    			T1.END_TIME          AS END_TIME,
+	    			SUM(T1.SUPPLY)       AS SUPPLY,
+	    			SUM(T1.DEMAND)       AS DEMAND
+             FROM :PURE_SD    AS T1
+             GROUP BY LOCATION_ID,
+                      LOCATION_NAME,
+                      TIME_INTERVAL_ID,
+                      START_TIME,
+                      END_TIME;   
+                        
+    OUTPUT = SELECT T1.LOCATION_ID       AS LOCATION_ID,
+	    			T1.LOCATION_NAME     AS LOCATION_NAME,
+	    			T1.TIME_INTERVAL_ID  AS TIME_INTERVAL_ID,
+	    		    T1.START_TIME        AS START_TIME,
+	    			T1.END_TIME          AS END_TIME,
+	    			T1.SUPPLY            AS SUPPLY,
+	    			T1.DEMAND            AS DEMAND,
+	    			CASE WHEN T1.END_TIME < CURRENT_TIMESTAMP  
+	    				   THEN 0 
+	    			     WHEN (T1.START_TIME <= CURRENT_TIMESTAMP AND T1.END_TIME >= CURRENT_TIMESTAMP) 
+	    			       THEN T2.HANDLING_CAPACITY * ( 24 - :PAST_TIME )/24
+	    			     ELSE T2.HANDLING_CAPACITY END AS HANDLING_CAPACITY
+             FROM :SQL2    AS T1
+             INNER JOIN :SQL1 AS T2 ON T1.LOCATION_ID = T2.LOCATION_ID;   
+END;

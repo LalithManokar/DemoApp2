@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_role_check_location_group" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_role_check_location_group"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="ID" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="NAME" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="DESC" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="USER_ID" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="CREATED_BY" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="VISIBILITY" length="3"/>
+        <viewAttribute datatype="VARCHAR" id="VISIBILITY_DESC" length="32"/>
+        <viewAttribute datatype="TIMESTAMP" id="CREATED_TIME"/>
+        <viewAttribute datatype="VARCHAR" id="CITY_CODE" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="CITY_NAME" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="STATE_CODE" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="STATE_NAME" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="COUNTRY_CODE" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="COUNTRY_NAME" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="PRIME_LOC_ID" length="22"/>
+        <viewAttribute datatype="DOUBLE" id="XPOS"/>
+        <viewAttribute datatype="DOUBLE" id="YPOS"/>
+        <viewAttribute datatype="VARCHAR" id="MODIFIED_BY" length="60"/>
+        <viewAttribute datatype="TIMESTAMP" id="MODIFIED_TIME"/>
+        <viewAttribute datatype="DOUBLE" id="AVG_XPOS"/>
+        <viewAttribute datatype="DOUBLE" id="AVG_YPOS"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition>
+
+ BEGIN
+
+    
+     --DECLARE NAME VARCHAR(60);
+     --DECLARE USERTYPE INTEGER;
+     DECLARE LOCATION_TYPE_LOCATION_GROUP INTEGER :=2;
+
+     --SELECT USERNAME INTO NAME FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+
+     --SELECT USER_TYPE_ID INTO USERTYPE FROM &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot;
+     --WHERE USERNAME = :NAME;
+
+     --IF :USERTYPE = 99 THEN
+     DECLARE HAS_AUTHORIZATION_FLAG TINYINT;
+     CALL &quot;sap.tm.trp.db.systemmanagement::p_check_location_full_authorization&quot; (
+      HAVE_AUTHORIZATION_FLAG => HAS_AUTHORIZATION_FLAG
+     );
+   IF :HAS_AUTHORIZATION_FLAG = 1 THEN
+        var_out = SELECT
+                T1.ID,
+                T1.NAME,
+                T1.DESC AS DESC,
+                T1.USER_ID,
+                T1.CREATE_BY AS CREATED_BY,
+                T1.VISIBLE_FLAG AS VISIBILITY,
+                T2.DESC AS VISIBILITY_DESC,
+                T1.CREATE_AT AS CREATED_TIME,
+                T1.CITY_CODE,
+                T1.CITY_NAME,
+                T1.STATE_CODE,
+                T1.STATE_NAME,
+                T1.COUNTRY_CODE,
+                T1.COUNTRY_NAME,
+                T1.PRIME_LOC_ID,
+                T1.XPOS,
+                T1.YPOS,
+                T1.LAST_MODIFIED_BY AS MODIFIED_BY,
+                T1.LAST_MODIFIED_TIME AS MODIFIED_TIME,
+                T1.AVG_XPOS,
+                T1.AVG_YPOS
+                FROM &quot;sap.tm.trp.db.systemmanagement::v_user_location_group&quot; T1
+                LEFT OUTER JOIN 
+                (
+                 SELECT T1.CODE,T2.DESC
+                 FROM &quot;sap.tm.trp.db.systemmanagement::t_visibility_type&quot; T1
+                 INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_visibility_type_t&quot; T2
+                 ON (T1.ID = T2.ID)
+                 INNER JOIN &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot; LANGUAGE 
+                 ON (T2.SPRAS = LANGUAGE.SPRAS)
+                ) AS T2 ON T2.CODE = T1.VISIBLE_FLAG;
+
+
+     ELSE
+
+         var_out = SELECT
+                T1.ID,
+                T1.NAME,
+                T1.DESC AS DESC,
+                T1.USER_ID,
+                T1.CREATE_BY AS CREATED_BY,
+                T1.VISIBLE_FLAG AS VISIBILITY,
+                T3.DESC AS VISIBILITY_DESC,
+                T1.CREATE_AT AS CREATED_TIME,
+                T1.CITY_CODE,
+                T1.CITY_NAME,
+                T1.STATE_CODE,
+                T1.STATE_NAME,
+                T1.COUNTRY_CODE,
+                T1.COUNTRY_NAME,
+                T1.PRIME_LOC_ID,
+                T1.XPOS,
+                T1.YPOS,
+                T1.LAST_MODIFIED_BY AS MODIFIED_BY,
+                T1.LAST_MODIFIED_TIME AS MODIFIED_TIME,
+                T1.AVG_XPOS,
+                T1.AVG_YPOS
+                FROM &quot;sap.tm.trp.db.systemmanagement::v_user_location_group&quot; T1
+                INNER JOIN &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(PLACEHOLDER.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_LOCATION_GROUP) T2
+                ON T1.ID = T2.LOCATION_ID
+                LEFT OUTER JOIN 
+                (
+                 SELECT T1.CODE,T2.DESC
+                 FROM &quot;sap.tm.trp.db.systemmanagement::t_visibility_type&quot; T1
+                 INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_visibility_type_t&quot; T2
+                 ON (T1.ID = T2.ID)
+                 INNER JOIN &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot; LANGUAGE 
+                 ON (T2.SPRAS = LANGUAGE.SPRAS)
+                ) AS T3 ON T3.CODE = T1.VISIBLE_FLAG;
+
+     END IF;
+
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="NAME" order="2">
+        <descriptions defaultDescription="NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="DESC" order="3">
+        <descriptions defaultDescription="DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+      <attribute id="USER_ID" order="4">
+        <descriptions defaultDescription="USER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="USER_ID"/>
+      </attribute>
+      <attribute id="CREATED_BY" order="5">
+        <descriptions defaultDescription="CREATE_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATED_BY"/>
+      </attribute>
+      <attribute id="VISIBILITY" order="6">
+        <descriptions defaultDescription="VISIBILITY"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY"/>
+      </attribute>
+      <attribute id="VISIBILITY_DESC" order="7">
+        <descriptions defaultDescription="VISIBILITY_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY_DESC"/>
+      </attribute>
+      <attribute id="CITY_CODE" order="9">
+        <descriptions defaultDescription="CITY_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="CITY_CODE"/>
+      </attribute>
+      <attribute id="CITY_NAME" order="10">
+        <descriptions defaultDescription="CITY_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="CITY_NAME"/>
+      </attribute>
+      <attribute id="STATE_CODE" order="11">
+        <descriptions defaultDescription="STATE_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="STATE_CODE"/>
+      </attribute>
+      <attribute id="STATE_NAME" order="12">
+        <descriptions defaultDescription="STATE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="STATE_NAME"/>
+      </attribute>
+      <attribute id="COUNTRY_CODE" order="13">
+        <descriptions defaultDescription="COUNTRY_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="COUNTRY_CODE"/>
+      </attribute>
+      <attribute id="COUNTRY_NAME" order="14">
+        <descriptions defaultDescription="COUNTRY_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="COUNTRY_NAME"/>
+      </attribute>
+      <attribute id="PRIME_LOC_ID" order="15">
+        <descriptions defaultDescription="PRIME_LOC_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PRIME_LOC_ID"/>
+      </attribute>
+      <attribute id="MODIFIED_BY" order="18">
+        <descriptions defaultDescription="MODIFIED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="MODIFIED_BY"/>
+      </attribute>
+      <attribute id="AVG_XPOS" order="20">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="AVG_XPOS"/>
+      </attribute>
+      <attribute id="AVG_YPOS" order="21">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="AVG_YPOS"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="CREATED_TIME" order="8" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="CREATE_AT"/>
+        <measureMapping columnObjectName="Script_View" columnName="CREATED_TIME"/>
+      </measure>
+      <measure id="XPOS" order="16" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="XPOS"/>
+        <measureMapping columnObjectName="Script_View" columnName="XPOS"/>
+      </measure>
+      <measure id="YPOS" order="17" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="YPOS"/>
+        <measureMapping columnObjectName="Script_View" columnName="YPOS"/>
+      </measure>
+      <measure id="MODIFIED_TIME" order="19" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="LAST_MODIFIED_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="MODIFIED_TIME"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

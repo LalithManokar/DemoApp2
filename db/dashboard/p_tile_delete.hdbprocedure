@@ -1,0 +1,12 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.dashboard::p_tile_delete" (
+    IN TILE_ID BIGINT
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+    
+    DELETE FROM "sap.tm.trp.db.dashboard::t_tile" WHERE ID = :TILE_ID;
+
+END

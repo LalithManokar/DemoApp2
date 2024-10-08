@@ -1,0 +1,34 @@
+schema = "SAP_TM_TRP";
+query = "
+	select 
+		param.\"_Item\",
+		param.\"_Header.ID\",
+		param.\"_Header.CreationDate\",
+		param.\"OrdinalNumberValue\",
+		param.\"ParameterType.Code\",
+		code.\"Description\" as \"ParameterType.Description\",
+		param.\"ParameterValue.String\",
+		param.\"ParameterValue.Amount.Content\",
+		param.\"ParameterValue.Amount.CurrencyCode\",
+		param.\"ParameterValue.Quantity.Content\",
+		param.\"ParameterValue.Quantity.UnitCode\",
+		param.\"ParameterValue.Date\",
+		param.\"ParameterValue.Time\",
+		param.\"ParameterValue.DateTime\",
+		param.\"ParameterValue.Indicator\",
+		param.\"ParameterValue.Duration\",
+		param.\"ParameterValue.Decimal\",
+		param.\"ParameterValue.Float\",
+		param.\"ParameterValue.Integer\"
+	from
+		\"sap.tm.trp.applog.db::AppLogItemMsgParam\" as param
+	join
+		\"HCO_BC_APPLOG\".\"sap.bc.applog.db.code::MessageParameterTypeCode\" as code
+	on
+		param.\"ParameterType.Code\" = code.\"Code\"
+";
+
+depends_on_table = [
+	"sap.tm.trp.applog.db::AppLogItemMsgParam",
+	"sap.bc.applog.db.code::MessageParameterTypeCode"
+];

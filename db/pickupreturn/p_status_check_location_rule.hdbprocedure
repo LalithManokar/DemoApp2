@@ -1,0 +1,41 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_status_check_location_rule"(
+    IN LOCATION_RULE_ID BIGINT,
+    OUT MESSAGE VARCHAR(100)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE LR_STATUS SMALLINT; -- LOCATION RULE STATUS
+    DECLARE SD_STATUS SMALLINT; -- SD PLAN STATUS
+    DECLARE SD_PLAN_ID BIGINT;
+    DECLARE PIPELINE_MODEL_COUNT INTEGER;
+
+    SELECT IFNULL (MAX(STATUS),0) INTO LR_STATUS
+    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID = :LOCATION_RULE_ID;
+
+    SELECT IFNULL (MAX(SD_PLAN_ID),0) INTO SD_PLAN_ID
+    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID = :LOCATION_RULE_ID;
+
+    SELECT IFNULL(MAX(STATUS), 0) INTO SD_STATUS
+    FROM "sap.tm.trp.db.pipeline::t_plan_model"
+    WHERE ID = :SD_PLAN_ID;
+
+    --Check if the pipeline model of the plan is supply demand plan:
+    SELECT COUNT(*) INTO PIPELINE_MODEL_COUNT
+    FROM "sap.tm.trp.db.pipeline::t_plan_model" AS A
+    INNER JOIN "sap.tm.trp.db.pipeline::v_pipeline_has_supply_demand" AS B
+    ON A.PIPELINE_MODEL_ID = B.PIPELINE_MODEL_ID
+    WHERE B.HAS_SUPPLY_DEMAND = 0 AND A.ID = :SD_PLAN_ID;
+
+    IF :PIPELINE_MODEL_COUNT > 0 THEN
+        MESSAGE := 'MSG_CALC_PLAN_NOT_VALID';
+        --CALCULATION MODEL HAS BEEN CHANGED, IT IS A CRITICAL ERROR, NEED TO RETURN.
+        RETURN;
+    ELSE
+        MESSAGE := 'MSG_LOCATION_RULE_VALID';
+    END IF;
+END;

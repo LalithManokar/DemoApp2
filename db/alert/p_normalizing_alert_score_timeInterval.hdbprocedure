@@ -1,0 +1,203 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert::p_normalizing_alert_score_timeInterval" (
+IN  IN_EXECUTION_ID BIGINT,
+OUT OUTPUT_RECORDS INTEGER 
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+          DECLARE EMER_WEIGHT VARCHAR(30) := 'EMERGENCY_WEIGHT';
+          DECLARE IMP_WEIGHT VARCHAR(30) := 'IMPORTANCY_WEIGHT';          
+          
+          DELETE FROM "sap.tm.trp.db.alert::t_alert_DT_output_alertScore_timeInterval"  
+          WHERE PLAN_EXECUTION_ID = :IN_EXECUTION_ID;
+           
+          SQL1 = SELECT  
+               T0.PLAN_EXECUTION_ID,
+               T0.PLAN_MODEL_ID,    
+               T0.PLAN_MODEL_TYPE_ID,                   
+               T0.PLAN_MODEL_CATEGORY_ID,                 
+               T0.FILTER_TYPE,
+               T0.FILTER_GROUP_ID,
+               T0.PIPELINE_MODEL_ID,
+               T0.NODE_ID,
+               T0.NODE_NAME,
+               T0.NODE_VISIBLE,
+               T0.DATA_OBJECT_FORMAT,
+               T0.LOCATION_ID,
+               T0.LOCATION_NAME,
+               T0.EQUIP_TYPE_ID,
+               T0.EQUIP_TYPE_NAME,
+               T0.TIME_INTERVAL_ID,
+               T0.SEQUENCE,
+               T0.START_TIME,
+               T0.TIME_STEP,
+               T0.STOCK,
+               T0.SUPPLY,
+               T0.DEMAND,
+               T0.BALANCE_SUPPLY_DEMAND,
+               T0.BALANCE_STOCK_SUPPLY_DEMAND,
+               T0.MIN_SAFETY_STOCK,
+               T0.MAX_SAFETY_STOCK,
+               T0.MESSAGE,
+               T0.ALERT_REASON,
+               T0.ALERT_SCORE_EMER,
+               T0.ALERT_SCORE_IMP,
+               T6.ALERT_SCORE_IMP_EMER,
+               CASE WHEN T6.ALERT_SCORE_IMP_EMER_RANGE >0.0001 
+               THEN T6.ALERT_SCORE_NORMALIZING 
+               ELSE 50 
+               END AS ALERT_SCORE_NORMALIZING  
+          FROM "sap.tm.trp.db.alert::t_alert_DT_output_timeInterval" T0
+          INNER JOIN
+          (
+             SELECT T5.NODE_ID,
+                    T5.LOCATION_ID,
+                    T5.EQUIP_TYPE_ID,
+                    T5.SEQUENCE,
+                    T5.ALERT_SCORE_IMP_EMER,
+                    T5.ALERT_SCORE_IMP_EMER_RANGE, 
+                    T5.ALERT_SCORE_NORMALIZING         
+             FROM
+             (     
+                    SELECT T41.NODE_ID,
+                           T41.LOCATION_ID,
+                           T41.EQUIP_TYPE_ID,
+                           T41.SEQUENCE,
+                           T41.ALERT_SCORE_IMP_EMER,
+                           T42.ALERT_SCORE_IMP_EMER_RANGE,
+                           CEIL(T41.FILTER_TYPE*(T41.ALERT_SCORE_IMP_EMER - T42.ALERT_SCORE_IMP_EMER_MIN)/T42.ALERT_SCORE_IMP_EMER_RANGE*(100-1)) AS ALERT_SCORE_NORMALIZING
+                    FROM
+                    (
+                         SELECT T1.FILTER_TYPE, 
+                                T1.NODE_ID,
+                                T1.LOCATION_ID,
+                                T1.EQUIP_TYPE_ID,
+                                T1.SEQUENCE,
+                                (T1.ALERT_SCORE_EMER  * T2.EMERGENCY_WEIGHT  + T1.ALERT_SCORE_IMP * T3.IMPORTANCY_WEIGHT) AS ALERT_SCORE_IMP_EMER
+                         FROM "sap.tm.trp.db.alert::t_alert_DT_output_timeInterval" T1,
+                         (
+                              select T1.ALERT_SCORE_SETTING_VALUE AS EMERGENCY_WEIGHT 
+                              from "sap.tm.trp.db.alert.alert_rule_group::t_alert_score_setting" T1
+                              where T1.ALERT_SCORE_SETTING_KEY = :EMER_WEIGHT
+                         )T2,
+                         (
+                              select T1.ALERT_SCORE_SETTING_VALUE AS IMPORTANCY_WEIGHT 
+                              from "sap.tm.trp.db.alert.alert_rule_group::t_alert_score_setting" T1
+                              where T1.ALERT_SCORE_SETTING_KEY = :IMP_WEIGHT
+                         )T3 
+                         WHERE PLAN_EXECUTION_ID = :IN_EXECUTION_ID
+                    )T41,
+                    (     
+                         SELECT  T4_2.FILTER_TYPE * T4_1.ALERT_SCORE_IMP_EMER_RANGE AS ALERT_SCORE_IMP_EMER_RANGE,
+                                 T4_1.ALERT_SCORE_IMP_EMER_MIN
+                         FROM
+                         (
+                             SELECT (MAX(T4.ALERT_SCORE_IMP_EMER) - MIN(T4.ALERT_SCORE_IMP_EMER)) AS ALERT_SCORE_IMP_EMER_RANGE,
+                                    MIN(T4.ALERT_SCORE_IMP_EMER) AS ALERT_SCORE_IMP_EMER_MIN
+                             FROM
+                             (
+                                 SELECT T1.FILTER_TYPE, 
+                                        (T1.ALERT_SCORE_EMER  * T2.EMERGENCY_WEIGHT  + T1.ALERT_SCORE_IMP * T3.IMPORTANCY_WEIGHT) AS ALERT_SCORE_IMP_EMER
+                                 FROM "sap.tm.trp.db.alert::t_alert_DT_output_timeInterval" T1,
+                                 (
+                                      select T1.ALERT_SCORE_SETTING_VALUE AS EMERGENCY_WEIGHT 
+                                      from "sap.tm.trp.db.alert.alert_rule_group::t_alert_score_setting" T1
+                                      where T1.ALERT_SCORE_SETTING_KEY = :EMER_WEIGHT
+                                 )T2,
+                                 (
+                                      select T1.ALERT_SCORE_SETTING_VALUE AS IMPORTANCY_WEIGHT 
+                                      from "sap.tm.trp.db.alert.alert_rule_group::t_alert_score_setting" T1
+                                      where T1.ALERT_SCORE_SETTING_KEY = :IMP_WEIGHT
+                                 )T3 
+                                 WHERE PLAN_EXECUTION_ID = :IN_EXECUTION_ID
+                             )T4
+                          )T4_1,
+                          (
+                              SELECT TOP 1 FILTER_TYPE 
+                              FROM "sap.tm.trp.db.alert::t_alert_DT_output_timeInterval" 
+                              WHERE PLAN_EXECUTION_ID = :IN_EXECUTION_ID
+                          )T4_2
+                   )T42
+               )T5
+          )T6 ON (T0.NODE_ID       = T6.NODE_ID 
+              AND T0.LOCATION_ID   = T6.LOCATION_ID 
+              AND T0.EQUIP_TYPE_ID = T6.EQUIP_TYPE_ID
+              AND T0.SEQUENCE      = T6.SEQUENCE )
+           WHERE T0.PLAN_EXECUTION_ID = :IN_EXECUTION_ID;
+        
+          INSERT INTO "sap.tm.trp.db.alert::t_alert_DT_output_alertScore_timeInterval"
+          (
+	           PLAN_EXECUTION_ID,
+	           PLAN_MODEL_ID,    
+	           PLAN_MODEL_TYPE_ID,                   
+	           PLAN_MODEL_CATEGORY_ID,                 
+	           FILTER_TYPE,
+	           FILTER_GROUP_ID,
+	           PIPELINE_MODEL_ID,
+	           NODE_ID,
+	           NODE_NAME,
+	           NODE_VISIBLE,
+	           DATA_OBJECT_FORMAT,
+	           LOCATION_ID,
+	           LOCATION_NAME,
+	           EQUIP_TYPE_ID,
+	           EQUIP_TYPE_NAME,
+	           TIME_INTERVAL_ID,
+	           SEQUENCE,
+	           START_TIME,
+	           TIME_STEP,
+	           STOCK,
+	           SUPPLY,
+	           DEMAND,
+	           BALANCE_SUPPLY_DEMAND,
+	           BALANCE_STOCK_SUPPLY_DEMAND,
+	           MIN_SAFETY_STOCK,
+	           MAX_SAFETY_STOCK,
+	           MESSAGE,
+	           ALERT_REASON,
+	           ALERT_SCORE_EMER,
+	           ALERT_SCORE_IMP,
+	           ALERT_SCORE_IMP_EMER,
+	           ALERT_SCORE_NORMALIZING
+            )
+		    SELECT
+		           T1.PLAN_EXECUTION_ID,
+		           T1.PLAN_MODEL_ID,    
+		           T1.PLAN_MODEL_TYPE_ID,                   
+		           T1.PLAN_MODEL_CATEGORY_ID,                 
+		           T1.FILTER_TYPE,
+		           T1.FILTER_GROUP_ID,
+		           T1.PIPELINE_MODEL_ID,
+		           T1.NODE_ID,
+		           T1.NODE_NAME,
+		           T1.NODE_VISIBLE,
+		           T1.DATA_OBJECT_FORMAT,
+		           T1.LOCATION_ID,
+		           T1.LOCATION_NAME,
+		           T1.EQUIP_TYPE_ID,
+		           T1.EQUIP_TYPE_NAME,
+		           T1.TIME_INTERVAL_ID,
+		           T1.SEQUENCE,
+		           T1.START_TIME,
+		           T1.TIME_STEP,
+		           T1.STOCK,
+		           T1.SUPPLY,
+		           T1.DEMAND,
+		           T1.BALANCE_SUPPLY_DEMAND,
+		           T1.BALANCE_STOCK_SUPPLY_DEMAND,
+		           T1.MIN_SAFETY_STOCK,
+		           T1.MAX_SAFETY_STOCK,
+		           T1.MESSAGE,
+		           T1.ALERT_REASON,
+		           T1.ALERT_SCORE_EMER,
+		           T1.ALERT_SCORE_IMP,
+		           T1.ALERT_SCORE_IMP_EMER,
+		           T1.ALERT_SCORE_NORMALIZING
+		       FROM :SQL1 T1;
+		       
+		   select count(*) into OUTPUT_RECORDS
+		   from "sap.tm.trp.db.alert::t_alert_DT_output_alertScore_timeInterval" T1
+		   where T1.PLAN_EXECUTION_ID  = :IN_EXECUTION_ID;
+END;

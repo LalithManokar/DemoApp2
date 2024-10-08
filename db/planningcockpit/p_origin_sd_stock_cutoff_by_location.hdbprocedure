@@ -1,0 +1,62 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_origin_sd_stock_cutoff_by_location"      
+(
+IN EXECUTION_ID BIGINT,
+IN SD_PLAN_ID BIGINT,
+IN DEFAULT_NODE BIGINT,
+IN IT_LOCATIONS "sap.tm.trp.db.planningcockpit::tt_location_id",
+OUT cutoff_sd "sap.tm.trp.db.planningcockpit::tt_sd_result",
+OUT init_stock "sap.tm.trp.db.planningcockpit::tt_initial_stock" 
+)  
+       LANGUAGE SQLSCRIPT
+       SQL SECURITY INVOKER 
+       DEFAULT SCHEMA "SAP_TM_TRP"
+       READS SQL DATA   
+        AS     
+BEGIN
+
+  DECLARE MAX_INTERVAL_BEFORE_CUTOFF BIGINT;
+  DECLARE MIN_TIME_INTERVAL BIGINT;
+  
+  -- get initial stock and indepent sd
+  CALL "sap.tm.trp.db.planningcockpit::p_origin_sd_initial_stock_extractor"(
+       :SD_PLAN_ID, :EXECUTION_ID,:DEFAULT_NODE, tmp_sd_origin, init_stock); 
+  
+  SELECT MIN(TIME_INTERVAL_ID) INTO MIN_TIME_INTERVAL
+  FROM :tmp_sd_origin
+  WHERE LOCATION_ID IN (SELECT LOC_ID FROM :IT_LOCATIONS);
+  
+  -- get provisional stock
+  prov_stock = SELECT T1.LOCATION_ID, T1.LOCATION_NAME, T1.EQUIP_TYPE_ID, T1.TIME_INTERVAL_ID, 
+               T1.START_TIME, T1.END_TIME, TO_INTEGER(T1.OUTPUT_VALUE) AS STOCK 
+               FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T1
+               INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T2
+               ON (T1.NODE_ID = T2.ID AND T2.NAME = 'PROVISIONAL_STOCK')
+               WHERE T1.PLAN_EXECUTION_ID = :EXECUTION_ID AND T1.OUTPUT_KEY ='STOCK'
+                 AND LOCATION_ID IN (SELECT LOC_ID FROM :IT_LOCATIONS);
+
+  -- only sd values in the future time ranges are passed to solver
+  -- The provisional stock of the first time interval after cutoff need to add into the sd values 
+  -- The activities fall in the past time range have become expired, no more effect the sd values
+  -- so we can do cutoff here and add the provisional stock of plan execution restuls 
+  SELECT IFNULL(MAX(TIME_INTERVAL_ID),:MIN_TIME_INTERVAL - 1) INTO MAX_INTERVAL_BEFORE_CUTOFF FROM
+  (SELECT *, ADD_SECONDS(START_TIME, SECONDS_BETWEEN(START_TIME,END_TIME)/2) AS MIDDLE_TIME
+   FROM :tmp_sd_origin
+  ) WHERE MIDDLE_TIME <= CURRENT_UTCTIMESTAMP
+	AND LOCATION_ID IN (SELECT LOC_ID FROM :IT_LOCATIONS);
+  
+  cutoff_sd = SELECT DISTINCT LOCATION_ID,LOCATION_NAME,EQUIP_TYPE_ID,TIME_INTERVAL_ID,START_TIME,END_TIME
+                     ,SUPPLY,DEMAND
+              FROM (
+	      SELECT T1.LOCATION_ID, T1.LOCATION_NAME, T1.EQUIP_TYPE_ID, T1.TIME_INTERVAL_ID, T1.START_TIME, T1.END_TIME, 
+	      CASE WHEN T2.STOCK >= 0 THEN T1.SUPPLY + T2.STOCK ELSE T1.SUPPLY END AS SUPPLY, 
+	      CASE WHEN T2.STOCK < 0 THEN T1.DEMAND - T2.STOCK  ELSE T1.DEMAND END AS DEMAND
+	      FROM :tmp_sd_origin T1
+	      LEFT OUTER JOIN :prov_stock T2 ON ( T1.LOCATION_ID = T2.LOCATION_ID AND T1.EQUIP_TYPE_ID = t2.EQUIP_TYPE_ID
+	           AND T1.TIME_INTERVAL_ID = T2.TIME_INTERVAL_ID)
+		  WHERE T1.TIME_INTERVAL_ID = :MAX_INTERVAL_BEFORE_CUTOFF + 1   
+	      UNION ALL
+	      SELECT LOCATION_ID, LOCATION_NAME, EQUIP_TYPE_ID, TIME_INTERVAL_ID, START_TIME, END_TIME,SUPPLY, DEMAND
+	      FROM :tmp_sd_origin 
+	      WHERE TIME_INTERVAL_ID > :MAX_INTERVAL_BEFORE_CUTOFF + 1
+      );
+END; 

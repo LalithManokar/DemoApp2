@@ -1,0 +1,462 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_lease_contract_availability" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_lease_contract_availability"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="LOCATION" parameter="true">
+      <descriptions defaultDescription="LOCATION"/>
+      <variableProperties datatype="NVARCHAR" length="22" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="DATE" parameter="true">
+      <descriptions defaultDescription="DATE"/>
+      <variableProperties datatype="TIMESTAMP" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="RESOURCE_TYPE" parameter="true">
+      <descriptions defaultDescription="RESOURCE_TYPE"/>
+      <variableProperties datatype="NVARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="DEMAND_QUANTITY" parameter="true">
+      <descriptions defaultDescription="DEMAND_QUANTITY"/>
+      <variableProperties datatype="INTEGER" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="SCENARIO_ID" parameter="true">
+      <descriptions defaultDescription="SCENARIO_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="HIRE_TYPE" parameter="true">
+      <descriptions defaultDescription="HIRE_TYPE"/>
+      <variableProperties datatype="INTEGER" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="RESOURCE_CATEGORY" parameter="true">
+      <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+      <variableProperties datatype="VARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="NVARCHAR" id="LEASE_CONTRACT_ID" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="LEASE_CONTRACT_REFERENCE" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="LESSOR" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="LEASE_CONTRACT_TYPE" length="100"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_TIME"/>
+        <viewAttribute datatype="INTEGER" id="MAX_HIRE_QUOTA"/>
+        <viewAttribute datatype="INTEGER" id="USED_QUOTA"/>
+        <viewAttribute datatype="INTEGER" id="ACTUAL_AVAILABLE_QUANTITY"/>
+        <viewAttribute datatype="DECIMAL" id="HIRE_FEE" length="13" scale="3"/>
+        <viewAttribute datatype="DECIMAL" id="DEMAND_QUANTITY_HIRE_COST" length="13" scale="3"/>
+        <viewAttribute datatype="NVARCHAR" id="CURRENCY" length="3"/>
+        <viewAttribute datatype="NVARCHAR" id="UNIT" length="3"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#LOCATION</localVariable>
+      <localVariable>#DATE</localVariable>
+      <localVariable>#RESOURCE_TYPE</localVariable>
+      <localVariable>#DEMAND_QUANTITY</localVariable>
+      <localVariable>#SCENARIO_ID</localVariable>
+      <localVariable>#HIRE_TYPE</localVariable>
+      <localVariable>#RESOURCE_CATEGORY</localVariable>
+      <definition>
+  
+ BEGIN
+ DECLARE LOCATION_IN NVARCHAR(22);
+ DECLARE SCENARIO_ID_IN BIGINT;
+ DECLARE DEMAND_QUANTITY_IN INTEGER;
+ DECLARE RECORD_COUNT BIGINT;
+ DECLARE HIRE_CONDITION_CHECK TINYINT;
+ 
+	DECLARE AUTH SMALLINT;
+	DECLARE CUSTOMCONDITION CONDITION FOR SQL_ERROR_CODE 10001;/* Custom Error Code = 10001*/
+		
+		/*User Defined exception handler */
+		
+	DECLARE EXIT HANDLER FOR CUSTOMCONDITION RESIGNAL ;	
+
+	CALL &quot;SAP_TM_TRP&quot;.&quot;sap.tm.trp.db.leasecontract::p_check_lease_authorization&quot;(
+	  	:AUTH
+		);
+	IF AUTH = 0 THEN
+		/* Signaling Custom error and setting the Custom Error Message */
+		SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'USER IS NOT AUTHORIZED TO ACCESS LEASE VIEW';
+	END IF;  
+ 
+  --0-->DO NOT DO THE CHECK
+ --1-->DO THE CHECK
+ SELECT 0 INTO HIRE_CONDITION_CHECK 
+ FROM DUMMY; 	
+ 
+ --HANA_BUG THIS STEP WAS ADDED HERE AS LOCATION INPUT PARAMETER WASNT RECOGNISED IN LINE 14 OTHERWISE
+ SELECT IFNULL(:LOCATION,'') INTO LOCATION_IN 		
+ FROM DUMMY;
+ 
+ --TO AVOID CONVERSION EXCEPTION
+ SELECT IFNULL(TO_BIGINT(:SCENARIO_ID),0) INTO SCENARIO_ID_IN
+ FROM DUMMY;
+ 
+  --TO AVOID CONVERSION EXCEPTION
+ SELECT IFNULL(TO_INTEGER(:DEMAND_QUANTITY),0) INTO DEMAND_QUANTITY_IN
+ FROM DUMMY;
+ 
+ --FILTERED HIER TERMS EXPANDED
+HIER_TERMS_BY_FILTERS_EXPANDED = 
+ SELECT * FROM
+ &quot;_SYS_BIC&quot;.&quot;sap.tm.trp.db.leasecontract/cv_lease_contract_hire_terms_by_filters&quot;
+ (placeholder.&quot;$$LOCATION_IN$$&quot;=>:LOCATION_IN,placeholder.&quot;$$RESOURCE_TYPE$$&quot;=>:RESOURCE_TYPE,placeholder.&quot;$$DATE$$&quot;=>:DATE,placeholder.&quot;$$HIRE_TYPE$$&quot;=>:HIRE_TYPE);
+
+SELECT COUNT(ID) INTO RECORD_COUNT FROM :HIER_TERMS_BY_FILTERS_EXPANDED;
+
+IF :RECORD_COUNT > 0 THEN
+	
+	--SCENARIO TABLE WITH LEASE CONTRACT_ID
+	SCENARIO_USED_QUOTA_TABLE = 
+		SELECT LC.ID AS LEASE_CONTRACT_ID,
+				SUQ.LOCATION_ID,
+				SUQ.RESOURCE_TYPE,
+				SUQ.ACTUAL_HIRE_TIME as HIRE_TIME,				
+				IFNULL(SUQ.ACTUAL_HIRE_QUANTITY,SUQ.PLANNED_QUANTITY) AS USED_QUOTA,
+				SUQ.ACTIVITY_ID,
+				SUQ.SCENARIO_ID,
+				SUQ.FINALIZE_FLAG,
+				LC.RESOURCE_CATEGORY				
+		FROM &quot;SAP_TM_TRP&quot;.&quot;sap.tm.trp.db.planningcockpit::t_used_lease_quota&quot; SUQ
+		INNER JOIN &quot;SAP_TM_TRP&quot;.&quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot; LC ON LC.LEASE_CONTRACT_REFERENCE = SUQ.LEASE_CONTRACT_ID
+		WHERE SUQ.HIRE_TYPE = :HIRE_TYPE; 
+	
+	
+	--GET THE HIRE_TERMS HAVING ELD
+	HIER_TERMS_ELD = 	
+	SELECT HT.ID,
+				 HT.LEASE_CONTRACT_ID,
+				 HT.LEASE_CONTRACT_REFERENCE,
+				 HT.LESSOR,
+				 HT.LEASE_CONTRACT_TYPE,
+				 HT.START_TIME,
+				 HT.END_TIME,
+				 HT.LOCATION_TYPE,
+				 HT.LOCATION_GROUP_NAME,
+				 HT.LOCATION,
+				 HT.LOCATION_GUID,
+				 HT.EQUIPMENT_CODE_TYPE,
+				 HT.EQUIPMENT_CODE,
+				 HT.EQUIPMENT_GROUP_NAME,
+                 HT.TERM_MAX_HIRE_QUANTITY,				 
+				 HT.TERM_MIN_HIRE_QUANTITY,
+				 HT.CONSOLIDATED_MIN_HIRE_QUANTITY,
+				 HT.COND_MAX_HIRE_QUANTITY_EL,
+				 HT.COND_MAX_HIRE_QUANTITY_L,
+				 HT.COND_MAX_HIRE_QUANTITY_E,
+				 HT.COND_EL_ID,
+				 HT.COND_E_ID,
+				 HT.COND_L_ID,	
+				 HT.CONTRACT_MAX_HIRE_QUANTITY,
+				 HT.CONTRACT_MIN_HIRE_QUANTITY,		
+				 HT.HIRE_FEE,
+				 HT.CURRENCY,
+				 HT.UNIT,
+				 HT.RESOURCE_CATEGORY
+		FROM :HIER_TERMS_BY_FILTERS_EXPANDED HT
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings&quot; RCS 
+	    ON (HT.RESOURCE_CATEGORY = RCS.CODE AND RCS.CODE = :RESOURCE_CATEGORY)
+	 	INNER JOIN (SELECT DISTINCT ID FROM :HIER_TERMS_BY_FILTERS_EXPANDED
+		WHERE EQUIPMENT_CODE=:RESOURCE_TYPE AND LOCATION_GUID=:LOCATION) HTID
+		ON HT.ID=HTID.ID;
+	
+	--GET THE HIRE_TERMS HAVING ED
+	HIER_TERMS_ED = 	
+	SELECT HT.ID,
+				 HT.LEASE_CONTRACT_ID,
+				 HT.LEASE_CONTRACT_REFERENCE,
+				 HT.LESSOR,
+				 HT.LEASE_CONTRACT_TYPE,
+				 HT.START_TIME,
+				 HT.END_TIME,
+				 HT.LOCATION_TYPE,
+				 HT.LOCATION_GROUP_NAME,
+				 HT.LOCATION,
+				 HT.LOCATION_GUID,
+				 HT.EQUIPMENT_CODE_TYPE,
+				 HT.EQUIPMENT_CODE,
+				 HT.EQUIPMENT_GROUP_NAME,
+                 HT.TERM_MAX_HIRE_QUANTITY,				 
+				 HT.TERM_MIN_HIRE_QUANTITY,
+				 HT.CONSOLIDATED_MIN_HIRE_QUANTITY,
+				 HT.COND_MAX_HIRE_QUANTITY_EL,
+				 HT.COND_MAX_HIRE_QUANTITY_L,
+				 HT.COND_MAX_HIRE_QUANTITY_E,
+				 HT.COND_EL_ID,
+				 HT.COND_E_ID,
+				 HT.COND_L_ID,	
+				 HT.CONTRACT_MAX_HIRE_QUANTITY,
+				 HT.CONTRACT_MIN_HIRE_QUANTITY,		
+				 HT.HIRE_FEE,
+				 HT.CURRENCY,
+				 HT.UNIT,
+				 HT.RESOURCE_CATEGORY
+		FROM :HIER_TERMS_BY_FILTERS_EXPANDED HT
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings&quot; RCS 
+	    ON (HT.RESOURCE_CATEGORY = RCS.CODE AND RCS.CODE = :RESOURCE_CATEGORY)		
+	 	INNER JOIN (SELECT DISTINCT ID FROM :HIER_TERMS_BY_FILTERS_EXPANDED
+		WHERE EQUIPMENT_CODE=:RESOURCE_TYPE AND LOCATION_GUID IS NULL) HTID
+		ON HT.ID=HTID.ID;
+		
+	--GET THE HIRE_TERMS HAVING LD
+	HIER_TERMS_LD = 	
+	SELECT HT.ID,
+				 HT.LEASE_CONTRACT_ID,
+				 HT.LEASE_CONTRACT_REFERENCE,
+				 HT.LESSOR,
+				 HT.LEASE_CONTRACT_TYPE,
+				 HT.START_TIME,
+				 HT.END_TIME,
+				 HT.LOCATION_TYPE,
+				 HT.LOCATION_GROUP_NAME,
+				 HT.LOCATION,
+				 HT.LOCATION_GUID,
+				 HT.EQUIPMENT_CODE_TYPE,
+				 HT.EQUIPMENT_CODE,
+				 HT.EQUIPMENT_GROUP_NAME,
+                 HT.TERM_MAX_HIRE_QUANTITY,				 
+				 HT.TERM_MIN_HIRE_QUANTITY,
+				 HT.CONSOLIDATED_MIN_HIRE_QUANTITY,
+				 HT.COND_MAX_HIRE_QUANTITY_EL,
+				 HT.COND_MAX_HIRE_QUANTITY_L,
+				 HT.COND_MAX_HIRE_QUANTITY_E,
+				 HT.COND_EL_ID,
+				 HT.COND_E_ID,
+				 HT.COND_L_ID,	
+				 HT.CONTRACT_MAX_HIRE_QUANTITY,
+				 HT.CONTRACT_MIN_HIRE_QUANTITY,		
+				 HT.HIRE_FEE,
+				 HT.CURRENCY,
+				 HT.UNIT,
+				 HT.RESOURCE_CATEGORY
+		FROM :HIER_TERMS_BY_FILTERS_EXPANDED HT
+		INNER JOIN &quot;sap.tm.trp.db.semantic.resource::t_resource_category&quot; RCS 
+	    ON (HT.RESOURCE_CATEGORY = RCS.MAPPING_CODE AND RCS.CODE = :RESOURCE_CATEGORY)		
+	 	INNER JOIN (SELECT DISTINCT ID FROM :HIER_TERMS_BY_FILTERS_EXPANDED
+		WHERE EQUIPMENT_CODE IS NULL AND LOCATION_GUID=:LOCATION) HTID
+		ON HT.ID=HTID.ID;			
+		
+	CALL &quot;SAP_TM_TRP&quot;.&quot;sap.tm.trp.db.leasecontract::sp_lease_contract_availability_for_eld_terms&quot;(
+	:HIER_TERMS_ELD,
+	:SCENARIO_USED_QUOTA_TABLE,
+	:HIRE_TYPE,
+	:LOCATION_IN , 
+  	:DATE , 
+  	:RESOURCE_TYPE,
+  	:DEMAND_QUANTITY_IN,
+  	:SCENARIO_ID,
+  	:HIRE_CONDITION_CHECK,
+  	VAR_OUT_ELD
+	);
+	
+	CALL &quot;SAP_TM_TRP&quot;.&quot;sap.tm.trp.db.leasecontract::sp_lease_contract_availability_for_ed_terms&quot;(
+	:HIER_TERMS_ED,
+	:SCENARIO_USED_QUOTA_TABLE,
+	:HIRE_TYPE,	
+	:LOCATION_IN , 
+  	:DATE , 
+  	:RESOURCE_TYPE,
+  	:DEMAND_QUANTITY_IN,
+  	:SCENARIO_ID,
+  	:HIRE_CONDITION_CHECK,
+  	VAR_OUT_ED
+	);
+	
+	CALL &quot;SAP_TM_TRP&quot;.&quot;sap.tm.trp.db.leasecontract::sp_lease_contract_availability_for_ld_terms&quot;(
+	:HIER_TERMS_LD,
+	:SCENARIO_USED_QUOTA_TABLE,
+	:HIRE_TYPE,	
+	:LOCATION_IN , 
+  	:DATE , 
+  	:RESOURCE_TYPE,
+  	:DEMAND_QUANTITY_IN,
+  	:SCENARIO_ID,
+  	:HIRE_CONDITION_CHECK,
+  	VAR_OUT_LD
+	);
+	
+	
+	
+	VAR_OUT=
+	SELECT ID,
+		LEASE_CONTRACT_ID,
+		LEASE_CONTRACT_REFERENCE,
+		LESSOR,
+		LEASE_CONTRACT_TYPE,
+		START_TIME,
+		END_TIME,
+		MAX_HIRE_QUOTA,
+		USED_QUOTA,
+		ACTUAL_AVAILABLE_QUANTITY,
+		HIRE_FEE,
+		DEMAND_QUANTITY_HIRE_COST,
+		CURRENCY,
+		UNIT
+	FROM :VAR_OUT_ELD
+		UNION
+	SELECT ID,
+		LEASE_CONTRACT_ID,
+		LEASE_CONTRACT_REFERENCE,
+		LESSOR,
+		LEASE_CONTRACT_TYPE,
+		START_TIME,
+		END_TIME,
+		MAX_HIRE_QUOTA,
+		USED_QUOTA,
+		ACTUAL_AVAILABLE_QUANTITY,
+		HIRE_FEE,
+		DEMAND_QUANTITY_HIRE_COST,
+		CURRENCY,
+		UNIT
+	FROM :VAR_OUT_ED
+		UNION
+	SELECT ID, 
+		LEASE_CONTRACT_ID,
+		LEASE_CONTRACT_REFERENCE,
+		LESSOR,
+		LEASE_CONTRACT_TYPE,
+		START_TIME,
+		END_TIME,
+		MAX_HIRE_QUOTA,
+		USED_QUOTA,
+		ACTUAL_AVAILABLE_QUANTITY,
+		HIRE_FEE,
+		DEMAND_QUANTITY_HIRE_COST,
+		CURRENCY,
+		UNIT
+	FROM :VAR_OUT_LD;		
+	
+									
+ELSE
+	VAR_OUT= 
+		SELECT 1 AS ID,
+			1 AS LEASE_CONTRACT_ID,
+			'A' AS LEASE_CONTRACT_REFERENCE,
+			'A' AS LESSOR,
+			'A' AS LEASE_CONTRACT_TYPE,
+			NOW() AS START_TIME,
+			NOW()END_TIME,
+			1 AS MAX_HIRE_QUOTA,
+			1 AS USED_QUOTA,
+			1 AS ACTUAL_AVAILABLE_QUANTITY,
+			1 AS HIRE_FEE,
+			1 AS DEMAND_QUANTITY_HIRE_COST,
+			'' AS CURRENCY,
+			'' AS UNIT			
+			FROM DUMMY WHERE 1=2; 
+END IF;		
+
+			
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="LEASE_CONTRACT_ID" order="2">
+        <descriptions defaultDescription="LEASE_CONTRACT_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASE_CONTRACT_ID"/>
+      </attribute>
+      <attribute id="LEASE_CONTRACT_REFERENCE" order="3">
+        <descriptions defaultDescription="LEASE_CONTRACT_REFERENCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASE_CONTRACT_REFERENCE"/>
+      </attribute>
+      <attribute id="LESSOR" order="4">
+        <descriptions defaultDescription="LESSOR"/>
+        <keyMapping columnObjectName="Script_View" columnName="LESSOR"/>
+      </attribute>
+      <attribute id="LEASE_CONTRACT_TYPE" order="5">
+        <descriptions defaultDescription="LEASE_CONTRACT_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASE_CONTRACT_TYPE"/>
+      </attribute>
+      <attribute id="CURRENCY" order="13">
+        <descriptions defaultDescription="CURRENCY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CURRENCY"/>
+      </attribute>
+      <attribute id="UNIT" order="14">
+        <descriptions defaultDescription="UNIT"/>
+        <keyMapping columnObjectName="Script_View" columnName="UNIT"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="ID"/>
+      </measure>
+      <measure id="START_TIME" order="6" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="START_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </measure>
+      <measure id="END_TIME" order="7" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="END_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="END_TIME"/>
+      </measure>
+      <measure id="MAX_HIRE_QUOTA" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MAX_HIRE_QUOTA"/>
+        <measureMapping columnObjectName="Script_View" columnName="MAX_HIRE_QUOTA"/>
+      </measure>
+      <measure id="USED_QUOTA" order="9" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="USED_QUOTA"/>
+        <measureMapping columnObjectName="Script_View" columnName="USED_QUOTA"/>
+      </measure>
+      <measure id="ACTUAL_AVAILABLE_QUANTITY" order="10" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ACTUAL_AVAILABLE_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="ACTUAL_AVAILABLE_QUANTITY"/>
+      </measure>
+      <measure id="HIRE_FEE" order="11" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="HIRE_FEE"/>
+        <measureMapping columnObjectName="Script_View" columnName="HIRE_FEE"/>
+      </measure>
+      <measure id="DEMAND_QUANTITY_HIRE_COST" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DEMAND_QUANTITY_HIRE_COST"/>
+        <measureMapping columnObjectName="Script_View" columnName="DEMAND_QUANTITY_HIRE_COST"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

@@ -1,0 +1,27 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_get_parent_zone" (
+    IN IT_INPUT_LOC_ZONE "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_location_zone",
+    OUT ET_OUTPUT_LOC_ZONE "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_location_zone"
+) 
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_TRP
+   READS SQL DATA 
+  AS
+BEGIN
+
+   lt_relehzone = select a.root_id, a.zone_id
+                        from "sap.tm.trp.db.systemmanagement.location::v_region_item" a
+                        where zone_id in (select zone_id from :IT_INPUT_LOC_ZONE);
+
+    lt_parent_zones = select distinct a.location_id, b.root_id as zone_id
+                        from :IT_INPUT_LOC_ZONE a
+                        left join :lt_relehzone b
+                        on a.zone_id = b.root_id;
+    
+    ET_OUTPUT_LOC_ZONE = select location_id, zone_id 
+                            from :IT_INPUT_LOC_ZONE
+                        union select location_id, zone_id
+                            from :lt_parent_zones;
+    
+END;
+

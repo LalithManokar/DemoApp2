@@ -1,0 +1,29 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "NAME"; sqlType = NVARCHAR; length = 50;},
+    {name = "DESCRIPTION"; sqlType = NVARCHAR; length = 100; },
+    {name = "TYPE_NAME"; sqlType = NVARCHAR; length = 100; },
+    {name = "LOCATION_FILTER_NAME"; sqlType = NVARCHAR; length = 30; },
+    {name = "RESOURCE_FILTER_NAME"; sqlType = NVARCHAR; length = 30; },
+    {name = "TIME_FILTER_NAME"; sqlType = NVARCHAR; length = 30; },
+    {name = "CALCULATION_MODEL_NAME"; sqlType = NVARCHAR; length = 30; },
+    {name = "ALERT_RULE_GROUP_NAME"; sqlType = NVARCHAR; length = 30; },
+    {name = "ATTRIBUTE_GROUP_NAME"; sqlType = NVARCHAR; length = 30; },
+    {name = "RECURRENCE_TYPE"; sqlType = NVARCHAR; length = 10; },
+    {name = "RECURRENCE_INTERVAL"; sqlType = INTEGER;},
+    {name = "RECURRENCE_DAY"; sqlType = INTEGER;},
+    {name = "START_TIME"; sqlType = NVARCHAR; length = 50;},
+    {name = "EXPIRY_TIME"; sqlType = NVARCHAR; length = 50;},
+    {name = "VISIBILITY_FLAG"; sqlType = INTEGER;},
+    {name = "USER_ID"; sqlType =  BIGINT;  nullable = false;},
+    {name = "ACTION_TIME"; sqlType = TIMESTAMP; nullable = false;},
+    {name = "CONNECTION_ID"; sqlType = VARCHAR; length = 100; nullable = false;},
+    {name = "KEEP_EXECUTION_RUNS"; sqlType = BIGINT;},
+    {name = "PLAN_USAGE"; sqlType = VARCHAR; length = 40;},
+    {name = "DISABLE_INTERMEDIATE_NODE"; sqlType = VARCHAR; length = 1;},
+    {name = "EXECUTE_IN_WORKING_HOUR"; sqlType = VARCHAR; length = 1;},
+    {name = "START_WORKING_TIME"; sqlType = VARCHAR; length = 8;},
+    {name = "END_WORKING_TIME"; sqlType = VARCHAR; length = 8;},
+    {name = "TIMEZONES"; sqlType = VARCHAR; length = 40;}
+];

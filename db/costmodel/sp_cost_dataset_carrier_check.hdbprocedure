@@ -1,0 +1,60 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_cost_dataset_carrier_check"(
+   IN COST_DATASET_ID BIGINT,
+   IN CARRIER_ID_LIST "sap.tm.trp.db.costmodel::tt_carrier_id",
+   OUT COST_MODEL_WITH_CARRIER_CONFLICT "sap.tm.trp.db.costmodel::tt_cost_model_name"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+    CARRIER_CNT INTEGER;
+BEGIN
+   
+     --Get the carrier_id and cost dataset list of the cost model
+    CARRIER_ID_LIST_OF_COST_MODEL = 
+    	SELECT T1.COST_MODEL_ID,T1.COST_DATASET_ID,T1.CARRIER_ID 
+    	FROM "sap.tm.trp.db.costmodel::t_cost_model_carrier" T1
+    	WHERE T1.COST_DATASET_ID = :COST_DATASET_ID
+    ;
+    
+   
+    --Get the carrier list of the cost dataset
+    SELECT COUNT(*) INTO CARRIER_CNT FROM :CARRIER_ID_LIST;
+    IF :CARRIER_CNT = 0 THEN
+    	CARRIER_ID_OF_THE_COST_DATASET = SELECT :COST_DATASET_ID AS COST_DATASET_ID, '*' AS CARRIER_ID FROM DUMMY;
+    ELSE
+    	CARRIER_ID_OF_THE_COST_DATASET = SELECT :COST_DATASET_ID AS COST_DATASET_ID, ID AS CARRIER_ID FROM :CARRIER_ID_LIST;
+    END IF;
+    	    
+    --check if there are some carriers defined in cost model is not defined in the cost dataset carrier filter. 
+   /* COST_MODEL_WITH_CARRIER_CONFLICT = 
+	    SELECT DISTINCT T4.NAME
+	    FROM (
+	    	SELECT T1.COST_MODEL_ID AS ID
+	    	FROM :CARRIER_ID_LIST_OF_COST_MODEL T1
+	    	LEFT OUTER JOIN :CARRIER_ID_OF_THE_COST_DATASET T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID AND (T1.CARRIER_ID = T2.CARRIER_ID OR T2.CARRIER_ID = '*'))
+	    	WHERE T2.COST_DATASET_ID IS NULL
+	    )T3
+	    INNER JOIN "sap.tm.trp.db.costmodel::t_cost_model_new" T4 ON(T3.ID = T4.ID)
+	;*/
+	
+-- Newly added code start--
+R3=SELECT T1.COST_MODEL_ID AS ID, T2.COST_DATASET_ID
+	    	FROM :CARRIER_ID_LIST_OF_COST_MODEL T1
+	    	LEFT OUTER JOIN :CARRIER_ID_OF_THE_COST_DATASET T2 ON T1.COST_DATASET_ID = T2.COST_DATASET_ID AND  T1.CARRIER_ID = T2.CARRIER_ID
+            INTERSECT
+            SELECT T1.COST_MODEL_ID AS ID, T2.COST_DATASET_ID
+	    	FROM :CARRIER_ID_LIST_OF_COST_MODEL T1
+	    	LEFT OUTER JOIN :CARRIER_ID_OF_THE_COST_DATASET T2 ON T1.COST_DATASET_ID = T2.COST_DATASET_ID AND  T2.CARRIER_ID = '*';
+
+COST_MODEL_WITH_CARRIER_CONFLICT = 
+	    SELECT DISTINCT T4.NAME
+	    FROM(
+	        SELECT * FROM :R3 WHERE COST_DATASET_ID IS NULL
+	    ) AS T3
+	    INNER JOIN "sap.tm.trp.db.costmodel::t_cost_model_new" T4 ON(T3.ID = T4.ID)
+	;
+-- Newly added code end --
+	   
+	
+END;

@@ -1,0 +1,69 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_independent_sd_extractor"      
+(
+IN PLAN_ID BIGINT,
+IN EXECUTION_ID BIGINT,
+IN DEFAULT_NODE BIGINT,
+OUT origin_sd "sap.tm.trp.db.planningcockpit::tt_sd_result" 
+)  
+       LANGUAGE SQLSCRIPT
+       SQL SECURITY INVOKER 
+       DEFAULT SCHEMA "SAP_TM_TRP"
+       READS SQL DATA   
+        AS     
+BEGIN
+
+  -- For pipeline with stock/provisional stock, there would be cascade effect from previous time intervals
+  -- For example, booking 20 containers on time_interval_1, demand of this interval would increase 20
+  -- and it also become negative stock and as a result the demand of next intervals would all increase 20
+  -- Refer to p_cal_provisional_stock and p_get_positive_stock and p_get_negative_stock for  details
+
+  -- For solver, it does not want this cascade effect and it hopes the sd are independent between intervals
+  -- The initial stock only add to the first time interval as supply, no effect on other time intervals
+
+  -- This procedure is to extract the indepent SD data from the cascaded results
+  -- (the initial stock has been added to the supply of first time interval
+  --  that's the difference between this procedure and p_origin_sd_extractor and also the requirement of the solver    
+
+  -- The sd plan execution results(with cascade effect)  
+  sd_res = 
+         SELECT T1.LOCATION_ID, T1.LOCATION_NAME, T1.EQUIP_TYPE_ID, T1.TIME_INTERVAL_ID, T1.START_TIME, T1.END_TIME, T1.SUPPLY, T2.DEMAND FROM
+         (
+           SELECT LOCATION_ID, LOCATION_NAME, EQUIP_TYPE_ID, TIME_INTERVAL_ID, START_TIME, END_TIME, TO_INTEGER(OUTPUT_VALUE) AS SUPPLY 
+           FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"
+           WHERE PLAN_EXECUTION_ID = :EXECUTION_ID AND NODE_ID = :DEFAULT_NODE AND OUTPUT_KEY = 'SUPPLY'
+         ) T1         
+         INNER JOIN 
+         (
+           SELECT LOCATION_ID, LOCATION_NAME, EQUIP_TYPE_ID, TIME_INTERVAL_ID, START_TIME, END_TIME, TO_INTEGER(OUTPUT_VALUE) AS DEMAND 
+           FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"
+           WHERE PLAN_EXECUTION_ID = :EXECUTION_ID AND NODE_ID = :DEFAULT_NODE AND OUTPUT_KEY = 'DEMAND'
+         ) T2 ON (T1.LOCATION_ID = T2.LOCATION_ID AND T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID AND T1.TIME_INTERVAL_ID = T2.TIME_INTERVAL_ID);
+
+  
+  -- The initial stock of the plan execution(that depends on one annotations 'nodeType' of the pipeline flowgraph)       
+  init_stock = SELECT LOCATION_ID, EQUIP_TYPE_ID, TIME_INTERVAL_ID, TO_INTEGER(OUTPUT_VALUE) AS INIT_STOCK 
+               FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T1
+               INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node_misc_info" T2 ON (T1.NODE_ID = T2.NODE_ID AND T2.KEY = 'nodeType'  AND T2.VALUE = 'INITIAL_STOCK')
+               WHERE T1.PLAN_EXECUTION_ID = :EXECUTION_ID AND T1.OUTPUT_KEY = 'STOCK';
+
+  
+  -- The POS & NEG of the delta (SUPPLY - DEMAND) of each time interval
+  -- Note the time_interval id plus 1 here as we use this delta for next time interval               
+  deltas= SELECT LOCATION_ID, EQUIP_TYPE_ID, TIME_INTERVAL_ID + 1 AS TIME_INTERVAL_ID, 
+                  CASE WHEN DELTA > 0 THEN DELTA ELSE 0 END AS POS_DELTA,
+                  CASE WHEN DELTA < 0 THEN -1 * DELTA ELSE 0 END AS NEG_DELTA
+          FROM 
+          (    
+             SELECT LOCATION_ID, EQUIP_TYPE_ID, TIME_INTERVAL_ID, SUPPLY - DEMAND AS DELTA
+             FROM :sd_res
+          );      
+ 
+  -- Remove the cascade effect 
+  -- Note the first time interval don't have cascade effect, so it stays as the same  (there is no delta data for first time interval)
+  -- And the initial stock has been contained in the SUPPLY of the first time interval                    
+  origin_sd = SELECT T1.LOCATION_ID, T1.LOCATION_NAME, T1.EQUIP_TYPE_ID, T1.TIME_INTERVAL_ID, T1.START_TIME, T1.END_TIME, 
+              SUPPLY - IFNULL(POS_DELTA,0) AS SUPPLY, DEMAND - IFNULL(NEG_DELTA,0) AS DEMAND
+              FROM :sd_res T1
+              LEFT OUTER JOIN :deltas T2 ON (T1.LOCATION_ID = T2.LOCATION_ID AND T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID AND T1.TIME_INTERVAL_ID = T2.TIME_INTERVAL_ID);
+              
+END; 

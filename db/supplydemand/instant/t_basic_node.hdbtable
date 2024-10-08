@@ -1,0 +1,18 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "CLIENT"; sqlType = NVARCHAR; length = 10;},
+    {name = "COMPANY_CODE"; sqlType = NVARCHAR; length = 10;},
+    {name = "SOURCE_KEY"; sqlType = NVARCHAR; length = 32;},
+    {name = "SOURCE_TYPE"; sqlType = NVARCHAR; length = 20;},
+    {name = "NODE"; sqlType = NVARCHAR; length = 32;},
+    {name = "LOCATION_ID"; sqlType = NVARCHAR; length = 22;},
+    {name = "RESOURCE_GROUP"; sqlType = NVARCHAR; length = 20;},
+    {name = "RESOURCE_TYPE"; sqlType = NVARCHAR; length = 10;},            
+    {name = "OUTPUT_KEY"; sqlType = NVARCHAR; length = 20;},
+    {name = "QUANTITY"; sqlType = DECIMAL; precision = 31; scale = 14;},
+    {name = "UPDATE_TIME"; sqlType = TIMESTAMP;},
+    {name = "OCCURRED_TIME"; sqlType = TIMESTAMP;},
+    {name = "DELETE_FLAG"; sqlType = NVARCHAR; length = 1;}
+    ];
+table.primaryKey.pkcolumns = ["CLIENT","COMPANY_CODE","SOURCE_KEY","SOURCE_TYPE"];

@@ -1,0 +1,15 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::p_prepare_for_instant_execution" (
+	IN SD_PLAN_ID BIGINT,
+	IN TIMEZONE NVARCHAR(50)
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	AS
+BEGIN
+	
+	TRUNCATE TABLE "sap.tm.trp.db.supplydemand.instant::t_cm_execution_parameter_temp";
+	INSERT INTO "sap.tm.trp.db.supplydemand.instant::t_cm_execution_parameter_temp"
+	SELECT :SD_PLAN_ID AS SD_PLAN_ID, :TIMEZONE AS TIMEZONE FROM DUMMY;
+	
+END;

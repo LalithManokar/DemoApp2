@@ -1,0 +1,57 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_get_virtual_plan_table_result_details_export" 
+( 
+	IN PLAN_MODEL_ID BIGINT,
+	IN NODE_NAME VARCHAR(32),
+	IN IN_PP_EXECUTION_ID BIGINT,
+	IN LOCATION_ID_LIST "sap.tm.trp.db.pipeline::tt_get_virtual_plan_table_result_drilldown_details_location_id_list",
+	OUT OUTPUT "sap.tm.trp.db.pipeline::tt_get_virtual_plan_table_result_details_output_by_plan_id_location_id_resource_type_export",
+	OUT PLAN_STATUS INTEGER
+)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+
+DECLARE STATUS_VALID SMALLINT := 0;
+DECLARE STATUS_SUSPEND SMALLINT := 1;
+DECLARE STATUS_INVALID SMALLINT := 2;
+
+-- CHECK WHETHER THE PLAN IS VALID
+SELECT IFNULL(MAX(STATUS),:STATUS_SUSPEND) INTO PLAN_STATUS FROM "sap.tm.trp.db.pipeline::t_plan_model" WHERE ID = :PLAN_MODEL_ID;
+
+IF PLAN_STATUS = :STATUS_INVALID THEN
+	RETURN;
+ELSEIF PLAN_STATUS = :STATUS_SUSPEND THEN
+	CALL "sap.tm.trp.db.pipeline::p_virtual_plan_valid_check" (:PLAN_MODEL_ID,PLAN_STATUS);
+    IF :PLAN_STATUS = :STATUS_INVALID THEN
+    	RETURN;
+    END IF;
+END IF;
+
+-- GET VIRTUAL PLAN RESULT
+CALL "sap.tm.trp.db.pipeline::p_get_aggregate_execution_result_for_virtual_plan"(:PLAN_MODEL_ID,:IN_PP_EXECUTION_ID,:LOCATION_ID_LIST,:NODE_NAME,PLAN_RESULT,NO_DATA_PLAN_LIST);
+
+OUTPUT =
+    SELECT
+		T1.LOCATION_ID AS GEO_ID
+		,T1.LOCATION_NAME AS GEO_NAME
+		,T1.EQUIP_TYPE_ID AS RESOURCE_TYPE_CODE
+		,T1.EQUIP_NAME AS RESOURCE_TYPE_NAME
+        ,T1.OUTPUT_KEY -- NOTE: Actually, the output key of parent node and the node is the same
+        ,T1.METADATA_NODE_ID AS DRILLDOWN_OUTPUT_KEY
+        ,T1.SEQUENCE
+        ,T1.START_TIME
+        ,T1.END_TIME
+        ,T1.TIME_INTERVAL
+        ,SUM(T1.OUTPUT_VALUE) AS OUTPUT_VALUE
+        ,SUM(T1.ALERT_NUM) AS ALERT_STATUS
+    FROM :PLAN_RESULT T1
+    INNER JOIN :LOCATION_ID_LIST T2 ON T2.ID = T1.LOCATION_ID -- filter the output data which does not match the location
+    WHERE T1.PARENT_METADATA_NODE_ID = :NODE_NAME AND T1.HAS_DRILLDOWN_FLAG = 3 -- filter the node which matches the input node name
+    GROUP BY T1.LOCATION_ID,T1.LOCATION_NAME,T1.EQUIP_TYPE_ID,T1.EQUIP_NAME,T1.OUTPUT_KEY,T1.METADATA_NODE_ID,T1.SEQUENCE,T1.START_TIME,T1.END_TIME,T1.TIME_INTERVAL
+	ORDER BY T1.LOCATION_ID,T1.EQUIP_TYPE_ID,T1.SEQUENCE,T1.OUTPUT_KEY,T1.METADATA_NODE_ID
+;
+
+
+END;

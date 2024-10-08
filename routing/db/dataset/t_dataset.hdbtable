@@ -1,0 +1,18 @@
+table.schemaName = "SAP_TM_ROUTING";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; },
+    {name = "CODE"; sqlType = NVARCHAR; length = 50;},
+    {name = "BASE_DATASET_ID"; sqlType = BIGINT; },
+    {name = "SOURCE"; sqlType = NVARCHAR; length = 10; comment = "Source of the dataset";}, // TM, Local or third party system
+    {name = "VALID_FROM"; sqlType = DATE; },
+    {name = "VALID_TO"; sqlType = DATE; },
+    {name = "CREATED_BY"; sqlType = NVARCHAR; length = 50;},
+    {name = "CREATED_ON"; sqlType = TIMESTAMP;},
+    {name = "CHANGED_BY"; sqlType = NVARCHAR; length = 50;},
+    {name = "CHANGED_ON"; sqlType = TIMESTAMP;},
+    {name = "REPLICATED_BY"; sqlType = NVARCHAR; length = 50;},
+    {name = "REPLICATED_ON"; sqlType = TIMESTAMP;}
+];
+table.primaryKey.pkcolumns = ["ID"];
+table.indexes = [ {name = "IX_DATASET_CODE"; unique = true; order = ASC; indexColumns = ["CODE"];}];

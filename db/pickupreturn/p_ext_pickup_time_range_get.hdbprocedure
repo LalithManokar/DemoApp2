@@ -1,0 +1,49 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_pickup_time_range_get"(
+    IN RULE_ID BIGINT,
+    IN TU_ID VARCHAR(20),
+    OUT START_DATE TIMESTAMP,
+    OUT END_DATE TIMESTAMP
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE LAST_EXECUTION_TIME TIMESTAMP;
+    DECLARE SD_PLAN_ID BIGINT;
+    DECLARE CURRENT_DATE_ASSIGN TIMESTAMP;
+    DECLARE DATE_OFFSET INTEGER;
+    DECLARE TOTAL_COUNT INTEGER;
+    DECLARE USERNAME VARCHAR(50);
+    
+    SELECT USERNAME INTO USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+    
+    SELECT IFNULL(MAX(DATE_OFFSET), 0) INTO DATE_OFFSET
+    FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+    WHERE USER = :USERNAME;
+    
+    SELECT IFNULL(MAX(SD_PLAN_ID), 0) INTO SD_PLAN_ID
+    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID = :RULE_ID;
+    
+    SELECT ADD_DAYS(IFNULL(MAX (EXECUTE_ON), CURRENT_UTCTIMESTAMP), :DATE_OFFSET) INTO LAST_EXECUTION_TIME 
+    FROM "sap.tm.trp.db.pipeline::t_plan_execution"
+    WHERE PLAN_MODEL_ID = :SD_PLAN_ID;
+    
+    CALL "sap.tm.trp.db.pickupreturn::p_ext_get_staging_tu"(:RULE_ID, TU_INFO);
+    
+    SELECT IFNULL(MAX(IFNULL (BOOKING_DATE, ADD_DAYS(CURRENT_UTCTIMESTAMP,:DATE_OFFSET))),'') INTO CURRENT_DATE_ASSIGN
+    FROM :TU_INFO
+    WHERE TU_ID = :TU_ID;
+    
+    SELECT ADD_DAYS(CURRENT_UTCTIMESTAMP, :DATE_OFFSET) INTO START_DATE FROM DUMMY;
+    
+    --SELECT LEAST(:CURRENT_DATE_ASSIGN, ADD_SECONDS(:LAST_EXECUTION_TIME, MAX(END_OFFSET))) INTO START_DATE
+    SELECT GREATEST(:CURRENT_DATE_ASSIGN, ADD_SECONDS(:LAST_EXECUTION_TIME, MAX(END_OFFSET))) INTO END_DATE
+      FROM "sap.tm.trp.db.pipeline::t_plan_model" AS T2
+           INNER JOIN "sap.tm.trp.db.filter::t_filter_group" AS T3
+           ON T2.FILTER_GROUP_ID = T3.ID
+           INNER JOIN "sap.tm.trp.db.filter::t_time_filter_interval" AS T4
+           ON T3.TIME_FILTER_ID = T4.TIME_FILTER_ID
+     WHERE T2.ID = :SD_PLAN_ID;
+END;

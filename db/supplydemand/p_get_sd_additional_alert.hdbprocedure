@@ -1,0 +1,98 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand::p_get_sd_additional_alert" (
+	IN NODE_ID BIGINT,
+	IN PLAN_ID BIGINT,
+	IN PLAN_EXECUTION_ID BIGINT,
+	IN LOCATION_ID_LIST "sap.tm.trp.db.supplydemand::tt_id_list",
+	IN SD_RESULT "sap.tm.trp.db.pipeline::t_pipeline_output_dataset",
+	OUT DATASET "sap.tm.trp.db.supplydemand::tt_supply_demand_additional"
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+ 	--READS SQL DATA
+ 	AS 
+BEGIN
+
+    DECLARE INSTANT_ENABLED CHAR(1) DEFAULT '';
+    
+	CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_node"(:PLAN_ID, :PLAN_EXECUTION_ID, :NODE_ID, NODE_ID);
+	
+	lt_output_dataset = select T1.LOCATION_ID,T1.LOCATION_NAME,
+	   T1.EQUIP_TYPE_ID,T1.EQUIP_TYPE_NAME,
+       T1.START_TIME,T1.END_TIME,T1.SEQUENCE,
+        T1.OUTPUT_KEY,TO_DOUBLE(T1.OUTPUT_VALUE) AS OUTPUT_VALUE,
+        :NODE_ID AS OUT_NODE_ID,T1.TIME_INTERVAL,T1.node_id,t1.time_interval_id from  
+        :SD_RESULT T1
+     INNER JOIN :LOCATION_ID_LIST T5 ON (T1.LOCATION_ID = T5.ID)
+      WHERE T1.NODE_ID = :NODE_ID;
+      
+    lt_nodes = SELECT NAME,ID 
+	                   FROM "sap.tm.trp.db.pipeline::t_pipeline_node"
+	                   WHERE ID = :NODE_ID;
+	
+ IF :PLAN_ID IS NOT NULL AND PLAN_ID <> -1 THEN	
+	SELECT IFNULL (T2.INSTANT_ENABLED,'') INTO INSTANT_ENABLED
+	FROM "sap.tm.trp.db.pipeline::t_plan_model" AS T1
+	INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_model" AS T2 ON T1.PIPELINE_MODEL_ID = T2.ID
+	WHERE T1.ID = :PLAN_ID;
+ END IF; 	
+	
+	IF PLAN_EXECUTION_ID IS NOT NULL AND PLAN_EXECUTION_ID <> -1 THEN
+	
+	    DATASET = 
+	        SELECT DISTINCT 
+	            T1.LOCATION_ID,T1.LOCATION_NAME, T1.EQUIP_TYPE_ID AS RESOURCE_TYPE,T1.EQUIP_TYPE_NAME AS RESOURCE_NAME, T1.START_TIME,
+	            T1.END_TIME, T1.SEQUENCE, T1.OUTPUT_KEY,TO_DOUBLE(T1.OUTPUT_VALUE) AS OUTPUT_VALUE,
+                CASE LOWER(T3."MESSAGE") WHEN 'alert' THEN 1 ELSE 0 END AS "ALERT_STATUS", T3.ALERT_REASON, :NODE_ID AS OUT_NODE_ID,
+                T2.NAME AS OUT_NODE_NAME,T6.VALUE AS OUT_NODE_NAV_TYPE, IFNULL(T5.NODE_ID,0) AS HAS_DRILLDOWN_FLAG,T1.TIME_INTERVAL
+            FROM :lt_output_dataset T1
+            INNER JOIN :lt_nodes T2 ON (T1.NODE_ID = T2.ID)
+            LEFT JOIN "sap.tm.trp.db.hrf::v_SD_KPI_rules"  T3 ON (
+                T3.PLAN_EXECUTION_ID = :PLAN_EXECUTION_ID
+                AND T3.NODE_ID = T1.NODE_ID 
+                AND T3.EQUIP_TYPE_ID = T1.EQUIP_TYPE_ID AND T3.LOCATION_ID = T1.LOCATION_ID 
+                AND T1.TIME_INTERVAL_ID = T3.TIME_INTERVAL_ID
+            )
+            LEFT OUTER JOIN  "sap.tm.trp.db.pipeline::t_pipeline_node_logical_hierarchy"  T5 ON (T5.NODE_ID = T1.NODE_ID AND T5.OUTPUT_KEY = T1.OUTPUT_KEY)
+            LEFT OUTER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node_misc_info" T6 ON (T1.NODE_ID = T6.NODE_ID AND LOWER(T6.KEY) = 'navigationtype');
+	
+	ELSEIF INSTANT_ENABLED = 'X' THEN
+
+	    lt_dataset =
+	        select 
+	            node_id,
+	            LOCATION_ID,
+	            LOCATION_NAME,
+	            EQUIP_TYPE_ID,
+	            EQUIP_TYPE_NAME,
+	            OUTPUT_KEY,
+	            OUTPUT_VALUE,
+	            time_interval_id,
+	            START_TIME,
+	            END_TIME,
+	            SEQUENCE,
+	            TIME_INTERVAL,
+	            UNIT
+            from :SD_RESULT;	            
+	            
+	    CALL "SAP_TM_TRP"."sap.tm.trp.db.supplydemand::p_get_instant_hrf_alert_wrapper" (:PLAN_ID, :lt_dataset, lt_hrf_sd_output );
+	    
+	    DATASET = 
+	        SELECT DISTINCT 
+	            T1.LOCATION_ID,T1.LOCATION_NAME, T1.EQUIP_TYPE_ID AS RESOURCE_TYPE,T1.EQUIP_TYPE_NAME AS RESOURCE_NAME, T1.START_TIME,
+	            T1.END_TIME,T1.SEQUENCE, T1.OUTPUT_KEY,TO_DOUBLE(T1.OUTPUT_VALUE) AS OUTPUT_VALUE,
+                CASE LOWER(T3."MESSAGE") WHEN 'alert' THEN 1 ELSE 0 END AS "ALERT_STATUS", T3.ALERT_REASON, :NODE_ID AS OUT_NODE_ID,
+                T2.NAME AS OUT_NODE_NAME,T6.VALUE AS OUT_NODE_NAV_TYPE, IFNULL(T5.NODE_ID,0) AS HAS_DRILLDOWN_FLAG,T1.TIME_INTERVAL
+            FROM :lt_output_dataset T1
+            INNER JOIN :lt_nodes T2 ON (T1.NODE_ID = T2.ID)
+            LEFT JOIN :lt_hrf_sd_output  T3 ON (
+                    T3.NODE_ID = T1.NODE_ID 
+                    AND T3.EQUIP_TYPE_ID = T1.EQUIP_TYPE_ID AND T3.LOCATION_ID = T1.LOCATION_ID 
+                    AND T1.TIME_INTERVAL_ID = T3.TIME_INTERVAL_ID
+            )
+            LEFT OUTER JOIN  "sap.tm.trp.db.pipeline::t_pipeline_node_logical_hierarchy"  T5 ON (T5.NODE_ID = T1.NODE_ID AND T5.OUTPUT_KEY = T1.OUTPUT_KEY)
+            LEFT OUTER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node_misc_info" T6 ON (T1.NODE_ID = T6.NODE_ID AND LOWER(T6.KEY) = 'navigationtype');
+	
+	END IF;
+	                   
+END;

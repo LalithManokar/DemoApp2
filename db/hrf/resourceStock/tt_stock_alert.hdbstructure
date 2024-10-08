@@ -1,0 +1,23 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+   { name = "MAX_CAPACITY"; sqlType = INTEGER; },
+   { name = "MAX_SAFETY_STOCK"; sqlType = INTEGER; },
+   { name = "MIN_SAFETY_STOCK"; sqlType = INTEGER; },
+   { name = "STOCK"; sqlType = INTEGER; },
+   { name = "TIME"; sqlType = TIMESTAMP; },
+   { name = "RESOURCE_TYPE_CATEGORY"; sqlType = VARCHAR; length = 22; },
+   { name = "RESOURCE_TYPE_NAME"; sqlType = VARCHAR; length = 22; },
+   { name = "RESOURCE_TYPE_ID"; sqlType = VARCHAR; length = 22; },
+   { name = "LOCATION_TYPE"; sqlType = VARCHAR; length = 22; },
+   { name = "LOCATION_NAME"; sqlType = VARCHAR; length = 22; },
+   { name = "LOCATION_ID"; sqlType = VARCHAR; length = 22; },
+   { name = "LOCATION_LEVEL"; sqlType = INTEGER; },
+   { name = "RULE_NAME"; sqlType = VARCHAR; length = 200; },
+   { name = "ROW_ID"; sqlType = INTEGER; },
+   { name = "MESSAGE"; sqlType = NVARCHAR; length = 22; },
+   { name = "ALERT_REASON"; sqlType = NVARCHAR; length = 500; },
+   { name = "SURPLUS_DEFICIT_NUM"; sqlType = INTEGER; },
+   { name = "SURPLUS_DEFICIT_PERCENT"; sqlType = DOUBLE; },
+   { name = "ALERT_SCORE"; sqlType = INTEGER; }
+];

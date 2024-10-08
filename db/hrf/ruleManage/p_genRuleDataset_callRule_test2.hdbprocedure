@@ -1,0 +1,834 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage::p_genRuleDataset_callRule_test2" (
+IN  PLAN_EXECUTION_ID BIGINT,
+OUT OUT_PLAN_MODEL_TYPE_ID INTEGER,
+OUT OUTPUT_RECORDS INTEGER,
+OUT OUT_REC_BUBBLE INTEGER
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    DECLARE PLAN_MODEL_ID BIGINT;
+    DECLARE PLAN_MODEL_TYPE_ID_TMP INTEGER;
+    DECLARE PIPELINE_MODEL_ID BIGINT;
+    DECLARE FILTER_GROUP_ID BIGINT;
+    DECLARE PLAN_MODEL_CATEGORY_ID BIGINT;
+    DECLARE FILTER_TYPE INTEGER;
+    DECLARE NODE_BINDING_RULE INTEGER;   
+    DECLARE SP VARCHAR(500);
+    DECLARE SCRIPT VARCHAR(5000);
+    DECLARE EXECUTION_TIME TIMESTAMP;
+    DECLARE GLOBAL_TEMPORARY_TABLE_EXIST INTEGER;
+    
+    DECLARE OUTPUT_KEY_SUPPLY VARCHAR(20) := 'SUPPLY';
+    DECLARE OUTPUT_KEY_DEMAND VARCHAR(20) := 'DEMAND';
+    DECLARE OUTPUT_KEY_STOCK VARCHAR(20) := 'STOCK';
+    
+    DECLARE OUTPUT_KEY_RATE VARCHAR(20) := 'RATE';  
+    DECLARE OUTPUT_KEY_QUANTITY VARCHAR(20) := 'QUANTITY';   
+    DECLARE OUTPUT_KEY_RESERV1 VARCHAR(20) := 'RESERV1';  
+    DECLARE OUTPUT_KEY_RESERV2 VARCHAR(20) := 'RESERV2';   
+
+    
+    DECLARE SD_FLAG VARCHAR(8) := 'SD';
+    DECLARE KPI_FLAG VARCHAR(8) := 'KPI';
+    
+    DECLARE TMP_NODE_ID BIGINT;
+    DECLARE TMP_LOCATION_TYPE INTEGER;
+    DECLARE TMP_EQUIP_TYPE INTEGER;
+    
+    DECLARE REC_BUBBLE_TOTAL INTEGER := 0;
+    
+    DECLARE NUM_AMOUNT_DECIMAL_POINT INTEGER := 2;
+    --01_01_distinct (NODE_ID,NAME,DATA_OBJECT_FORMAT, SP) for PLAN_EXECUTION_ID 
+    -- get rule sp info for each plan_model node
+    -- plan_model  <-----> alert_rule_group
+    -- alert_rule_groups <------> alert rules
+    -- alert rule type <-----------> data object
+     
+    DECLARE CURSOR DISTINCT_FILTER_NODE_RULE_CURSOR FOR
+          SELECT DISTINCT T4.ID AS NODE_ID, 
+                          T4.NAME AS NODE_NAME, 
+                          T4.RESULT_VISIBLE AS NODE_VISIBLE,
+                          T5.DATA_OBJECT_ID, 
+                          T5.DATA_OBJECT_FORMAT, 
+                          T5.METADATA_NODE_ID,
+                          T5.NODE_OUTPUT_KEYS,
+                          T6.SP
+          FROM  "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T1
+          INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T4 
+          ON (T1.NODE_ID = T4.ID AND T4.RESULT_VISIBLE = 1) 
+          INNER JOIN "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" T5
+          ON (T4.METADATA_NODE_ID = T5.METADATA_NODE_ID AND T4.PIPELINE_MODEL_ID = T5.PIPELINE_MODEL_ID)
+          INNER JOIN "sap.tm.trp.db.hrf.ruleManage::v_pipeline_model_rule_group_rule_dataObject" T6
+          ON ( T5.DATA_OBJECT_ID = T6.DATA_OBJECT_ID AND T6.EXECUTION_ID = :PLAN_EXECUTION_ID )
+          WHERE T1.PLAN_EXECUTION_ID = :PLAN_EXECUTION_ID;               
+  
+      NODE_LIST_GEN_ALERT = SELECT DISTINCT T4.ID AS NODE_ID                         
+          FROM  "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T1
+          INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T4 
+          ON (T1.NODE_ID = T4.ID AND T4.RESULT_VISIBLE = 1) 
+          INNER JOIN "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" T5
+          ON (T4.METADATA_NODE_ID = T5.METADATA_NODE_ID AND T4.PIPELINE_MODEL_ID = T5.PIPELINE_MODEL_ID)
+          INNER JOIN "sap.tm.trp.db.hrf.ruleManage::v_pipeline_model_rule_group_rule_dataObject" T6
+          ON ( T5.DATA_OBJECT_ID = T6.DATA_OBJECT_ID AND T6.EXECUTION_ID = :PLAN_EXECUTION_ID )
+          WHERE T1.PLAN_EXECUTION_ID = :PLAN_EXECUTION_ID;
+      
+           
+      EXE_RESULT = SELECT *
+                   FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"   
+                   WHERE PLAN_EXECUTION_ID = :PLAN_EXECUTION_ID AND NODE_ID IN (SELECT NODE_ID FROM :NODE_LIST_GEN_ALERT);
+                   
+      SELECT COUNT(1) INTO NODE_BINDING_RULE FROM :EXE_RESULT;
+      
+      -- If no node has been assigned rule or no execution result, exit without further processing.
+      IF :NODE_BINDING_RULE = 0 THEN 
+        RETURN;
+      END IF;   
+                                   
+      -- get plan_model_id, filter type, and other plan related information  
+      SELECT PLAN_MODEL_ID, PLAN_MODEL_TYPE_ID,EXECUTE_ON, FILTER_TYPE, LOCATION_TYPE, EQUI_TYPE, PIPELINE_MODEL_ID, FILTER_GROUP_ID, PLAN_MODEL_CATEGORY_ID
+      INTO PLAN_MODEL_ID, PLAN_MODEL_TYPE_ID_TMP, EXECUTION_TIME, FILTER_TYPE, TMP_LOCATION_TYPE, TMP_EQUIP_TYPE, PIPELINE_MODEL_ID, FILTER_GROUP_ID, PLAN_MODEL_CATEGORY_ID	 
+      FROM ( SELECT t2.ID AS PLAN_EXECUTION_ID, 
+                         T2.PLAN_MODEL_ID, 
+                         EXECUTE_ON, 
+                         PLAN_MODEL_TYPE_ID, 
+                         PLAN_MODEL_TYPE_ID as PLAN_MODEL_CATEGORY_ID, 
+                         FILTER_GROUP_ID, 
+                         PIPELINE_MODEL_ID,
+		                 CASE T7.LOCATION_TYPE || T7.EQUI_TYPE
+		                  WHEN '11' THEN 1
+		                  WHEN '31' THEN 2
+		                  WHEN '51' THEN 3
+		                  WHEN '21' THEN 4
+		                  WHEN '41' THEN 5
+		                  WHEN '61' THEN 6
+		                  WHEN '12' THEN 7
+		                  WHEN '32' THEN 8
+		                  WHEN '52' THEN 9
+		                  WHEN '22' THEN 10
+		                  WHEN '42' THEN 11
+		                  WHEN '62' THEN 12
+		                 END AS FILTER_TYPE,
+		                 T7.LOCATION_TYPE,
+		                 T7.EQUI_TYPE
+      FROM "sap.tm.trp.db.pipeline::t_plan_execution" t2
+      INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T3 ON (T2.PLAN_MODEL_ID = T3.ID)
+      INNER JOIN "sap.tm.trp.db.filter::v_filter_group" AS T7 ON (T3.FILTER_GROUP_ID = T7.ID)
+      WHERE t2.ID = :PLAN_EXECUTION_ID
+      ); 
+      
+      -- get interval info              
+      INTERVAL_INFO = SELECT DISTINCT T1.TIME_INTERVAL_ID, 
+                                      T3.DESC AS TIME_FILTER_DESC, 
+                                      T1.SEQUENCE,
+                                      T1.START_TIME, 
+                                      T1.TIME_INTERVAL as TIME_STEP 
+                      FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T1
+                      INNER JOIN "sap.tm.trp.db.filter::t_time_filter_interval" T2 ON (T1.TIME_INTERVAL_ID = T2.ID )
+                      INNER JOIN "sap.tm.trp.db.filter::t_time_filter" T3 ON (T2.TIME_FILTER_ID = T3.ID) 
+                      WHERE T1.PLAN_EXECUTION_ID = :PLAN_EXECUTION_ID;         
+  
+     --02_OUT_TBL(...LOCATION_NAME,...EQUIP_TYPE_NAME,..MIN_SAFETY_STOCK,MAX_SAFETY_STOCK) for PLAN_EXECUTION_ID from v_stock_minSafety_maxSafety_locName_eqName
+     -- get stock confing information
+     call "sap.tm.trp.db.hrf.ruleManage::p_get_locationEquip_name_minMaxSafetyCapacity_test2"(:PLAN_EXECUTION_ID,:TMP_LOCATION_TYPE, :TMP_EQUIP_TYPE, OUT_TBL);
+     -- get stock config information for bubble rule generation 
+     call "sap.tm.trp.db.hrf.ruleManage::p_get_location_minMaxSafetyCapacity_test2"(:PLAN_EXECUTION_ID,:TMP_LOCATION_TYPE, OUT_TBL_LOC);
+
+     -- SD plan 
+     IF (  (PLAN_MODEL_TYPE_ID_TMP = 1 or PLAN_MODEL_TYPE_ID_TMP = 2 or PLAN_MODEL_TYPE_ID_TMP = 99) ) THEN 
+     
+      -- convert row to column for all the node data that need to generate alert
+       OUTPUT_FOR_SD_RULE_TOTAL = 
+               SELECT 
+               T1.NODE_ID,
+               T1.TIME_INTERVAL_ID,
+               T2.EQUIP_TYPE_TYPE,   
+               T2.EQUIP_TYPE_NAME,    
+               T1.EQUIP_TYPE_ID,
+               T2.LOCATION_TYPE,
+               T2.LOCATION_NAME,
+               T1.LOCATION_ID,                                       
+               :PIPELINE_MODEL_ID AS PIPELINE_MODEL_ID,      
+               :FILTER_GROUP_ID AS FILTER_GROUP_ID,         
+               :FILTER_TYPE AS FILTER_TYPE ,  
+                            
+               :PLAN_EXECUTION_ID AS PLAN_EXECUTION_ID,
+               :PLAN_MODEL_ID AS PLAN_MODEL_ID,    
+               :PLAN_MODEL_TYPE_ID_TMP AS PLAN_MODEL_TYPE_ID,  
+               :PLAN_MODEL_CATEGORY_ID AS PLAN_MODEL_CATEGORY_ID, 
+                                         
+               T1.UNIT,
+               T2.MAX_CAPACITY,
+               T2.MAX_SAFETY_STOCK,
+               T2.MIN_SAFETY_STOCK,
+               (T1.STOCK + T1.SUPPLY - T1.DEMAND) AS BALANCE_STOCK_SUPPLY_DEMAND,
+               (T1.SUPPLY - T1.DEMAND) AS BALANCE_SUPPLY_DEMAND,
+               T1.DEMAND,
+               T1.SUPPLY,
+               T1.STOCK,                         
+               T3.TIME_STEP,  
+               T3.START_TIME,  
+               T3.SEQUENCE,                    
+               T3.TIME_FILTER_DESC
+               FROM 
+               (
+                   SELECT :PLAN_EXECUTION_ID AS PLAN_EXECUTION_ID, T0.NODE_ID, T0.LOCATION_ID, T0.EQUIP_TYPE_ID, 
+                          T0.TIME_INTERVAL_ID, IFNULL(T1.SUPPLY,0) AS SUPPLY, IFNULL(T2.DEMAND,0) AS DEMAND, 
+                          IFNULL(T3.STOCK,0) AS STOCK, T0.UNIT
+                   FROM
+                   (   SELECT DISTINCT NODE_ID, LOCATION_ID, EQUIP_TYPE_ID, TIME_INTERVAL_ID, UNIT 
+                       FROM :EXE_RESULT 
+                   ) T0
+                   LEFT OUTER JOIN  
+                   (   SELECT NODE_ID,
+                       LOCATION_ID,
+                       EQUIP_TYPE_ID,
+                       TIME_INTERVAL_ID, 
+                       TO_INTEGER(OUTPUT_VALUE) as SUPPLY,
+                       UNIT
+                       FROM :EXE_RESULT  
+                       WHERE OUTPUT_KEY = 'SUPPLY'
+                   ) T1 ON (T0.NODE_ID = T1.NODE_ID 
+                        AND T0.LOCATION_ID = T1.LOCATION_ID
+                        AND T0.EQUIP_TYPE_ID = T1.EQUIP_TYPE_ID
+                        AND T0.TIME_INTERVAL_ID = T1.TIME_INTERVAL_ID)
+                   LEFT OUTER JOIN 
+                   (   SELECT NODE_ID,
+                       LOCATION_ID,
+                       EQUIP_TYPE_ID,
+                       TIME_INTERVAL_ID, 
+                       TO_INTEGER(OUTPUT_VALUE) as DEMAND,
+                       UNIT
+                       FROM :EXE_RESULT   
+                       WHERE OUTPUT_KEY = 'DEMAND'                    
+                   ) T2 ON (T0.NODE_ID = T2.NODE_ID 
+                        AND T0.LOCATION_ID = T2.LOCATION_ID
+                        AND T0.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID
+                        AND T0.TIME_INTERVAL_ID = T2.TIME_INTERVAL_ID)
+                   LEFT OUTER JOIN 
+                   (   SELECT NODE_ID,
+                       LOCATION_ID,
+                       EQUIP_TYPE_ID,
+                       TIME_INTERVAL_ID, 
+                       TO_INTEGER(OUTPUT_VALUE) as STOCK,
+                       UNIT
+                       FROM :EXE_RESULT   
+                       WHERE OUTPUT_KEY = 'STOCK'
+                   ) T3 ON (T0.NODE_ID = T3.NODE_ID 
+                        AND T0.LOCATION_ID = T3.LOCATION_ID
+                        AND T0.EQUIP_TYPE_ID = T3.EQUIP_TYPE_ID
+                        AND T0.TIME_INTERVAL_ID = T3.TIME_INTERVAL_ID)
+               ) T1                     
+               INNER JOIN :OUT_TBL T2 ON (T1.LOCATION_ID = T2.LOCATION_ID and T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID)
+               INNER JOIN :INTERVAL_INFO T3 ON (T1.TIME_INTERVAL_ID = T3.TIME_INTERVAL_ID);
+       
+       -- bubble view input has no equip information, so need to sum up over the equip types   
+       INPUT_FOR_SD_KPI_BUBBLE_RULE_TOTAL =    
+       
+               select distinct
+               :PLAN_EXECUTION_ID AS PLAN_EXECUTION_ID,
+	           :PLAN_MODEL_ID AS PLAN_MODEL_ID,    
+	           :PLAN_MODEL_TYPE_ID_TMP AS PLAN_MODEL_TYPE_ID,                   
+	           :PLAN_MODEL_CATEGORY_ID AS PLAN_MODEL_CATEGORY_ID,                 
+	           :FILTER_TYPE AS FILTER_TYPE,
+	           :FILTER_GROUP_ID AS FILTER_GROUP_ID,
+	           :PIPELINE_MODEL_ID AS PIPELINE_MODEL_ID,
+	           T11.NODE_ID,
+	           
+	           T11.LOCATION_ID,
+	           T11.LOCATION_NAME,
+			   :TMP_LOCATION_TYPE AS LOCATION_TYPE,
+	           
+	           'N/A'as EQUIP_TYPE_ID,
+	           'N/A' as EQUIP_TYPE_NAME,
+			   -1 as EQUIP_TYPE_TYPE,
+	           
+	           T11.TIME_INTERVAL_ID,
+			   T12.TIME_FILTER_DESC,
+	           T12.SEQUENCE,
+	           T12.START_TIME,
+	           T12.TIME_STEP,
+	           
+	           T11.STOCK,
+		       T11.SUPPLY,	
+			   T11.DEMAND,			     
+			   T11.BALANCE_SUPPLY_DEMAND,
+			   T11.BALANCE_STOCK_SUPPLY_DEMAND,
+				 				  		
+			   T13.MIN_SAFETY_STOCK,
+			   T13.MAX_SAFETY_STOCK,
+			   T13.MAX_CAPACITY,
+				 
+			   0 as RATE,
+			   0 as QUANTITY,
+			   0 as RESERV1,
+			   0 as RESERV2,
+			   T11.UNIT,
+			   :SD_FLAG as SD_KPI_FLAG
+               from	           
+               (  select	           
+	              T1.NODE_ID,
+	              T1.LOCATION_ID,
+	              T1.TIME_INTERVAL_ID,
+	              T1.LOCATION_NAME,
+                  sum(T1.STOCK) as STOCK,
+		          sum(T1.SUPPLY) as SUPPLY,	
+		          sum(T1.DEMAND) as DEMAND,			     
+		          sum(T1.BALANCE_SUPPLY_DEMAND) as BALANCE_SUPPLY_DEMAND,
+		          sum(T1.BALANCE_STOCK_SUPPLY_DEMAND) as BALANCE_STOCK_SUPPLY_DEMAND,
+		          UNIT
+                  from :OUTPUT_FOR_SD_RULE_TOTAL T1
+                  group by  T1.NODE_ID,			        
+  			                T1.LOCATION_ID,
+			                T1.TIME_INTERVAL_ID,
+			                T1.LOCATION_NAME,
+			                T1.UNIT
+		       ) T11
+		       left outer join :INTERVAL_INFO T12 
+		            on T11.TIME_INTERVAL_ID = T12.TIME_INTERVAL_ID		  
+		       left outer join :OUT_TBL_LOC T13
+		            on T11.LOCATION_ID = T13.LOCATION_ID;
+	       
+	      	           
+      ELSEIF ( PLAN_MODEL_TYPE_ID_TMP = 4 ) THEN   --persistent KPI plan
+                          
+       -- convert row to column for all the node data that need to generate alert              
+       OUTPUT_FOR_DT_TOTAL = SELECT 
+               T1.NODE_ID,
+		       :PLAN_EXECUTION_ID AS PLAN_EXECUTION_ID,
+			   :PLAN_MODEL_ID AS PLAN_MODEL_ID,						 
+		       :PLAN_MODEL_TYPE_ID_TMP AS PLAN_MODEL_TYPE_ID,	
+			   :PLAN_MODEL_CATEGORY_ID AS PLAN_MODEL_CATEGORY_ID,				
+			   :FILTER_TYPE AS FILTER_TYPE,				
+			   :FILTER_GROUP_ID AS FILTER_GROUP_ID,						
+			   :PIPELINE_MODEL_ID AS PIPELINE_MODEL_ID,					
+				
+			   T1.LOCATION_ID,
+			   T1.LOCATION_NAME,
+			   T1.LOCATION_FILTER_TYPE AS LOCATION_TYPE, 
+			   T1.EQUIP_TYPE_ID,
+			   T1.EQUIP_TYPE_NAME,
+			   T1.EQUIP_FILTER_TYPE AS EQUIP_TYPE_TYPE,
+			   T1.TIME_INTERVAL_ID,
+			   T3.TIME_FILTER_DESC,
+			   T3.SEQUENCE,
+			   T3.START_TIME,
+			   T3.TIME_STEP,
+			   T1.RATE, 
+			   T1.QUANTITY,
+			   T1.RESERV1,
+			   T1.RESERV2,
+			   T1.UNIT                                  
+               FROM 
+               (  select
+                  T0.NODE_ID,
+                  T0.LOCATION_ID,
+                  T0.LOCATION_NAME,
+                  T0.LOCATION_FILTER_TYPE,                         
+                  T0.EQUIP_TYPE_ID,
+                  T0.EQUIP_TYPE_NAME,
+                  T0.EQUIP_FILTER_TYPE,
+                  T0.TIME_INTERVAL_ID,
+                  IFNULL(T1.RATE,0) AS RATE,
+                  IFNULL(T2.QUANTITY,0) AS QUANTITY,
+                  IFNULL(T3.RESERV1,0) AS RESERV1,
+                  IFNULL(T4.RESERV2,0) AS RESERV2,
+                  T0.UNIT FROM 
+                  (
+                     SELECT DISTINCT NODE_ID, LOCATION_ID, EQUIP_TYPE_ID, TIME_INTERVAL_ID,LOCATION_FILTER_TYPE,
+                            LOCATION_NAME,EQUIP_TYPE_NAME,EQUIP_FILTER_TYPE,UNIT  
+                     FROM :EXE_RESULT    
+                  ) T0
+                  LEFT OUTER JOIN  
+                  (  SELECT NODE_ID,
+                     LOCATION_ID,
+                     EQUIP_TYPE_ID,
+                     TIME_INTERVAL_ID, 
+                     ROUND(TO_DOUBLE(OUTPUT_VALUE),:NUM_AMOUNT_DECIMAL_POINT) as RATE
+                     FROM :EXE_RESULT   
+                     WHERE OUTPUT_KEY = :OUTPUT_KEY_RATE
+                  ) T1 ON (T0.NODE_ID = T1.NODE_ID 
+                       AND T0.LOCATION_ID = T1.LOCATION_ID
+                       AND T0.EQUIP_TYPE_ID = T1.EQUIP_TYPE_ID
+                       AND T0.TIME_INTERVAL_ID = T1.TIME_INTERVAL_ID)
+                  LEFT OUTER JOIN  
+                  (
+                      SELECT NODE_ID,
+                      LOCATION_ID,
+                      EQUIP_TYPE_ID,
+                      TIME_INTERVAL_ID, 
+                      TO_INTEGER(OUTPUT_VALUE) as QUANTITY
+                      FROM :EXE_RESULT   
+                      WHERE OUTPUT_KEY = :OUTPUT_KEY_QUANTITY
+                  ) T2 ON (T0.NODE_ID = T2.NODE_ID 
+                       AND T0.LOCATION_ID = T2.LOCATION_ID
+                       AND T0.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID
+                       AND T0.TIME_INTERVAL_ID = T2.TIME_INTERVAL_ID) 
+                  LEFT OUTER JOIN  
+                  (
+                      SELECT NODE_ID,
+                      LOCATION_ID,
+                      EQUIP_TYPE_ID,
+                      TIME_INTERVAL_ID, 
+                      ROUND(TO_DOUBLE(OUTPUT_VALUE),:NUM_AMOUNT_DECIMAL_POINT) as RESERV1                        
+                      FROM :EXE_RESULT  
+                      WHERE OUTPUT_KEY = :OUTPUT_KEY_RESERV1
+                  ) T3 ON (T0.NODE_ID = T3.NODE_ID 
+                       AND T0.LOCATION_ID = T3.LOCATION_ID
+                       AND T0.EQUIP_TYPE_ID = T3.EQUIP_TYPE_ID
+                       AND T0.TIME_INTERVAL_ID = T3.TIME_INTERVAL_ID) 
+                  LEFT OUTER JOIN  
+                  (  
+                      SELECT NODE_ID,
+                      LOCATION_ID,
+                      EQUIP_TYPE_ID,
+                      TIME_INTERVAL_ID, 
+                      ROUND(TO_DOUBLE(OUTPUT_VALUE),:NUM_AMOUNT_DECIMAL_POINT) as RESERV2
+                      FROM :EXE_RESULT   
+                      WHERE OUTPUT_KEY = :OUTPUT_KEY_RESERV2
+                  ) T4 ON (T0.NODE_ID = T2.NODE_ID 
+                       AND T0.LOCATION_ID = T4.LOCATION_ID
+                       AND T0.EQUIP_TYPE_ID = T4.EQUIP_TYPE_ID
+                       AND T0.TIME_INTERVAL_ID = T4.TIME_INTERVAL_ID)
+               ) T1
+               INNER JOIN :INTERVAL_INFO T3 ON (T1.TIME_INTERVAL_ID = T3.TIME_INTERVAL_ID);
+               
+       -- bubble view input has no equip information, so need to sum up over the equip types 
+        INPUT_FOR_SD_KPI_BUBBLE_RULE_02_TOTAL =    
+               select distinct
+               :PLAN_EXECUTION_ID AS PLAN_EXECUTION_ID,
+	           :PLAN_MODEL_ID AS PLAN_MODEL_ID,    
+	           :PLAN_MODEL_TYPE_ID_TMP AS PLAN_MODEL_TYPE_ID,                   
+	           :PLAN_MODEL_CATEGORY_ID AS PLAN_MODEL_CATEGORY_ID,                 
+	           :FILTER_TYPE AS FILTER_TYPE,
+	           :FILTER_GROUP_ID AS FILTER_GROUP_ID,
+	           :PIPELINE_MODEL_ID AS PIPELINE_MODEL_ID,
+	           
+	           T11.NODE_ID,	           
+	           T11.LOCATION_ID,
+	           T11.LOCATION_NAME,
+			   :TMP_LOCATION_TYPE AS LOCATION_TYPE,
+	           
+	           'N/A'as EQUIP_TYPE_ID,
+	           'N/A' as EQUIP_TYPE_NAME,
+			   -1 as EQUIP_TYPE_TYPE,
+	           
+	           T11.TIME_INTERVAL_ID,
+			   T12.TIME_FILTER_DESC,
+	           T12.SEQUENCE,
+	           T12.START_TIME,
+	           T12.TIME_STEP,
+	           
+	           0 as STOCK,
+			   0 as SUPPLY,	
+			   0 as DEMAND,			     
+			   0 as BALANCE_SUPPLY_DEMAND,
+			   0 as BALANCE_STOCK_SUPPLY_DEMAND,
+			   0 as MIN_SAFETY_STOCK,
+			   0 as MAX_SAFETY_STOCK,
+			   0 as MAX_CAPACITY,
+				 
+			   T11.RATE,
+			   T11.QUANTITY,
+			   T11.RESERV1,
+			   T11.RESERV2,
+			   T11.UNIT,
+			   :KPI_FLAG as SD_KPI_FLAG
+               from	           
+               (  select
+	              T1.NODE_ID,
+	              T1.LOCATION_ID,	
+	              T1.LOCATION_NAME,           
+	              T1.TIME_INTERVAL_ID,	          
+				  avg(T1.RATE) as RATE,
+				  sum(T1.QUANTITY) as QUANTITY,	
+			 	  sum(T1.RESERV1) as RESERV1,			     
+			      sum(T1.RESERV2) as RESERV2,
+			      UNIT
+                  from :OUTPUT_FOR_DT_TOTAL T1
+                  group by T1.NODE_ID,			               
+			               T1.LOCATION_ID,
+			               T1.TIME_INTERVAL_ID,
+			               T1.LOCATION_NAME,
+			               T1.UNIT
+		       ) T11
+               left outer join :INTERVAL_INFO T12
+		            on T11.TIME_INTERVAL_ID = T12.TIME_INTERVAL_ID;
+		                                
+      END IF;                      
+  
+                               
+    --03_for each distinct (NODE_ID,NAME,DATA_OBJECT_FORMAT) 
+    --   do 03_01_NODE_RULE_TABLE for (PLAN_MODEL_ID,FILTER_TYPE,NODE_ID,NAME,DATA_OBJECT_FORMAT) 
+    --      03_02_compose SUPPLY_DEMAND_TABLE/SUPPLY_TABLE/DEMAND_TABLE/STOCK_TABLE according to NAME(SD/TOR_S,FS/TOR_D,FD/STOCK) and (mockup not exist culumns:STOCK/SUPPLY/DEMAND)
+    --      03_03_get OUTPUT_FOR_DT(calcu culumns:BALANCE_SUPPLY_DEMAND,BALANCE_STOCK_SUPPLY_DEMAND)
+    --      03_04_get SP from PLAN_MODEL_NODE_RULE_DATAOBJECT_TAB for (PLAN_MODEL_ID,FILTER_TYPE,NODE_ID,NAME,DATA_OBJECT_FORMAT)
+    --      03_05_call DT_storage_procedure SP
+    --      03_06_insert output of DT_SP into table  
+    --end for                           
+  
+    IF (  (PLAN_MODEL_TYPE_ID_TMP = 1 or PLAN_MODEL_TYPE_ID_TMP = 2 or PLAN_MODEL_TYPE_ID_TMP = 99) )  --persistent/temporary plan
+    THEN      
+
+      FOR NODE_RULE_GROUP as DISTINCT_FILTER_NODE_RULE_CURSOR DO            
+    --    03_03_get OUTPUT_FOR_DT(calcu culumns:BALANCE_SUPPLY_DEMAND,BALANCE_STOCK_SUPPLY_DEMAND)   
+        --trucate GLOBAL_TEMPORARY_TABLE
+          truncate table "sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_inputGlobalTemp";
+          truncate table "sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_outputGlobalTemp";               
+
+          insert into "sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_inputGlobalTemp"
+          (
+               SELECT 
+               T1.TIME_INTERVAL_ID,
+               T1."EQUIP_TYPE_TYPE",   
+               T1."EQUIP_TYPE_NAME",    
+               T1."EQUIP_TYPE_ID",
+               T1."LOCATION_TYPE",
+               T1."LOCATION_NAME",
+               T1."LOCATION_ID",
+                          
+               NODE_RULE_GROUP.DATA_OBJECT_FORMAT AS DATA_OBJECT_FORMAT,
+               NODE_RULE_GROUP.METADATA_NODE_ID AS METADATA_NODE_ID,
+               NODE_RULE_GROUP.NODE_OUTPUT_KEYS AS NODE_OUTPUT_KEYS,
+               NODE_RULE_GROUP.NODE_VISIBLE AS NODE_VISIBLE,
+               NODE_RULE_GROUP.NODE_NAME AS NODE_NAME,
+               NODE_RULE_GROUP.NODE_ID AS NODE_ID,
+                         
+               T1."PIPELINE_MODEL_ID",      
+               T1."FILTER_GROUP_ID",         
+               T1."FILTER_TYPE",  
+                               
+               T1.PLAN_EXECUTION_ID,
+               T1.PLAN_MODEL_ID,    
+               T1.PLAN_MODEL_TYPE_ID,  
+               T1.PLAN_MODEL_CATEGORY_ID, 
+                                         
+               "UNIT",
+                T1.MAX_CAPACITY,
+                T1.MAX_SAFETY_STOCK,
+                T1.MIN_SAFETY_STOCK,
+                T1.BALANCE_STOCK_SUPPLY_DEMAND,
+                T1.BALANCE_SUPPLY_DEMAND,
+                DEMAND,
+                SUPPLY,
+                STOCK,                         
+                T1.TIME_STEP,  
+                T1.START_TIME,  
+                T1.SEQUENCE,                    
+                T1.TIME_FILTER_DESC
+                FROM :OUTPUT_FOR_SD_RULE_TOTAL T1
+                WHERE T1.NODE_ID = NODE_RULE_GROUP.NODE_ID
+          );          
+          SELECT NODE_RULE_GROUP.SP INTO SP FROM DUMMY;
+          
+    --    03_05_call DT_storage_procedure SP 
+                 
+          SCRIPT := 'call '|| :SP ||'("sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_inputGlobalTemp" ,
+                                      "sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_outputGlobalTemp",
+                                      "sap.tm.trp.db.hrf.ruleManage::t_hrf_actions_results") with overview';           
+
+          execute immediate(:SCRIPT);
+          
+          --select 'SD_INPUT' AS TAB_NAME, NODE_RULE_GROUP.NODE_ID AS NODE_ID, * from "sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_inputGlobalTemp"; 
+          --select count(1) from "sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_outputGlobalTemp";
+           
+          --    03_06_insert output of DT_SP into tabl          
+		  insert into "sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_DeltaFlag"
+		    (
+             select 	distinct
+		     T1."PLAN_EXECUTION_ID",
+		     T1."PLAN_MODEL_ID",
+		     T1."PLAN_MODEL_TYPE_ID",
+		     T1."PLAN_MODEL_CATEGORY_ID", 
+		     
+		     T1."FILTER_TYPE",      
+		     T1."FILTER_GROUP_ID",  
+		            
+		     T1."PIPELINE_MODEL_ID",      
+		     T1."NODE_ID",
+		     T1."NODE_NAME",     
+		     T1."NODE_VISIBLE",   
+		     T1."NODE_OUTPUT_KEYS",
+		     T1."METADATA_NODE_ID",               
+		     T1."DATA_OBJECT_FORMAT",    
+		     T1."LOCATION_TYPE",
+		     T1."LOCATION_ID", 
+		     T1."LOCATION_NAME",
+		     T1."EQUIP_TYPE_TYPE",   
+		     T1."EQUIP_TYPE_ID",
+		     T1."EQUIP_TYPE_NAME",      
+		
+		     T1."TIME_FILTER_DESC",     
+		     T1."TIME_INTERVAL_ID",     
+		     T1."SEQUENCE",  
+		     T1."START_TIME",
+		     T1."TIME_STEP", 
+		     
+		     T1.STOCK,
+		     T1.SUPPLY,
+		     T1.DEMAND,
+		     T1.BALANCE_SUPPLY_DEMAND,
+		     T1.BALANCE_STOCK_SUPPLY_DEMAND,
+		     T1.MIN_SAFETY_STOCK,
+		     T1.MAX_SAFETY_STOCK,
+		     T1.MAX_CAPACITY,
+		     T1."UNIT",      
+		     
+		     T2."ROW_ID", 
+		     T2."MESSAGE", 
+		     T2."ALERT_REASON", 
+		     T2."ALERT_SCORE_IMP", 
+		     T2."ALERT_SCORE_EMER",
+		     0 AS DELTA
+		    from "sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_inputGlobalTemp" T1
+		    inner join "sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_outputGlobalTemp" T2
+		    on T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID and 		       
+		       T1.LOCATION_ID = T2.LOCATION_ID and 
+		       T1.START_TIME = T2.START_TIME
+		    );
+   	       
+           -- generate bubble alerts
+           INPUT_FOR_SD_KPI_BUBBLE_RULE =    
+               select 
+               T1.PLAN_EXECUTION_ID,
+	           T1.PLAN_MODEL_ID,    
+	           T1.PLAN_MODEL_TYPE_ID,                   
+	           T1.PLAN_MODEL_CATEGORY_ID,                 
+	           T1.FILTER_TYPE,
+	           T1.FILTER_GROUP_ID,
+	           T1.PIPELINE_MODEL_ID,
+	           T1.NODE_ID,
+	           NODE_RULE_GROUP.NODE_NAME AS NODE_NAME,
+	           NODE_RULE_GROUP.NODE_VISIBLE AS NODE_VISIBLE,
+	           NODE_RULE_GROUP.NODE_OUTPUT_KEYS AS NODE_OUTPUT_KEYS,
+               NODE_RULE_GROUP.METADATA_NODE_ID AS METADATA_NODE_ID,
+	           NODE_RULE_GROUP.DATA_OBJECT_FORMAT AS DATA_OBJECT_FORMAT,
+                         	           	           
+	           T1.LOCATION_ID,
+	           T1.LOCATION_NAME,
+			   T1.LOCATION_TYPE,
+	           
+	           T1.EQUIP_TYPE_ID,
+	           T1.EQUIP_TYPE_NAME,
+			   T1.EQUIP_TYPE_TYPE,
+	           
+	           T1.TIME_INTERVAL_ID,
+			   T1.TIME_FILTER_DESC,
+	           T1.SEQUENCE,
+	           T1.START_TIME,
+	           T1.TIME_STEP,
+	           
+	           T1.STOCK,
+			   T1.SUPPLY,	
+			   T1.DEMAND,			     
+			   T1.BALANCE_SUPPLY_DEMAND,
+			   T1.BALANCE_STOCK_SUPPLY_DEMAND,
+				 				  		
+			   T1.MIN_SAFETY_STOCK,
+			   T1.MAX_SAFETY_STOCK,
+			   T1.MAX_CAPACITY,
+				 
+			   T1.RATE,
+			   T1.QUANTITY,
+			   T1.RESERV1,
+			   T1.RESERV2,
+			   T1.UNIT,
+			   T1.SD_KPI_FLAG 
+         FROM :INPUT_FOR_SD_KPI_BUBBLE_RULE_TOTAL T1
+         WHERE NODE_ID = NODE_RULE_GROUP.NODE_ID;    
+                                   
+         --call bubble rule
+         call "sap.tm.trp.db.hrf.planBubble::p_call_plan_bubbleView_cus_rule_test2"(:PLAN_EXECUTION_ID,:INPUT_FOR_SD_KPI_BUBBLE_RULE,OUT_REC_BUBBLE);
+
+         REC_BUBBLE_TOTAL := :REC_BUBBLE_TOTAL + :OUT_REC_BUBBLE;
+         
+         --select :OUT_REC_BUBBLE as BUBBLE_OUT FROM DUMMY;
+       END FOR;	
+           
+       OUT_PLAN_MODEL_TYPE_ID := PLAN_MODEL_TYPE_ID_TMP;
+	   OUT_REC_BUBBLE := :REC_BUBBLE_TOTAL; 
+	          
+       select COUNT(1) into OUTPUT_RECORDS 
+       from "sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_DeltaFlag" T1
+	   where T1.PLAN_EXECUTION_ID = :PLAN_EXECUTION_ID;       
+	   	    
+     ELSEIF ( PLAN_MODEL_TYPE_ID_TMP = 4 )  --persistent KPI plan
+     THEN              
+
+       FOR NODE_RULE_GROUP as DISTINCT_FILTER_NODE_RULE_CURSOR DO  
+                       
+          --trucate GLOBAL_TEMPORARY_TABLE
+          truncate table "sap.tm.trp.db.hrf.kpi::t_hrf_KPI_cus_inputGlobalTemp";
+          truncate table "sap.tm.trp.db.hrf.kpi::t_hrf_KPI_outputGlobalTemp";     
+
+          insert into "sap.tm.trp.db.hrf.kpi::t_hrf_KPI_cus_inputGlobalTemp" 
+          (
+             SELECT 
+			 T1.PLAN_EXECUTION_ID,
+			 T1.PLAN_MODEL_ID,						 
+			 T1.PLAN_MODEL_TYPE_ID,	
+			 T1.PLAN_MODEL_CATEGORY_ID,				
+			 T1.FILTER_TYPE,				
+			 T1.FILTER_GROUP_ID,						
+			 T1.PIPELINE_MODEL_ID,					
+			 NODE_RULE_GROUP.NODE_ID as NODE_ID,					
+			 NODE_RULE_GROUP.NODE_NAME as NODE_NAME, 
+			 NODE_RULE_GROUP.NODE_VISIBLE as NODE_VISIBLE,
+			 NODE_RULE_GROUP.NODE_OUTPUT_KEYS as NODE_OUTPUT_KEYS,
+			 NODE_RULE_GROUP.METADATA_NODE_ID as METADATA_NODE_ID,
+			 NODE_RULE_GROUP.DATA_OBJECT_FORMAT as DATA_OBJECT_FORMAT,						
+			 T1.LOCATION_ID,
+			 T1.LOCATION_NAME,
+			 T1.LOCATION_TYPE, 
+			 T1.EQUIP_TYPE_ID,
+			 T1.EQUIP_TYPE_NAME,
+			 T1.EQUIP_TYPE_TYPE,
+			 T1.TIME_INTERVAL_ID,
+			 T1.TIME_FILTER_DESC,
+			 T1.SEQUENCE,
+			 T1.START_TIME,
+			 T1.TIME_STEP,
+			 T1.RATE, 
+			 T1.QUANTITY,
+			 T1.RESERV1,
+			 T1.RESERV2,
+			 T1.UNIT                                  
+             FROM :OUTPUT_FOR_DT_TOTAL T1
+             WHERE T1.NODE_ID = NODE_RULE_GROUP.NODE_ID
+          );
+          
+          SELECT NODE_RULE_GROUP.SP INTO SP FROM DUMMY;
+          
+          --    03_05_call DT_storage_procedure SP  
+          SCRIPT := 'call '|| :SP ||'("sap.tm.trp.db.hrf.kpi::t_hrf_KPI_cus_inputGlobalTemp" ,
+                                      "sap.tm.trp.db.hrf.kpi::t_hrf_KPI_outputGlobalTemp",
+                                      "sap.tm.trp.db.hrf.ruleManage::t_hrf_actions_results") with overview'; 
+          execute immediate(:SCRIPT);
+           
+	      insert into "sap.tm.trp.db.hrf.kpi::t_trp_hrf_KPI_cus_output_withoutDelta"
+		  (
+		     select	distinct
+		     T1."PLAN_EXECUTION_ID",
+		     T1."PLAN_MODEL_ID",
+		     T1."PLAN_MODEL_TYPE_ID",
+		     T1."PLAN_MODEL_CATEGORY_ID",
+		     T1."FILTER_TYPE",    
+		     T1."FILTER_GROUP_ID",
+		     T1."PIPELINE_MODEL_ID",
+		     T1."NODE_ID",
+		     T1."NODE_NAME",
+		     T1."NODE_VISIBLE",
+		     T1."NODE_OUTPUT_KEYS",
+		     T1."METADATA_NODE_ID",
+		     T1."DATA_OBJECT_FORMAT",
+		    
+		     T1."LOCATION_ID",
+		     T1."LOCATION_NAME",
+		     T1."LOCATION_TYPE",
+		    
+		     T1."EQUIP_TYPE_ID",
+		     T1."EQUIP_TYPE_NAME",
+		     T1."EQUIP_TYPE_TYPE",
+		    
+		     T1."TIME_INTERVAL_ID",
+		     T1."TIME_FILTER_DESC",
+		     T1."SEQUENCE",
+		    
+		     T1."START_TIME",
+		     T1."TIME_STEP",
+		     
+		     T1.RATE,
+		     T1.QUANTITY,
+		     T1.RESERV1,
+		     T1.RESERV2,
+		     T1."UNIT",
+		     T2."ROW_ID", 
+		     T2."MESSAGE", 
+		     T2."ALERT_REASON", 
+		     T2."ALERT_SCORE_IMP", 
+		     T2."ALERT_SCORE_EMER"
+		    from "sap.tm.trp.db.hrf.kpi::t_hrf_KPI_outputGlobalTemp" T2
+		    inner join "sap.tm.trp.db.hrf.kpi::t_hrf_KPI_cus_inputGlobalTemp" T1	
+		    on T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID and 		      
+		       T1.LOCATION_ID = T2.LOCATION_ID and 
+		       T1.START_TIME = T2.START_TIME  
+		    );
+		                                    
+        -- to generate bubble alerts
+        INPUT_FOR_SD_KPI_BUBBLE_RULE_02 =    
+               select 
+               T1.PLAN_EXECUTION_ID,
+	           T1.PLAN_MODEL_ID,    
+	           T1.PLAN_MODEL_TYPE_ID,                   
+	           T1.PLAN_MODEL_CATEGORY_ID,                 
+	           T1.FILTER_TYPE,
+	           T1.FILTER_GROUP_ID,
+	           T1.PIPELINE_MODEL_ID,
+	           T1.NODE_ID,
+	           NODE_RULE_GROUP.NODE_NAME AS NODE_NAME,
+	           NODE_RULE_GROUP.NODE_VISIBLE AS NODE_VISIBLE,
+	           NODE_RULE_GROUP.NODE_OUTPUT_KEYS AS NODE_OUTPUT_KEYS,
+               NODE_RULE_GROUP.METADATA_NODE_ID AS METADATA_NODE_ID,
+	           NODE_RULE_GROUP.DATA_OBJECT_FORMAT AS DATA_OBJECT_FORMAT,
+                         	           	           
+	           T1.LOCATION_ID,
+	           T1.LOCATION_NAME,
+			   T1.LOCATION_TYPE,
+	           
+	           T1.EQUIP_TYPE_ID,
+	           T1.EQUIP_TYPE_NAME,
+			   T1.EQUIP_TYPE_TYPE,
+	           
+	           T1.TIME_INTERVAL_ID,
+			   T1.TIME_FILTER_DESC,
+	           T1.SEQUENCE,
+	           T1.START_TIME,
+	           T1.TIME_STEP,
+	           
+	           T1.STOCK,
+			   T1.SUPPLY,	
+			   T1.DEMAND,			     
+			   T1.BALANCE_SUPPLY_DEMAND,
+			   T1.BALANCE_STOCK_SUPPLY_DEMAND,
+				 				  		
+			   T1.MIN_SAFETY_STOCK,
+			   T1.MAX_SAFETY_STOCK,
+			   T1.MAX_CAPACITY,
+				 
+			   T1.RATE,
+			   T1.QUANTITY,
+			   T1.RESERV1,
+			   T1.RESERV2,
+			   T1.UNIT,
+			   T1.SD_KPI_FLAG 
+         FROM :INPUT_FOR_SD_KPI_BUBBLE_RULE_02_TOTAL T1
+         WHERE NODE_ID = NODE_RULE_GROUP.NODE_ID;      
+
+         --call bubble rule
+         call "sap.tm.trp.db.hrf.planBubble::p_call_plan_bubbleView_cus_rule_test2"(:PLAN_EXECUTION_ID,:INPUT_FOR_SD_KPI_BUBBLE_RULE_02,OUT_REC_BUBBLE);
+         REC_BUBBLE_TOTAL := :REC_BUBBLE_TOTAL + :OUT_REC_BUBBLE;
+                  
+       END FOR;	
+
+       OUT_PLAN_MODEL_TYPE_ID := PLAN_MODEL_TYPE_ID_TMP;
+		    
+	   select COUNT(1) into OUTPUT_RECORDS from "sap.tm.trp.db.hrf.kpi::t_trp_hrf_KPI_cus_output_withoutDelta" T1
+       where T1.PLAN_EXECUTION_ID = :PLAN_EXECUTION_ID;
+        
+       OUT_REC_BUBBLE := :REC_BUBBLE_TOTAL; 
+                                    
+    ELSE
+       OUT_PLAN_MODEL_TYPE_ID := -1;
+       OUTPUT_RECORDS := -1;
+       OUT_REC_BUBBLE := -1;
+            
+    END IF;
+
+  --trucate GLOBAL_TEMPORARY_TABLE
+    truncate table "sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_inputGlobalTemp";  
+    truncate table "sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_outputGlobalTemp";  
+    truncate table "sap.tm.trp.db.hrf.kpi::t_hrf_KPI_cus_inputGlobalTemp";  
+    truncate table "sap.tm.trp.db.hrf.kpi::t_hrf_KPI_outputGlobalTemp";  
+END;

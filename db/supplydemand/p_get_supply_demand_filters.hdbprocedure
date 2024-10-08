@@ -1,0 +1,57 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand::p_get_supply_demand_filters" ( 
+	IN SD_PLAN_ID BIGINT,
+	IN TIMEZONE NVARCHAR(50),
+  	IN PLAN_EXECUTION_ID BIGINT,
+  	IN DEFAULT_NODE_ID BIGINT,  
+  	OUT geos "sap.tm.trp.db.pipeline::tt_filter_location_no_expand",
+  	OUT time_intervals "sap.tm.trp.db.pipeline::tt_filter_date_no_expand",
+  	OUT equips "sap.tm.trp.db.pipeline::tt_filter_resource_no_expand"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN   
+
+	--Filter ID
+	DECLARE LOCATION_FILTER_ID BIGINT;
+	DECLARE RESOURCE_FILTER_ID BIGINT;
+	DECLARE TIME_FILTER_ID BIGINT;
+	DECLARE ATTRIBUTE_FILTER_ID BIGINT;
+    
+IF PLAN_EXECUTION_ID IS NOT NULL AND PLAN_EXECUTION_ID <> -1 THEN -- -1 means null for PLAN_EXECUTION_ID
+ 
+   result = SELECT LOCATION_ID, LOCATION_NAME, LOCATION_FILTER_TYPE, EQUIP_TYPE_ID, EQUIP_TYPE_NAME, EQUIP_FILTER_TYPE,
+            TIME_INTERVAL_ID, START_TIME, END_TIME, SEQUENCE, TIME_INTERVAL 
+            FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" 
+            WHERE PLAN_EXECUTION_ID = :PLAN_EXECUTION_ID AND NODE_ID = :DEFAULT_NODE_ID;
+
+   -- location/location group/ region/ region group 
+   geos = SELECT DISTINCT LOCATION_ID AS GEO_ID, LOCATION_NAME AS GEO_NAME, LOCATION_FILTER_TYPE AS GEO_FILTER_TYPE FROM :result; 
+    
+   -- time interval          
+   time_intervals = SELECT DISTINCT START_TIME AS START_TIMESTAMP, END_TIME AS END_TIMESTAMP, TIME_INTERVAL_ID,SEQUENCE                       
+                    FROM :result;
+     
+   -- equip types/ equip group         
+   equips = SELECT DISTINCT EQUIP_TYPE_ID AS EQUIP_CODE, EQUIP_TYPE_NAME AS EQUIP_NAME, EQUIP_FILTER_TYPE FROM :result;
+   
+ELSE
+   -- read filter from plan configuration
+	CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_filterid_by_plan"(:SD_PLAN_ID,LOCATION_FILTER_ID,RESOURCE_FILTER_ID,TIME_FILTER_ID,ATTRIBUTE_FILTER_ID);
+	LOCATION = SELECT * FROM "sap.tm.trp.db.supplydemand.instant::t_cm_execution_parameter_location_temp";
+	RESOURCE = SELECT * FROM "sap.tm.trp.db.supplydemand.instant::t_cm_execution_parameter_resource_temp";
+	CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_location_by_plan"(:LOCATION_FILTER_ID, :LOCATION, LT_LOCATIONS);
+	CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_resource_by_plan"(:RESOURCE_FILTER_ID, :RESOURCE, LT_RESOURCES);
+	CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_time_period_by_plan"(:TIME_FILTER_ID, :TIMEZONE, LT_TIMES);
+   
+   geos = SELECT DISTINCT GEO_ID, GEO_NAME, GEO_FILTER_TYPE FROM :LT_LOCATIONS; 
+      
+   time_intervals = SELECT DISTINCT START_TIMESTAMP, END_TIMESTAMP, TIME_INTERVAL_ID, SEQUENCE                       
+                    FROM :LT_TIMES;
+                    
+   equips = SELECT DISTINCT EQUIP_CODE, EQUIP_NAME, EQUIP_FILTER_TYPE FROM :LT_RESOURCES;
+  	
+END IF;
+
+END;

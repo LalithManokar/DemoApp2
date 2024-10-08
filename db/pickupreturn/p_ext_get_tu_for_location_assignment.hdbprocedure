@@ -1,0 +1,927 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_get_tu_for_location_assignment" (
+    IN RULE_ID BIGINT,
+    IN RESOURCE_CATEGORY VARCHAR(50),
+    IN PARAMETER VARCHAR(5000),
+    OUT TU_OUTPUT "sap.tm.trp.db.pickupreturn::tt_location_assignment_tu"
+)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+
+BEGIN
+
+    DECLARE V_CNT INTEGER;
+    DECLARE USERNAME VARCHAR(60);
+    DECLARE V_DRAFT_COUNT INTEGER;
+
+    --Rule INFO
+    DECLARE V_RULE_TYPE INTEGER;
+    DECLARE V_SD_PLAN_ID BIGINT;
+    DECLARE V_TIME_RANGE_ID INTEGER;
+    DECLARE V_EQUIP_FILTER_ID BIGINT;
+    DECLARE V_LOCATION_FILTER_ID BIGINT;
+    DECLARE V_COST_MODEL_ID BIGINT;
+    DECLARE V_OP_SETTING_TYPE INTEGER;
+    DECLARE V_OPTIMIZATION INTEGER;
+    DECLARE V_SCHEDULE_TIME_TYPE INTEGER;
+    DECLARE V_LDR_RULE_ID INTEGER;
+    DECLARE V_OPTIMIZATION_OPTION VARCHAR(50);
+    DECLARE V_EXCLUSIVE_RULE_ID INTEGER;
+    DECLARE V_FILTER_EXECUTION SMALLINT;
+    DECLARE V_RESOURCE_CATEGORY VARCHAR(50); 
+
+     
+    --GET USER NAME
+    SELECT IFNULL(MAX(USERNAME),'') INTO USERNAME
+    FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+
+    --If have realted data in location rule table
+    SELECT COUNT(*) INTO V_CNT
+    FROM  "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID =  :RULE_ID;
+    
+    --get realted location rule info
+    CALL "sap.tm.trp.db.pickupreturn::p_location_ruleset_info" (
+      :RULE_ID,
+      V_RULE_TYPE,
+      V_SD_PLAN_ID,
+      V_TIME_RANGE_ID,
+      V_EQUIP_FILTER_ID,
+      V_LOCATION_FILTER_ID,
+      V_COST_MODEL_ID,
+      V_OP_SETTING_TYPE,
+      V_OPTIMIZATION,
+      V_SCHEDULE_TIME_TYPE,
+      V_LDR_RULE_ID,
+      V_EXCLUSIVE_RULE_ID,
+      V_FILTER_EXECUTION,
+      V_RESOURCE_CATEGORY
+    );
+
+    --WHETHER HAVE RULE'S DRAFT DATA
+    IF :V_SCHEDULE_TIME_TYPE = 1 THEN
+      SELECT COUNT(*) INTO V_DRAFT_COUNT
+	    FROM  "sap.tm.trp.db.pickupreturn::t_pickupreturn_global_draft"
+	    WHERE RULE_ID =  :RULE_ID;
+    ELSE
+	    SELECT COUNT(*) INTO V_DRAFT_COUNT
+	    FROM  "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft"
+	    WHERE RULE_ID =  :RULE_ID
+	    AND USER = :USERNAME;
+    END IF ;
+    
+    IF :V_DRAFT_COUNT >0 THEN
+      IF :V_SCHEDULE_TIME_TYPE = 1 THEN
+      	globalDraft= select * FROM "sap.tm.trp.db.pickupreturn::t_pickupreturn_global_draft" T1 WHERE T1.RULE_ID = :RULE_ID;
+
+			vl=select * from "sap.tm.trp.db.semantic.location::v_all_location" where id IN 
+			(select distinct DESTINATION_LOCATION_ID FROM :globalDraft
+			UNION all select distinct POL FROM :globalDraft
+			union all select distinct POD FROM :globalDraft
+			union all select distinct PRE_LOCATION_ID FROM :globalDraft
+			union all select distinct CUR_LOCATION_ID FROM :globalDraft
+			union all select distinct SOURCE_LOCATION_ID FROM :globalDraft);
+
+			vp=select * from "sap.tm.trp.db.semantic.common::v_partner" where id IN 
+			(select distinct SHIPPER_ID FROM :globalDraft
+			union all 
+			select distinct CONSIGNEE_ID FROM :globalDraft
+			union all 
+			select distinct CUSTOMER_CODE FROM :globalDraft);
+			
+        TU_OPT = SELECT DISTINCT T1.RULE_ID,
+                        :V_RULE_TYPE AS RULE_TYPE,
+                        T1.TU_ID AS TRANSPORTATION_ID,
+                        T1.TU_TYPE_CODE,
+                        T2.DESC AS TU_TYPE,
+                        T1.EXECUTION_STATUS_CODE,
+                        T3.DESC AS STATUS,
+                        T1.LIFECYCLE_CODE,
+                        T4.DESC AS LIFECYCLE_STATUS,
+                        T1.SHIPPER_ID,
+                        T5.NAME AS SHIPPER,
+                        T1.CONSIGNEE_ID,
+                        T6.NAME AS CONSIGNEE,
+                        T1.RESOURCE_TYPE,  --readable
+                        T1.QUANTITY,
+                        T1.ASSIGN_QUANTITY AS ASSIGNED_CONTAINERS,
+                        T1.RESOURCE_NUMBER,
+                        T1.SOURCE_LOCATION_ID,
+                        T13.NAME AS SOURCE_LOCATION,
+                        T1.DESTINATION_LOCATION_ID,
+                        T7.NAME AS DESTINATION_LOCATION,
+                        T1.POL,
+                        T8.NAME AS POL_NAME,
+                        T1.POD,
+                        T9.NAME AS POD_NAME,
+                        T1.PLANNING_RELEVANT AS RELEVANT_PLANNING,
+                        T1.CUSTOMER_CODE,
+                        T11.NAME AS CUSTOMER_NAME,
+                        T1.BOOKING_DATE,
+                        T1.BOOKING_REFERENCE,
+                        CASE :V_RULE_TYPE WHEN 1 THEN T1.CUR_DATE ELSE NULL END AS ORIGINAL_PICKUP_DATE,
+                        CASE :V_RULE_TYPE WHEN 1 THEN T1.CUR_LOCATION_ID ELSE '' END AS ORIGINAL_PICKUP_LOCATION_ID,
+                        CASE :V_RULE_TYPE WHEN 1 THEN T12.NAME ELSE '' END AS ORIGINAL_PICKUP_LOCATION,
+          	            CASE :V_RULE_TYPE WHEN 1 THEN T1.PRE_DATE ELSE NULL END AS PICKUP_DATE,
+          	            CASE :V_RULE_TYPE WHEN 1 THEN T1.PRE_LOCATION_ID ELSE '' END AS PICKUP_LOCATION_ID,
+          	            CASE :V_RULE_TYPE WHEN 1 THEN T10.NAME ELSE '' END AS PICKUP_LOCATION,
+          	            CASE :V_RULE_TYPE WHEN 2 THEN T1.CUR_DATE ELSE NULL END AS ORIGINAL_RETURN_DATE,
+                        CASE :V_RULE_TYPE WHEN 2 THEN T1.CUR_LOCATION_ID ELSE '' END AS ORIGINAL_RETURN_LOCATION_ID,
+                        CASE :V_RULE_TYPE WHEN 2 THEN T12.NAME ELSE '' END AS ORIGINAL_RETURN_LOCATION,
+          	            CASE :V_RULE_TYPE WHEN 2 THEN T1.PRE_DATE ELSE NULL END AS RETURN_DATE,
+          	            CASE :V_RULE_TYPE WHEN 2 THEN T1.PRE_LOCATION_ID ELSE '' END AS RETURN_LOCATION_ID,
+          	            CASE :V_RULE_TYPE WHEN 2 THEN T10.NAME ELSE '' END AS RETURN_LOCATION,
+          	            T1.ASSIGN_STATUS,
+          	            T1.FLAG,
+          	            T1.ITE_KEY,
+          	            T1.MOT,
+						T1.MEANS_OF_TRANSPORTATION,
+						T1.CARRIER_POL,
+						T1.CARRIER_POD,
+						T1.VOYAGE_POL,
+						T1.VOYAGE_POD,
+						T1.SPECIAL_INSTRUCTION_CODE,
+						T1.SPECIAL_INSTRUCTION_NAME,
+						T1.LAST_LOCATION_ID,
+						T1.LAST_LOCATION_NAME,
+						T1.LEASE_AGREEMENT,
+						T1.LEASE_TYPE_CODE,
+						T1.LEASE_TYPE,
+						T1.LEASE_CONTRACT_TYPE,
+						T1.ASSIGNED_RESOURCE,
+						T1.VESSEL_CUTOFF_TIME,
+						T1.VESSEL_ARRIVAL_DATE,
+						T1.VESSEL_POL,
+						T1.VESSEL_POD,
+						T1.STREETTURN_TU_ID,
+						T1.INVALID,
+						T1.PLAN_STATUS  
+                 FROM :globalDraft T1
+                 LEFT OUTER JOIN "sap.tm.trp.db.semantic.order::v_tor_movement_category_t" t2 ON (T1.TU_TYPE_CODE = t2.CODE)                 
+                 LEFT OUTER JOIN "sap.tm.trp.db.semantic.order::v_tor_execution_status_t" t3 ON (T1.EXECUTION_STATUS_CODE = t3.CODE)    
+                 LEFT OUTER JOIN "sap.tm.trp.db.semantic.order::v_tor_lifecycle_status_t" t4 ON (T1.LIFECYCLE_CODE = t4.CODE)
+                 LEFT JOIN :vp t5 ON (T1.SHIPPER_ID = t5.ID)
+                 LEFT JOIN :vp t6 ON (T1.CONSIGNEE_ID = t6.ID)
+                 LEFT JOIN :vp T11 ON (T1.CUSTOMER_CODE = T11.ID) 
+                 LEFT JOIN :vl T7 ON (T1.DESTINATION_LOCATION_ID = T7.ID)
+                 LEFT JOIN :vl T8 ON (T1.POL = T8.ID)
+                 LEFT JOIN :vl T9 ON (T1.POD = T9.ID)
+                 LEFT JOIN :vl T10 ON (T1.PRE_LOCATION_ID = T10.ID)
+                 LEFT JOIN :vl T12 ON (T1.CUR_LOCATION_ID = T12.ID)
+                 LEFT JOIN :vl T13 ON (T1.SOURCE_LOCATION_ID = T13.ID);
+           ELSE
+
+			  locationRuleAssignDraft= select * FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft" T1 WHERE T1.RULE_ID = :RULE_ID;
+
+				vl=select * from "sap.tm.trp.db.semantic.location::v_all_location" where id IN 
+				(select distinct DESTINATION_LOCATION_ID FROM :locationRuleAssignDraft
+				UNION all select distinct POL FROM :locationRuleAssignDraft
+				union all select distinct POD FROM :locationRuleAssignDraft
+				union all select distinct PRE_LOCATION_ID FROM :locationRuleAssignDraft
+				union all select distinct CUR_LOCATION_ID FROM :locationRuleAssignDraft
+				union all select distinct SOURCE_LOCATION_ID FROM :locationRuleAssignDraft);
+
+				vp=select * from "sap.tm.trp.db.semantic.common::v_partner" where id IN 
+				(select distinct SHIPPER_ID FROM :locationRuleAssignDraft
+				union all 
+				select distinct CONSIGNEE_ID FROM :locationRuleAssignDraft
+				union all 
+				select distinct CUSTOMER_CODE FROM :locationRuleAssignDraft);
+
+             TU_OPT = SELECT DISTINCT T1.RULE_ID,
+                        :V_RULE_TYPE AS RULE_TYPE,
+                        T1.TU_ID AS TRANSPORTATION_ID,
+                        T1.TU_TYPE_CODE,
+                        T2.DESC AS TU_TYPE,
+                        T1.EXECUTION_STATUS_CODE,
+                        T3.DESC AS STATUS,
+                        T1.LIFECYCLE_CODE,
+                        T4.DESC AS LIFECYCLE_STATUS,
+                        T1.SHIPPER_ID,
+                        T5.NAME AS SHIPPER,
+                        T1.CONSIGNEE_ID,
+                        T6.NAME AS CONSIGNEE,
+                        T1.RESOURCE_TYPE,  --readable
+                        T1.QUANTITY,
+                        T1.ASSIGN_QUANTITY AS ASSIGNED_CONTAINERS,
+                        T1.RESOURCE_NUMBER,
+                        T1.SOURCE_LOCATION_ID,
+                        T13.NAME AS SOURCE_LOCATION,
+                        T1.DESTINATION_LOCATION_ID,
+                        T7.NAME AS DESTINATION_LOCATION,
+                        T1.POL,
+                        T8.NAME AS POL_NAME,
+                        T1.POD,
+                        T9.NAME AS POD_NAME,
+                        T1.PLANNING_RELEVANT AS RELEVANT_PLANNING,
+                        T1.CUSTOMER_CODE,
+                        T11.NAME AS CUSTOMER_NAME,
+                        T1.BOOKING_DATE,
+                        T1.BOOKING_REFERENCE,
+                        CASE :V_RULE_TYPE WHEN 1 THEN T1.CUR_DATE ELSE NULL END AS ORIGINAL_PICKUP_DATE,
+                        CASE :V_RULE_TYPE WHEN 1 THEN T1.CUR_LOCATION_ID ELSE '' END AS ORIGINAL_PICKUP_LOCATION_ID,
+                        CASE :V_RULE_TYPE WHEN 1 THEN T12.NAME ELSE '' END AS ORIGINAL_PICKUP_LOCATION,
+          	            CASE :V_RULE_TYPE WHEN 1 THEN T1.PRE_DATE ELSE NULL END AS PICKUP_DATE,
+          	            CASE :V_RULE_TYPE WHEN 1 THEN T1.PRE_LOCATION_ID ELSE '' END AS PICKUP_LOCATION_ID,
+          	            CASE :V_RULE_TYPE WHEN 1 THEN T10.NAME ELSE '' END AS PICKUP_LOCATION,
+          	            CASE :V_RULE_TYPE WHEN 2 THEN T1.CUR_DATE ELSE NULL END AS ORIGINAL_RETURN_DATE,
+                        CASE :V_RULE_TYPE WHEN 2 THEN T1.CUR_LOCATION_ID ELSE '' END AS ORIGINAL_RETURN_LOCATION_ID,
+                        CASE :V_RULE_TYPE WHEN 2 THEN T12.NAME ELSE '' END AS ORIGINAL_RETURN_LOCATION,
+          	            CASE :V_RULE_TYPE WHEN 2 THEN T1.PRE_DATE ELSE NULL END AS RETURN_DATE,
+          	            CASE :V_RULE_TYPE WHEN 2 THEN T1.PRE_LOCATION_ID ELSE '' END AS RETURN_LOCATION_ID,
+          	            CASE :V_RULE_TYPE WHEN 2 THEN T10.NAME ELSE '' END AS RETURN_LOCATION,
+          	            T1.ASSIGN_STATUS,
+          	            T1.FLAG,
+          	            T1.ITE_KEY,
+          	            T1.MOT,
+						T1.MEANS_OF_TRANSPORTATION,
+						T1.CARRIER_POL,
+						T1.CARRIER_POD,
+						T1.VOYAGE_POL,
+						T1.VOYAGE_POD,
+						T1.SPECIAL_INSTRUCTION_CODE,
+						T1.SPECIAL_INSTRUCTION_NAME,
+						T1.LAST_LOCATION_ID,
+						T1.LAST_LOCATION_NAME,
+						T1.LEASE_AGREEMENT,
+						T1.LEASE_TYPE_CODE,
+						T1.LEASE_TYPE,
+						T1.LEASE_CONTRACT_TYPE,
+						T1.ASSIGNED_RESOURCE,
+						T1.VESSEL_CUTOFF_TIME,
+						T1.VESSEL_ARRIVAL_DATE,
+						T1.VESSEL_POL,
+						T1.VESSEL_POD,
+						T1.STREETTURN_TU_ID,
+						T1.INVALID ,
+						T1.PLAN_STATUS 
+                 FROM :locationRuleAssignDraft T1
+                 LEFT OUTER JOIN "sap.tm.trp.db.semantic.order::v_tor_movement_category_t" t2 ON (T1.TU_TYPE_CODE = t2.CODE)                 
+                 LEFT OUTER JOIN "sap.tm.trp.db.semantic.order::v_tor_execution_status_t" t3 ON (T1.EXECUTION_STATUS_CODE = t3.CODE)    
+                 LEFT OUTER JOIN "sap.tm.trp.db.semantic.order::v_tor_lifecycle_status_t" t4 ON (T1.LIFECYCLE_CODE = t4.CODE)
+                 LEFT JOIN :vp t5 ON (T1.SHIPPER_ID = t5.ID)
+                 LEFT JOIN :vp t6 ON (T1.CONSIGNEE_ID = t6.ID)
+                 LEFT JOIN :vp T11 ON (T1.CUSTOMER_CODE = T11.ID) 
+                 LEFT JOIN :vl T7 ON (T1.DESTINATION_LOCATION_ID = T7.ID)
+                 LEFT JOIN :vl T8 ON (T1.POL = T8.ID)
+                 LEFT JOIN :vl T9 ON (T1.POD = T9.ID)
+                 LEFT JOIN :vl T10 ON (T1.PRE_LOCATION_ID = T10.ID)
+                 LEFT JOIN :vl T12 ON (T1.CUR_LOCATION_ID = T12.ID)
+                 LEFT JOIN :vl T13 ON (T1.SOURCE_LOCATION_ID = T13.ID)
+                 WHERE T1.USER = :USERNAME;
+           END IF ;
+           
+           TU_OUTPUT = APPLY_FILTER(:TU_OPT,:PARAMETER);
+       
+       ELSE
+         -- rule for pick up
+           IF  :V_RULE_TYPE = 1   THEN
+
+              
+	             
+	             
+	        CALL "sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_main_get_tu_for_pickup_harmonised" (
+	 :RULE_ID ,
+	:RESOURCE_CATEGORY ,
+	:V_SD_PLAN_ID,
+    :V_EQUIP_FILTER_ID ,
+    :V_TIME_RANGE_ID,
+    :V_LOCATION_FILTER_ID,
+    :V_FILTER_EXECUTION ,
+    :V_EXCLUSIVE_RULE_ID ,
+    TU_FOR_PICKUP 
+ )     ;
+	             
+               IF :V_SCHEDULE_TIME_TYPE = 1 THEN
+                 TU_OPT = SELECT DISTINCT :RULE_ID AS RULE_ID,
+                            :V_RULE_TYPE AS RULE_TYPE,
+                            T1.TU_ID AS TRANSPORTATION_ID,
+                            T1.TU_TYPE_CODE,
+                            T1.TU_TYPE,
+                            T1.EXECUTION_STATUS_CODE,
+            			    T1.EXECUTION_STATUS AS STATUS,
+            			    T1.LIFECYCLE_CODE,
+            		        T1.LIFECYCLE_STATUS,
+            			    T1.SHIPPER_ID,
+            			    T1.SHIPPER_NAME AS SHIPPER,
+            		        T1.CONSIGNEE_ID,
+            		        T1.CONSIGNEE_NAME AS CONSIGNEE,
+            			    T1.RESOURCE_TYPE,            			
+            			    T1.QUANTITY,
+            			    T1.ASSIGN_QUANTITY AS ASSIGNED_CONTAINERS,
+            			    T1.RESOURCE_NUMBER,
+            			    T1.SOURCE_LOCATION_ID,
+            			    T1.SOURCE_LOCATION_NAME AS SOURCE_LOCATION,
+            			    T1.DESTINATION_LOCATION_ID,
+            			    T1.DESTINATION_LOCATION_NAME AS DESTINATION_LOCATION,
+            			    T1.POL,
+            			    T1.POL_NAME,
+            			    T1.POD,
+            			    T1.POD_NAME,
+            			    T1.PLANNING_RELEVANT AS RELEVANT_PLANNING,
+            			    T1.CUSTOMER_CODE,
+            			    T1.CUSTOMER_NAME,
+            			    T1.BOOKING_DATE,
+            			    T1.BOOKING_REFERENCE,
+           				    T1.ORIGINAL_PICKUP_DATE,
+           				    T1.ORIGINAL_PICKUP_LOCATION_ID,
+            			    T1.ORIGINAL_PICKUP_LOCATION,
+          				    T1.ORIGINAL_PICKUP_DATE AS PICKUP_DATE,
+          				    '' AS PICKUP_LOCATION_ID,
+          				    '' AS PICKUP_LOCATION,
+          				    NULL AS ORIGINAL_RETURN_DATE,
+           				    '' AS ORIGINAL_RETURN_LOCATION_ID,
+            			    '' AS ORIGINAL_RETURN_LOCATION,
+          				    NULL AS RETURN_DATE,
+          				    '' AS RETURN_LOCATION_ID,
+          				    '' AS RETURN_LOCATION,
+          				    0 AS ASSIGN_STATUS,
+          				    0 AS FLAG,
+          				    T1.ITE_KEY,          				
+          	                T1.MOT,
+						    T1.MEANS_OF_TRANSPORTATION,
+						    T1.CARRIER_POL,
+						    T1.CARRIER_POD,
+						    T1.VOYAGE_POL,
+						    '' AS VOYAGE_POD,
+						    IFNULL (T2.SPECIAL_INSTRUCTION_CODE,T1.SPECIAL_INSTRUCTION_CODE) AS SPECIAL_INSTRUCTION_CODE,						
+						    IFNULL (T2.SPECIAL_INSTRUCTION_NAME,T1.SPECIAL_INSTRUCTION_NAME) AS SPECIAL_INSTRUCTION_NAME,
+						    T1.LAST_LOCATION_ID,
+						    T1.LAST_LOCATION_NAME,
+						    T1.LEASE_AGREEMENT,
+						    T1.LEASE_TYPE_CODE,
+						    T1.LEASE_TYPE,
+						    T1.LEASE_CONTRACT_TYPE,
+						    T1.ASSIGNED_RESOURCE,
+						    T1.VESSEL_CUTOFF_TIME,
+						    NULL AS VESSEL_ARRIVAL_DATE,
+						    T1.VESSEL_POL,
+						    '' AS VESSEL_POD,
+						    '' AS STREETTURN_TU_ID,
+						    0  AS INVALID,
+						    T1.PLAN_STATUS
+                     FROM :TU_FOR_PICKUP T1
+                     LEFT OUTER JOIN 
+                     (SELECT A.RULE_ID, A.USER, A.TU_ID, C.RESOURCE_NAME, A.SPECIAL_INSTRUCTION_CODE, B.DESC AS SPECIAL_INSTRUCTION_NAME
+                      FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction" A
+                      LEFT JOIN "sap.tm.trp.db.semantic.resource::v_special_instruction_t" B ON (A.SPECIAL_INSTRUCTION_CODE = B.CODE)
+                      LEFT JOIN "sap.tm.trp.db.semantic.resource::v_resource_master" C ON (A.RESOURCE_ID = C.RESOURCE_ID)                      
+                     ) T2 ON (T1.ASSIGNED_RESOURCE = T2.RESOURCE_NAME AND T2.RULE_ID = :RULE_ID AND T1.TU_ID = T2.TU_ID)
+                   
+                     WHERE T1.ORIGINAL_PICKUP_DATE IS NOT NULL AND T1.ORIGINAL_PICKUP_DATE <> '';
+               ELSE
+	               TU_OPT = SELECT DISTINCT :RULE_ID AS RULE_ID,
+	                            :V_RULE_TYPE AS RULE_TYPE,
+	                            T1.TU_ID AS TRANSPORTATION_ID,
+	                            T1.TU_TYPE_CODE,
+	                            T1.TU_TYPE,
+	                            T1.EXECUTION_STATUS_CODE,
+	            			    T1.EXECUTION_STATUS AS STATUS,
+	            			    T1.LIFECYCLE_CODE,
+	            		        T1.LIFECYCLE_STATUS,
+	            			    T1.SHIPPER_ID,
+	            			    T1.SHIPPER_NAME AS SHIPPER,
+	            		        T1.CONSIGNEE_ID,
+	            		        T1.CONSIGNEE_NAME AS CONSIGNEE,
+	            			    T1.RESOURCE_TYPE,            			
+	            			    T1.QUANTITY,
+	            			    T1.ASSIGN_QUANTITY AS ASSIGNED_CONTAINERS,
+	            			    T1.RESOURCE_NUMBER,
+	            			    T1.SOURCE_LOCATION_ID,
+	            			    T1.SOURCE_LOCATION_NAME AS SOURCE_LOCATION,
+	            			    T1.DESTINATION_LOCATION_ID,
+	            			    T1.DESTINATION_LOCATION_NAME AS DESTINATION_LOCATION,
+	            			    T1.POL,
+	            			    T1.POL_NAME,
+	            			    T1.POD,
+	            			    T1.POD_NAME,
+	            			    T1.PLANNING_RELEVANT AS RELEVANT_PLANNING,
+	            			    T1.CUSTOMER_CODE,
+	            			    T1.CUSTOMER_NAME,
+	            			    T1.BOOKING_DATE,
+	            			    T1.BOOKING_REFERENCE,
+	           				    T1.ORIGINAL_PICKUP_DATE,
+	           				    T1.ORIGINAL_PICKUP_LOCATION_ID,
+	            			    T1.ORIGINAL_PICKUP_LOCATION,
+	          				    T1.ORIGINAL_PICKUP_DATE AS PICKUP_DATE,
+	          				    '' AS PICKUP_LOCATION_ID,
+	          				    '' AS PICKUP_LOCATION,
+	          				    NULL AS ORIGINAL_RETURN_DATE,
+	           				    '' AS ORIGINAL_RETURN_LOCATION_ID,
+	            			    '' AS ORIGINAL_RETURN_LOCATION,
+	          				    NULL AS RETURN_DATE,
+	          				    '' AS RETURN_LOCATION_ID,
+	          				    '' AS RETURN_LOCATION,
+	          				    0 AS ASSIGN_STATUS,
+	          				    0 AS FLAG,
+	          				    T1.ITE_KEY,          				
+	          	                T1.MOT,
+							    T1.MEANS_OF_TRANSPORTATION,
+							    T1.CARRIER_POL,
+							    T1.CARRIER_POD,
+							    T1.VOYAGE_POL,
+							    '' AS VOYAGE_POD,
+							    IFNULL (T2.SPECIAL_INSTRUCTION_CODE,T1.SPECIAL_INSTRUCTION_CODE) AS SPECIAL_INSTRUCTION_CODE,						
+							    IFNULL (T2.SPECIAL_INSTRUCTION_NAME,T1.SPECIAL_INSTRUCTION_NAME) AS SPECIAL_INSTRUCTION_NAME,
+							    T1.LAST_LOCATION_ID,
+							    T1.LAST_LOCATION_NAME,
+							    T1.LEASE_AGREEMENT,
+							    T1.LEASE_TYPE_CODE,
+							    T1.LEASE_TYPE,
+							    T1.LEASE_CONTRACT_TYPE,
+							    T1.ASSIGNED_RESOURCE,
+							    T1.VESSEL_CUTOFF_TIME,
+							    NULL AS VESSEL_ARRIVAL_DATE,
+							    T1.VESSEL_POL,
+							    '' AS VESSEL_POD,
+							    '' AS STREETTURN_TU_ID,
+							    0  AS INVALID,
+							    T1.PLAN_STATUS							      
+	                     FROM :TU_FOR_PICKUP T1
+	                     LEFT OUTER JOIN 
+                         (SELECT A.RULE_ID, A.USER, A.TU_ID, C.RESOURCE_NAME, A.SPECIAL_INSTRUCTION_CODE, B.DESC AS SPECIAL_INSTRUCTION_NAME
+                          FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction" A
+                          LEFT JOIN "sap.tm.trp.db.semantic.resource::v_special_instruction_t" B ON (A.SPECIAL_INSTRUCTION_CODE = B.CODE)  
+                          LEFT JOIN "sap.tm.trp.db.semantic.resource::v_resource_master" C ON(A.RESOURCE_ID = C.RESOURCE_ID)                 
+                         ) T2 ON (T1.ASSIGNED_RESOURCE = T2.RESOURCE_NAME AND T2.RULE_ID = :RULE_ID AND T2.USER = :USERNAME AND T1.TU_ID = T2.TU_ID)
+                         
+	                     WHERE T1.ORIGINAL_PICKUP_DATE IS NOT NULL AND T1.ORIGINAL_PICKUP_DATE <> '';
+	                   END IF ;
+
+        -- rule for return
+        ELSE
+
+	       
+	        
+	        CALL "sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_main_get_tu_for_return_harmonised" (
+	 :RULE_ID ,
+	:RESOURCE_CATEGORY ,
+	:V_SD_PLAN_ID,
+    :V_EQUIP_FILTER_ID ,
+    :V_TIME_RANGE_ID,
+    :V_LOCATION_FILTER_ID,
+    :V_FILTER_EXECUTION ,
+    :V_EXCLUSIVE_RULE_ID ,
+    TU_FOR_RETURN 
+ )     ;
+	            
+            IF :V_SCHEDULE_TIME_TYPE = 1 THEN
+              TU_OPT = SELECT DISTINCT :RULE_ID AS RULE_ID,
+	                      :V_RULE_TYPE AS RULE_TYPE,
+	                      T1.TU_ID AS TRANSPORTATION_ID,
+	                      T1.TU_TYPE_CODE,
+	                      T1.TU_TYPE,
+	                      T1.EXECUTION_STATUS_CODE,
+	            		  T1.EXECUTION_STATUS AS STATUS,
+	            		  T1.LIFECYCLE_CODE,
+	            		  T1.LIFECYCLE_STATUS,
+	            		  T1.SHIPPER_ID,
+	            		  T1.SHIPPER_NAME AS SHIPPER,
+	            		  T1.CONSIGNEE_ID,
+	            		  T1.CONSIGNEE_NAME AS CONSIGNEE,
+	            		  T1.RESOURCE_TYPE,  --readable
+	            		  T1.QUANTITY,
+	            		  T1.ASSIGN_QUANTITY AS ASSIGNED_CONTAINERS,
+	            		  T1.RESOURCE_NUMBER,
+	            		  T1.SOURCE_LOCATION_ID,
+	            		  T1.SOURCE_LOCATION_NAME AS SOURCE_LOCATION,
+	            		  T1.DESTINATION_LOCATION_ID,
+	            		  T1.DESTINATION_LOCATION_NAME AS DESTINATION_LOCATION,
+	            		  T1.POL,
+	            		  T1.POL_NAME,
+	            		  T1.POD,
+	            		  T1.POD_NAME,
+	            		  T1.PLANNING_RELEVANT AS RELEVANT_PLANNING,
+	            		  T1.CUSTOMER_CODE,
+	            		  T1.CUSTOMER_NAME,
+	            		  T1.BOOKING_DATE,
+	            		  T1.BOOKING_REFERENCE,
+	            		  NULL AS ORIGINAL_PICKUP_DATE,
+	           			  '' AS ORIGINAL_PICKUP_LOCATION_ID,
+	            		  '' AS ORIGINAL_PICKUP_LOCATION,
+	          			  NULL AS PICKUP_DATE,
+	          			  '' AS PICKUP_LOCATION_ID,
+	          			  '' AS PICKUP_LOCATION,
+	           			  T1.ORIGINAL_RETURN_DATE,
+	           			  T1.ORIGINAL_RETURN_LOCATION_ID,
+	            		  T1.ORIGINAL_RETURN_LOCATION,
+	          			  T1.ORIGINAL_RETURN_DATE AS RETURN_DATE,
+	          			  '' AS RETURN_LOCATION_ID,
+	          			  '' AS RETURN_LOCATION,
+	          			  0 AS ASSIGN_STATUS,
+	          			  0 AS FLAG,
+	          			  T1.ITE_KEY,
+          	              T1.MOT,
+						  T1.MEANS_OF_TRANSPORTATION,
+						  T1.CARRIER_POL,
+						  T1.CARRIER_POD,
+						  '' AS VOYAGE_POL,
+						  T1.VOYAGE_POD,
+						  IFNULL (T2.SPECIAL_INSTRUCTION_CODE,T1.SPECIAL_INSTRUCTION_CODE) AS SPECIAL_INSTRUCTION_CODE,						
+						  IFNULL (T2.SPECIAL_INSTRUCTION_NAME,T1.SPECIAL_INSTRUCTION_NAME) AS SPECIAL_INSTRUCTION_NAME,
+						  T1.LAST_LOCATION_ID,
+						  T1.LAST_LOCATION_NAME,
+						  T1.LEASE_AGREEMENT,
+						  T1.LEASE_TYPE_CODE,
+						  T1.LEASE_TYPE,
+						  T1.LEASE_CONTRACT_TYPE,
+						  T1.ASSIGNED_RESOURCE,
+						  NULL AS VESSEL_CUTOFF_TIME,
+						  T1.VESSEL_ARRIVAL_DATE,
+						  '' AS VESSEL_POL,
+						  T1.VESSEL_POD,
+						  '' AS STREETTURN_TU_ID,
+						  0  AS  INVALID,
+						  T1.PLAN_STATUS  
+                   FROM :TU_FOR_RETURN T1
+                   LEFT OUTER JOIN                   
+                   (     SELECT A.RULE_ID, A.USER, A.TU_ID, C.RESOURCE_NAME, A.SPECIAL_INSTRUCTION_CODE, B.DESC AS SPECIAL_INSTRUCTION_NAME
+                           FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction" A
+                      LEFT JOIN "sap.tm.trp.db.semantic.resource::v_special_instruction_t" B ON (A.SPECIAL_INSTRUCTION_CODE = B.CODE)  
+                     LEFT JOIN "sap.tm.trp.db.semantic.resource::v_resource_master" C ON (A.RESOURCE_ID = C.RESOURCE_ID)                           
+                   ) T2
+                   ON (T1.ASSIGNED_RESOURCE = T2.RESOURCE_NAME AND T2.RULE_ID = :RULE_ID AND T1.TU_ID = T2.TU_ID)
+                     
+                   WHERE T1.ORIGINAL_RETURN_DATE IS NOT NULL AND T1.ORIGINAL_RETURN_DATE <> '';
+            ELSE
+            
+	            TU_OPT = SELECT DISTINCT :RULE_ID AS RULE_ID,
+		                      :V_RULE_TYPE AS RULE_TYPE,
+		                      T1.TU_ID AS TRANSPORTATION_ID,
+		                      T1.TU_TYPE_CODE,
+		                      T1.TU_TYPE,
+		                      T1.EXECUTION_STATUS_CODE,
+		            		  T1.EXECUTION_STATUS AS STATUS,
+		            		  T1.LIFECYCLE_CODE,
+		            		  T1.LIFECYCLE_STATUS,
+		            		  T1.SHIPPER_ID,
+		            		  T1.SHIPPER_NAME AS SHIPPER,
+		            		  T1.CONSIGNEE_ID,
+		            		  T1.CONSIGNEE_NAME AS CONSIGNEE,
+		            		  T1.RESOURCE_TYPE,  --readable
+		            		  T1.QUANTITY,
+		            		  T1.ASSIGN_QUANTITY AS ASSIGNED_CONTAINERS,
+		            		  T1.RESOURCE_NUMBER,
+		            		  T1.SOURCE_LOCATION_ID,
+		            		  T1.SOURCE_LOCATION_NAME AS SOURCE_LOCATION,
+		            		  T1.DESTINATION_LOCATION_ID,
+		            		  T1.DESTINATION_LOCATION_NAME AS DESTINATION_LOCATION,
+		            		  T1.POL,
+		            		  T1.POL_NAME,
+		            		  T1.POD,
+		            		  T1.POD_NAME,
+		            		  T1.PLANNING_RELEVANT AS RELEVANT_PLANNING,
+		            		  T1.CUSTOMER_CODE,
+		            		  T1.CUSTOMER_NAME,
+		            		  T1.BOOKING_DATE,
+		            		  T1.BOOKING_REFERENCE,
+		            		  NULL AS ORIGINAL_PICKUP_DATE,
+		           			  '' AS ORIGINAL_PICKUP_LOCATION_ID,
+		            		  '' AS ORIGINAL_PICKUP_LOCATION,
+		          			  NULL AS PICKUP_DATE,
+		          			  '' AS PICKUP_LOCATION_ID,
+		          			  '' AS PICKUP_LOCATION,
+		           			  T1.ORIGINAL_RETURN_DATE,
+		           			  T1.ORIGINAL_RETURN_LOCATION_ID,
+		            		  T1.ORIGINAL_RETURN_LOCATION,
+		          			  T1.ORIGINAL_RETURN_DATE AS RETURN_DATE,
+		          			  '' AS RETURN_LOCATION_ID,
+		          			  '' AS RETURN_LOCATION,
+		          			  0 AS ASSIGN_STATUS,
+		          			  0 AS FLAG,
+		          			  T1.ITE_KEY,
+	          	              T1.MOT,
+							  T1.MEANS_OF_TRANSPORTATION,
+							  T1.CARRIER_POL,
+							  T1.CARRIER_POD,
+							  '' AS VOYAGE_POL,
+							  T1.VOYAGE_POD,
+							  IFNULL (T2.SPECIAL_INSTRUCTION_CODE,T1.SPECIAL_INSTRUCTION_CODE) AS SPECIAL_INSTRUCTION_CODE,						
+							  IFNULL (T2.SPECIAL_INSTRUCTION_NAME,T1.SPECIAL_INSTRUCTION_NAME) AS SPECIAL_INSTRUCTION_NAME,
+							  T1.LAST_LOCATION_ID,
+							  T1.LAST_LOCATION_NAME,
+							  T1.LEASE_AGREEMENT,
+							  T1.LEASE_TYPE_CODE,
+							  T1.LEASE_TYPE,
+							  T1.LEASE_CONTRACT_TYPE,
+							  T1.ASSIGNED_RESOURCE,
+							  NULL AS VESSEL_CUTOFF_TIME,
+							  T1.VESSEL_ARRIVAL_DATE,
+							  '' AS VESSEL_POL,
+							  T1.VESSEL_POD,
+							  '' AS STREETTURN_TU_ID,
+							  0 AS  INVALID ,
+							  T1.PLAN_STATUS 
+	                   FROM :TU_FOR_RETURN T1
+	                   LEFT JOIN 
+                       (SELECT A.RULE_ID, A.USER, A.TU_ID, C.RESOURCE_NAME, A.SPECIAL_INSTRUCTION_CODE, B.DESC AS SPECIAL_INSTRUCTION_NAME
+                          FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction" A
+                          LEFT JOIN "sap.tm.trp.db.semantic.resource::v_special_instruction_t" B ON (A.SPECIAL_INSTRUCTION_CODE = B.CODE)  
+                          LEFT JOIN "sap.tm.trp.db.semantic.resource::v_resource_master" C ON(A.RESOURCE_ID = C.RESOURCE_ID)      
+                       ) T2	                   
+	                   ON (T1.ASSIGNED_RESOURCE = T2.RESOURCE_NAME AND T2.RULE_ID = :RULE_ID AND T2.USER = :USERNAME AND T1.TU_ID = T2.TU_ID)
+	                   
+	                   WHERE T1.ORIGINAL_RETURN_DATE IS NOT NULL AND T1.ORIGINAL_RETURN_DATE <> '';
+	                END IF ;
+          END IF;
+          
+          TU_OUTPUT = APPLY_FILTER(:TU_OPT,:PARAMETER);
+
+          -- cache in the staging table
+          IF :V_SCHEDULE_TIME_TYPE = 1 THEN
+            TRUNCATE TABLE "sap.tm.trp.db.pickupreturn::t_pickupreturn_global_stage";  
+		    --WHERE RULE_ID = :RULE_ID;
+          ELSE
+			  DELETE FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_tu_staging"
+			  WHERE RULE_ID = :RULE_ID AND USERNAME = :USERNAME;
+		  END IF ;
+		  
+		  IF :V_SCHEDULE_TIME_TYPE = 1 THEN
+		  
+		  INSERT INTO "sap.tm.trp.db.pickupreturn::t_pickupreturn_global_stage"(
+		    RULE_ID,
+		    RULE_TYPE,
+		    TRANSPORTATION_ID,
+		    TU_TYPE_CODE,
+		    TU_TYPE,
+		    EXECUTION_STATUS_CODE,
+		    STATUS,
+		    LIFECYCLE_CODE,
+		    LIFECYCLE_STATUS,
+			SHIPPER_ID,
+		    SHIPPER,
+			CONSIGNEE_ID,
+		    CONSIGNEE,
+			RESOURCE_TYPE,
+			QUANTITY,
+		    ASSIGNED_CONTAINERS,
+		    RESOURCE_NUMBER,
+			SOURCE_LOCATION_ID,
+		    SOURCE_LOCATION,
+		    DESTINATION_LOCATION_ID,
+		    DESTINATION_LOCATION,
+			POL,
+		    POL_NAME,
+		    POD,
+		    POD_NAME,
+			RELEVANT_PLANNING,
+			CUSTOMER_CODE,
+		    CUSTOMER_NAME,
+			BOOKING_DATE,
+			BOOKING_REFERENCE,
+			ORIGINAL_PICKUP_DATE,
+			ORIGINAL_PICKUP_LOCATION_ID,
+		    ORIGINAL_PICKUP_LOCATION,
+			PICKUP_DATE,
+			PICKUP_LOCATION_ID,
+		    PICKUP_LOCATION,
+		    ORIGINAL_RETURN_DATE,
+			ORIGINAL_RETURN_LOCATION_ID,
+		    ORIGINAL_RETURN_LOCATION,
+			RETURN_DATE,
+			RETURN_LOCATION_ID,
+		    RETURN_LOCATION,
+			ASSIGN_STATUS,
+			FLAG,
+			ITE_KEY,
+			MOT,
+			MEANS_OF_TRANSPORTATION,
+			CARRIER_POL,
+			CARRIER_POD,
+		    VOYAGE_POL,
+		    VOYAGE_POD,
+		    SPECIAL_INSTRUCTION_CODE,
+		    SPECIAL_INSTRUCTION_NAME,	
+		    LAST_LOCATION_ID,
+		    LAST_LOCATION_NAME,
+		    LEASE_AGREEMENT,
+		    LEASE_TYPE_CODE,
+		    LEASE_TYPE,
+		    LEASE_CONTRACT_TYPE,
+		    ASSIGNED_RESOURCE,
+		    VESSEL_CUTOFF_TIME,
+		    VESSEL_ARRIVAL_DATE,
+		    VESSEL_POL,
+		    VESSEL_POD,
+		    STREETTURN_TU_ID,
+		    INVALID,
+		    PLAN_STATUS,
+		    USERNAME
+		  )
+		  SELECT RULE_ID,
+		         RULE_TYPE,
+		         TRANSPORTATION_ID,
+		         TU_TYPE_CODE,
+		         TU_TYPE,
+		         EXECUTION_STATUS_CODE,
+		         STATUS,
+		         LIFECYCLE_CODE,
+		         LIFECYCLE_STATUS,
+		         SHIPPER_ID,
+		         SHIPPER,
+		         CONSIGNEE_ID,
+		         CONSIGNEE,
+		         RESOURCE_TYPE,
+		         QUANTITY,
+		         ASSIGNED_CONTAINERS,
+		         RESOURCE_NUMBER,
+		         SOURCE_LOCATION_ID,
+		         SOURCE_LOCATION,
+		         DESTINATION_LOCATION_ID,
+		         DESTINATION_LOCATION,
+		         POL,
+		         POL_NAME,
+		         POD,
+		         POD_NAME,
+		         RELEVANT_PLANNING,
+		         CUSTOMER_CODE,
+		         CUSTOMER_NAME,
+		         BOOKING_DATE,
+		         BOOKING_REFERENCE,
+		         ORIGINAL_PICKUP_DATE,
+		         ORIGINAL_PICKUP_LOCATION_ID,
+		         ORIGINAL_PICKUP_LOCATION,
+		         PICKUP_DATE,
+		         PICKUP_LOCATION_ID,
+		         PICKUP_LOCATION,
+		         ORIGINAL_RETURN_DATE,
+		         ORIGINAL_RETURN_LOCATION_ID,
+		         ORIGINAL_RETURN_LOCATION,
+		         RETURN_DATE,
+		         RETURN_LOCATION_ID,
+		         RETURN_LOCATION,
+		         ASSIGN_STATUS,
+		         FLAG,
+		         ITE_KEY,
+	          	 MOT,
+				 MEANS_OF_TRANSPORTATION,
+				 CARRIER_POL,
+				 CARRIER_POD,
+				 VOYAGE_POL,
+				 VOYAGE_POD,
+				 SPECIAL_INSTRUCTION_CODE,						
+				 SPECIAL_INSTRUCTION_NAME,
+				 LAST_LOCATION_ID,
+				 LAST_LOCATION_NAME,
+				 LEASE_AGREEMENT,
+				 LEASE_TYPE_CODE,
+				 LEASE_TYPE,
+				 LEASE_CONTRACT_TYPE,
+				 ASSIGNED_RESOURCE,
+				 VESSEL_CUTOFF_TIME,
+				 VESSEL_ARRIVAL_DATE,
+				 VESSEL_POL,
+				 VESSEL_POD,
+				 STREETTURN_TU_ID,
+				 INVALID ,
+				 PLAN_STATUS, 
+				 :USERNAME FROM :TU_OPT;
+		  
+		  ELSE
+		  
+		  
+		  
+		  INSERT INTO "sap.tm.trp.db.pickupreturn::t_location_assignment_tu_staging"(
+		    RULE_ID,
+		    RULE_TYPE,
+		    TRANSPORTATION_ID,
+		    TU_TYPE_CODE,
+		    TU_TYPE,
+		    EXECUTION_STATUS_CODE,
+		    STATUS,
+		    LIFECYCLE_CODE,
+		    LIFECYCLE_STATUS,
+			SHIPPER_ID,
+		    SHIPPER,
+			CONSIGNEE_ID,
+		    CONSIGNEE,
+			RESOURCE_TYPE,
+			QUANTITY,
+		    ASSIGNED_CONTAINERS,
+		    RESOURCE_NUMBER,
+			SOURCE_LOCATION_ID,
+		    SOURCE_LOCATION,
+		    DESTINATION_LOCATION_ID,
+		    DESTINATION_LOCATION,
+			POL,
+		    POL_NAME,
+		    POD,
+		    POD_NAME,
+			RELEVANT_PLANNING,
+			CUSTOMER_CODE,
+		    CUSTOMER_NAME,
+			BOOKING_DATE,
+			BOOKING_REFERENCE,
+			ORIGINAL_PICKUP_DATE,
+			ORIGINAL_PICKUP_LOCATION_ID,
+		    ORIGINAL_PICKUP_LOCATION,
+			PICKUP_DATE,
+			PICKUP_LOCATION_ID,
+		    PICKUP_LOCATION,
+		    ORIGINAL_RETURN_DATE,
+			ORIGINAL_RETURN_LOCATION_ID,
+		    ORIGINAL_RETURN_LOCATION,
+			RETURN_DATE,
+			RETURN_LOCATION_ID,
+		    RETURN_LOCATION,
+			ASSIGN_STATUS,
+			FLAG,
+			ITE_KEY,
+			MOT,
+			MEANS_OF_TRANSPORTATION,
+			CARRIER_POL,
+			CARRIER_POD,
+		    VOYAGE_POL,
+		    VOYAGE_POD,
+		    SPECIAL_INSTRUCTION_CODE,
+		    SPECIAL_INSTRUCTION_NAME,	
+		    LAST_LOCATION_ID,
+		    LAST_LOCATION_NAME,
+		    LEASE_AGREEMENT,
+		    LEASE_TYPE_CODE,
+		    LEASE_TYPE,
+		    LEASE_CONTRACT_TYPE,
+		    ASSIGNED_RESOURCE,
+		    VESSEL_CUTOFF_TIME,
+		    VESSEL_ARRIVAL_DATE,
+		    VESSEL_POL,
+		    VESSEL_POD,
+		    STREETTURN_TU_ID,
+		    INVALID,
+		    PLAN_STATUS,
+		    USERNAME
+		  )
+		  SELECT RULE_ID,
+		         RULE_TYPE,
+		         TRANSPORTATION_ID,
+		         TU_TYPE_CODE,
+		         TU_TYPE,
+		         EXECUTION_STATUS_CODE,
+		         STATUS,
+		         LIFECYCLE_CODE,
+		         LIFECYCLE_STATUS,
+		         SHIPPER_ID,
+		         SHIPPER,
+		         CONSIGNEE_ID,
+		         CONSIGNEE,
+		         RESOURCE_TYPE,
+		         QUANTITY,
+		         ASSIGNED_CONTAINERS,
+		         RESOURCE_NUMBER,
+		         SOURCE_LOCATION_ID,
+		         SOURCE_LOCATION,
+		         DESTINATION_LOCATION_ID,
+		         DESTINATION_LOCATION,
+		         POL,
+		         POL_NAME,
+		         POD,
+		         POD_NAME,
+		         RELEVANT_PLANNING,
+		         CUSTOMER_CODE,
+		         CUSTOMER_NAME,
+		         BOOKING_DATE,
+		         BOOKING_REFERENCE,
+		         ORIGINAL_PICKUP_DATE,
+		         ORIGINAL_PICKUP_LOCATION_ID,
+		         ORIGINAL_PICKUP_LOCATION,
+		         PICKUP_DATE,
+		         PICKUP_LOCATION_ID,
+		         PICKUP_LOCATION,
+		         ORIGINAL_RETURN_DATE,
+		         ORIGINAL_RETURN_LOCATION_ID,
+		         ORIGINAL_RETURN_LOCATION,
+		         RETURN_DATE,
+		         RETURN_LOCATION_ID,
+		         RETURN_LOCATION,
+		         ASSIGN_STATUS,
+		         FLAG,
+		         ITE_KEY,
+	          	 MOT,
+				 MEANS_OF_TRANSPORTATION,
+				 CARRIER_POL,
+				 CARRIER_POD,
+				 VOYAGE_POL,
+				 VOYAGE_POD,
+				 SPECIAL_INSTRUCTION_CODE,						
+				 SPECIAL_INSTRUCTION_NAME,
+				 LAST_LOCATION_ID,
+				 LAST_LOCATION_NAME,
+				 LEASE_AGREEMENT,
+				 LEASE_TYPE_CODE,
+				 LEASE_TYPE,
+				 LEASE_CONTRACT_TYPE,
+				 ASSIGNED_RESOURCE,
+				 VESSEL_CUTOFF_TIME,
+				 VESSEL_ARRIVAL_DATE,
+				 VESSEL_POL,
+				 VESSEL_POD,
+				 STREETTURN_TU_ID,
+				 INVALID ,
+				 PLAN_STATUS, 
+				 :USERNAME FROM :TU_OPT;
+				 END IF; 
+      END IF;
+
+
+END;

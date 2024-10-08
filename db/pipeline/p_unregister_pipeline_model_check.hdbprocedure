@@ -1,0 +1,26 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_unregister_pipeline_model_check" (
+   IN ID  BIGINT,
+   OUT WHEREUSED "sap.tm.trp.db.whereusedlist::v_used_registered_object" 
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	--DEFAULT SCHEMA <default_schema_name>
+	READS SQL DATA AS
+BEGIN
+DECLARE OBJECT_CODE VARCHAR(40);
+  
+--get code by id
+SELECT IFNULL (MAX (CODE),'') 
+INTO OBJECT_CODE 
+FROM "sap.tm.trp.db.objectregistration::v_registered_object_ui"
+WHERE ID = :ID
+;
+  
+--get used list by code
+WHEREUSED = 
+	SELECT * 
+	FROM "sap.tm.trp.db.whereusedlist::v_used_registered_object"
+	WHERE OBJECT_CODE = :OBJECT_CODE
+;
+
+END;

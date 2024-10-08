@@ -1,0 +1,60 @@
+schema = "SAP_TM_TRP"; 
+query = "SELECT T1.ID,
+                T1.CODE AS NAME,
+                T1.ENABLE_FLAG,
+                CASE T1.ENABLE_FLAG
+                  WHEN 0 THEN 'NO'
+                  WHEN 1 THEN 'YES'
+                END AS ENABLE_FLAG_DESC,
+                T2.DESC,
+                T1.LEASE_CONTRACT_FLAG,
+                T1.RESOURCE_CATEGORY_TYPE,
+                CASE T1.RESOURCE_CATEGORY_TYPE
+                  WHEN 'CN' THEN 'Containers'
+                  WHEN 'RC' THEN 'Railcars'
+                  WHEN 'GE' THEN 'Generic'
+                END AS RESOURCE_CATEGORY_TYPE_DESC,
+                T1.RESOURCE_GROUP_TYPE,
+                T3.GROUP_TYPE_DESC,
+                T1.BASE_RESOURCE_TYPE,
+                T5.RESOURCE_TYPE_DESC,
+                CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                  WHEN (T1.CREATE_BY <> 0 AND T1.CREATE_BY IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+			      WHEN T1.CREATE_BY = 0 OR T1.CREATE_BY IS NULL THEN ''
+			      ELSE '***' END AS CREATED_BY,
+                T1.CREATE_AT AS CREATED_ON,
+                CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                  WHEN (T1.LAST_MODIFIED_BY <> 0 AND T1.LAST_MODIFIED_BY IS NOT NULL) AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+			      WHEN T1.LAST_MODIFIED_BY = 0 OR T1.LAST_MODIFIED_BY IS NULL THEN ''
+			      ELSE '***' END AS LAST_CHANGED_BY,
+                T1.LAST_MODIFIED_AT AS LAST_CHANGED_ON
+         FROM \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings\" AS T1 
+         LEFT OUTER JOIN (SELECT A.* FROM \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings_t\" AS A
+                          INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS B
+                             ON (A.SPRAS = B.SPRAS)) AS T2 
+         ON (T1.ID = T2.ID)
+         LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS U1
+                  ON (T1.CREATE_BY = U1.ID)
+         LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS U2
+                  ON (T1.LAST_MODIFIED_BY = U2.ID)
+         LEFT JOIN \"sap.tm.trp.db.semantic.resource::v_resource_group_type\" AS T3
+                  ON (T1.RESOURCE_GROUP_TYPE = T3.RESOURCE_GROUP_TYPE)
+         LEFT JOIN (SELECT DISTINCT RESOURCE_TYPE_CODE, RESOURCE_TYPE_DESC, RESOURCE_CATEGORY
+                    FROM \"sap.tm.trp.db.semantic.resource::v_resource_type_with_category\") AS T5
+                  ON (T1.BASE_RESOURCE_TYPE = T5.RESOURCE_TYPE_CODE AND T1.CODE = T5.RESOURCE_CATEGORY)
+         LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T9  
+                  ON U1.USERNAME = T9.USERNAME
+         LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T10  
+                  ON U2.USERNAME = T10.USERNAME
+         CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE"
+         ; 
+                
+depends_on_table = ["sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings",
+                    "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings_t"];
+
+depends_on_view = ["sap.tm.trp.db.semantic.resource::v_resource_group_type",
+                    "sap.tm.trp.db.semantic.resource::v_resource_type_with_category",
+                    "sap.tm.trp.db.semantic.common::v_lang_code",
+                    "sap.tm.trp.db.dataprotectionprivacy::v_unblock_users",
+                    "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege",
+                    "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];               

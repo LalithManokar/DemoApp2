@@ -1,0 +1,60 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_archive_rule_history_facet_filter" (IN SEARCH VARCHAR(500),
+																		IN TYPES "sap.tm.trp.db.archive::tt_id_list",
+																		IN STATUS "sap.tm.trp.db.archive::tt_id_list",
+																		OUT FILTERED_TYPE_OUTPUT "sap.tm.trp.db.archive::t_archive_rule_type",
+																		OUT FILTERED_STATUS_OUTPUT "sap.tm.trp.db.archive::t_archive_status") 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+	
+	TYPE_LIST_CNT TINYINT;
+	STATUS_LIST_CNT TINYINT;
+	
+BEGIN 
+    DECLARE TYPES_COUNT TINYINT;
+    DECLARE STATUS_COUNT TINYINT;
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    SELECT ::SQL_ERROR_CODE, ::SQL_ERROR_MESSAGE FROM DUMMY;
+    SELECT COUNT(1) INTO TYPES_COUNT FROM :TYPES;
+    IF ( TYPES_COUNT = 0 ) THEN
+        TYPES = SELECT TYPE AS ID FROM "sap.tm.trp.db.archive::t_archive_rule_type";
+    END IF;
+    SELECT COUNT(1) INTO STATUS_COUNT FROM :STATUS;
+    IF ( STATUS_COUNT = 0 ) THEN
+        STATUS = SELECT STATUS AS ID FROM "sap.tm.trp.db.archive::t_archive_status";
+    END IF;    
+	ARCHIVE_OUTPUT= SELECT TYPE,TYPE_DESC,STATUS,STATUS_DESC FROM "_SYS_BIC"."sap.tm.trp.db.archive/cv_archive_history"
+	WHERE (
+	        LOWER(RULE_NAME) LIKE '%'||LOWER(:SEARCH)||'%'
+	        OR LOWER(TYPE_DESC) LIKE '%'||LOWER(:SEARCH)||'%'
+	        OR LOWER(EXECUTED_BY_NAME) LIKE '%'||LOWER(:SEARCH)||'%'
+	        OR LOWER(MESSAGE) LIKE '%'||LOWER(:SEARCH)||'%'
+	    );
+
+   
+     FILTERED_TYPE_OUTPUT = SELECT DISTINCT
+        --MASTER_TBL.*
+        MASTER_TBL.TYPE AS TYPE,
+        MASTER_TBL.TYPE_DESC AS TYPE_DESC
+        FROM :ARCHIVE_OUTPUT AS MASTER_TBL
+        INNER JOIN :TYPES AS TYPE_TBL
+            ON MASTER_TBL.TYPE = TYPE_TBL.ID
+        INNER JOIN :STATUS AS STATUS_DBL
+        ON MASTER_TBL.STATUS = STATUS_DBL.ID
+        ORDER BY MASTER_TBL.TYPE_DESC;
+        
+        
+
+   
+     FILTERED_STATUS_OUTPUT = SELECT DISTINCT
+        MASTER_TBL.STATUS AS STATUS,
+        MASTER_TBL.STATUS_DESC AS STATUS_DESC
+        FROM :ARCHIVE_OUTPUT AS MASTER_TBL
+        INNER JOIN :STATUS AS STATUS_TBL
+            ON MASTER_TBL.STATUS = STATUS_TBL.ID
+        INNER JOIN :TYPES AS TYPE_TBL
+        ON MASTER_TBL.TYPE = TYPE_TBL.ID
+        ORDER BY MASTER_TBL.STATUS_DESC;
+	    
+END

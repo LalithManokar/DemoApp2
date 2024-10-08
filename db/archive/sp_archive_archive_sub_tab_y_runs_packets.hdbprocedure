@@ -1,0 +1,158 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_archive_archive_sub_tab_y_runs_packets"(
+		IN RULE_ID BIGINT, 
+		IN EXECUTION_ID BIGINT, 
+		IN ROOT_TEMP_TAB NVARCHAR(500), 
+		IN CHILD_TAB_NAME NVARCHAR(500), 
+		IN ROOT_COLUMN_STR NVARCHAR(1000),
+		IN RECORD_REF_COL NVARCHAR(500),
+		IN ROOT_TABLE_NAME NVARCHAR(500),
+		IN DATE_COLUMN_NAME NVARCHAR(500),
+		IN NUM_EXEC BIGINT,
+		OUT STATUS_CODE INTEGER,
+		OUT RECORD_COUNT BIGINT,
+		OUT MESSAGE NVARCHAR(5000)
+	)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+
+	DECLARE SCHEMA_NAME NVARCHAR(20) DEFAULT 'SAP_TM_TRP';
+    DECLARE CHILD_WARM_TEM_TAB NVARCHAR(500);
+    DECLARE CHILD_WARM_TAB NVARCHAR(500);
+    DECLARE SQL_STT NVARCHAR(5000);
+    DECLARE COLUMN_STR NVARCHAR(1000);
+    DECLARE COLUMN_STR_TEMP NVARCHAR(1000);
+    DECLARE COLUMN_STR_DEL NVARCHAR(1000);
+    DECLARE PARENT_REF_COL NVARCHAR(500);
+    DECLARE CHILD_REF_COL NVARCHAR(500);
+    DECLARE RECORDS_COUNT BIGINT;
+    DECLARE PROCESS_TIMES BIGINT;
+	DECLARE KEY_COLUMN_STR NVARCHAR(1000);
+	DECLARE DATA_PACKET_SIZE BIGINT;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN      
+        STATUS_CODE := 2;
+        SELECT ::SQL_ERROR_MESSAGE INTO MESSAGE FROM DUMMY;
+   END; 
+    
+    --initialize status code
+    CHILD_WARM_TEM_TAB := '';
+    CHILD_WARM_TAB := '';
+    SQL_STT := '';
+    COLUMN_STR := '';
+    PARENT_REF_COL := '';
+    CHILD_REF_COL := '';
+    STATUS_CODE := 0;
+    MESSAGE := 'Success';
+    RECORD_COUNT := 0;
+    KEY_COLUMN_STR := '';
+    
+    --get data packet size 
+    SELECT PACKET_SIZE INTO DATA_PACKET_SIZE FROM "sap.tm.trp.db.archive::t_archive_exec_run_metadata" AS T1
+    INNER JOIN "sap.tm.trp.db.archive::t_archive_metadata" AS T2
+    ON T1.TABLE_ID = T2.ID WHERE T2.TABLE_NAME = :ROOT_TABLE_NAME;
+    
+    --copy root table entries to temp table
+    SQL_STT := 'INSERT INTO "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:ROOT_TEMP_TAB) || '" (' || escape_single_quotes(ROOT_COLUMN_STR) || ') SELECT ' 
+    	|| escape_single_quotes(:ROOT_COLUMN_STR) || ' FROM ( SELECT ' || escape_single_quotes(:ROOT_COLUMN_STR) ||',ROW_NUMBER() OVER(PARTITION BY ' || escape_single_quotes(:RECORD_REF_COL) 
+    	|| ' ORDER BY ' || escape_single_quotes(:DATE_COLUMN_NAME) || ' DESC) AS RANK FROM "' 
+    	|| :SCHEMA_NAME || '"."' || escape_double_quotes(:ROOT_TABLE_NAME) || '" ) WHERE RANK > ' || :NUM_EXEC ;
+    EXECUTE IMMEDIATE :SQL_STT;    
+
+    --move archived rolws from child table into child temporary table
+    SELECT PARENT_REF_COL, CHILD_REF_COL INTO PARENT_REF_COL, CHILD_REF_COL 
+    FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE TABLE_NAME = :CHILD_TAB_NAME;
+    CHILD_WARM_TAB := :CHILD_TAB_NAME || '_warm'; --child warm table
+    SELECT REPLACE(REPLACE(:CHILD_TAB_NAME,'.','_'),'::','_') || '_warm_temp' INTO CHILD_WARM_TEM_TAB FROM DUMMY; --child warm temporary table
+	SELECT STRING_AGG(COLUMN_NAME,',') INTO COLUMN_STR FROM TABLE_COLUMNS WHERE SCHEMA_NAME = :SCHEMA_NAME AND TABLE_NAME = :CHILD_TAB_NAME;
+	COLUMN_STR_TEMP  := :COLUMN_STR || ',TRP_RULE_ID,TRP_EXECUTION_ID';
+	
+	SELECT STRING_AGG(COLUMN_NAME,',') INTO KEY_COLUMN_STR FROM "SYS"."CONSTRAINTS" WHERE SCHEMA_NAME = :SCHEMA_NAME AND TABLE_NAME = :CHILD_TAB_NAME;
+	
+	create local temporary table "#t_record_count" (num_records BIGINT);
+	
+	SQL_STT := 'INSERT INTO "#t_record_count" SELECT COUNT(*) FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_TAB_NAME) || '" ' || 'WHERE ' 
+	|| escape_single_quotes(:CHILD_REF_COL) || ' IN (SELECT ' || escape_single_quotes(:PARENT_REF_COL) || ' FROM "'
+	|| escape_single_quotes(:SCHEMA_NAME) || '"."' || escape_double_quotes(:ROOT_TEMP_TAB) || '")';
+	EXECUTE IMMEDIATE :SQL_STT;
+	
+	SELECT TOP 1 num_records INTO RECORDS_COUNT FROM "#t_record_count";
+	
+	DROP TABLE "#t_record_count";
+	
+	PROCESS_TIMES = CEIL(RECORDS_COUNT/:DATA_PACKET_SIZE);
+	
+	--clear root temporary table
+    SQL_STT := 'DELETE FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:ROOT_TEMP_TAB) || '"';
+    EXECUTE IMMEDIATE :SQL_STT;
+	
+	WHILE :PROCESS_TIMES > 0 DO
+	
+		 --copy root table entries to temp table
+	    SQL_STT := 'INSERT INTO "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:ROOT_TEMP_TAB) || '" (' || escape_single_quotes(ROOT_COLUMN_STR) || ') SELECT ' 
+	    	|| escape_single_quotes(:ROOT_COLUMN_STR) || ' FROM ( SELECT ' || escape_single_quotes(:ROOT_COLUMN_STR) ||',ROW_NUMBER() OVER(PARTITION BY ' || escape_single_quotes(:RECORD_REF_COL) 
+	    	|| ' ORDER BY ' || escape_single_quotes(:DATE_COLUMN_NAME) || ' DESC) AS RANK FROM "' 
+	    	|| :SCHEMA_NAME || '"."' || escape_double_quotes(:ROOT_TABLE_NAME) || '" ) WHERE RANK > ' || :NUM_EXEC ;
+	    EXECUTE IMMEDIATE :SQL_STT; 
+	
+    	SQL_STT := 
+    	'INSERT INTO "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_WARM_TEM_TAB) || '" (' || escape_single_quotes(:COLUMN_STR) || ') SELECT TOP ' || '10000000 ' || escape_single_quotes(:COLUMN_STR) || ' FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_TAB_NAME) || '" ' || 'WHERE ' || escape_single_quotes(:CHILD_REF_COL) || ' IN (SELECT DISTINCT ' || escape_single_quotes(:PARENT_REF_COL) || ' FROM "'
+    	|| :SCHEMA_NAME || '"."' || escape_double_quotes(:ROOT_TEMP_TAB) || '")';
+    	EXECUTE IMMEDIATE :SQL_STT; --insert to temp table
+
+    	IF (:KEY_COLUMN_STR IS NULL) THEN 
+    	
+    	    COLUMN_STR_DEL := '';
+    	
+    	    IF (:CHILD_TAB_NAME = 'sap.tm.trp.db.hrf.planBubble::t_SD_KPI_cus_BubbleRule_output') THEN
+    	        CALL "SAP_TM_TRP"."sap.tm.trp.db.archive::p_get_column_str"(:CHILD_TAB_NAME, COLUMN_STR_DEL);
+    	    ELSE
+    	        COLUMN_STR_DEL := :COLUMN_STR;
+    	    END IF;
+    	
+	    	SQL_STT := 
+			'DELETE FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_TAB_NAME) || '" ' || 'WHERE ( ' || escape_single_quotes(:COLUMN_STR_DEL) || ' ) IN ( SELECT TOP ' || '10000000 ' 
+			|| escape_single_quotes(:COLUMN_STR_DEL) || ' FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_TAB_NAME) || '" ' || 'WHERE ' || escape_single_quotes(:CHILD_REF_COL) || ' IN (SELECT DISTINCT ' 
+			|| escape_single_quotes(:PARENT_REF_COL) || ' FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:ROOT_TEMP_TAB) || '") )' ;
+	    	EXECUTE IMMEDIATE :SQL_STT; --delete corresponding rows in chilad table
+    	
+    	ELSE
+    	
+	    	SQL_STT := 
+			'DELETE FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_TAB_NAME) || '" ' || 'WHERE ( ' || escape_single_quotes(:KEY_COLUMN_STR) || ' ) IN ( SELECT TOP ' || '10000000 ' 
+			|| escape_single_quotes(:KEY_COLUMN_STR) || ' FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_TAB_NAME) || '" ' || 'WHERE ' || escape_single_quotes(:CHILD_REF_COL) || ' IN (SELECT DISTINCT ' 
+			|| escape_single_quotes(:PARENT_REF_COL) || ' FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:ROOT_TEMP_TAB) || '") )' ;
+	    	EXECUTE IMMEDIATE :SQL_STT; --delete corresponding rows in chilad table
+    	
+    	END IF ;
+
+    	--insert data from temporary table to child warm table
+    	SQL_STT := 'UPDATE "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_WARM_TEM_TAB) || '" SET TRP_RULE_ID = ' || :RULE_ID || ', TRP_EXECUTION_ID = ' || :EXECUTION_ID;
+    	EXECUTE IMMEDIATE :SQL_STT;
+    	SQL_STT := 'INSERT INTO "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_WARM_TAB) || '" (' || escape_single_quotes(:COLUMN_STR_TEMP) || ') SELECT '
+    	|| escape_single_quotes(:COLUMN_STR_TEMP) || ' FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_WARM_TEM_TAB) || '"';
+    	EXECUTE IMMEDIATE :SQL_STT;
+    	
+    	--clear child temporary table
+    	SQL_STT :=
+    	'DELETE FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_WARM_TEM_TAB) || '"';
+    	EXECUTE IMMEDIATE :SQL_STT;
+    
+    	RECORD_COUNT := :RECORD_COUNT + ::ROWCOUNT;
+    	
+    	--clear root temporary table
+    	SQL_STT := 'DELETE FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:ROOT_TEMP_TAB) || '"';
+    	EXECUTE IMMEDIATE :SQL_STT;
+    	
+   		COMMIT;
+    	
+    	PROCESS_TIMES = :PROCESS_TIMES - 1;
+	
+	END WHILE;
+	
+END;
+
+

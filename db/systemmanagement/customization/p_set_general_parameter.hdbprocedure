@@ -1,0 +1,76 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.customization::p_set_general_parameter" (
+    IN NAME VARCHAR(50),
+    IN VALUE VARCHAR(500),
+    OUT ERROR_CODE VARCHAR(500)
+)
+ LANGUAGE SQLSCRIPT
+ SQL SECURITY INVOKER
+ DEFAULT SCHEMA SAP_TM_TRP
+ AS
+BEGIN
+	
+    DECLARE TABLE_COUNT INTEGER;
+    DECLARE OPTION_TYPE VARCHAR(50);
+	DECLARE OPTION_FROM BIGINT;
+	DECLARE OPTION_TO BIGINT;
+	DECLARE VALUE_INT BIGINT;
+	DECLARE EXISTING_OPTIOIN TINYINT;
+	DECLARE USER_ID BIGINT;
+	
+	NAME := UPPER (:NAME);
+	
+	SELECT COUNT(*) INTO EXISTING_OPTIOIN FROM "sap.tm.trp.db.systemmanagement.customization::t_general_parameter_options" WHERE NAME = :NAME;
+	IF :EXISTING_OPTIOIN = 0 THEN
+		ERROR_CODE := 'GENERAL_PARAMETER_NOT_ALLOWED';
+	ELSE
+		-- check
+		SELECT "TYPE","FROM","TO" INTO OPTION_TYPE,OPTION_FROM,OPTION_TO 
+			FROM "sap.tm.trp.db.systemmanagement.customization::t_general_parameter_options" 
+			WHERE NAME = :NAME;
+		
+		ERROR_CODE := '';
+		
+		IF UPPER (:OPTION_TYPE) = 'BOOLEAN' THEN
+			VALUE := UPPER (:VALUE);
+			IF :VALUE <> 'X' AND :VALUE <> '' THEN
+				ERROR_CODE := 'GENERAL_PARAMETER_VALUE_NOT_MATCHED_BOOLEAN';
+			END IF;
+		END IF ;
+		
+		IF UPPER (:OPTION_TYPE) = 'INT' THEN
+				--ERROR_CODE := 'GENERAL_PARAMETER_VALUE_NOT_MATCHED_INT';
+			IF LENGTH (LTRIM (:VALUE,' +-0123456789')) <> 0 THEN
+				ERROR_CODE := 'GENERAL_PARAMETER_VALUE_NOT_MATCHED_INT';
+			ELSE
+				VALUE_INT := TO_INT(:VALUE);
+				IF :OPTION_FROM IS NOT NULL AND :VALUE_INT < :OPTION_FROM THEN
+					ERROR_CODE := 'GENERAL_PARAMETER_VALUE_LESS_THAN_THRESHOLD';
+				END IF;
+				IF :OPTION_TO IS NOT NULL AND :VALUE_INT > :OPTION_TO THEN
+					ERROR_CODE := 'GENERAL_PARAMETER_VALUE_GREATER_THAN_THRESHOLD';
+				END IF;
+			END IF;
+		END IF ;
+		
+		-- save
+	    IF :ERROR_CODE = '' THEN
+			CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+			
+		    SELECT COUNT(*) INTO TABLE_COUNT FROM "sap.tm.trp.db.systemmanagement.customization::t_general_parameters" WHERE NAME = :NAME;
+		
+		    IF ( :TABLE_COUNT > 0 )
+		    THEN
+		        UPDATE "sap.tm.trp.db.systemmanagement.customization::t_general_parameters" 
+		        	SET 
+		        		VALUE = :VALUE,
+				    	LAST_MODIFIED_BY = :USER_ID,
+				    	LAST_MODIFIED_ON = CURRENT_UTCTIMESTAMP
+		        	WHERE NAME = :NAME;
+		    ELSE
+			    INSERT INTO "sap.tm.trp.db.systemmanagement.customization::t_general_parameters"(NAME,VALUE,LAST_MODIFIED_BY,LAST_MODIFIED_ON) 
+			    VALUES(:NAME,:VALUE,:USER_ID,CURRENT_UTCTIMESTAMP);
+		    END IF;
+		END IF;
+	END IF;
+
+END;

@@ -1,0 +1,29 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_networkcode_by_simulation_scenario_id"(
+    IN SIM_PLAN_ID BIGINT,
+    IN SCENARIO_ID BIGINT,
+    OUT NETWORK_CODE VARCHAR(50)    
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    READS SQL DATA
+    AS
+BEGIN
+   
+   IF :SCENARIO_ID = 0 THEN
+      SELECT IFNULL(MAX(T2.CODE),'') INTO NETWORK_CODE 
+      FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" T1
+      INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T2 ON (T1.SD_PLAN_ID = T2.ID)
+      WHERE T1.ID = :SIM_PLAN_ID;
+      
+   ELSE
+   
+      SELECT IFNULL(CONCAT(CONCAT(MAX(T1.CODE),'_'),MAX(T2.CODE)),'') INTO NETWORK_CODE
+      FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" T1
+      INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" T2 ON (T1.ID = T2.REL_SM_PLAN_ID)
+      WHERE T1.ID = :SIM_PLAN_ID AND T2.ID = :SCENARIO_ID;
+   END IF;
+
+      
+END;
+

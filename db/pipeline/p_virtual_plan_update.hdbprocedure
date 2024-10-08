@@ -1,0 +1,110 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_virtual_plan_update" (
+    IN PLAN_MODEL_ID BIGINT,
+    IN NAME VARCHAR(200),
+    IN DESC VARCHAR(500), 
+    IN PLAN_TYPE_ID INTEGER, 
+    IN VISIBILITY INT,
+    IN EQUIPMENT_FILTER_ID BIGINT, 
+    IN LOCATION_FILTER_ID BIGINT,
+    IN PLAN_ID_LIST "sap.tm.trp.db.pipeline::tt_plan_id_list",
+    IN USAGE NVARCHAR(1),
+    IN USAGE_CODE NVARCHAR(4)
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	--READS SQL DATA 
+AS
+    TIME_FILTER_ID BIGINT;
+    FILTER_GROUP_ID BIGINT;
+    USER_ID BIGINT;
+    PLAN_STATUS INTEGER;
+BEGIN
+ 
+
+
+DECLARE STATUS_VALID SMALLINT := 0;
+DECLARE STATUS_SUSPEND SMALLINT := 1;
+DECLARE STATUS_INVALID SMALLINT := 2;
+
+-- GET TIME_FILTER_ID
+SELECT TOP 1 T2.TIME_FILTER_ID INTO TIME_FILTER_ID
+FROM :PLAN_ID_LIST T0
+INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T1 ON T1.ID = T0.ID
+INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2 ON T2.ID = T1.FILTER_GROUP_ID
+;
+
+-- GET VIRTUAL PLAN FILTR_GROUP_ID
+SELECT IFNULL(MAX(FILTER_GROUP_ID),0) INTO FILTER_GROUP_ID FROM "sap.tm.trp.db.pipeline::t_plan_model"
+WHERE ID = :PLAN_MODEL_ID
+;
+
+-- GET CURRENT USER_ID
+SELECT IFNULL(MAX(ID),0) INTO USER_ID
+FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+-- UPDATE FILTER GROUP
+CALL "sap.tm.trp.db.filter::p_ext_filter_group_update"(:FILTER_GROUP_ID, :EQUIPMENT_FILTER_ID, :TIME_FILTER_ID, :LOCATION_FILTER_ID)
+;
+
+-- UPDATE VIRTUAL PLAN METADATA
+UPDATE "sap.tm.trp.db.pipeline::t_plan_model"
+SET NAME                = :NAME,
+    LAST_MODIFIED_BY    = :USER_ID,
+    LAST_MODIFIED_ON    = CURRENT_UTCTIMESTAMP,
+    DESC                = :DESC,
+    USAGE               = :USAGE,
+    USAGE_CODE          = :USAGE_CODE,
+    VISIBILITY_FLAG     = :VISIBILITY
+WHERE ID = :PLAN_MODEL_ID
+;
+
+-- UPDATE PERSISTED PLAN LIST
+--1. Before delete from t_virtual_plan_persisted_plan table, clear those persited plan 
+--   ASSIGNED_TO_VIRTUAL flag in t_plan_model table
+UPDATE "sap.tm.trp.db.pipeline::t_plan_model"
+SET ASSIGNED_TO_VIRTUAL = ''
+WHERE ID IN (
+              SELECT PERSISTED_PLAN_MODEL_ID 
+                FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" 
+               WHERE VIRTUAL_PLAN_MODEL_ID = :PLAN_MODEL_ID
+                );
+--2. Delete orgional relationship of VSD and SDs               	 
+DELETE FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" WHERE VIRTUAL_PLAN_MODEL_ID = :PLAN_MODEL_ID;
+
+--3. Rebuild relationship of VSD and SDs
+INSERT INTO "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" 
+            (VIRTUAL_PLAN_MODEL_ID,
+             PERSISTED_PLAN_MODEL_ID)
+SELECT 
+            :PLAN_MODEL_ID, 
+            ID 
+FROM        :PLAN_ID_LIST;
+
+--4. After insert into t_virtual_plan_persisted_plan table, set those persited plan 
+--   ASSIGNED_TO_VIRTUAL flag with 'X' in t_plan_model table
+/*UPDATE "sap.tm.trp.db.pipeline::t_plan_model"
+SET ASSIGNED_TO_VIRTUAL = 'X'
+WHERE ID IN (
+              SELECT DISTINCT ID 
+                FROM :PLAN_ID_LIST
+             );*/
+
+
+-- UPDATE VIRTUAL TREE INFO
+CALL "sap.tm.trp.db.pipeline::p_delete_virtual_tree"(:PLAN_MODEL_ID);
+CALL "sap.tm.trp.db.pipeline::p_save_virtual_tree" (:PLAN_MODEL_ID);
+
+SELECT IFNULL(MAX(STATUS),0) INTO PLAN_STATUS FROM "sap.tm.trp.db.pipeline::t_plan_model" WHERE ID = :PLAN_MODEL_ID;
+IF PLAN_STATUS = :STATUS_SUSPEND OR PLAN_STATUS = :STATUS_INVALID
+THEN
+	CALL "sap.tm.trp.db.pipeline::p_virtual_plan_valid_check"(:PLAN_MODEL_ID,PLAN_STATUS);
+	UPDATE "sap.tm.trp.db.pipeline::t_plan_model"
+	SET STATUS = :PLAN_STATUS
+	WHERE ID = :PLAN_MODEL_ID
+	;
+END IF;
+
+
+END;

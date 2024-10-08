@@ -1,0 +1,65 @@
+schema="SAP_TM_TRP";
+query="SELECT DISTINCT 
+	 	 	  --b.ID,
+              a.ID AS RULE_ID,
+              a.RULE_NAME,
+              a.RULE_TYPE,
+              a.LOCATION_FILTER_ID AS LOCATION_FILTER_ID,
+              a.LOCATION_FILTER_DESC AS LOCATION_FILTER_DESC,
+              --b.RUN_ID,
+              c.RUN_ID,
+              c.TU_ID,
+              CASE WHEN (c.PROCESS_STATUS = 'F') THEN 5 -- Fetched
+               WHEN (c.PROCESS_STATUS = 'O') THEN 6 -- Optimized
+               WHEN (c.STATUS = 'S' AND c.FLAG=1) THEN 1 -- assigned
+               WHEN (c.STATUS = 'S' AND c.FLAG=2 )  THEN 3 -- updated
+               WHEN (c.STATUS = 'F' or c.STATUS = 'I' ) THEN 2
+               WHEN c.STATUS IS NULL THEN 4 --TM update in progress
+               WHEN (c.PRE_LOCATION_ID IS NULL OR c.PRE_LOCATION_ID = '')AND (c.streetturn_tu_id is null or c.streetturn_tu_id ='') THEN 2 --undefined	
+              END AS STATUS,
+              c.SCHEDULE_TIME_TYPE,
+              c.OP_SETTING_TYPE,
+              c.EXECUTION_TIME,
+              c.CUR_LOCATION_ID,
+              CASE WHEN C.CUR_LOCATION IS NOT NULL THEN C.CUR_LOCATION
+              	    ELSE d.NAME END AS CUR_LOCATION_NAME,
+              c.PRE_LOCATION_ID,
+              CASE WHEN C.PRE_LOCATION IS NOT NULL THEN C.PRE_LOCATION
+              	    ELSE e.NAME END AS PRE_LOCATION_NAME,
+              c.STREETTURN_TU_ID, 
+              c.CUR_DATE,
+              c.PRE_DATE, 
+              USER_TBL.ID AS USER_ID,
+              CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                WHEN c.EXECUTION_BY <> 0 AND c.EXECUTION_BY IS NOT NULL AND g.USERNAME IS NOT NULL THEN g.USERNAME
+		        WHEN c.EXECUTION_BY = 0 OR c.EXECUTION_BY IS NULL THEN ''
+		        ELSE '***' END AS USER,
+              a.RESOURCE_CATEGORY,
+              CASE WHEN c.STATUS = 'I' THEN 'F' ELSE c.STATUS END AS UPDATE_STATUS,
+              cast(c.MESSAGE as nvarchar(2000)) as MESSAGE
+       FROM \"sap.tm.trp.db.pickupreturn::cv_role_check_location_rule\"  a 
+       --INNER JOIN \"sap.tm.trp.db.pickupreturn::t_location_rule_running_log\" b  
+       --ON (a.ID = b.RULE_ID)
+       INNER JOIN \"sap.tm.trp.db.pickupreturn::v_location_rule_assign_all\" c 
+       --ON (b.RULE_ID = c.RULE_ID AND b.RUN_ID=c.RUN_ID) 
+       ON (a.ID = c.RULE_ID)
+       LEFT JOIN \"sap.tm.trp.db.semantic.location::v_all_location\"  d 
+       ON (c.CUR_LOCATION_ID= d.ID) 
+       LEFT JOIN \"sap.tm.trp.db.semantic.location::v_all_location\"  e 
+       ON (c.PRE_LOCATION_ID= e.ID)
+       --LEFT JOIN \"sap.tm.trp.db.filter::t_location_filter\" f 
+       --ON (b.LOCATION_FILTER_ID = f.ID)
+       LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS USER_TBL 
+       ON c.EXECUTION_BY = USER_TBL.ID
+       LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\" g
+       ON USER_TBL.USERNAME = g.USERNAME 
+       CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE
+";
+
+    
+depends_on_view=["sap.tm.trp.db.pickupreturn::cv_role_check_location_rule",
+                 "sap.tm.trp.db.semantic.location::v_all_location",
+                 "sap.tm.trp.db.dataprotectionprivacy::v_unblock_users",
+                 "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege",
+                 "sap.tm.trp.db.pickupreturn::v_location_rule_assign_all",
+                 "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

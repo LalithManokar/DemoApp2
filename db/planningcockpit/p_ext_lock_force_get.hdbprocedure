@@ -1,0 +1,39 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_ext_lock_force_get" (
+    IN SIMULATION_ID BIGINT,
+    OUT MESSAGE VARCHAR(200),
+    OUT MODIFIED_BY VARCHAR(60) ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    DECLARE V_COUNT INT; 
+    DECLARE V_TIMESTAMP_START  DATETIME  := CURRENT_UTCTIMESTAMP;
+    DECLARE USER_ID BIGINT;  
+    DECLARE USER_NAME VARCHAR(60);     
+    DECLARE V_LOCK_SESSION_ID  VARCHAR(200);  
+    DECLARE V_LOCK_USER_ID  BIGINT;  
+    DECLARE V_LOCK_LAST_MODIFYED_ON  TIMESTAMP; 
+    DECLARE V_PLAN_STATUS INTEGER;
+    
+    CALL "sap.tm.trp.db.planningcockpit::p_ext_lock_simulation_plan_by_id"(:SIMULATION_ID, V_LOCK_SESSION_ID, V_LOCK_USER_ID, V_LOCK_LAST_MODIFYED_ON);
+
+    SELECT COUNT(*) INTO V_COUNT FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan"
+    WHERE ID = :SIMULATION_ID;
+
+     IF V_COUNT=0 THEN  MESSAGE := 'MSG_ERROR_NODATA';
+                        MODIFIED_BY:='';
+     ELSE 
+         CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+ 		 SELECT USERNAME INTO USER_NAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";    
+ 		  
+          UPDATE "sap.tm.trp.db.planningcockpit::t_lock"
+             SET USER_ID= :USER_ID,
+                 LAST_MODIFYED_ON = :V_TIMESTAMP_START                     
+           WHERE SIMULATION_ID=:SIMULATION_ID; 
+          
+         MESSAGE     := 'MSG_SUCCESS_STATUS';       
+         MODIFIED_BY := USER_NAME;  
+     END IF;        
+  
+END;

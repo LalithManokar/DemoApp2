@@ -1,0 +1,16 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.stock::p_location_stock_delete" (
+	IN GEO_ID VARCHAR(32)
+	)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+/***************************** 
+	Write your procedure logic 
+ *****************************/
+ 
+ DELETE FROM "sap.tm.trp.db.stock::t_stock_config" 
+ WHERE LOCATION_ID = :GEO_ID;
+ 
+END;

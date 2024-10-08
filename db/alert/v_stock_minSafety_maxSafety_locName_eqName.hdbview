@@ -1,0 +1,416 @@
+//To define the HDB view file use the following syntax: 
+//LOCATION_TYPE INTEGER,    1: location;   2: location group;  3: zone; 4: zone group; 5: region; 6: region group
+//EQUIP_CODE_TYPE INTEGER,  1: equip type; 2: equip type group
+//FILTER_TYPE 
+//               Location  zone  region  loc_Group  zone_Group  region_Group
+//Equip_Type           1        2       3       4         5             6
+//Equip_Group          7        8       9       10        11           12
+schema = "SAP_TM_TRP";
+query = "
+select 
+       LOCATION_ID,
+       LOCATION_NAME,
+       LOCATION_TYPE,
+       EQUIP_TYPE_ID,
+       EQUIP_TYPE_NAME,
+       EQUIP_TYPE_TYPE,
+       FILTER_TYPE,
+       TO_DOUBLE(MIN_SAFETY_STOCK) as MIN_SAFETY_STOCK,
+       TO_DOUBLE(MAX_SAFETY_STOCK) as MAX_SAFETY_STOCK
+from
+(
+select LOCATION_ID,
+       IFNULL(T2.NAME,'No Location Name set') as LOCATION_NAME,
+       LOCATION_TYPE,
+       EQUIP_TYPE_ID,
+       IFNULL(T3.RESOURCE_TYPE_CODE,'No Equipment Name set') as EQUIP_TYPE_NAME,
+       EQUIP_TYPE_TYPE,
+       1 as FILTER_TYPE,
+       MIN_SAFETY_STOCK,
+       MAX_SAFETY_STOCK
+from 
+  ( select 
+       LOCATION_ID,
+       LOCATION_TYPE,
+       EQUIP_CODE as EQUIP_TYPE_ID,
+       EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+       MIN_SAFETY AS MIN_SAFETY_STOCK,
+       MAX_SAFETY AS MAX_SAFETY_STOCK
+    from \"sap.tm.trp.db.stock::t_stock_configuration\" T11
+    where (T11.LOCATION_TYPE = 1 and 
+           T11.EQUIP_CODE_TYPE = 1)
+   ) T1
+LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_location\" T2
+--ON T1.LOCATION_ID = to_VARCHAR(T2.ID) 
+ON T1.LOCATION_ID = T2.ID 
+LEFT OUTER JOIN (
+  SELECT DISTINCT RESOURCE_TYPE_CODE 
+  FROM \"sap.tm.trp.db.semantic.resource::v_resource_type\") T3
+ON T1.EQUIP_TYPE_ID = T3.RESOURCE_TYPE_CODE 
+)
+union all 
+(
+select LOCATION_ID,
+       IFNULL(T2.NAME,'No Location Name set') as LOCATION_NAME,
+       LOCATION_TYPE,
+       EQUIP_TYPE_ID,
+       IFNULL(T3.DESC,'No Equipment Name set') as EQUIP_TYPE_NAME,
+       EQUIP_TYPE_TYPE,
+       7 as FILTER_TYPE,
+       MIN_SAFETY_STOCK,
+       MAX_SAFETY_STOCK
+from 
+  ( select 
+       LOCATION_ID,
+       LOCATION_TYPE,
+       EQUIP_CODE as EQUIP_TYPE_ID,
+       EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+       MIN_SAFETY AS MIN_SAFETY_STOCK,
+       MAX_SAFETY AS MAX_SAFETY_STOCK
+    from \"sap.tm.trp.db.stock::t_stock_configuration\" T11
+    where (T11.LOCATION_TYPE = 1 and 
+           T11.EQUIP_CODE_TYPE = 2)
+   ) T1
+LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_location\" T2
+--ON T1.LOCATION_ID = to_VARCHAR(T2.ID) 
+ON T1.LOCATION_ID = T2.ID 
+LEFT OUTER JOIN (
+         SELECT DISTINCT T1.ID, T1.DESC
+         FROM \"sap.tm.trp.db.systemmanagement::t_equipment_group\" T1
+         ) T3
+--ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) 
+ON T1.EQUIP_TYPE_ID = T3.ID
+)    
+union all  
+(
+select LOCATION_ID,
+       IFNULL(T2.DESC,'No Location Name set') as LOCATION_NAME,
+       LOCATION_TYPE,
+       EQUIP_TYPE_ID,
+       IFNULL(T3.RESOURCE_TYPE_CODE,'No Equipment Name set') as EQUIP_TYPE_NAME,
+       EQUIP_TYPE_TYPE,
+       4 as FILTER_TYPE,
+       MIN_SAFETY_STOCK,
+       MAX_SAFETY_STOCK
+from 
+  ( select 
+       LOCATION_ID,
+       LOCATION_TYPE,
+       EQUIP_CODE as EQUIP_TYPE_ID,
+       EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+       MIN_SAFETY AS MIN_SAFETY_STOCK,
+       MAX_SAFETY AS MAX_SAFETY_STOCK
+    from \"sap.tm.trp.db.stock::t_stock_configuration\" T11
+    where (T11.LOCATION_TYPE = 2 and 
+           T11.EQUIP_CODE_TYPE = 1)
+   ) T1
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement::t_location_group\" T2
+--ON T1.LOCATION_ID = to_VARCHAR(T2.ID) 
+ON T1.LOCATION_ID = T2.ID 
+LEFT OUTER JOIN (
+  SELECT DISTINCT RESOURCE_TYPE_CODE 
+  FROM \"sap.tm.trp.db.semantic.resource::v_resource_type\") T3
+ON T1.EQUIP_TYPE_ID = T3.RESOURCE_TYPE_CODE 
+)
+union all 
+(
+select LOCATION_ID,
+       IFNULL(T2.DESC,'No Location Name set') as LOCATION_NAME,
+       LOCATION_TYPE,
+       EQUIP_TYPE_ID,
+       IFNULL(T3.DESC,'No Equipment Name set') as EQUIP_TYPE_NAME,
+       EQUIP_TYPE_TYPE,
+       10 as FILTER_TYPE,
+       MIN_SAFETY_STOCK,
+       MAX_SAFETY_STOCK
+from 
+  ( select 
+       LOCATION_ID,
+       LOCATION_TYPE,
+       EQUIP_CODE as EQUIP_TYPE_ID,
+       EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+       MIN_SAFETY AS MIN_SAFETY_STOCK,
+       MAX_SAFETY AS MAX_SAFETY_STOCK
+    from \"sap.tm.trp.db.stock::t_stock_configuration\" T11
+    where (T11.LOCATION_TYPE = 2 and 
+           T11.EQUIP_CODE_TYPE = 2)
+   ) T1
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement::t_location_group\" T2
+--ON T1.LOCATION_ID = to_VARCHAR(T2.ID) 
+ON T1.LOCATION_ID = T2.ID 
+LEFT OUTER JOIN (
+         SELECT DISTINCT T1.ID, T1.DESC
+         FROM \"sap.tm.trp.db.systemmanagement::t_equipment_group\" T1
+         ) T3
+--ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) 
+ON T1.EQUIP_TYPE_ID = T3.ID
+)   
+union all
+(
+select LOCATION_ID,
+       IFNULL(T2.NAME,'No Location Name set') as LOCATION_NAME,
+       LOCATION_TYPE,
+       EQUIP_TYPE_ID,
+       IFNULL(T3.RESOURCE_TYPE_CODE,'No Equipment Name set') as EQUIP_TYPE_NAME,
+       EQUIP_TYPE_TYPE,
+       2 as FILTER_TYPE,
+       MIN_SAFETY_STOCK,
+       MAX_SAFETY_STOCK
+from 
+  ( select 
+       LOCATION_ID,
+       LOCATION_TYPE,
+       EQUIP_CODE as EQUIP_TYPE_ID,
+       EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+       MIN_SAFETY AS MIN_SAFETY_STOCK,
+       MAX_SAFETY AS MAX_SAFETY_STOCK
+    from \"sap.tm.trp.db.stock::t_stock_configuration\" T11
+    where (T11.LOCATION_TYPE = 3 and 
+           T11.EQUIP_CODE_TYPE = 1)
+   ) T1
+LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_zone\" T2
+--ON T1.LOCATION_ID = to_VARCHAR(T2.ID) 
+ON T1.LOCATION_ID = T2.ID 
+LEFT OUTER JOIN (
+  SELECT DISTINCT RESOURCE_TYPE_CODE 
+  FROM \"sap.tm.trp.db.semantic.resource::v_resource_type\") T3
+ON T1.EQUIP_TYPE_ID = T3.RESOURCE_TYPE_CODE 
+)
+union all 
+(
+select LOCATION_ID,
+       IFNULL(T2.NAME,'No Location Name set') as LOCATION_NAME,
+       LOCATION_TYPE,
+       EQUIP_TYPE_ID,
+       IFNULL(T3.DESC,'No Equipment Name set') as EQUIP_TYPE_NAME,
+       EQUIP_TYPE_TYPE,
+       8 as FILTER_TYPE,
+       MIN_SAFETY_STOCK,
+       MAX_SAFETY_STOCK
+from 
+  ( select 
+       LOCATION_ID,
+       LOCATION_TYPE,
+       EQUIP_CODE as EQUIP_TYPE_ID,
+       EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+       MIN_SAFETY AS MIN_SAFETY_STOCK,
+       MAX_SAFETY AS MAX_SAFETY_STOCK
+    from \"sap.tm.trp.db.stock::t_stock_configuration\" T11
+    where (T11.LOCATION_TYPE = 3 and 
+           T11.EQUIP_CODE_TYPE = 2)
+   ) T1
+LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_zone\" T2
+--ON T1.LOCATION_ID = to_VARCHAR(T2.ID) 
+ON T1.LOCATION_ID = T2.ID 
+LEFT OUTER JOIN (
+         SELECT DISTINCT T1.ID, T1.DESC
+         FROM \"sap.tm.trp.db.systemmanagement::t_equipment_group\" T1
+         ) T3
+--ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) 
+ON T1.EQUIP_TYPE_ID = T3.ID
+)    
+union all  
+(
+select LOCATION_ID,
+       IFNULL(T2.DESC,'No Location Name set') as LOCATION_NAME,
+       LOCATION_TYPE,
+       EQUIP_TYPE_ID,
+       IFNULL(T3.RESOURCE_TYPE_CODE,'No Equipment Name set') as EQUIP_TYPE_NAME,
+       EQUIP_TYPE_TYPE,
+       5 as FILTER_TYPE,
+       MIN_SAFETY_STOCK,
+       MAX_SAFETY_STOCK
+from 
+  ( select 
+       LOCATION_ID,
+       LOCATION_TYPE,
+       EQUIP_CODE as EQUIP_TYPE_ID,
+       EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+       MIN_SAFETY AS MIN_SAFETY_STOCK,
+       MAX_SAFETY AS MAX_SAFETY_STOCK
+    from \"sap.tm.trp.db.stock::t_stock_configuration\" T11
+    where (T11.LOCATION_TYPE = 4 and 
+           T11.EQUIP_CODE_TYPE = 1)
+   ) T1
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement::t_zone_group\" T2
+--ON T1.LOCATION_ID = to_VARCHAR(T2.ID) 
+ON T1.LOCATION_ID = T2.ID 
+LEFT OUTER JOIN (
+  SELECT DISTINCT RESOURCE_TYPE_CODE 
+  FROM \"sap.tm.trp.db.semantic.resource::v_resource_type\") T3
+ON T1.EQUIP_TYPE_ID = T3.RESOURCE_TYPE_CODE 
+)
+union all 
+(
+select LOCATION_ID,
+       IFNULL(T2.DESC,'No Location Name set') as LOCATION_NAME,
+       LOCATION_TYPE,
+       EQUIP_TYPE_ID,
+       IFNULL(T3.DESC,'No Equipment Name set') as EQUIP_TYPE_NAME,
+       EQUIP_TYPE_TYPE,
+       11 as FILTER_TYPE,
+       MIN_SAFETY_STOCK,
+       MAX_SAFETY_STOCK
+from 
+  ( select 
+       LOCATION_ID,
+       LOCATION_TYPE,
+       EQUIP_CODE as EQUIP_TYPE_ID,
+       EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+       MIN_SAFETY AS MIN_SAFETY_STOCK,
+       MAX_SAFETY AS MAX_SAFETY_STOCK
+    from \"sap.tm.trp.db.stock::t_stock_configuration\" T11
+    where (T11.LOCATION_TYPE = 4 and 
+           T11.EQUIP_CODE_TYPE = 2)
+   ) T1
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement::t_zone_group\" T2
+--ON T1.LOCATION_ID = to_VARCHAR(T2.ID) 
+ON T1.LOCATION_ID = T2.ID 
+LEFT OUTER JOIN (
+         SELECT DISTINCT T1.ID, T1.DESC
+         FROM \"sap.tm.trp.db.systemmanagement::t_equipment_group\" T1
+         ) T3
+--ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) 
+ON T1.EQUIP_TYPE_ID = T3.ID
+)   
+union all  
+(
+select LOCATION_ID,
+       IFNULL(T2.NAME,'No Location Name set') as LOCATION_NAME,
+       LOCATION_TYPE,
+       EQUIP_TYPE_ID,
+       IFNULL(T3.RESOURCE_TYPE_CODE,'No Equipment Name set') as EQUIP_TYPE_NAME,
+       EQUIP_TYPE_TYPE,
+       3 as FILTER_TYPE,
+       MIN_SAFETY_STOCK,
+       MAX_SAFETY_STOCK
+from 
+  ( select 
+       LOCATION_ID,
+       LOCATION_TYPE,
+       EQUIP_CODE as EQUIP_TYPE_ID,
+       EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+       MIN_SAFETY AS MIN_SAFETY_STOCK,
+       MAX_SAFETY AS MAX_SAFETY_STOCK
+    from \"sap.tm.trp.db.stock::t_stock_configuration\" T11
+    where (T11.LOCATION_TYPE = 5 and 
+           T11.EQUIP_CODE_TYPE = 1)
+   ) T1
+LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_zone\" T2
+--ON T1.LOCATION_ID = to_VARCHAR(T2.ID) 
+ON T1.LOCATION_ID = T2.ID 
+LEFT OUTER JOIN (
+  SELECT DISTINCT RESOURCE_TYPE_CODE 
+  FROM \"sap.tm.trp.db.semantic.resource::v_resource_type\") T3
+ON T1.EQUIP_TYPE_ID = T3.RESOURCE_TYPE_CODE 
+)
+union all 
+(
+select LOCATION_ID,
+       IFNULL(T2.NAME,'No Location Name set') as LOCATION_NAME,
+       LOCATION_TYPE,
+       EQUIP_TYPE_ID,
+       IFNULL(T3.DESC,'No Equipment Name set') as EQUIP_TYPE_NAME,
+       EQUIP_TYPE_TYPE,
+       9 as FILTER_TYPE,
+       MIN_SAFETY_STOCK,
+       MAX_SAFETY_STOCK
+from 
+  ( select 
+       LOCATION_ID,
+       LOCATION_TYPE,
+       EQUIP_CODE as EQUIP_TYPE_ID,
+       EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+       MIN_SAFETY AS MIN_SAFETY_STOCK,
+       MAX_SAFETY AS MAX_SAFETY_STOCK
+    from \"sap.tm.trp.db.stock::t_stock_configuration\" T11
+    where (T11.LOCATION_TYPE = 5 and 
+           T11.EQUIP_CODE_TYPE = 2)
+   ) T1
+LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_zone\" T2
+--ON T1.LOCATION_ID = to_VARCHAR(T2.ID) 
+ON T1.LOCATION_ID = T2.ID 
+LEFT OUTER JOIN (
+         SELECT DISTINCT T1.ID, T1.DESC
+         FROM \"sap.tm.trp.db.systemmanagement::t_equipment_group\" T1
+         ) T3
+--ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) 
+ON T1.EQUIP_TYPE_ID = T3.ID
+)   
+union all  
+(
+select LOCATION_ID,
+       IFNULL(T2.DESC,'No Location Name set') as LOCATION_NAME,
+       LOCATION_TYPE,
+       EQUIP_TYPE_ID,
+       IFNULL(T3.RESOURCE_TYPE_CODE,'No Equipment Name set') as EQUIP_TYPE_NAME,
+       EQUIP_TYPE_TYPE,
+       6 as FILTER_TYPE,
+       MIN_SAFETY_STOCK,
+       MAX_SAFETY_STOCK
+from 
+  ( select 
+       LOCATION_ID,
+       LOCATION_TYPE,
+       EQUIP_CODE as EQUIP_TYPE_ID,
+       EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+       MIN_SAFETY AS MIN_SAFETY_STOCK,
+       MAX_SAFETY AS MAX_SAFETY_STOCK
+    from \"sap.tm.trp.db.stock::t_stock_configuration\" T11
+    where (T11.LOCATION_TYPE = 6 and 
+           T11.EQUIP_CODE_TYPE = 1)
+   ) T1
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement::t_region_group\" T2
+--ON T1.LOCATION_ID = to_VARCHAR(T2.ID) 
+ON T1.LOCATION_ID = T2.ID 
+LEFT OUTER JOIN (
+  SELECT DISTINCT RESOURCE_TYPE_CODE 
+  FROM \"sap.tm.trp.db.semantic.resource::v_resource_type\") T3
+ON T1.EQUIP_TYPE_ID = T3.RESOURCE_TYPE_CODE 
+)
+union all 
+(
+select LOCATION_ID,
+       IFNULL(T2.DESC,'No Location Name set') as LOCATION_NAME,
+       LOCATION_TYPE,
+       EQUIP_TYPE_ID,
+       IFNULL(T3.DESC,'No Equipment Name set') as EQUIP_TYPE_NAME,
+       EQUIP_TYPE_TYPE,
+       12 as FILTER_TYPE,
+       MIN_SAFETY_STOCK,
+       MAX_SAFETY_STOCK
+from 
+  ( select 
+       LOCATION_ID,
+       LOCATION_TYPE,
+       EQUIP_CODE as EQUIP_TYPE_ID,
+       EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+       MIN_SAFETY AS MIN_SAFETY_STOCK,
+       MAX_SAFETY AS MAX_SAFETY_STOCK
+    from \"sap.tm.trp.db.stock::t_stock_configuration\" T11
+    where (T11.LOCATION_TYPE = 6 and 
+           T11.EQUIP_CODE_TYPE = 2)
+   ) T1
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement::t_region_group\" T2
+--ON T1.LOCATION_ID = to_VARCHAR(T2.ID) 
+ON T1.LOCATION_ID = T2.ID 
+LEFT OUTER JOIN (
+         SELECT DISTINCT T1.ID, T1.DESC
+         FROM \"sap.tm.trp.db.systemmanagement::t_equipment_group\" T1
+         ) T3
+--ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) 
+ON T1.EQUIP_TYPE_ID = T3.ID
+)   
+ORDER BY FILTER_TYPE desc
+";
+depends_on_table = ["sap.tm.trp.db.stock::t_stock_configuration"
+					,"sap.tm.trp.db.systemmanagement::t_location_group"
+					,"sap.tm.trp.db.systemmanagement::t_zone_group"
+					,"sap.tm.trp.db.systemmanagement::t_region_group"
+					,"sap.tm.trp.db.systemmanagement::t_equipment_group"
+					];
+depends_on_view = ["sap.tm.trp.db.semantic.location::v_location"
+					,"sap.tm.trp.db.semantic.location::v_zone"
+					,"sap.tm.trp.db.semantic.resource::v_resource_type"
+					];
+

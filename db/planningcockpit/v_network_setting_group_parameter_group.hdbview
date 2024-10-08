@@ -1,0 +1,35 @@
+//To define the HDB view file use the following syntax:
+
+schema="SAP_TM_TRP";
+query="
+	SELECT
+		NETWORK_SETTING_GROUP_ID
+		,PARAMETER_ID
+		,VALUE_TYPE
+		,TRIM(TRAILING ',' FROM STRING_AGG(VALUE||',')) AS VALUE
+	FROM (
+	SELECT
+		T0.NETWORK_SETTING_GROUP_ID
+		,T0.PARAMETER_ID
+		,T2.VALUE_TYPE
+		,T1.VALUE
+	FROM \"sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_group\" T0
+	INNER JOIN \"sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_value\" T1 ON T1.NETWORK_SETTING_GROUP_ID = T0.NETWORK_SETTING_GROUP_ID AND T1.PARAMETER_ID = T0.PARAMETER_ID
+	INNER JOIN \"sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter\" T2 ON T2.ID = T0.PARAMETER_ID
+	UNION
+	SELECT
+		T0.NETWORK_SETTING_GROUP_ID
+		,18 AS PARAMETER_ID
+		,'String' AS VALUE_TYPE
+		,T2.BASE_RESOURCE_TYPE AS VALUE
+	FROM \"sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_group\" T0
+	INNER JOIN \"sap.tm.trp.db.planningcockpit::t_network_setting_group\" T1 ON T1.ID = T0.NETWORK_SETTING_GROUP_ID
+	INNER JOIN \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings\" T2 ON T2.CODE = T1.RESOURCE_CATEGORY
+	)
+	GROUP BY NETWORK_SETTING_GROUP_ID,PARAMETER_ID,VALUE_TYPE
+";
+depends_on_table = ["sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_group"
+					,"sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_value"
+					,"sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter"
+					,"sap.tm.trp.db.planningcockpit::t_network_setting_group"
+					,"sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings"];

@@ -1,0 +1,10 @@
+schema = "SAP_TM_TRP";
+query = "select T0.EQUIPMENT_GROUP_ID,
+				T0.EQUI_CODE,
+				T0.RESOURCE_CATEGORY
+		   from \"sap.tm.trp.db.systemmanagement::t_equipment_group_item\"  T0
+		   join \"sap.tm.trp.db.systemmanagement::v_equipment_group_id_auth\" T1
+		   on T1.equipment_group_id = T0.equipment_group_id";
+
+depends_on_view = ["sap.tm.trp.db.systemmanagement::v_equipment_group_id_auth"];
+depends_on_table = ["sap.tm.trp.db.systemmanagement::t_equipment_group_item"];

@@ -1,0 +1,45 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_get_division_for_display_regional_planner_hull" (
+    IN IN_POLYGON CLOB,
+    IN ROLE_ID BIGINT,
+    --20150108 change dynamic sql to normal
+    OUT DIVISION_ON_ZONE "sap.tm.trp.db.systemmanagement::tt_division_on_zone",
+    OUT OUT_LOCATIONS_XPOS_YPOS_INVALID  "sap.tm.trp.db.pipeline::tt_location_info_list" 
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+	--20150120 Remove temparory table
+    --DECLARE OUT_UUID VARCHAR(32);
+    --OUT_UUID := SYSUUID;
+
+    
+    
+    ROOT_IDS = SELECT ROOT_ID AS ID
+                 FROM "sap.tm.trp.db.systemmanagement.user::t_role_region"
+                WHERE ROLE_ID = :ROLE_ID;
+                
+    OUT_LOCATIONS_XPOS_YPOS_INVALID =
+    SELECT T3.ID AS LOCATION_ID, T3.NAME AS LOCATION_NAME, T3.XPOS, T3.YPOS 
+    FROM
+		:ROOT_IDS T1 
+		INNER JOIN "sap.tm.trp.db.systemmanagement.location::v_region_location_for_boundary" T2
+		ON T1.ID = T2.ROOT_ID
+		INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T3 ON (T2.LOCATION_ID = T3.ID)
+		WHERE (T2.XPOS IS NULL OR T2.YPOS IS NULL) OR (ABS(T2.XPOS) + ABS(T2.YPOS) =0);
+                
+    call "sap.tm.trp.db.systemmanagement::p_get_boundary_for_region"(:ROOT_IDS, tmp_multipoints_tab);
+    
+    
+    DIVISION_ON_ZONE = SELECT ID, NAME, NEW ST_MultiPoint(TO_VARCHAR(GEOTEXT)).ST_CONVEXHULL().ST_ASTEXT() AS BOUNDARY, NUM AS LOCATION_NO FROM 
+            (
+             SELECT A.ID, B.NAME, GEOTEXT, NUM	
+             from :tmp_multipoints_tab AS A
+             INNER JOIN "sap.tm.trp.db.semantic.location::v_zone" AS B
+             ON A.ID = B.ID AND 
+             TO_TINYINT(ST_GeomFromText(TO_VARCHAR(:IN_POLYGON)).ST_INTERSECTS(NEW ST_MultiPoint(TO_VARCHAR( GEOTEXT )) )) = 1
+             )  T1;
+ 	
+    
+END;

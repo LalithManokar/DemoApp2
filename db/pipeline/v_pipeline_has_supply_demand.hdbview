@@ -1,0 +1,20 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT T0.ID AS PIPELINE_MODEL_ID, 
+ 	CASE IFNULL(T2.VALUE,'')
+ 	WHEN '' THEN 0
+ 	ELSE 1 
+ 	END
+ 	AS HAS_SUPPLY_DEMAND
+FROM \"sap.tm.trp.db.pipeline::t_pipeline_model\" T0
+LEFT OUTER JOIN \"sap.tm.trp.db.pipeline::v_pipeline_default_node\" T1
+ON T0.ID = T1.PIPELINE_MODEL_ID
+LEFT OUTER JOIN 
+(
+	 SELECT NODE_ID, VALUE FROM \"sap.tm.trp.db.pipeline::t_pipeline_node_layout\"
+	 WHERE KEY = 'outputKey'
+	 AND VALUE LIKE '%SUPPLY%' AND VALUE LIKE '%DEMAND%'
+) T2
+ON T1.DEFAULT_NODE_ID = T2.NODE_ID";
+       
+depends_on_table = ["sap.tm.trp.db.pipeline::t_pipeline_model","sap.tm.trp.db.pipeline::t_pipeline_node_layout"];
+depends_on_view = ["sap.tm.trp.db.pipeline::v_pipeline_default_node"];

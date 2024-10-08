@@ -1,0 +1,454 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_build_delta_network" (
+    IN dataset_id BIGINT,
+    IN network_id BIGINT,
+    IN base_network_id BIGINT,
+	OUT message "sap.tm.trp.routing.db.common::tt_message",
+	OUT log "sap.tm.trp.routing.db.common::tt_message",
+	OUT return_code INTEGER
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING
+   AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+	DECLARE msg_params TABLE(PLACEHOLDER INTEGER, VALUE NVARCHAR(100));
+	DECLARE cost_model_id BIGINT;
+	DECLARE resource_type NVARCHAR(20);
+	DECLARE base_dataset_id BIGINT;
+	DECLARE lowest_dataset_id BIGINT;
+	DECLARE cost_currency NVARCHAR(10); 
+	
+	
+	DECLARE target_cfg_name CONSTANT NVARCHAR(50) = 'TARGET';
+	DECLARE targets TABLE(VALUE VARCHAR(50));
+	DECLARE target_arr VARCHAR(50) ARRAY;
+	DECLARE iter INTEGER;
+
+	DECLARE manual_source CONSTANT CHAR = 'M';
+	DECLARE system_source CONSTANT CHAR = 'S';
+	DECLARE create_action_type CONSTANT CHAR = 'C';
+	DECLARE delete_action_type CONSTANT CHAR = 'D';
+	DECLARE load_handling_type CONSTANT VARCHAR(10) = 'LOD';
+	DECLARE unload_handling_type CONSTANT VARCHAR(10) = 'ULD';
+	DECLARE transload_handling_type CONSTANT VARCHAR(10) = 'TRN';
+
+	DECLARE mtr_filter TABLE(MTR NVARCHAR(10));
+	
+	DECLARE path_usage CONSTANT VARCHAR(10) = 'PATH';
+
+	DECLARE err_path VARCHAR(50);
+
+	DECLARE accumulate_delta_path TABLE(id BIGINT, from_location NVARCHAR(50), to_location NVARCHAR(50), total_distance DOUBLE, loading_cost DOUBLE, unloading_cost DOUBLE, total_cost DOUBLE, 
+	loading_duration INTEGER, unloading_duration INTEGER, total_duration INTEGER, action CHAR, source CHAR, hash VARBINARY(32)); 
+
+	DECLARE accumulate_delta_path_detail TABLE(path_id BIGINT, sequence INTEGER, basic_path_id BIGINT, path_type VARCHAR(10), from_location NVARCHAR(50), to_location NVARCHAR(50), from_bp_sequence INTEGER, to_bp_sequence INTEGER, 
+	mtr NVARCHAR(10), distance DOUBLE, transport_duration INTEGER, transship_duration INTEGER, transport_cost DOUBLE, transship_cost DOUBLE); 
+	
+	DECLARE accumulate_delta_target TABLE(path_id BIGINT, target VARCHAR(50)); 
+	
+	DECLARE base_path_conn TABLE(name VARCHAR(50), mtr NVARCHAR(10), category VARCHAR(10), location NVARCHAR(50), sequence INTEGER, 
+	edge_distance DOUBLE, edge_duration INTEGER, edge_cost double, loc_delay INTEGER, availability_offset INTEGER, cutoff_offset INTEGER, hash_code VARBINARY(32));
+	
+	DECLARE delta_path_conn TABLE(name VARCHAR(50), mtr NVARCHAR(10), category VARCHAR(10), location NVARCHAR(50), sequence INTEGER, 
+	edge_distance DOUBLE, edge_duration INTEGER, edge_cost double, loc_delay INTEGER, availability_offset INTEGER, cutoff_offset INTEGER, hash_code VARBINARY(32), opt_type CHAR);
+	
+	accumulate_delta_path = SELECT 0 AS id, '' AS from_location, '' AS to_location, 0.0 AS total_distance, 0.0 AS loading_cost, 0.0 AS unloading_cost, 0.0 AS total_cost, 
+	0 AS loading_duration, 0 AS unloading_duration, 0 AS total_duration, '' AS action, '' AS source, TO_VARBINARY('') AS hash
+	FROM DUMMY
+	WHERE 1 != 1;
+	
+	accumulate_delta_path_detail = SELECT 0 AS path_id, 0 AS sequence, 0 AS basic_path_id, '' AS path_type, '' AS from_location, '' AS to_location, 0 AS from_bp_sequence, 0 AS to_bp_sequence, '' AS mtr, 0.0 AS distance,
+	0 AS transport_duration, 0 AS transship_duration, 0.0 AS transport_cost, 0.0 AS transship_cost
+	FROM DUMMY
+	WHERE 1 != 1;
+	
+	accumulate_delta_target = SELECT 0 AS path_id, '' AS target
+	FROM DUMMY
+	WHERE 1 != 1;
+	
+
+	-- Reuse location pair from base network
+	-- Current location list only stored in lower layer's dataset, so first need to get lowest level dataset_id
+	CALL "sap.tm.trp.routing.db.dataset::p_get_dataset_chain"(:dataset_id, dataset_chain);
+	
+	SELECT NTH_VALUE(id, 2 ORDER BY level DESC) INTO lowest_dataset_id
+	FROM :dataset_chain;
+	
+	location_set = SELECT location_id FROM "sap.tm.trp.routing.db.dataset::t_dataset_location" WHERE dataset_id = :lowest_dataset_id;
+	location_pair = SELECT A.location_id AS st_location, B.location_id AS ed_location FROM :location_set AS A CROSS JOIN :location_set AS B
+	where A.location_id <> B.location_id;
+
+    IF :base_network_id IS NOT NULL THEN
+    	CALL "sap.tm.trp.routing.db.path::p_query_composite_path"(:base_network_id, 'S', '', '', '', paths_tmp_target, path_connections);
+    	
+    	paths =
+    	SELECT path_id, action, source, from_location, to_location, total_distance, loading_cost, unloading_cost, total_cost, cost_currency, loading_duration, unloading_duration, total_duration, conflict_flag
+    	FROM :paths_tmp_target;
+    
+    	-- Fetch options from base network
+    	-- Later here may need to adapt to call other function to obtain the configuration
+    	CALL "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_get_network_config_info"(:base_network_id, :path_usage, options);
+
+        -- Ensure to retrieve distinct value
+        mtr_filter = 
+        SELECT DISTINCT value AS mtr
+        FROM :options
+        WHERE name = 'MTR';
+    	/*
+    	options = 
+    	SELECT name, value
+    	FROM "sap.tm.trp.routing.db.path::t_network_model_conf"
+    	WHERE network_model_id = :base_network_id;
+        */
+
+    	-- Fetch base merged basic path with the base dataset id
+    	-- Fetch the delta basic path with the given dataet id
+    	SELECT base_dataset_id INTO base_dataset_id
+    	FROM "sap.tm.trp.routing.db.dataset::t_dataset"
+    	WHERE id = :dataset_id;
+    	
+    	CALL "sap.tm.trp.routing.db.path::p_get_network_attr"(:base_network_id, :path_usage, cost_model_id, resource_type);
+    
+    	CALL "sap.tm.trp.routing.db.dataset::p_get_merged_and_delta_dataset"(:dataset_id, :base_dataset_id, :cost_model_id, :resource_type, :mtr_filter, base_path_conn, delta_path_conn);
+    ELSE
+        paths = 
+        SELECT id AS path_id, action, source, from_location, to_location, total_distance, loading_cost, unloading_cost, total_cost, cost_currency, loading_duration, unloading_duration, total_duration, '' AS conflict_flag
+        FROM "sap.tm.trp.routing.db.path::t_path"
+        WHERE network_model_id = :network_id AND action IS NULL AND source = :system_source;
+        
+        path_connections = 
+        SELECT A.path_id, sequence, basic_path_id, path_type, A.from_location, A.to_location, from_bp_sequence, to_bp_sequence, mtr, distance, transport_duration, transship_duration, transport_cost, transship_cost
+        FROM "sap.tm.trp.routing.db.path::t_path_sequence" AS A INNER JOIN :paths AS B ON A.path_id = B.path_id;
+
+    	CALL "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_get_network_config_info"(:network_id, :path_usage, options);
+
+        -- Ensure to retrieve distinct value
+        mtr_filter = 
+        SELECT DISTINCT value AS mtr
+        FROM :options
+        WHERE name = 'MTR';
+
+    	CALL "sap.tm.trp.routing.db.path::p_get_network_attr"(:network_id, :path_usage, cost_model_id, resource_type);
+    
+    	CALL "sap.tm.trp.routing.db.dataset::p_get_base_and_delta_dataset"(:dataset_id, :cost_model_id, :resource_type, :mtr_filter, base_path_conn, delta_path_conn); 
+    END IF;
+	
+	-- Check whether edge duration and edge cost are null, if there is report error
+	null_edge_cost_path_conn = 
+	SELECT name, sequence, location, mtr, category
+	FROM :base_path_conn
+	WHERE edge_cost IS NULL;
+	
+	SELECT COUNT(*) INTO return_code
+	FROM :null_edge_cost_path_conn;
+	
+	IF :return_code > 0 THEN
+	    null_cost_path_conn = 
+	    SELECT id, sequence, B.from_location, B.to_location, B.mtr, category
+	    FROM :null_edge_cost_path_conn AS A INNER JOIN "sap.tm.trp.routing.db.dataset::t_connection" AS B
+	    ON TO_BIGINT(A.name) = B.id
+	    WHERE category = 'C'
+	    UNION ALL
+	    SELECT path_id AS id, B.sequence, B.from_location, B.to_location, A.mtr, category
+	    FROM :null_edge_cost_path_conn AS A INNER JOIN "sap.tm.trp.routing.db.dataset::t_path_connection" AS B
+	    ON TO_BIGINT(A.name) = B.path_id AND A.sequence = B.sequence
+	    WHERE category = 'P';
+	    
+	    CALL "sap.tm.trp.routing.db.util::p_convert_transport_cost_missing_message"(:null_cost_path_conn, message);
+	    log_message = SELECT * FROM :message;
+	    return_code = 1;
+	    RETURN;
+	END IF;
+	
+	null_edge_cost_path_conn = 
+	SELECT name, sequence, location, mtr, category
+	FROM :delta_path_conn
+	WHERE edge_cost IS NULL;
+	
+	SELECT COUNT(*) INTO return_code
+	FROM :null_edge_cost_path_conn;
+	
+	IF :return_code != 0 THEN
+	    null_cost_path_conn = 
+	    SELECT id, sequence, B.from_location, B.to_location, B.mtr, category
+	    FROM :null_edge_cost_path_conn AS A INNER JOIN "sap.tm.trp.routing.db.dataset::t_connection" AS B
+	    ON TO_BIGINT(A.name) = B.id
+	    WHERE category = 'C'
+	    UNION ALL
+	    SELECT path_id AS id, B.sequence, B.from_location, B.to_location, A.mtr, category
+	    FROM :null_edge_cost_path_conn AS A INNER JOIN "sap.tm.trp.routing.db.dataset::t_path_connection" AS B
+	    ON TO_BIGINT(A.name) = B.path_id AND A.sequence = B.sequence
+	    WHERE category = 'P';
+	    
+	    CALL "sap.tm.trp.routing.db.util::p_convert_transport_cost_missing_message"(:null_cost_path_conn, message);
+	    log_message = SELECT * FROM :message;
+	    return_code = 1;
+	    RETURN;
+	END IF;
+	
+	-- Fetch handling cost
+	CALL "sap.tm.trp.db.costmodel::sp_get_handling_based_cost_info"(:cost_model_id, handling_cost_info_tmp);
+	
+	CALL "sap.tm.trp.db.costmodel::sp_cost_model_get"(:cost_model_id, currency_info);
+   
+    -- CURRENCY CODE MUST EXIST!!!
+    SELECT currency_code INTO cost_currency
+    FROM :currency_info;
+	
+	
+	handling_cost_info = 
+	SELECT location_name AS location, from_mot AS from_mtr, to_mot AS to_mtr, priority, wild_star_count AS star_count, cost
+	FROM :handling_cost_info_tmp
+	WHERE resource_type = :resource_type OR resource_type = '*';
+	
+	-- Fetch handling duration
+	-- Decision from PO, for version 1.1 there is no requirements to do handling duration, so here just retrieve no data!!!
+	handling_duration_info = 
+	SELECT '' AS location, '' AS from_mtr, '' AS to_mtr, 0 AS priority, 0 AS star_count, 0.0 AS duration
+	FROM DUMMY
+	WHERE 1 != 1;
+	
+	/*
+	handling_duration_info = 
+	SELECT location, from_mtr, to_mtr, 1 AS priority, 
+	(CASE location WHEN '*' THEN 1 ELSE 0 END) + (CASE from_mtr WHEN '*' THEN 1 ELSE 0 END) + (CASE to_mtr WHEN '*' THEN 1 ELSE 0 END) AS star_count,
+	time AS duration FROM "sap.tm.trp.routing.db.common::t_handling_time";
+	*/
+	
+	targets = SELECT TO_VARCHAR(value) AS value FROM :options WHERE name = :target_cfg_name;
+	constraints = SELECT * FROM :options WHERE name != :target_cfg_name;
+	
+	target_arr = ARRAY_AGG(:targets.value);
+	
+	message = 
+	SELECT '' AS severity, '' AS message
+	FROM DUMMY
+	WHERE 1 != 1;
+	
+	log = 
+	SELECT '' AS severity, '' AS message
+	FROM DUMMY
+	WHERE 1 != 1;
+	
+	FOR iter IN 1 .. CARDINALITY(:target_arr) DO
+	    control_parameters = 
+	    SELECT name AS parameter_name, value AS str_value FROM :constraints
+	    UNION ALL
+	    SELECT :target_cfg_name AS parameter_name, :target_arr[:iter] AS str_value FROM DUMMY;
+
+    	-- Fetch the merged composite path with base network id
+    	-- Pass base system generated composite path (No base manual generated composite path!!!)
+    	
+    	paths_with_target = 
+    	SELECT A.*
+    	FROM :paths AS A INNER JOIN "sap.tm.trp.routing.db.path::t_path_target" AS B ON A.path_id = B.path_id
+    	WHERE B.target = :target_arr[:iter];
+    	
+    	paths_sequence_with_target = 
+    	SELECT A.*
+    	FROM :path_connections AS A INNER JOIN "sap.tm.trp.routing.db.path::t_path_target" AS B ON A.path_id = B.path_id
+    	WHERE B.target = :target_arr[:iter];
+    	
+    	-- adapt to the interface required by delta composite path generation
+    	-- for the last location of each path_id, the transship_duration and transship_cost need to recompute the unload_duration and unload_cost
+    	path_to_loc = 
+    	SELECT path_id, sequence, to_location AS location, to_bp_sequence AS pre_bp_sequence, LEAD(from_bp_sequence - 1, 1) OVER (PARTITION BY path_id ORDER BY sequence) AS next_bp_sequence,
+    	mtr, path_type, distance, transport_duration, transship_duration, transport_cost, transship_cost, basic_path_id
+    	FROM :paths_sequence_with_target;
+    	
+    	first_loc = 
+    	SELECT A.path_id AS name, 0 AS sequence, from_location AS location, 0 AS pre_bp_sequence, B.next_bp_sequence, '' AS mtr, '' AS category, 0.0 AS distance, 0 AS transport_duration, 
+    	loading_duration AS handling_duration, 0.0 AS transport_cost, loading_cost AS handling_cost, 'LOD' AS act_type, 0 AS basic_path_name
+    	FROM :paths_with_target AS A INNER JOIN (
+    	    SELECT path_id, FIRST_VALUE(from_bp_sequence - 1 ORDER BY sequence) AS next_bp_sequence
+    	    FROM :paths_sequence_with_target
+    	    GROUP BY path_id
+    	) AS B ON A.path_id = B.path_id;
+    	
+    	intermediate_loc = 
+    	SELECT path_id AS name, sequence, location, pre_bp_sequence, next_bp_sequence, mtr, path_type AS category, distance, transport_duration, transship_duration AS handling_duration,
+    	transport_cost, transship_cost AS handling_cost, 'TRN' AS act_type, basic_path_id AS basic_path_name
+    	FROM :path_to_loc
+    	WHERE next_bp_sequence IS NOT NULL;
+    	
+    	last_loc = 
+    	SELECT A.path_id AS name, sequence, location, pre_bp_sequence, 0 AS next_bp_sequence, mtr, path_type AS category, distance, transport_duration, unloading_duration AS handling_duration,
+    	transport_cost, unloading_cost AS handling_cost, 'ULD' AS act_type, basic_path_id AS basic_path_name
+    	FROM :paths_with_target AS A INNER JOIN (
+    	    SELECT path_id, sequence, location, pre_bp_sequence, mtr, path_type, distance, transport_duration, transport_cost, basic_path_id
+    	    FROM :path_to_loc
+    	    WHERE next_bp_sequence IS NULL
+    	) AS B ON A.path_id = B.path_id;
+    	
+    	composite_path_with_target = 
+    	SELECT * FROM :first_loc
+    	UNION ALL 
+    	SELECT * FROM :intermediate_loc
+    	UNION ALL
+    	SELECT * FROM :last_loc;
+    
+    	-- convert hash field from VARBINARY to VARCHAR
+    	base_path_conn_hash_char = 
+    	SELECT name, mtr, category, location, sequence, edge_distance, edge_duration, edge_cost, loc_delay, availability_offset, cutoff_offset, TO_VARCHAR(hash_code) AS hash_code
+    	FROM :base_path_conn;
+    	
+    	delta_path_conn_hash_char = 
+    	SELECT name, mtr, category, location, sequence, edge_distance, edge_duration, edge_cost, loc_delay, availability_offset, cutoff_offset, TO_VARCHAR(hash_code) AS hash_code, opt_type
+    	FROM :delta_path_conn;
+    	
+    	-- call delta generation algorithm to generate delta composite path
+    	CALL "_SYS_AFL"."TRP_AREA_PATH_DELTA_PROC"(:location_pair, :base_path_conn_hash_char, :delta_path_conn_hash_char, :composite_path_with_target, :handling_cost_info, :handling_duration_info, :control_parameters,
+    	    delta_path, delta_path_detail, ret_message, return_code_tbl);
+    	
+	    -- fetch messages from message_tmpl
+    	CALL "sap.tm.trp.routing.db.common::p_convert_texts_util"(internal_message => :ret_message, message => message_tmp, log_message => log_message_tmp);
+    	message = 
+    	SELECT * FROM :message
+    	UNION ALL
+    	SELECT * FROM :message_tmp;
+    	
+    	log = 
+    	SELECT * FROM :log
+    	UNION ALL
+    	SELECT * FROM :log_message_tmp;
+
+    	SELECT return_code INTO return_code FROM :return_code_tbl;
+    	IF :return_code != 0 THEN
+    	    return_code = 1;
+    	    RETURN;
+    	END IF;
+    	
+    	-- compute the hash for the delta
+    	
+    	-- For current implementation of TRP_AREA_PATH_DELTA_PROC, delta_path_detail only contain action CREATE!!!
+    	-- The delta_path_detail's path detail sequence begin with 1
+    	delta_create_path_detail = 
+    	SELECT *
+    	FROM (
+        	SELECT TO_BIGINT(pathid) AS pathid, sequence - 1 AS sequence, TO_BIGINT(basic_path_name) AS basic_path_id, category AS path_type, 
+        	LAG(location, 1) OVER (PARTITION BY pathid ORDER BY sequence ASC) AS from_location,
+        	location AS to_location,  LAG(next_bp_sequence + 1, 1) OVER (PARTITION BY pathid ORDER BY sequence ASC) AS from_bp_sequence, pre_bp_sequence AS to_bp_sequence, mtr, distance, transport_duration, 
+        	CASE act_type
+        	WHEN :load_handling_type THEN 0
+        	WHEN :unload_handling_type THEN 0
+        	ELSE handling_duration
+        	END AS transship_duration, 
+        	transport_cost, 
+        	CASE act_type
+        	WHEN :load_handling_type THEN 0
+        	WHEN :unload_handling_type THEN 0
+        	ELSE handling_cost
+        	END AS transship_cost
+        	FROM :delta_path_detail
+    	)
+    	WHERE from_location IS NOT NULL;
+
+    	path_conn_create_for_hash = 
+    	SELECT pathid AS path_id, sequence, basic_path_id,from_location, to_location, from_bp_sequence, to_bp_sequence
+    	FROM :delta_create_path_detail;
+    	
+        CALL "sap.tm.trp.routing.db.path::p_calculate_composite_path_hash" (:path_conn_create_for_hash, delta_create_path_hash);
+        
+    	-- check whether there are already the same hash system generated and same action record in the same network layer
+    	
+        -- retrieve the hash for delete action delta from the t_path table
+        -- not check the wrong raw_name returned by delta_path
+        delta_delete_path = 
+        SELECT B.id, B.from_location, B.to_location, B.total_distance, B.loading_cost, B.unloading_cost, B.total_cost, B.loading_duration, B.unloading_duration,
+        B.total_duration, B.hash
+        FROM :delta_path AS A INNER JOIN "sap.tm.trp.routing.db.path::t_path" AS B ON TO_BIGINT(A.raw_name) = B.id
+        WHERE A.delta_type = :delete_action_type;
+        
+        -- check for duplication by hash with accumulate_delta_path
+        delta_create_duplicate_flag = 
+        SELECT TO_BIGINT(B.pathid) AS id, B.start_loc AS from_location, B.destination_loc AS to_location, B.total_distance, B.total_cost, B.total_duration, A.hash, C.id AS id_flag
+        FROM :delta_create_path_hash AS A INNER JOIN :delta_path AS B ON A.path_id = B.pathid
+        LEFT OUTER JOIN :accumulate_delta_path AS C ON A.hash = C.hash AND C.action = :create_action_type;
+        
+        delta_delete_duplicate_flag = 
+        SELECT A.*, B.id AS id_flag
+        FROM :delta_delete_path AS A LEFT OUTER JOIN :accumulate_delta_path AS B
+        ON A.hash = B.hash AND B.action = :delete_action_type;
+        
+    	delta_create_noduplicate_path = 
+    	SELECT id, from_location, to_location, total_distance, 
+    	(SELECT handling_cost FROM :delta_path_detail WHERE TO_BIGINT(pathid) = id AND act_type = :load_handling_type) AS loading_cost,
+    	(SELECT handling_cost FROM :delta_path_detail WHERE TO_BIGINT(pathid) = id AND act_type = :unload_handling_type) AS unloading_cost,
+    	total_cost, 
+    	(SELECT handling_duration FROM :delta_path_detail WHERE TO_BIGINT(pathid) = id AND act_type = :load_handling_type) AS loading_duration,
+    	(SELECT handling_duration FROM :delta_path_detail WHERE TO_BIGINT(pathid) = id AND act_type = :unload_handling_type) AS unloading_duration,
+    	total_duration, hash, "sap.tm.trp.routing.db.path::s_composite_path".NEXTVAL AS new_id
+    	FROM :delta_create_duplicate_flag 
+    	WHERE id_flag IS NULL;
+
+    	delta_delete_noduplicate_path = 
+    	SELECT id, from_location, to_location, total_distance, loading_cost, unloading_cost, total_cost, loading_duration, unloading_duration, total_duration, hash,
+    	"sap.tm.trp.routing.db.path::s_composite_path".NEXTVAL AS new_id
+    	FROM :delta_delete_duplicate_flag
+    	WHERE id_flag IS NULL;
+
+    	-- provides a merge operation based on the network_model_id, source, action, hash
+    	-- the reason to take action into accout is because the different target may generate different action(CREATE or DELETE) for the same hash
+    	accumulate_delta_path_detail = 
+    	SELECT * FROM :accumulate_delta_path_detail
+    	UNION ALL
+    	SELECT B.new_id AS path_id, A.sequence, A.basic_path_id, A.path_type, A.from_location, A.to_location, A.from_bp_sequence, A.to_bp_sequence, A.mtr, A.distance, 
+    	A.transport_duration, A.transship_duration, A.transport_cost, A.transship_cost
+    	FROM :delta_create_path_detail AS A INNER JOIN :delta_create_noduplicate_path AS B ON A.pathid = B.id
+    	UNION ALL
+    	SELECT new_id AS path_id, A.sequence, A.basic_path_id, A.path_type, A.from_location, A.to_location, A.from_bp_sequence, A.to_bp_sequence, A.mtr, A.distance, 
+    	A.transport_duration, A.transship_duration, A.transport_cost, A.transship_cost
+    	FROM "sap.tm.trp.routing.db.path::t_path_sequence" AS A INNER JOIN :delta_delete_noduplicate_path AS B ON A.path_id = B.id;
+    	
+    	accumulate_delta_path = 
+    	SELECT * FROM :accumulate_delta_path
+    	UNION ALL
+    	SELECT new_id AS id, from_location, to_location, total_distance, loading_cost, unloading_cost, total_cost, loading_duration, unloading_duration, total_duration, :create_action_type AS action, 
+    	:system_source AS source, hash
+    	FROM :delta_create_noduplicate_path
+    	UNION ALL
+    	SELECT new_id AS id, from_location, to_location, total_distance, loading_cost, unloading_cost, total_cost, loading_duration, unloading_duration, total_duration, :delete_action_type AS action,
+    	:system_source AS source, hash
+    	FROM :delta_delete_noduplicate_path;
+    	
+    	accumulate_delta_target = 
+    	SELECT * FROM :accumulate_delta_target
+    	UNION ALL
+    	SELECT id_flag AS path_id, :target_arr[:iter] AS target
+    	FROM :delta_create_duplicate_flag
+    	WHERE id_flag IS NOT NULL
+    	UNION ALL
+    	SELECT new_id AS path_id, :target_arr[:iter] AS target
+    	FROM :delta_create_noduplicate_path
+    	UNION ALL
+    	SELECT id_flag AS path_id, :target_arr[:iter] AS target
+    	FROM :delta_delete_duplicate_flag
+    	WHERE id_flag IS NOT NULL
+    	UNION ALL
+    	SELECT new_id AS path_id, :target_arr[:iter] AS target
+    	FROM :delta_delete_noduplicate_path;
+
+	END FOR;
+	
+	-- insert the computed delta composite path into "sap.tm.trp.routing.db.path::t_path" and "sap.tm.trp.routing.db.path::t_path_sequence" and "sap.tm.trp.routing.db.path::t_path_target"
+    INSERT INTO "sap.tm.trp.routing.db.path::t_path" (id, network_model_id, from_location, to_location, total_distance, loading_cost, unloading_cost, total_cost, 
+    cost_currency, loading_duration, unloading_duration, total_duration, action, source, hash, created_by, created_on, changed_by, changed_on)
+    SELECT id, :network_id, from_location, to_location, total_distance, loading_cost, unloading_cost, total_cost, :cost_currency,
+    loading_duration, unloading_duration, total_duration, action, source, hash, 
+    SESSION_CONTEXT('APPLICATIONUSER'), CURRENT_UTCTIMESTAMP, SESSION_CONTEXT('APPLICATIONUSER'), CURRENT_UTCTIMESTAMP
+    FROM :accumulate_delta_path;
+    
+
+    INSERT INTO "sap.tm.trp.routing.db.path::t_path_sequence" (path_id, sequence, basic_path_id, path_type, from_location, to_location, from_bp_sequence, to_bp_sequence, mtr, distance, transport_duration, transship_duration, transport_cost, transship_cost)
+    SELECT path_id, sequence, basic_path_id, path_type, from_location, to_location, from_bp_sequence, to_bp_sequence, mtr, distance, transport_duration, transship_duration, transport_cost, transship_cost
+    FROM :accumulate_delta_path_detail;
+    
+    INSERT INTO "sap.tm.trp.routing.db.path::t_path_target"(path_id, target)
+    SELECT path_id, target
+    FROM :accumulate_delta_target;
+    
+    return_code = 0;
+END

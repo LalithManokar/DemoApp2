@@ -1,0 +1,136 @@
+{
+    "exposed": true,
+    "prevent_xsrf": true,
+    "default_connection" : "sap.tm.trp.service.config::TechnicalUser",
+    "authentication": {
+        "method": "Basic"
+    },
+    "headers": {
+        "enabled": true,
+        "customHeaders": [{
+            "name":"X-Frame-Options",
+            "value":"DENY"
+        }]
+    },
+    "rewrite_rules": [{
+        "source": "/user/settings\\.(json|xml|html|txt)\\??(.+)?",
+        "target": "/user/users.xsjs?format=$1&raw=/settings&$2"
+    }, {
+        "source": "/user/profile\\.(json|xml|html|txt)([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/user/users.xsjs?format=$1&raw=/updateMyProfile&$3"
+    }, {
+        "source": "/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/scenarios/(\\w+)/paths/(\\w+)/rules/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/planningcockpit/rules.xsjs?planId=$2&scenarioId=$3&pathId=$4&format=$1&raw=$5&$6"
+    }, {
+        "source": "/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/scenarios/(\\w+)/paths/(\\w+)/voyages/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/planningcockpit/voyages.xsjs?planId=$2&scenarioId=$3&pathId=$4&format=$1&raw=$5&$6"
+    }, {
+        "source": "/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/scenarios/(\\w+)/connections/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/planningcockpit/connections.xsjs?planId=$2&scenarioId=$3&format=$1&raw=$4&$5"
+    }, {
+        "source": "/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/scenarios/(\\w+)/routes/?([\\w\\/]+)?\\??(.+)?",
+        "target": "/planningcockpit/routes.xsjs?planId=$2&scenarioId=$3&format=$1&raw=$4&$5"
+    }, {
+        "source": "/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/scenarios/(\\w+)/network/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/planningcockpit/network.xsjs?planId=$2&scenarioId=$3&format=$1&raw=$4&$5"
+    }, {
+        "source": "/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/scenarios/(\\w+)/compositepaths/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/planningcockpit/paths.xsjs?planId=$2&scenarioId=$3&type=COMPOSITE&format=$1&raw=$4&$5"
+    }, {
+        "source": "/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/scenarios/(\\w+)/paths/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/planningcockpit/paths.xsjs?planId=$2&scenarioId=$3&format=$1&raw=$4&$5"
+    }, {
+        "source": "/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/paths/(\\w+)/rules/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/planningcockpit/rules.xsjs?planId=$2&scenarioId=0&pathId=$3&format=$1&raw=$4&$5"
+    }, {
+        "source": "/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/paths/(\\w+)/voyages/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/planningcockpit/voyages.xsjs?planId=$2&scenarioId=0&pathId=$3&format=$1&raw=$4&$5"
+    }, {
+        "source": "/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/paths/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/planningcockpit/paths.xsjs?planId=$2&scenarioId=0&format=$1&raw=$3&$4"
+    }, {
+        "source": "/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/dataset/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/planningcockpit/dataset.xsjs?planId=$2&scenarioId=0&format=$1&raw=$3&$4"
+    }, {
+        "source": "/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/connections/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/planningcockpit/connections.xsjs?planId=$2&scenarioId=0&format=$1&raw=$3&$4"
+    }, {
+        "source": "/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/compositepaths/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/planningcockpit/paths.xsjs?planId=$2&scenarioId=0&type=COMPOSITE&format=$1&raw=$3&$4"
+    }, {
+        "source": "/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/routes/?([\\w\\/]+)?\\??(.+)?",
+        "target": "/planningcockpit/routes.xsjs?planId=$2&scenarioId=0&format=$1&raw=$3&$4"
+    }, {
+        "source": "/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/network/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/planningcockpit/network.xsjs?planId=$2&scenarioId=0&format=$1&raw=$3&$4"
+    }, {
+        "source": "/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/scenarios/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/planningcockpit/scenario.xsjs?planId=$2&format=$1&raw=$3&$4"
+    }, {
+        "source": "/([a-zA-Z_0-9]+)/(\\w+)\\.(json|xml|html|txt)([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/$1/$2.xsjs?format=$3&raw=$4&$5"
+    }, {
+        "source": "/navigation\\.(json|xml|html|txt)([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/navigation.xsjs?format=$1&raw=$2&$3"
+    }, {
+        "source": "/(\\w+)/railcar/(\\w+)\\.(json|xml|html|txt)([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/$1/railcar/$2.xsjs?format=$3&raw=$4&$5"
+    }, {
+        "source": "/ng/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/scenarios/(\\w+)/repositioningactivity/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=planningcockpit/repositioningActivity&planId=$2&scenarioId=$3&format=$1&raw=$4&$5"
+    }, {
+        "source": "/ng/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/scenarios/(\\w+)/offhireactivity/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=planningcockpit/offHireActivity&planId=$2&scenarioId=$3&format=$1&raw=$4&$5"
+    },{
+        "source": "/ng/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/scenarios/(\\w+)/onhireactivity/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=planningcockpit/onHireActivity&planId=$2&scenarioId=$3&format=$1&raw=$4&$5"
+    },{
+        "source": "/ng/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/scenarios/(\\w+)/mractivity/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=planningcockpit/mrActivity&planId=$2&scenarioId=$3&format=$1&raw=$4&$5"
+    },{
+        "source": "/ng/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/scenarios/(\\w+)/repositioningavoidanceactivity/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=planningcockpit/repositioningAvoidanceActivity&planId=$2&scenarioId=$3&format=$1&raw=$4&$5"
+    },{
+        "source": "/ng/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/scenarios/(\\w+)/loaddischargeactivity/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=planningcockpit/loadDischargeActivity&planId=$2&scenarioId=$3&format=$1&raw=$4&$5"
+    },{
+        "source": "/ng/planningcockpit/simulations\\.(json|xml|html|txt)/(\\w+)/scenarios/(\\w+)/activity/?([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=planningcockpit/onHireActivity&planId=$2&scenarioId=$3&format=$1&raw=$4&$5"
+    },{
+        "source": "/ng/plan/plans\\.(json|xml|html|txt)([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=plan/scheduledPlan&format=$1&raw=$2&$3"
+    }, {
+        "source": "/ng/plan/executions\\.(json|xml|html|txt)([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=plan/templatePlan&format=$1&raw=$2&$3"
+    }, {
+        "source": "/ng/user/registrationobject\\.(json|xml|html|txt)([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=user/sdPlanAlertRule&format=$1&raw=$2&$3"
+    }, {
+        "source": "/ng/user/calculationmodel\\.(json|xml|html|txt)([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=user/calculationModel&format=$1&raw=$2&$3"
+    }, {
+        "source": "/ng/user/availablecheckrule\\.(json|xml|html|txt)([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=user/availableCheckRule&format=$1&raw=$2&$3"
+    }, {
+        "source": "/ng/user/exclusionrule\\.(json|xml|html|txt)([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=user/exclusionRule&format=$1&raw=$2&$3"
+    }, {
+        "source": "/ng/user/kpiplanalertrule\\.(json|xml|html|txt)([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=user/kpiPlanAlertRule&format=$1&raw=$2&$3"
+    }, {
+        "source": "/ng/user/locationdeterminationrule\\.(json|xml|html|txt)([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=user/locationDeterminationRule&format=$1&raw=$2&$3"
+    }, {
+        "source": "/ng/user/resourcestockalertrule\\.(json|xml|html|txt)([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=user/resourceStockAlertRule&format=$1&raw=$2&$3"
+    }, {
+        "source": "/ng/user/sdkpibubblerule\\.(json|xml|html|txt)([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=user/sdKPIBubbleRule&format=$1&raw=$2&$3"
+    }, {
+        "source": "/ng/user/sdplanalertrule\\.(json|xml|html|txt)([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=user/sdPlanAlertRule&format=$1&raw=$2&$3"
+    }, {
+        "source": "/ng/([a-zA-Z_0-9]+)/(\\w+)\\.(json|xml|html|txt)([\\w\\{\\}\\/]+)?\\??(.+)?",
+        "target": "/broker.xsjs?$path=$1/$2&format=$3&raw=$4&$5"
+    }]
+}

@@ -1,0 +1,324 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_ext_pickup_return_ruleset_validate" (
+  IN KNOWN_INVALID_ITEMS "sap.tm.trp.db.massupload::tt_massupload_invalid_item",
+  IN PICKUP_RETURN_RULESET_ITEMS "sap.tm.trp.db.massupload::tt_pickup_return_ruleset",
+  IN RESOURCE_CATEGORY_ID VARCHAR(20),
+  IN ERROR_LIMIT INTEGER,
+  OUT INVALID_ITEMS "sap.tm.trp.db.massupload::tt_massupload_invalid_item"
+)
+  LANGUAGE SQLSCRIPT
+  SQL SECURITY INVOKER
+  DEFAULT SCHEMA "SAP_TM_TRP"
+  ---READS SQL DATA
+AS
+BEGIN
+
+  DECLARE LOCATION_DETERMINATION_RULE VARCHAR(50) := 'LOCATION DETERMINATION RULE';
+  DECLARE OPTIMIZATION VARCHAR(50) := 'AUTOMATIC OPTIMIZATION';
+  DECLARE BOTH_RULE_OPTI VARCHAR(60) := 'LOCATION DETERMINATION RULE AND AUTOMATIC OPTIMIZATION';
+  DECLARE NONE_OPTI VARCHAR(20) := 'NONE';
+  DECLARE COST_BASED VARCHAR(20) := 'COST-BASED';
+  DECLARE BOTH_COST_AND_BALANCING VARCHAR(60) := 'BOTH COST-BASED AND BALANCING-BASED';
+  DECLARE SCHEDULE_MANUAL VARCHAR(20) := 'MANUAL';
+  DECLARE SCHEDULE_SCHEDULED VARCHAR(20) := 'SCHEDULED';
+  DECLARE MINUTES VARCHAR(20) := 'MINUTES';
+  DECLARE HOURS VARCHAR(20) := 'HOURS';
+  DECLARE DAYS VARCHAR(20) := 'DAYS';
+  DECLARE WEEKS VARCHAR(20) := 'WEEKS';
+  DECLARE CNT INTEGER := 0 ;
+  DECLARE PLAN_SD SMALLINT := 1;
+  DECLARE PLAN_VSD SMALLINT := 3;
+
+
+  ITEMS =
+      SELECT ROW_INDEX, UPPER(RULE_NAME) AS RULE_NAME,
+              UPPER(RULE_TYPE_NAME) AS RULE_TYPE_NAME,UPPER(ALLOWED_USAGE) AS ALLOWED_USAGE,
+              UPPER(TIME_UNIT_NAME) AS TIME_UNIT_NAME,
+              UPPER(LOCATION_FILTER_NAME) AS LOCATION_FILTER_NAME,
+              UPPER(RESOURCE_FILTER_NAME) AS RESOURCE_FILTER_NAME,
+              UPPER(EXCLUDE_YES_OR_NO) AS EXCLUDE_YES_OR_NO,
+              UPPER(EXCLUSIVE_RULE_NAME) AS EXCLUSIVE_RULE_NAME,
+              UPPER(SD_PLAN_NAME) AS SD_PLAN_NAME,
+              UPPER(NETWORK_SETTING_GROUP_NAME) AS NETWORK_SETTING_GROUP_NAME,
+              UPPER(OP_SETTING_NAME) AS OP_SETTING_NAME,
+              UPPER(LOCATION_DETERMIN_NAME) AS LOCATION_DETERMIN_NAME,
+              UPPER(OPTIMIZATION_NAME) AS OPTIMIZATION_NAME,
+              UPPER(SCHEDULE_TYPE_NAME) AS SCHEDULE_TYPE_NAME,
+              UPPER(EXECUTE_TIME_UINT_NAME) AS EXECUTE_TIME_UINT_NAME,
+              UPPER(SELECTION_DATE) AS SELECTION_DATE,
+              TIMEZONES
+         FROM :PICKUP_RETURN_RULESET_ITEMS;
+
+  ---Ruleset type check and duplicate name check
+  INVALID_ITEMS =
+   SELECT A.ROW_INDEX, 1 AS COL_INDEX , 'UPLOAD_DUPLICATE_NAME' AS REASON_CODE
+    FROM :ITEMS AS A
+      INNER JOIN :ITEMS AS B
+       ON ( A.RULE_NAME = B.RULE_NAME AND A.ROW_INDEX <> B.ROW_INDEX ) --duplidate name check in csv
+   UNION
+   SELECT A.ROW_INDEX, 3 AS COL_INDEX, 'RULESET_TYPE_MISMATCH' AS REASON_CODE
+   FROM :ITEMS AS A
+   LEFT OUTER JOIN (
+          SELECT RULE_NAME,
+                CASE RULE_TYPE
+                 WHEN 1 THEN 'PICK-UP'
+                 WHEN 2 THEN 'RETURN'
+                END AS RULE_TYPE_NAME, RESOURCE_CATEGORY FROM
+          "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+     ) AS B
+   ON A.RULE_NAME = B.RULE_NAME AND B.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID
+   WHERE B.RULE_NAME IS NOT NULL AND B.RULE_TYPE_NAME <> A.RULE_TYPE_NAME
+    UNION
+    SELECT ROW_INDEX, COL_INDEX, REASON_CODE FROM :KNOWN_INVALID_ITEMS;
+
+   SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+   IF :CNT >= :ERROR_LIMIT THEN
+     INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT ;
+     RETURN;
+   END IF;
+
+   --Existence and Authorization check
+   INVALID_ITEMS =
+         SELECT * FROM :INVALID_ITEMS
+         UNION
+         SELECT A.ROW_INDEX,
+                 7 AS COL_INDEX,
+               'LOCATION_FILTER_INVALID_NO_AUTH' AS REASON_CODE
+          FROM :ITEMS AS A
+           LEFT OUTER JOIN "sap.tm.trp.db.filter::cv_role_check_location_filter" AS B
+               ON A.LOCATION_FILTER_NAME = B.NAME and B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+           WHERE B.NAME IS NULL OR A.LOCATION_FILTER_NAME = '' OR A.LOCATION_FILTER_NAME IS NULL
+        UNION
+            SELECT A.ROW_INDEX,
+               8 AS COL_INDEX,
+               'RESOURCE_FILTER_INVALID_NO_AUTH' AS REASON_CODE
+            FROM :ITEMS AS A
+               LEFT OUTER JOIN "sap.tm.trp.db.filter::cv_equipment_filter" AS B
+               ON A.RESOURCE_FILTER_NAME = B.NAME and B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+            WHERE B.NAME IS NULL AND A.RESOURCE_FILTER_NAME <>  ''
+        UNION
+    /*        SELECT A.ROW_INDEX,
+                     11 AS COL_INDEX,
+                     'SD_PLAN_INVALID_NO_AUTH' AS REASON_CODE
+             FROM :ITEMS AS A
+             LEFT OUTER JOIN "sap.tm.trp.db.pipeline::cv_get_plan_list" AS B
+             ON A.SD_PLAN_NAME = B.NAME AND B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+                 AND (B.PLAN_TYPE_ID = :PLAN_SD OR B.PLAN_TYPE_ID = :PLAN_VSD) AND LOCATION_FILTER_TYPE = 1
+             WHERE B.NAME IS NULL OR A.SD_PLAN_NAME = '' OR A.SD_PLAN_NAME IS NULL	*/
+             SELECT A.ROW_INDEX,
+                     11 AS COL_INDEX,
+                     'SD_PLAN_INVALID_NO_AUTH' AS REASON_CODE
+             FROM :ITEMS AS A
+             LEFT OUTER JOIN (SELECT * FROM "sap.tm.trp.db.pipeline::cv_get_plan_list" 
+                                    WHERE PLAN_TYPE_ID = :PLAN_SD OR PLAN_TYPE_ID = :PLAN_VSD
+                                        AND RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID AND LOCATION_FILTER_TYPE = 1) AS B
+             ON A.SD_PLAN_NAME = B.NAME
+             WHERE B.NAME IS NULL OR A.SD_PLAN_NAME = '' OR A.SD_PLAN_NAME IS NULL
+        UNION
+            SELECT A.ROW_INDEX,
+                   12 AS COL_INDEX,
+                   'NETWORK_SETTING_GROUP_INVALID_NO_AUTH' AS REASON_CODE
+            FROM :ITEMS AS A
+            LEFT OUTER JOIN "sap.tm.trp.db.planningcockpit::v_network_setting_group" AS B
+            ON A.NETWORK_SETTING_GROUP_NAME = B.NAME AND B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+            WHERE B.NAME IS NULL OR A.NETWORK_SETTING_GROUP_NAME = '' OR A.NETWORK_SETTING_GROUP_NAME IS NULL;
+
+    --Check Count less than equal to 'ERROR_LIMIT'
+  SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+  IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+         RETURN;
+  END IF;
+
+  INVALID_ITEMS =
+       SELECT * FROM :INVALID_ITEMS
+       UNION      --Due for Pickup/return in xxx (Hours Days Weeks)
+         SELECT A.ROW_INDEX, 6 AS COL_INDEX, 'TIME_MEASURE_INVALID' AS REASON_CODE
+         FROM :ITEMS AS A WHERE TIME_UNIT_NAME NOT IN (:HOURS, :DAYS, :WEEKS)---Time measure field
+       UNION
+        SELECT A.ROW_INDEX, 9 AS COL_INDEX, 'EXCLUDE_PROCESSED_TUS_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A
+          WHERE EXCLUDE_YES_OR_NO NOT IN ('YES','NO')
+       UNION
+           SELECT  ROW_INDEX, 10 AS COL_INDEX, 'EXCLUSION_RULE_INVALID' AS REASON_CODE
+       FROM ( SELECT ROW_INDEX, EXCLUSIVE_RULE_NAME , RULE_TYPE_NAME FROM :ITEMS
+             WHERE EXCLUSIVE_RULE_NAME IS NOT NULL AND EXCLUSIVE_RULE_NAME <> '') AS A
+       LEFT OUTER JOIN (
+          SELECT DISTINCT T1.RULE_ID AS ID,
+               T1.CODE,
+               T1.NAME,
+               T7.ID AS TYPE_ID,
+               T7.NAME AS TYPE,
+               T1.RULE_TYPE_ID AS RULE_TYPE_ID,
+               CASE  T1.RULE_TYPE_ID
+                   WHEN 18 THEN 'PICK-UP'
+                   WHEN 19 THEN 'RETURN'
+               END AS RULE_TYPE,
+               T11.CODE AS RESOURCE_CATEGORY
+          FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule" AS T1
+          LEFT OUTER JOIN "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData" AS T6
+          ON T1.RULE_TYPE_ID = T6.RULE_TYPE_ID
+          LEFT OUTER JOIN "sap.tm.trp.db.objectregistration::t_object_type" AS T7
+          ON T6.OBJECT_TYPE_ID = T7.ID
+          INNER JOIN "sap.tm.trp.db.systemmanagement.customization::t_resource_category_object_registration" T10
+          ON T1.RULE_ID = T10.OBJECT_ID
+          INNER JOIN "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings" T11
+          ON T10.RESOURCE_CATEGORY_ID = T11.ID
+         WHERE T7.TYPE = 8 AND T11.CODE = :RESOURCE_CATEGORY_ID
+       ) AS B
+        ON A.EXCLUSIVE_RULE_NAME = B.NAME AND B.RULE_TYPE = A.RULE_TYPE_NAME
+           AND B.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID
+        WHERE B.NAME IS NULL
+       UNION
+       SELECT A.ROW_INDEX, 13 AS COL_INDEX, 'OPTIMIZATION_SETTING_INVALID' AS REASON_CODE
+        FROM :ITEMS AS A
+        WHERE OP_SETTING_NAME NOT IN (:NONE_OPTI, :LOCATION_DETERMINATION_RULE, :OPTIMIZATION, :BOTH_RULE_OPTI)
+      UNION
+       SELECT A.ROW_INDEX, 14 AS COL_INDEX, 'LOCATION_DETERMINATION_RULE_INVALID' AS REASON_CODE
+       FROM :ITEMS AS A
+       LEFT OUTER JOIN (
+            SELECT DISTINCT T1.RULE_ID,
+                 T1.CODE,
+                 T1.NAME,
+                 T7.ID AS TYPE_ID,
+                 T7.NAME AS TYPE,
+                 T1.RULE_TYPE_ID,
+                 CASE T1.RULE_TYPE_ID
+                     WHEN 8 THEN 'PICK-UP'
+                     WHEN 9 THEN 'RETURN'
+                 END AS RULE_TYPE,
+                 T11.CODE AS RESOURCE_CATEGORY
+            FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule" AS T1
+             LEFT OUTER JOIN "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData" AS T6
+             ON T1.RULE_TYPE_ID = T6.RULE_TYPE_ID
+             LEFT OUTER JOIN "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData_t" AS T8
+             ON T6.RULE_TYPE_ID = T8.ID
+             LEFT OUTER JOIN "sap.tm.trp.db.objectregistration::t_object_type" AS T7
+             ON T6.OBJECT_TYPE_ID = T7.ID
+             LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement.customization::t_resource_category_object_registration" T10
+           ON T1.RULE_ID = T10.OBJECT_ID
+           LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings" T11
+           ON T10.RESOURCE_CATEGORY_ID = T11.ID
+           WHERE T7.TYPE = 4 AND T11.CODE = :RESOURCE_CATEGORY_ID
+
+       ) AS B
+       ON A.LOCATION_DETERMIN_NAME = B.NAME AND A.RULE_TYPE_NAME = B.RULE_TYPE
+       WHERE B.NAME IS NULL  AND A.OP_SETTING_NAME IN (:LOCATION_DETERMINATION_RULE, :BOTH_RULE_OPTI )
+     UNION
+      SELECT  A.ROW_INDEX, 15 AS COL_INDEX, 'AUTOMATIC_OPTIMIZATION_INVALID' AS REASON_CODE
+      FROM :ITEMS AS A
+      WHERE A.OP_SETTING_NAME IN (:OPTIMIZATION, :BOTH_RULE_OPTI)
+         AND OPTIMIZATION_NAME NOT IN (:COST_BASED, :BOTH_COST_AND_BALANCING)
+ ;
+
+    --Check Count less than equal to 'ERROR_LIMIT'
+  SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+  IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+         RETURN;
+  END IF;
+
+
+---Visibility check
+---Pick-up return ruleset with global visibility cannot contain objects that have personal visibility
+ VISIBLITY_GLOBAL_ITEMS =
+   SELECT ROW_INDEX, RULE_NAME,LOCATION_FILTER_NAME,RESOURCE_FILTER_NAME,SD_PLAN_NAME
+   FROM :ITEMS WHERE ALLOWED_USAGE = 'GLOBAL';
+
+   INVALID_ITEMS =
+       SELECT * FROM :INVALID_ITEMS
+       UNION
+        SELECT A.ROW_INDEX,
+               7 AS COL_INDEX,
+               'LOC_FILTER_WITH_PERSONAL_VISIBILITY' AS REASON_CODE
+            FROM :VISIBLITY_GLOBAL_ITEMS AS A
+             LEFT OUTER JOIN "sap.tm.trp.db.filter::t_location_filter" AS B
+             ON A.LOCATION_FILTER_NAME = B.DESC AND B.VISIBLE_FLAG = 'P'
+                AND B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+            WHERE  B.DESC IS NOT NULL
+        UNION
+        SELECT A.ROW_INDEX,
+               8 AS COL_INDEX,
+               'RES_FILTER_WITH_PERSONAL_VISIBILITY' AS REASON_CODE
+            FROM :VISIBLITY_GLOBAL_ITEMS AS A
+            LEFT OUTER JOIN "sap.tm.trp.db.filter::t_equipment_filter" AS B
+            ON RESOURCE_FILTER_NAME = B.DESC AND B.VISIBLE_FLAG = 'P'
+               AND B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+            WHERE B.DESC IS NOT NULL AND A.RESOURCE_FILTER_NAME <>  ''
+        UNION
+        SELECT A.ROW_INDEX,
+               11 AS COL_INDEX,
+               'SD_PLAN_WITH_PERSONAL_VISIBILITY' AS REASON_CODE
+            FROM :VISIBLITY_GLOBAL_ITEMS AS A
+             LEFT OUTER JOIN (
+
+            /*  
+                 SELECT T1.NAME, T1. VISIBILITY_FLAG, T2.RESOURCE_CATEGORY
+
+                 FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+                INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2
+                ON T1.FILTER_GROUP_ID = T2.ID
+                   AND (T1.PLAN_MODEL_TYPE_ID = :PLAN_SD OR T1.PLAN_MODEL_TYPE_ID = :PLAN_VSD)
+                  AND T2.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID	*/
+                 SELECT T1.NAME, T1. VISIBILITY_FLAG, T2.RESOURCE_CATEGORY
+                 FROM (SELECT * FROM "sap.tm.trp.db.pipeline::t_plan_model" 
+                                WHERE PLAN_MODEL_TYPE_ID = :PLAN_SD OR PLAN_MODEL_TYPE_ID = :PLAN_VSD) T1
+                INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2
+                ON T1.FILTER_GROUP_ID = T2.ID
+                  AND T2.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID) AS B
+            ON B.NAME = A.SD_PLAN_NAME AND B.VISIBILITY_FLAG = 0
+             WHERE  B.NAME IS NOT NULL;
+
+  --Check Count less than equal to 'ERROR_LIMIT'
+  SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+  IF :CNT >= :ERROR_LIMIT THEN
+      INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+      RETURN;
+  END IF;
+
+
+   --Check Count less than equal to 'ERROR_LIMIT'
+  SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+  IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+         RETURN;
+  END IF;
+
+   --SD Plan Must have both supply and demand data flag
+   ---1)Get virtual/scheduled SD plan list from csv
+    SD_PLAN_LIST = SELECT DISTINCT SD_PLAN_NAME AS NAME FROM :ITEMS;
+   ---2) get invalid sd plans that don't have supply or demand
+    CALL "sap.tm.trp.db.massupload::p_batch_check_supply_demand_flag"(:SD_PLAN_LIST, INVALID_PLAN_LIST);
+
+    INVALID_ITEMS =
+         SELECT * FROM :INVALID_ITEMS
+         UNION
+         SELECT A.ROW_INDEX, 11 AS COL_INDEX,  B.MESSAGE AS REASON_CODE
+         FROM :ITEMS AS A
+         INNER JOIN :INVALID_PLAN_LIST AS B
+         ON A.SD_PLAN_NAME = B.NAME;
+
+    selection_dates = select A.NAME from "sap.tm.trp.db.pickupreturn::t_pickup_register_selection_date_criteria" A
+                      union select B.NAME from "sap.tm.trp.db.pickupreturn::t_return_register_selection_date_criteria" B;
+
+    selection_date_not_exist = select * from :ITEMS A where A.SELECTION_DATE != '' and  A.SELECTION_DATE not in (select B.NAME from :selection_dates B);
+
+    selection_date_pickup =  select * from :ITEMS as A inner join "sap.tm.trp.db.pickupreturn::t_pickup_register_selection_date_criteria" as B
+                     on (A.SELECTION_DATE = B.NAME and A.RULE_TYPE_NAME!='PICK-UP');
+
+    selection_date_return = select * from :ITEMS as A inner join "sap.tm.trp.db.pickupreturn::t_return_register_selection_date_criteria" as B
+                     on (A.SELECTION_DATE = B.NAME and A.RULE_TYPE_NAME!='RETURN');
+
+    invalid_selection = select * from :selection_date_pickup union select * from :selection_date_return;
+
+    INVALID_ITEMS=
+         SELECT * FROM :INVALID_ITEMS
+         UNION
+         SELECT A.ROW_INDEX, 23 AS COL_INDEX,  'SELECTION_DATE_INVALID' AS REASON_CODE
+         FROM :invalid_selection AS A
+         UNION
+         SELECT B.ROW_INDEX, 23 AS COL_INDEX,  'SELECTION_DATE_INVALID' AS REASON_CODE
+         FROM :selection_date_not_exist AS B;
+    --Return Errors based on input limit
+    INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+
+END;

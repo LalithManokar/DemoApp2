@@ -1,0 +1,192 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.equipment::p_equipment_info_facet_filter" (
+    IN FUZZYSEARCH_TEXT VARCHAR(500),
+    IN EQUIP_FILTER_ID BIGINT,
+    IN LOC_FILTER_ID BIGINT,
+    IN ATTRIBUTE_GROUP_ID BIGINT,
+    IN ATTRIBUTE_NODE_LIST NVARCHAR(2000),
+    IN LOCATION VARCHAR(20),
+    IN RESOURCE_TYPE VARCHAR(10),
+    IN LEASE_CONTRACT_REFERENCE VARCHAR(20),
+    IN RES_ID VARCHAR(40),
+    IN IN_MOVEMENT_STATUS VARCHAR(60),
+	IN RESOURCE_CATEGORY VARCHAR(20),
+	IN IN_RESOURCE_STATUS VARCHAR(100),
+    IN EQUIPMENT_STATUS_LIST_INPUT "sap.tm.trp.db.equipment::tt_str_list",
+    IN OWNERSHIP_LIST_INPUT "sap.tm.trp.db.equipment::tt_str_list",
+    IN BLOCK_STATUS_LIST_INPUT "sap.tm.trp.db.equipment::tt_str_list",
+    IN FOOD_GRADE_LIST_INPUT "sap.tm.trp.db.equipment::tt_str_list",
+    IN RESOURCE_CONDITION_LIST_INPUT "sap.tm.trp.db.equipment::tt_str_list",
+    IN MOVEMENT_STATUS_LIST_INPUT "sap.tm.trp.db.equipment::tt_str_list",
+    OUT RESOURCE_STATUS_OUTPUT "sap.tm.trp.db.equipment::tt_resource_visibility_facet_filter_string",
+    OUT OWNERSHIP_OUTPUT "sap.tm.trp.db.equipment::tt_resource_visibility_facet_filter_string",
+    OUT BLOCKING_STATUS_OUTPUT "sap.tm.trp.db.equipment::tt_resource_visibility_facet_filter_string",
+    OUT FOOD_GRADE_OUTPUT "sap.tm.trp.db.equipment::tt_resource_visibility_facet_filter_string",
+    OUT RESOURCE_CONDITION_OUTPUT "sap.tm.trp.db.equipment::tt_resource_visibility_facet_filter_string",
+    OUT MOVEMENT_STATUS_OUTPUT "sap.tm.trp.db.equipment::tt_resource_visibility_facet_filter_string"
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP"
+READS SQL DATA 
+AS
+    EQUIPMENT_STATUS_LIST_CNT INTEGER;
+    OWNERSHIP_LIST_CNT INTEGER;
+    BLOCK_STATUS_LIST_CNT INTEGER;
+    FOOD_GRADE_LIST_CNT INTEGER;
+    RESOURCE_CONDITION_LIST_CNT INTEGER;
+    MOVEMENT_STATUS_LIST_CNT INTEGER;
+BEGIN
+    res = SELECT * FROM "sap.tm.trp.db.equipment::cv_equipment_visibility_equip_info" (
+            placeholder."$$RESOURCE_FILTER_ID$$"=>:EQUIP_FILTER_ID,
+            placeholder."$$LOCATION_FILTER_ID$$"=>:LOC_FILTER_ID,
+            placeholder."$$ATTRIBUTE_GROUP_ID$$"=>:ATTRIBUTE_GROUP_ID,
+            placeholder."$$ATTRIBUTE_NODE_LIST$$"=>:ATTRIBUTE_NODE_LIST,
+            placeholder."$$LOCATION$$"=>:LOCATION,
+            placeholder."$$RESOURCE_TYPE$$"=>:RESOURCE_TYPE,
+            placeholder."$$LEASE_CONTRACT_REFERENCE$$"=>:LEASE_CONTRACT_REFERENCE,
+            placeholder."$$RES_ID$$"=>:RES_ID,
+            placeholder."$$IN_MOVEMENT_STATUS$$"=>:IN_MOVEMENT_STATUS,
+            placeholder."$$IN_RESOURCE_CATEGORY$$"=>:RESOURCE_CATEGORY,
+            placeholder."$$IN_RESOURCE_STATUS$$"=>:IN_RESOURCE_STATUS
+    );
+
+    SELECT COUNT(*) INTO EQUIPMENT_STATUS_LIST_CNT FROM :EQUIPMENT_STATUS_LIST_INPUT;
+    SELECT COUNT(*) INTO OWNERSHIP_LIST_CNT FROM :OWNERSHIP_LIST_INPUT;
+    SELECT COUNT(*) INTO BLOCK_STATUS_LIST_CNT FROM :BLOCK_STATUS_LIST_INPUT;
+    SELECT COUNT(*) INTO FOOD_GRADE_LIST_CNT FROM :FOOD_GRADE_LIST_INPUT;
+    SELECT COUNT(*) INTO RESOURCE_CONDITION_LIST_CNT FROM :RESOURCE_CONDITION_LIST_INPUT;
+    SELECT COUNT(*) INTO MOVEMENT_STATUS_LIST_CNT FROM :MOVEMENT_STATUS_LIST_INPUT;
+
+    IF :EQUIPMENT_STATUS_LIST_CNT = 0
+        THEN EQUIPMENT_STATUS_LIST_INPUT = SELECT DISTINCT RESOURCE_STATUS AS STR
+                                           FROM :res;
+    END IF;
+    IF :OWNERSHIP_LIST_CNT = 0
+        THEN OWNERSHIP_LIST_INPUT = SELECT DISTINCT OWNERSHIP AS STR
+                                FROM :res;
+    END IF;
+    IF :BLOCK_STATUS_LIST_CNT = 0
+        THEN BLOCK_STATUS_LIST_INPUT = SELECT DISTINCT BLOCK_STATUS AS STR
+                                       FROM :res;
+    END IF;
+    IF :FOOD_GRADE_LIST_CNT = 0
+        THEN FOOD_GRADE_LIST_INPUT = SELECT DISTINCT FOOD_GRADE AS STR
+                                     FROM :res;
+    END IF;
+    IF :RESOURCE_CONDITION_LIST_CNT = 0
+        THEN RESOURCE_CONDITION_LIST_INPUT = SELECT DISTINCT RESOURCE_CONDITION AS STR
+                                             FROM :res;
+    END IF;
+    IF :MOVEMENT_STATUS_LIST_CNT = 0
+        THEN MOVEMENT_STATUS_LIST_INPUT = SELECT DISTINCT MOVEMENT_STATUS_CODE AS STR
+                                             FROM :res;
+    END IF;
+    
+    IF RES_ID <> '' AND RES_ID IS NOT NULL THEN
+    	TMP_RES = 
+				SELECT MASTER_TBL.RESOURCE_ID,
+					   MASTER_TBL.RESOURCE_STATUS,
+                       MASTER_TBL.OWNERSHIP,
+                       MASTER_TBL.BLOCK_STATUS,
+                       MASTER_TBL.FOOD_GRADE,
+                       MASTER_TBL.RESOURCE_CONDITION,
+                       MASTER_TBL.MOVEMENT_STATUS_CODE,
+                       MASTER_TBL.MOVEMENT_STATUS,
+                       MASTER_TBL.LAST_LOCATION,
+                       MASTER_TBL.LEASING_ID,
+                       MASTER_TBL.RESOURCE_NAME,
+                       MASTER_TBL.RESOURCE_TYPE_DESC,
+                       MASTER_TBL.RESOURCE_TYPE_CODE,
+                       MASTER_TBL.CURRENT_LOCATION
+                FROM :res MASTER_TBL
+		        ;
+    ELSE
+    	TMP_RES = 
+				SELECT MASTER_TBL.RESOURCE_ID,
+					   MASTER_TBL.RESOURCE_STATUS,
+                       MASTER_TBL.OWNERSHIP,
+                       MASTER_TBL.BLOCK_STATUS,
+                       MASTER_TBL.FOOD_GRADE,
+                       MASTER_TBL.RESOURCE_CONDITION,
+                       MASTER_TBL.MOVEMENT_STATUS_CODE,
+                       MASTER_TBL.MOVEMENT_STATUS,
+                       MASTER_TBL.LAST_LOCATION,
+                       MASTER_TBL.LEASING_ID,
+                       MASTER_TBL.RESOURCE_NAME,
+                       MASTER_TBL.RESOURCE_TYPE_DESC,
+                       MASTER_TBL.RESOURCE_TYPE_CODE,
+                       MASTER_TBL.CURRENT_LOCATION
+                FROM :res MASTER_TBL
+			    INNER JOIN :EQUIPMENT_STATUS_LIST_INPUT AS EQUI_STATUS_TBL
+			            ON IFNULL(MASTER_TBL.RESOURCE_STATUS, '') = IFNULL(EQUI_STATUS_TBL.STR, '')
+			    INNER JOIN :OWNERSHIP_LIST_INPUT AS OWNERSHIP_TBL
+			            ON IFNULL(MASTER_TBL.OWNERSHIP, '') = IFNULL(OWNERSHIP_TBL.STR, '')
+			    INNER JOIN :BLOCK_STATUS_LIST_INPUT AS BLCK_STATUS_TBL
+			            ON IFNULL(MASTER_TBL.BLOCK_STATUS, '') = IFNULL(BLCK_STATUS_TBL.STR, '')
+			    INNER JOIN :FOOD_GRADE_LIST_INPUT AS FOOD_GRD_TBL
+			            ON IFNULL(MASTER_TBL.FOOD_GRADE, '') = IFNULL(FOOD_GRD_TBL.STR, '')
+			    INNER JOIN :RESOURCE_CONDITION_LIST_INPUT AS RSC_COND_TBL
+			            ON IFNULL(MASTER_TBL.RESOURCE_CONDITION, '') = IFNULL(RSC_COND_TBL.STR, '')
+			    INNER JOIN :MOVEMENT_STATUS_LIST_INPUT AS MOVEMENT_STATUS_TBL
+			            ON IFNULL(MASTER_TBL.MOVEMENT_STATUS_CODE, '') = IFNULL(MOVEMENT_STATUS_TBL.STR, '')
+		        ;
+	END IF;
+	
+    IF FUZZYSEARCH_TEXT <> '' AND FUZZYSEARCH_TEXT IS NOT NULL THEN
+    	EQUIP_INFO_DATA = 
+    					SELECT MASTER_TBL.RESOURCE_STATUS,
+                               MASTER_TBL.OWNERSHIP,
+                               MASTER_TBL.BLOCK_STATUS,
+                               MASTER_TBL.FOOD_GRADE,
+                               MASTER_TBL.RESOURCE_CONDITION,
+                               MASTER_TBL.MOVEMENT_STATUS_CODE,
+                               MASTER_TBL.MOVEMENT_STATUS
+                        FROM :TMP_RES MASTER_TBL
+				        WHERE LOWER(MASTER_TBL.RESOURCE_NAME) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.RESOURCE_TYPE_DESC) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.OWNERSHIP) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.MOVEMENT_STATUS) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.MOVEMENT_STATUS_CODE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.RESOURCE_CONDITION) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.FOOD_GRADE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.LEASING_ID) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.RESOURCE_TYPE_CODE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.RESOURCE_STATUS) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.CURRENT_LOCATION) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%';
+    ELSE
+    	EQUIP_INFO_DATA = 
+    					SELECT MASTER_TBL.RESOURCE_STATUS,
+                               MASTER_TBL.OWNERSHIP,
+                               MASTER_TBL.BLOCK_STATUS,
+                               MASTER_TBL.FOOD_GRADE,
+                               MASTER_TBL.RESOURCE_CONDITION,
+                               MASTER_TBL.MOVEMENT_STATUS_CODE,
+                               MASTER_TBL.MOVEMENT_STATUS
+                        FROM :TMP_RES MASTER_TBL;
+    END IF;
+    
+    RESOURCE_STATUS_OUTPUT = SELECT DISTINCT RESOURCE_STATUS AS KEY, RESOURCE_STATUS AS TEXT 
+                        FROM :EQUIP_INFO_DATA
+                        ORDER BY RESOURCE_STATUS;
+                        
+    OWNERSHIP_OUTPUT = SELECT DISTINCT OWNERSHIP AS KEY, OWNERSHIP AS TEXT 
+                       FROM :EQUIP_INFO_DATA
+                       ORDER BY OWNERSHIP;
+                       
+    BLOCKING_STATUS_OUTPUT = SELECT DISTINCT BLOCK_STATUS AS KEY, BLOCK_STATUS AS TEXT 
+                       FROM :EQUIP_INFO_DATA
+                       ORDER BY BLOCK_STATUS;
+                       
+    FOOD_GRADE_OUTPUT = SELECT DISTINCT FOOD_GRADE AS KEY, FOOD_GRADE AS TEXT 
+                       FROM :EQUIP_INFO_DATA
+                       ORDER BY FOOD_GRADE;
+                       
+    RESOURCE_CONDITION_OUTPUT = SELECT DISTINCT RESOURCE_CONDITION AS KEY, RESOURCE_CONDITION AS TEXT 
+                       FROM :EQUIP_INFO_DATA
+                       ORDER BY RESOURCE_CONDITION;
+                       
+    MOVEMENT_STATUS_OUTPUT = SELECT DISTINCT MOVEMENT_STATUS_CODE AS KEY, MOVEMENT_STATUS_CODE AS TEXT 
+                       FROM :EQUIP_INFO_DATA
+                       ORDER BY MOVEMENT_STATUS_CODE;
+
+END;

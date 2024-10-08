@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_cost_model_change_history" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_anna_privilege_check"/>
+  <localVariables>
+    <variable id="COST_MODEL_ID" parameter="true">
+      <descriptions defaultDescription="COST_MODEL_ID"/>
+      <variableProperties datatype="BIGINT" defaultValue="" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="TIMESTAMP" id="ACTION_TIME"/>
+        <viewAttribute datatype="VARCHAR" id="USERNAME" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="ACTION" length="200"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#COST_MODEL_ID</localVariable>
+      <definition> 
+  
+ BEGIN
+ 
+    VAR_OUT = SELECT T1.ID,T1.ACTION_TIME,T0.USERNAME,T5.DESC AS ACTION
+            FROM &quot;sap.tm.trp.db.costmodel::t_cost_model_history&quot; T1
+            INNER JOIN &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot; T0 ON (T1.USER_ID = T0.ID)
+            INNER JOIN
+           (
+		        SELECT T2.CODE,IFNULL(A.DESC,T2.DESC) AS DESC 
+	            FROM &quot;sap.tm.trp.db.costmodel::t_cost_action&quot; T2
+	            LEFT OUTER JOIN 
+	              (
+		            SELECT T3.ACTION_CODE,T3.DESC 
+		            FROM  &quot;sap.tm.trp.db.costmodel::t_cost_action_t&quot; T3
+		            INNER JOIN &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot; T4 ON (T3.LANG_CODE = T4.SPRAS)
+	              )A ON (T2.CODE = A.ACTION_CODE)
+              
+            )T5 ON (T1.ACTION_CODE = T5.CODE)
+            WHERE T1.COST_MODEL_ID =:COST_MODEL_ID;
+    
+END 
+</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="FROM_LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="ACTION_TIME" order="2">
+        <descriptions defaultDescription="CARRIER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ACTION_TIME"/>
+      </attribute>
+      <attribute id="USERNAME" order="3">
+        <descriptions defaultDescription="TO_LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="USERNAME"/>
+      </attribute>
+      <attribute id="ACTION" order="4">
+        <descriptions defaultDescription="CARRIER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ACTION"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

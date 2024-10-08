@@ -1,0 +1,15 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE; // ROWSTORE is an alternative value
+
+
+table.columns =
+ [
+ 	{name = "ID";  sqlType = BIGINT;  comment="Running ID";},
+ 	{name = "ADAPTER_CODE";  sqlType = NVARCHAR; length = 250; comment = "Adapter code";},
+    {name = "ADAPTER_NAME";  sqlType = NVARCHAR; length = 250; comment = "Adapter name";},
+    {name = "SQL_VIEW";  sqlType = CLOB; comment = "SQL";},
+    {name = "DB_NAME";  sqlType = TINYINT; comment = "Indicates whether the database name is required in the adapter configuration";}
+
+];
+
+table.primaryKey.pkcolumns = ["ID"];

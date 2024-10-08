@@ -1,0 +1,178 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.booking::p_containers_facet_filter" ( 
+    IN TOR_ID VARCHAR(50),
+    IN FUZZYSEARCH_TEXT VARCHAR(500),        
+    IN EQUIPMENT_STATUS_LIST_INPUT "sap.tm.trp.db.equipment::tt_str_list",
+    IN OWNER_LIST_INPUT "sap.tm.trp.db.equipment::tt_str_list",    
+    IN FOOD_GRADE_LIST_INPUT "sap.tm.trp.db.equipment::tt_str_list",
+    IN RESOURCE_CONDITION_LIST_INPUT "sap.tm.trp.db.equipment::tt_str_list",    
+    OUT RESOURCE_STATUS_OUTPUT "sap.tm.trp.db.booking::tt_booking_facet_filter_string",
+    OUT OWNERSHIP_OUTPUT "sap.tm.trp.db.booking::tt_booking_facet_filter_string",    
+    OUT FOOD_GRADE_OUTPUT "sap.tm.trp.db.booking::tt_booking_facet_filter_string",
+    OUT RESOURCE_CONDITION_OUTPUT "sap.tm.trp.db.booking::tt_booking_facet_filter_string"    
+) 
+
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP"
+READS SQL DATA 
+AS
+    EQUIPMENT_STATUS_LIST_CNT INTEGER;
+    OWNER_LIST_CNT INTEGER;   
+    FOOD_GRADE_LIST_CNT INTEGER;
+    RESOURCE_CONDITION_LIST_CNT INTEGER;
+    
+BEGIN
+    res = SELECT RESOURCE,
+                 RESOURCE_TYPE_DESC,
+                 LAST_LOCATION,
+                 RESOURCE_STATUS_CODE,
+                 RESOURCE_STATUS,
+                 MOVEMENT_STATUS,
+                 MOVEMENT_STATUS_DESCRIPTION,
+                 OWNERSHIP_CODE,
+                 OWNERSHIP,
+                 LEASING_ID,
+                 FOOD_GRADE_CODE,
+                 FOOD_GRADE,
+                 RESOURCE_CONDITION,
+                 SPECIAL_INSTRUCTION_CODE,
+                 SPECIAL_INSTRUCTION_NAME
+          FROM "sap.tm.trp.db.booking::cv_assigned_items" (placeholder."$$TORID$$"=>:TOR_ID);                 
+    
+    SELECT COUNT(*) INTO EQUIPMENT_STATUS_LIST_CNT FROM :EQUIPMENT_STATUS_LIST_INPUT;
+    SELECT COUNT(*) INTO OWNER_LIST_CNT FROM :OWNER_LIST_INPUT;    
+    SELECT COUNT(*) INTO FOOD_GRADE_LIST_CNT FROM :FOOD_GRADE_LIST_INPUT;
+    SELECT COUNT(*) INTO RESOURCE_CONDITION_LIST_CNT FROM :RESOURCE_CONDITION_LIST_INPUT;
+
+    IF :EQUIPMENT_STATUS_LIST_CNT = 0
+        THEN EQUIPMENT_STATUS_LIST_INPUT = SELECT DISTINCT RESOURCE_STATUS_CODE AS STR
+                                           FROM :res;
+    END IF;
+    
+    IF :OWNER_LIST_CNT = 0
+        THEN OWNER_LIST_INPUT = SELECT DISTINCT OWNERSHIP_CODE AS STR
+                                FROM :res;
+    END IF;
+
+    IF :FOOD_GRADE_LIST_CNT = 0
+        THEN FOOD_GRADE_LIST_INPUT = SELECT DISTINCT FOOD_GRADE AS STR
+                                     FROM :res;
+    END IF;
+    
+    IF :RESOURCE_CONDITION_LIST_CNT = 0
+        THEN RESOURCE_CONDITION_LIST_INPUT = SELECT DISTINCT RESOURCE_CONDITION AS STR
+                                             FROM :res;
+    END IF;
+    
+    /*EQUIP_INFO_DATA = SELECT DISTINCT MASTER_TBL.RESOURCE_STATUS_CODE,
+                             MASTER_TBL.RESOURCE_STATUS,
+                             MASTER_TBL.OWNERSHIP_CODE,
+                             MASTER_TBL.OWNERSHIP AS OWNER,
+                             MASTER_TBL.FOOD_GRADE_CODE,                               
+                             MASTER_TBL.FOOD_GRADE,
+                             MASTER_TBL.RESOURCE_CONDITION,
+                             MASTER_TBL.SPECIAL_INSTRUCTION_CODE,
+                             MASTER_TBL.SPECIAL_INSTRUCTION_NAME
+                      FROM :res MASTER_TBL
+                      INNER JOIN :EQUIPMENT_STATUS_LIST_INPUT AS EQUI_STATUS_TBL
+                            ON MASTER_TBL.RESOURCE_STATUS_CODE = EQUI_STATUS_TBL.STR 
+                            OR (MASTER_TBL.RESOURCE_STATUS_CODE IS NULL AND EQUI_STATUS_TBL.STR IS NULL)
+                      INNER JOIN :OWNER_LIST_INPUT AS OWNER_TBL
+                            ON MASTER_TBL.OWNERSHIP_CODE = OWNER_TBL.STR 
+                            OR (MASTER_TBL.OWNERSHIP_CODE IS NULL AND OWNER_TBL.STR IS NULL)
+                      INNER JOIN :FOOD_GRADE_LIST_INPUT AS FOOD_GRD_TBL
+                            ON MASTER_TBL.FOOD_GRADE = FOOD_GRD_TBL.STR OR (MASTER_TBL.FOOD_GRADE IS NULL AND FOOD_GRD_TBL.STR IS NULL)
+                      INNER JOIN :RESOURCE_CONDITION_LIST_INPUT AS RSC_COND_TBL
+                            ON MASTER_TBL.RESOURCE_CONDITION = RSC_COND_TBL.STR OR (MASTER_TBL.RESOURCE_CONDITION IS NULL AND RSC_COND_TBL.STR IS NULL)
+                      WHERE FUZZYSEARCH_TEXT = '' OR FUZZYSEARCH_TEXT IS NULL
+                         OR LOWER(MASTER_TBL.RESOURCE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.RESOURCE_TYPE_DESC) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'  
+                         OR LOWER(MASTER_TBL.LAST_LOCATION) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.OWNERSHIP) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.LEASING_ID) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.MOVEMENT_STATUS) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.MOVEMENT_STATUS_DESCRIPTION) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.RESOURCE_STATUS) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.FOOD_GRADE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.RESOURCE_CONDITION) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.SPECIAL_INSTRUCTION_NAME) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%';
+*/
+--Refactored code start
+    RS1 =   SELECT DISTINCT MASTER_TBL.RESOURCE_STATUS_CODE,
+                             MASTER_TBL.RESOURCE_STATUS,
+                             MASTER_TBL.OWNERSHIP_CODE,
+                             MASTER_TBL.OWNERSHIP AS OWNER,
+                             MASTER_TBL.FOOD_GRADE_CODE,                               
+                             MASTER_TBL.FOOD_GRADE,
+                             MASTER_TBL.RESOURCE_CONDITION,
+                             MASTER_TBL.SPECIAL_INSTRUCTION_CODE,
+                             MASTER_TBL.SPECIAL_INSTRUCTION_NAME
+                      FROM :res MASTER_TBL
+                      INNER JOIN :EQUIPMENT_STATUS_LIST_INPUT AS EQUI_STATUS_TBL
+                            ON MASTER_TBL.RESOURCE_STATUS_CODE = EQUI_STATUS_TBL.STR  
+                      INNER JOIN :OWNER_LIST_INPUT AS OWNER_TBL
+                            ON MASTER_TBL.OWNERSHIP_CODE = OWNER_TBL.STR 
+                      INNER JOIN :FOOD_GRADE_LIST_INPUT AS FOOD_GRD_TBL
+                            ON MASTER_TBL.FOOD_GRADE = FOOD_GRD_TBL.STR 
+                      INNER JOIN :RESOURCE_CONDITION_LIST_INPUT AS RSC_COND_TBL
+                            ON MASTER_TBL.RESOURCE_CONDITION = RSC_COND_TBL.STR
+                      WHERE FUZZYSEARCH_TEXT = '' OR FUZZYSEARCH_TEXT IS NULL
+                         OR LOWER(MASTER_TBL.RESOURCE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.RESOURCE_TYPE_DESC) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'  
+                         OR LOWER(MASTER_TBL.LAST_LOCATION) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.OWNERSHIP) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.LEASING_ID) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.MOVEMENT_STATUS) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.MOVEMENT_STATUS_DESCRIPTION) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.RESOURCE_STATUS) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.FOOD_GRADE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.RESOURCE_CONDITION) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.SPECIAL_INSTRUCTION_NAME) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%';        
+                            
+    RS2 =   SELECT DISTINCT MASTER_TBL.RESOURCE_STATUS_CODE,
+                             MASTER_TBL.RESOURCE_STATUS,
+                             MASTER_TBL.OWNERSHIP_CODE,
+                             MASTER_TBL.OWNERSHIP AS OWNER,
+                             MASTER_TBL.FOOD_GRADE_CODE,                               
+                             MASTER_TBL.FOOD_GRADE,
+                             MASTER_TBL.RESOURCE_CONDITION,
+                             MASTER_TBL.SPECIAL_INSTRUCTION_CODE,
+                             MASTER_TBL.SPECIAL_INSTRUCTION_NAME
+                      FROM :res MASTER_TBL
+                      INNER JOIN :EQUIPMENT_STATUS_LIST_INPUT AS EQUI_STATUS_TBL
+                            ON (MASTER_TBL.RESOURCE_STATUS_CODE IS NULL AND EQUI_STATUS_TBL.STR IS NULL)
+                      INNER JOIN :OWNER_LIST_INPUT AS OWNER_TBL
+                            ON (MASTER_TBL.OWNERSHIP_CODE IS NULL AND OWNER_TBL.STR IS NULL)
+                      INNER JOIN :FOOD_GRADE_LIST_INPUT AS FOOD_GRD_TBL
+                            ON (MASTER_TBL.FOOD_GRADE IS NULL AND FOOD_GRD_TBL.STR IS NULL)
+                      INNER JOIN :RESOURCE_CONDITION_LIST_INPUT AS RSC_COND_TBL
+                            ON (MASTER_TBL.RESOURCE_CONDITION IS NULL AND RSC_COND_TBL.STR IS NULL)
+                      WHERE FUZZYSEARCH_TEXT = '' OR FUZZYSEARCH_TEXT IS NULL
+                         OR LOWER(MASTER_TBL.RESOURCE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.RESOURCE_TYPE_DESC) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'  
+                         OR LOWER(MASTER_TBL.LAST_LOCATION) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.OWNERSHIP) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.LEASING_ID) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.MOVEMENT_STATUS) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.MOVEMENT_STATUS_DESCRIPTION) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.RESOURCE_STATUS) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.FOOD_GRADE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.RESOURCE_CONDITION) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                         OR LOWER(MASTER_TBL.SPECIAL_INSTRUCTION_NAME) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%';        
+                                      
+
+ EQUIP_INFO_DATA =  SELECT DISTINCT  * FROM :RS1
+                  UNION ALL 
+                    SELECT DISTINCT  * FROM :RS2;
+--Refactored code end
+    RESOURCE_STATUS_OUTPUT = SELECT DISTINCT IFNULL (RESOURCE_STATUS_CODE,'') AS KEY, IFNULL (RESOURCE_STATUS,'') AS TEXT 
+                             FROM :EQUIP_INFO_DATA ORDER BY KEY;
+    OWNERSHIP_OUTPUT = SELECT DISTINCT IFNULL (OWNERSHIP_CODE,'') AS KEY, IFNULL (OWNER,'') AS TEXT 
+                       FROM :EQUIP_INFO_DATA ORDER BY KEY;
+
+    FOOD_GRADE_OUTPUT = SELECT DISTINCT FOOD_GRADE AS KEY, FOOD_GRADE AS TEXT 
+                       FROM :EQUIP_INFO_DATA ORDER BY KEY;
+    RESOURCE_CONDITION_OUTPUT = SELECT DISTINCT RESOURCE_CONDITION AS KEY, RESOURCE_CONDITION AS TEXT 
+                       FROM :EQUIP_INFO_DATA ORDER BY RESOURCE_CONDITION;
+
+END;

@@ -1,0 +1,341 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_ext_call_solver"    
+( IN SIMULATION_ID BIGINT,      
+  IN SCENARIO_ID  BIGINT,
+  IN SD_PLAN_ID BIGINT,  
+  OUT out_route_res "sap.tm.trp.db.planningcockpit.reposition::tt_route_res",
+  OUT MESSAGE VARCHAR(200),
+  OUT SOLVER_RT_CODE VARCHAR(30)
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"   
+	AS
+BEGIN 
+    DECLARE SOLVER_USAGE VARCHAR(30) := 'OPTIMIZATION';
+    DECLARE BASE_EQUIP_CONST VARCHAR(30) := 'BASE_RESOURCE_TYPE';    
+    DECLARE NETWORK_SETTING_GRP BIGINT; 
+    DECLARE BASE_RESOURCE_TYPE VARCHAR(10);
+    DECLARE SOLVER_EXE_TIME INTEGER;
+    DECLARE NETWORK_MODEL_ID BIGINT;
+	DECLARE OUT_OBJ DOUBLE;  
+    DECLARE DATASET_CODE VARCHAR(50);
+    DECLARE UOM  VARCHAR(50);  --:='PCS';
+    DECLARE V_RESOURCE_CATEGORY NVARCHAR(20);
+    DECLARE TMP_EXECUTION_ID BIGINT;
+    DECLARE COUNT_SAFETY_STOCK INTEGER;
+    DECLARE LOCATION_TYPE INTEGER := 1;
+    DECLARE LOCATION_GROUP_TYPE INTEGER := 2;
+    DECLARE REGION_TYPE INTEGER :=5;
+    DECLARE REGION_GROUP_TYPE INTEGER :=6;
+    DECLARE filter_type INTEGER;
+    DECLARE LV_GRP_ID INTEGER;
+    
+    --to get UOM  
+    select distinct case when b.resource_category_type = 'CN' then 'TEU' else 'PCS' end,
+            b.code into UOM, V_RESOURCE_CATEGORY
+    from "sap.tm.trp.db.planningcockpit::t_simulation_plan"  a
+    inner join "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings"  b
+    on a.resource_category = b.code
+    where a.ID = :SIMULATION_ID;
+    
+    RESOURCE_TYPES = SELECT DISTINCT T1.RESOURCE_TYPE_CODE, T1.RESOURCE_TYPE_DESC, T2.TEU_COUNT
+                FROM "sap.tm.trp.db.semantic.resource::v_resource_type_with_category" T1
+                INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_type" T2
+                ON (T1.RESOURCE_TYPE_CODE = T2.RESOURCE_TYPE_CODE)
+                WHERE T1.RESOURCE_CATEGORY = :V_RESOURCE_CATEGORY
+                AND T2.EQUI_TYPE IN (SELECT RESOURCE_GROUP from "sap.tm.trp.db.systemmanagement.customization::v_resource_category_mapping"
+                WHERE CODE = :V_RESOURCE_CATEGORY);  --this change is to validate resource group are part of resorce catagory
+    
+    -- Get dataset code
+    CALL "sap.tm.trp.db.planningcockpit::p_get_dataset_code_by_simulation_scenario_id"(
+          :SIMULATION_ID, :SCENARIO_ID, DATASET_CODE, MESSAGE); 
+    
+    IF :MESSAGE <> 'MSG_SUCCESS_STATUS' THEN 
+       RETURN;
+    END IF;
+   
+    -- get sd values for the solver
+    CALL "sap.tm.trp.db.planningcockpit::p_prepare_sd_for_solver" (
+          :SIMULATION_ID, :SCENARIO_ID, :SD_PLAN_ID, supply_demand_res);
+    
+    -- get network setting group options 
+    SELECT IFNULL(MAX(NETWORK_SETTING_GROUP_ID),-1) INTO NETWORK_SETTING_GRP
+    FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" 
+    WHERE ID = :SIMULATION_ID;
+    
+    IF :NETWORK_SETTING_GRP = -1 THEN 
+       MESSAGE:='MSG_ERROR_NODATA';
+       RETURN;
+    END IF;
+     
+    CALL "sap.tm.trp.db.planningcockpit::p_get_setting_group_parameter_value_for_usage"
+      (:NETWORK_SETTING_GRP,:SOLVER_USAGE,opts);
+      
+    solver_opts = SELECT NAME, VALUE FROM :opts;  
+    SELECT IFNULL(MAX(VALUE),'RC_20HC') INTO BASE_RESOURCE_TYPE 
+    FROM :opts WHERE 
+    NAME = :BASE_EQUIP_CONST;
+    
+    IF UPPER(:UOM) = 'TEU' then    
+
+    -- get equip type and teu mapping 
+    equiptype_teu =
+         SELECT T1.RESOURCE_TYPE_CODE AS CONTAINER_TYPE, TEU_COUNT AS TEU 
+         FROM :RESOURCE_TYPES T1
+         INNER JOIN (SELECT DISTINCT CONTAINER_TYPE FROM :supply_demand_res) T2 
+         ON (T1.RESOURCE_TYPE_CODE = T2.CONTAINER_TYPE);        
+    
+    equiptype_costeff = 
+         SELECT T1.CONTAINER_TYPE, 
+                CASE WHEN (T2.BASE_TYPE_TEU = 0 OR T2.BASE_TYPE_TEU IS NULL) THEN 0
+                     ELSE T1.TEU / T2.BASE_TYPE_TEU 
+                END AS COST_COEFFICIENT
+         FROM :equiptype_teu T1
+         FULL JOIN (SELECT TEU AS BASE_TYPE_TEU      -- changes made to include resouce type other than base resource.
+                     FROM :equiptype_teu 
+                     WHERE CONTAINER_TYPE = :BASE_RESOURCE_TYPE) T2 on 1=1;   
+         
+    END IF;   
+    
+    IF UPPER(:UOM) = 'PCS' then    
+
+    -- get equip type and teu mapping 
+    equiptype_teu =
+         SELECT T1.RESOURCE_TYPE_CODE AS CONTAINER_TYPE, 1 AS TEU 
+         FROM :RESOURCE_TYPES T1
+         INNER JOIN (SELECT DISTINCT CONTAINER_TYPE FROM :supply_demand_res) T2 
+         ON (T1.RESOURCE_TYPE_CODE = T2.CONTAINER_TYPE);        
+    
+    equiptype_costeff = 
+         SELECT T1.CONTAINER_TYPE, 1 AS COST_COEFFICIENT 
+         FROM :equiptype_teu T1;   
+         
+    END IF;
+    
+    --get execution id 
+    SELECT IFNULL(MAX(EXCUTE_ID),0) INTO TMP_EXECUTION_ID
+    FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan"
+    WHERE ID = :SIMULATION_ID;
+  
+    -- Get location filter type
+    SELECT IFNULL(MAX(LOCATION_FILTER_TYPE),0) INTO filter_type
+    FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"
+    WHERE PLAN_EXECUTION_ID = :TMP_EXECUTION_ID;
+
+    
+    location_safety_stock = SELECT T1.LOCATION, 'OVERALL' AS CONTAINER_TYPE,
+                                   CASE WHEN T3.MIN_SAFETY IS NULL THEN 0 ELSE T3.MIN_SAFETY END AS MIN_SAFETY,
+                                   CASE WHEN T3.MAX_SAFETY IS NULL THEN 99999 ELSE T3.MAX_SAFETY END AS MAX_SAFETY,
+                                   FLOOR (((CASE WHEN T3.MIN_SAFETY IS NULL THEN 0 ELSE T3.MIN_SAFETY END) + 
+                                    (CASE WHEN T3.MAX_SAFETY IS NULL THEN 99999 ELSE T3.MAX_SAFETY END))/2) AS TARGET_STOCK
+                                    --0 AS TARGET_STOCK
+                            FROM (SELECT DISTINCT LOCATION FROM :supply_demand_res) T1
+                            INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_role_check_location_ui" T2
+                            ON (T2.NAME = T1.LOCATION)
+                            LEFT OUTER JOIN "sap.tm.trp.db.stock::t_stock_config" T3
+                            ON (T2.ID = T3.LOCATION_ID AND T3.RESOURCE_CATEGORY = :V_RESOURCE_CATEGORY
+                                AND T3.LOCATION_TYPE = :filter_type
+                                AND (T3.EQUIP_CODE = '0' AND T3.EQUIP_CODE_TYPE = 0))
+                            --AND NOT (T3.MIN_SAFETY IS NULL AND T3.MAX_SAFETY IS NULL)
+                            UNION ALL
+                            SELECT T1.LOCATION, T1.CONTAINER_TYPE,
+                                   CASE WHEN T3.MIN_SAFETY IS NULL THEN 0 ELSE T3.MIN_SAFETY END AS MIN_SAFETY,
+                                   CASE WHEN T3.MAX_SAFETY IS NULL THEN 99999 ELSE T3.MAX_SAFETY END AS MAX_SAFETY,
+                                   FLOOR (((CASE WHEN T3.MIN_SAFETY IS NULL THEN 0 ELSE T3.MIN_SAFETY END) + 
+                                    (CASE WHEN T3.MAX_SAFETY IS NULL THEN 99999 ELSE T3.MAX_SAFETY END))*T4.COST_COEFFICIENT/2) AS TARGET_STOCK
+                                   --0 AS TARGET_STOCK
+                            FROM (SELECT DISTINCT LOCATION, CONTAINER_TYPE FROM :supply_demand_res) T1
+                            INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_role_check_location_ui" T2
+                            ON (T2.NAME = T1.LOCATION)
+                            LEFT OUTER JOIN "sap.tm.trp.db.stock::t_stock_config" T3
+                            ON (T2.ID = T3.LOCATION_ID AND T1.CONTAINER_TYPE = T3.EQUIP_CODE
+                                AND T3.RESOURCE_CATEGORY = :V_RESOURCE_CATEGORY
+                                AND T3.LOCATION_TYPE = :filter_type
+                                AND (T3.EQUIP_CODE <> '0' AND T3.EQUIP_CODE_TYPE <> 0))
+                            LEFT OUTER JOIN :equiptype_costeff T4
+                            ON (T1.CONTAINER_TYPE = T4.CONTAINER_TYPE);
+                            --AND NOT (T3.MIN_SAFETY IS NULL AND T3.MAX_SAFETY IS NULL); 
+                      
+    in_safety_stock = SELECT DISTINCT LOCATION, CONTAINER_TYPE, TARGET_STOCK 
+                            FROM :location_safety_stock;
+    supply_demand_with_rank = SELECT ROW_NUMBER() OVER (PARTITION BY LOCATION,CONTAINER_TYPE ORDER BY START_TIME ASC) AS RANK,*
+                              FROM :supply_demand_res;
+                            
+    SD_with_safety_stock = SELECT T1.START_TIME, T1.END_TIME,T1.LOCATION,T1.CONTAINER_TYPE, T1.SUPPLY, 
+    					   IFNULL (T1.DEMAND,0) + IFNULL (T2.MIN_SAFETY,0) AS DEMAND 
+                           FROM :supply_demand_with_rank T1
+                           LEFT OUTER JOIN :location_safety_stock T2
+                           ON (T1.LOCATION = T2.LOCATION 
+                               AND T1.CONTAINER_TYPE = T2.CONTAINER_TYPE
+                               AND T1.RANK = 1
+                           );
+                           
+    SELECT COUNT(*) INTO COUNT_SAFETY_STOCK
+    FROM :in_safety_stock;
+    
+    in_storage_cost_time = SELECT '' AS LOCATION, '' AS CONTAINER_TYPE, 
+                                  0 AS THRESHOLD_FROM,0 AS THRESHOLD_TO, NULL AS COST FROM DUMMY;
+    in_penalty_cost = SELECT '' AS LOCATION, '' AS CONTAINER_TYPE, 0 AS PENALTY FROM DUMMY;
+    -- get system generated routes
+    CALL "sap.tm.trp.db.planningcockpit::p_get_networkid_by_simulation_scenario_id"
+    (:SIMULATION_ID, :SCENARIO_ID, NETWORK_MODEL_ID);       	                            
+   
+    CALL "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_query_route"
+    (:NETWORK_MODEL_ID, '', t_route, t_route_detail);       
+	
+    -- use route schedule as activity start time and end time	
+	route_head = SELECT ID AS ROUTE_ID, FROM_LOCATION, TO_LOCATION,
+                 DEPARTURE_TIME AS FROM_TIME, ARRIVAL_TIME AS TO_TIME           
+                 FROM :t_route
+                 WHERE DEPARTURE_TIME > CURRENT_UTCTIMESTAMP;
+				 
+    route_detail = SELECT T1.ROUTE_ID, T2.LOCATION, T2.SEQUENCE, T2.MTR, T2.ARRIVAL_TIME, 
+                   T2.DEPARTURE_TIME, SECONDS_BETWEEN(T2.ARRIVAL_TIME, T2.DEPARTURE_TIME) AS HANDLING_TIME,
+                   T2.STORAGE_COST, T2.HANDLING_COST,T2.TRANSPORT_COST, T2.HANDLING_TYPE,  
+    	           T2.TRIP_ID, T2.BASIC_PATH_ID AS PATH_ID, T2.PRE_TRIP_SEQUENCE, T2.NEXT_TRIP_SEQUENCE 
+                   FROM :route_head T1
+                   INNER JOIN "sap.tm.trp.routing.db.path::t_route_sequence" T2 ON (T2.ROUTE_ID = T1.ROUTE_ID);
+   
+                       
+    -- get route group capacity
+    route_segment = SELECT * FROM 
+                    (
+                      SELECT ROUTE_ID, SEQUENCE, TRIP_ID, PATH_ID,
+                      LAG(NEXT_TRIP_SEQUENCE) OVER (PARTITION BY ROUTE_ID ORDER BY SEQUENCE) AS FROM_SEQUENCE, 
+                      PRE_TRIP_SEQUENCE AS TO_SEQUENCE
+                      FROM :route_detail
+                    ) 
+                    WHERE TRIP_ID IS NOT NULL AND FROM_SEQUENCE IS NOT NULL;
+   
+    trip_segment = SELECT TRIP_ID, PATH_ID, FROM_SEQUENCE, TO_SEQUENCE FROM :route_segment;
+    
+    CALL "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_query_capacity_by_trip_segment"
+    (:DATASET_CODE, :trip_segment, capacity); 
+
+    capacity = SELECT * FROM :capacity WHERE CAPACITY IS NOT NULL AND UPPER(capacity_uom)= :UOM;
+    
+    grp_capacity = 
+        SELECT T1.TRIP_ID, T1.FROM_SEQUENCE, T1.TO_SEQUENCE, ROW_NUMBER () OVER () AS GROUP_ID, MIN(T2.CAPACITY) AS CAPACITY
+        FROM (
+          SELECT TRIP_ID, LAG(TRIP_SEQUENCE) OVER (PARTITION BY TRIP_ID ORDER BY TRIP_SEQUENCE) AS FROM_SEQUENCE,
+          TRIP_SEQUENCE as TO_SEQUENCE FROM 
+           (
+              SELECT TRIP_ID, FROM_SEQUENCE AS TRIP_SEQUENCE FROM :route_segment
+              UNION
+              SELECT TRIP_ID, TO_SEQUENCE AS TRIP_SEQUENCE FROM :route_segment
+           ) 
+           WHERE TRIP_ID <> '' 
+        ) T1
+        INNER JOIN :capacity T2 
+             ON (T2.TRIP_ID = T1.TRIP_ID AND T2.FROM_SEQUENCE >= T1.FROM_SEQUENCE AND T2.TO_SEQUENCE <= T1.TO_SEQUENCE)
+        GROUP BY T1.TRIP_ID, T1.FROM_SEQUENCE, T1.TO_SEQUENCE;
+        
+
+    route_grp_cap = SELECT T1.ROUTE_ID,  T2.GROUP_ID, T2.CAPACITY
+                    FROM :route_segment T1
+                    INNER JOIN :grp_capacity T2
+                    ON (T1.TRIP_ID = T2.TRIP_ID AND T1.FROM_SEQUENCE <= T2.FROM_SEQUENCE AND T1.TO_SEQUENCE >= T2.TO_SEQUENCE);
+ 
+    -- merge similar shared capacity
+    agg_route_grp = SELECT STRING_AGG(ROUTE_ID,',' ORDER BY ROUTE_ID) AS ROUTE_ID_LIST, GROUP_ID, MIN(CAPACITY) AS CAPACITY
+                    FROM :route_grp_cap
+                    GROUP BY GROUP_ID;
+    t_group = SELECT MIN(GROUP_ID) AS GROUP_ID,MIN(CAPACITY) AS CAPACITY FROM :agg_route_grp GROUP BY ROUTE_ID_LIST;  
+	
+    filter_route_grp_cap = SELECT A.ROUTE_ID,B.GROUP_ID, B.CAPACITY
+						   FROM :route_grp_cap A
+						   INNER JOIN :t_group B
+						   ON A.GROUP_ID = B.GROUP_ID;
+            
+                                                     
+    route_cap = SELECT T1.ROUTE_ID, T3.CONTAINER_TYPE, T1.GROUP_ID, T1.CAPACITY, 'TC' AS TYPE
+                FROM :filter_route_grp_cap T1
+                CROSS JOIN (SELECT DISTINCT CONTAINER_TYPE FROM :equiptype_costeff) AS T3;   
+                           
+    input_route_head = 
+                  SELECT T1.ROUTE_ID, T3.CONTAINER_TYPE, T2.COST * T3.COST_COEFFICIENT AS TOTAL_COST, 
+                  T1.FROM_LOCATION, T1.TO_LOCATION, T1.FROM_TIME, T1.TO_TIME                 
+                  FROM 
+                  ( SELECT * FROM :route_head
+                    WHERE ROUTE_ID NOT IN (SELECT ROUTE_ID FROM :route_cap WHERE CAPACITY = 0)
+                  ) T1
+                  INNER JOIN 
+                  ( SELECT ROUTE_ID, SUM(STORAGE_COST + HANDLING_COST + TRANSPORT_COST) AS COST 
+                    FROM :route_detail GROUP BY ROUTE_ID
+                  ) T2 ON (T1.ROUTE_ID = T2.ROUTE_ID)
+                  CROSS JOIN (SELECT DISTINCT CONTAINER_TYPE, COST_COEFFICIENT FROM :equiptype_costeff) AS T3;
+                  
+    --begin handling capacity verfication
+    SELECT IFNULL (MAX (GROUP_ID),0) INTO LV_GRP_ID FROM :route_cap;
+    
+    --prepare the route detail for handing capacity calculation
+    LT_ROUTE_DETAL_4_HANDLING_CAP = SELECT ROUTE_ID,LOCATION,ARRIVAL_TIME,DEPARTURE_TIME,HANDLING_TIME,HANDLING_TYPE FROM :ROUTE_DETAIL;
+    
+    --calculate the handling capacity for each location with different activites operation time
+    CALL "sap.tm.trp.db.planningcockpit::p_rb_auto_opt_with_handing_capacity"(
+                                                            :SCENARIO_ID,
+                                                            :NETWORK_SETTING_GRP,
+                                                            :LV_GRP_ID,
+                                                            :LT_ROUTE_DETAL_4_HANDLING_CAP,
+                                                            LT_ROUTE_HANDLING_CAP
+                                                            );
+    --merge the hanlding capacity constraint to the route capacity constraints.
+    route_cap = SELECT * FROM :route_cap
+    		    UNION
+    		    SELECT * FROM :LT_ROUTE_HANDLING_CAP;                                                     
+    --end handling capacity verfication              
+                  
+    IF :COUNT_SAFETY_STOCK <= 0 THEN
+      -- call optimizer
+      CALL "sap.tm.trp.db.planningcockpit.reposition::p_balancing"(
+                                                    :solver_opts,
+                                                    :supply_demand_res,
+                                                    :input_route_head,
+                                                    :route_cap,
+                                                    :equiptype_teu,
+                                                    out_route_res,
+													OUT_OBJ,                                   
+                                                    SOLVER_EXE_TIME,
+                                                    SOLVER_RT_CODE);    
+   ELSE
+     -- call optimizer
+     CALL "sap.tm.trp.db.planningcockpit.reposition::p_balancing3"(
+                                                    :solver_opts,
+                                                    :SD_with_safety_stock,
+                                                    :input_route_head,
+                                                    :route_cap,
+                                                    :equiptype_teu,
+                                                    :in_storage_cost_time,
+                                                    :in_safety_stock,
+                                                    :in_penalty_cost,
+                                                    out_route_res,
+                                                    out_bottleneck,
+                                                    out_new_supply_demand,
+                                                    out_t_new_route_cap,
+													OUT_OBJ,                                   
+                                                    SOLVER_EXE_TIME,
+                                                    SOLVER_RT_CODE);
+   END IF ;
+/*
+      -- get optimizer output
+	  out_route_res = SELECT ROUTE_ID, 
+							 CONTAINER_TYPE, 
+							 QUANTITY, 
+							 TOTAL_COST, 
+							 FROM_LOCATION, 
+							 TO_LOCATION,           
+							 FROM_TIME,
+							 TO_TIME
+                      FROM :out_solver_res;
+ */         
+    IF :SOLVER_RT_CODE = 'OPTIMAL SOLUTION' OR :SOLVER_RT_CODE = 'FEASIBLE SOLUTION'  THEN
+       MESSAGE :='MSG_SUCCESS_STATUS';  
+    ELSEIF :SOLVER_RT_CODE = 'INFEASIBLE SOLUTION' OR :SOLVER_RT_CODE = 'INFEASIBLE PROBLEM' OR :SOLVER_RT_CODE = 'NO ROUTE AVAILABLE' THEN   
+       MESSAGE := 'MSG_BALANCE_INFEASIBLE';
+    ELSEIF :SOLVER_RT_CODE = 'ALREADY OPTIMAL'  THEN   
+       MESSAGE := 'MSG_ALREADY_OPTIMAL';        
+    ELSE
+       MESSAGE:='MSG_ERROR_SOLVER_FAILED';
+    END IF; 
+        
+END

@@ -1,0 +1,48 @@
+schema="SAP_TM_TRP";
+query = "SELECT DISTINCT A.ID,
+            A.NAME,
+            C.DESC AS DESCRIPTION,
+            A.RULESET_TYPE,
+            T3.DESC AS RULESET_TYPE_DESC,
+            A.JOB_PROCESS AS JOB_PROCESS_ID,
+            B.CODE AS JOB_PROCESS_CODE,
+            B.DESC AS JOB_PROCESS,
+            A.RESOURCE_CATEGORY,
+            CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                  WHEN (A.CREATED_BY <> 0 AND A.CREATED_BY IS NOT NULL) AND E.USERNAME IS NOT NULL THEN E.USERNAME
+			      WHEN A.CREATED_BY = 0 OR A.CREATED_BY IS NULL THEN ''
+			      ELSE '***' END AS CREATED_BY,
+            A.CREATED_ON,
+            CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                  WHEN (A.MODIFIED_BY <> 0 AND A.MODIFIED_BY IS NOT NULL) AND F.USERNAME IS NOT NULL THEN F.USERNAME
+			      WHEN A.MODIFIED_BY = 0 OR A.MODIFIED_BY IS NULL THEN ''
+			      ELSE '***' END AS MODIFIED_BY,
+            A.MODIFIED_ON
+        FROM \"sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group\" A
+       LEFT OUTER JOIN 
+       (SELECT T1.ID,T1.DESC
+        FROM \"sap.tm.trp.db.pickupreturn::t_rule_type_t\" T1
+        INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE_T
+        ON T1.SPRAS = LANGUAGE_T.SPRAS) T3
+       ON A.RULESET_TYPE = T3.ID
+        LEFT OUTER JOIN \"sap.tm.trp.db.pickupreturn.rulesetgroup::t_job_process\" B ON A.JOB_PROCESS = B.ID
+        LEFT OUTER JOIN  \"sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_t\" C ON A.ID = C.ID
+        LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS USER1 ON (A.CREATED_BY = USER1.ID)
+        LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS USER2 ON (A.MODIFIED_BY = USER2.ID)
+        LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\" E ON USER1.USERNAME = E.USERNAME
+        LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\" F ON USER2.USERNAME = F.USERNAME    
+        CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE
+        ";
+
+depends_on_table = [
+					"sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group",
+					"sap.tm.trp.db.pickupreturn::t_rule_type_t",
+                    "sap.tm.trp.db.pickupreturn.rulesetgroup::t_job_process",
+					"sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_t"
+                    ];
+depends_on_view = [
+					"sap.tm.trp.db.semantic.common::v_lang_code",
+					"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join",
+					"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users",
+                    "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege"
+                    ];      

@@ -1,0 +1,131 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_query_route_for_map_by_route_id"(
+    IN SIM_PLAN_ID BIGINT,
+    IN ROUTE_ID BIGINT,
+    OUT ROUTES "sap.tm.trp.db.planningcockpit::tt_routes_for_map",
+    OUT ROUTE_CONNECTION "sap.tm.trp.db.planningcockpit::tt_route_connection_for_map",
+    OUT POINTS "sap.tm.trp.db.planningcockpit::tt_points_for_map_with_transhipment",
+    OUT GPS_INFO "sap.tm.trp.db.systemmanagement.location::t_gps_info",   
+    OUT MESSAGE VARCHAR(200),
+    OUT OUT_LOCATIONS_XPOS_YPOS_INVALID  "sap.tm.trp.db.pipeline::tt_location_info_list" 
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"   
+    AS
+BEGIN
+   --DECLARE NETWORK_CODE VARCHAR(50);   
+   DECLARE MAX_LOCATION_NUM_ON_MAP INTEGER := 2000;
+   DECLARE VAR_LOCATION_NUM INTEGER := 0 ;   
+   DECLARE OUT_UUID VARCHAR(32) := SYSUUID;   
+   DECLARE IN_POLYGON CLOB; 
+   DECLARE USED_FLAG_CHAR VARCHAR(1);
+   DECLARE ROUTE_HEAD_MESSAGE VARCHAR(500);
+ 	
+	--Head: -- exchange LONGITUDE and LATITUDE due to the frontend history code issue 
+	ROUTES = SELECT T1.ID AS ROUTE_ID,T1.FROM_LOCATION,T2.YPOS AS FROM_LONGITUDE, T2.XPOS AS FROM_LATITUDE,
+    T1.TO_LOCATION, T3.YPOS AS TO_LONGITUDE,T3.XPOS AS TO_LATITUDE
+    FROM "sap.tm.trp.routing.db.path::t_route" T1
+    LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_all_location" T2 ON (T1.FROM_LOCATION = T2.NAME)
+	LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_all_location" T3 ON (T1.TO_LOCATION = T3.NAME)
+	WHERE T1.ID = :ROUTE_ID ;
+
+   --Detail: 
+   TMP_ROUTE_CONNECTION =
+     SELECT T1.ROUTE_ID,T1.SEQUENCE,T1.FROM_LOCATION,T1.FROM_LATITUDE AS FROM_LONGITUDE ,T1.FROM_LONGITUDE AS FROM_LATITUDE,
+     T1.TO_LOCATION,T1.TO_LATITUDE AS TO_LONGITUDE,T1.TO_LONGITUDE AS TO_LATITUDE,T1.MTR AS MEANS_OF_TRANSPORT  
+    FROM  "sap.tm.trp.routing.db.dataset::cv_route_sequence"()T1
+    INNER JOIN (
+     SELECT DISTINCT ROUTE_ID FROM :ROUTES
+    )T2 ON (T1.ROUTE_ID = T2.ROUTE_ID)
+    ;
+    
+    --Total Points of the root:
+    TMP_POINTS = SELECT DISTINCT ROUTE_ID,LOCATION_NAME, LONGITUDE, LATITUDE 
+            FROM 
+            (
+	            SELECT ROUTE_ID,FROM_LOCATION AS LOCATION_NAME,FROM_LONGITUDE AS LONGITUDE,FROM_LATITUDE AS LATITUDE
+	            FROM :TMP_ROUTE_CONNECTION T1
+	            UNION SELECT ROUTE_ID,TO_LOCATION AS LOCATION_NAME,TO_LONGITUDE AS LONGITUDE,TO_LATITUDE AS LATITUDE
+	            FROM :TMP_ROUTE_CONNECTION T2
+            )T3;
+            
+    OUT_LOCATIONS_XPOS_YPOS_INVALID = SELECT 
+      T2.ID AS LOCATION_ID,T2.NAME AS LOCATION_NAME, T2.XPOS, T2.YPOS
+      FROM (SELECT DISTINCT LOCATION_NAME FROM :TMP_POINTS) T1 
+      INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T2 ON (T1.LOCATION_NAME = T2.NAME)
+      WHERE (T2.XPOS IS NULL OR T2.YPOS IS NULL) OR (ABS(T2.XPOS) + ABS(T2.YPOS) =0);  
+      
+      SELECT COUNT(1) INTO VAR_LOCATION_NUM FROM :TMP_POINTS;
+     
+     IF :VAR_LOCATION_NUM > MAX_LOCATION_NUM_ON_MAP THEN 
+         POINTS = SELECT NULL AS LOCATION_NAME, NULL AS LONGITUDE, NULL AS LATITUDE, NULL AS WITHIN_FILTER_FLAG,NULL AS TRANSHIPMENT_FLAG FROM DUMMY;  
+     
+         ROUTES =  SELECT NULL AS ROUTE_ID,NULL AS FROM_LOCATION,NULL AS FROM_LONGITUDE,NULL AS FROM_LATITUDE,
+              NULL AS TO_LOCATION,NULL AS TO_LONGITUDE,NULL AS TO_LATITUDE
+              FROM DUMMY WHERE 1 = 0;
+              
+	     ROUTE_CONNECTION = 
+	     SELECT NULL AS ROUTE_ID,NULL AS SEQUENCE,NULL AS FROM_LOCATION,
+	     NULL AS FROM_LONGITUDE,NULL AS FROM_LATITUDE,
+		 NULL AS TO_LOCATION,NULL AS TO_LONGITUDE,NULL AS TO_LATITUDE,
+		 NULL AS MEANS_OF_TRANSPORT,
+		 NULL AS HAS_GPS_INFO
+		 FROM DUMMY WHERE 1 = 0 ;
+        
+        MESSAGE := 'MSG_TOO_MUCH_DATA_FOR_MAP';
+        RETURN;    
+     END IF;
+     
+ 
+   
+	 -- get locations within the location filter(primary location is returned for aggregate location)
+     CALL "sap.tm.trp.db.planningcockpit::p_get_loc_primaryloc_by_simplanId"(:SIM_PLAN_ID, filter_locations);
+	 
+	 --Get the locatoins which is transhipment location:
+	
+	TRANSHIPMENT_LOCATION = SELECT DISTINCT LOCATION
+	FROM "sap.tm.trp.routing.db.path::t_route_sequence" T1
+	INNER JOIN :ROUTES T2 ON (T1.ROUTE_ID = T2.ROUTE_ID)
+	WHERE PRE_TRIP_SEQUENCE >0 AND NEXT_TRIP_SEQUENCE >0;
+	
+     
+     POINTS = SELECT T1.LOCATION_NAME, T1.LONGITUDE, T1.LATITUDE, 
+             CASE WHEN T2.LOCATION_ID IS NULL THEN 0 ELSE 1 END AS WITHIN_FILTER_FLAG ,
+              MAP(T3.LOCATION,NULL,1,0)  AS TRANSHIPMENT_FLAG
+              --FROM (SELECT DISTINCT LOCATION_NAME, LONGITUDE, LATITUDE FROM :TMP_POINTS_INTERSECTS_WITH_SCREEN) T1
+              --For the query_route_for_map_by_route_id do not need to do intersect with screen, just need to return all the sub sequence of the route
+	          --Becuase at UI, the screen is the whole world. so do not need it.
+              FROM (SELECT DISTINCT LOCATION_NAME, LONGITUDE, LATITUDE 
+              FROM :TMP_POINTS T1
+              WHERE  (T1.LONGITUDE IS NOT NULL AND T1.LATITUDE IS NOT NULL) AND (ABS(T1.LONGITUDE) + ABS(T1.LATITUDE) > 0)
+              ) T1
+              LEFT OUTER JOIN :filter_locations T2 ON (T1.LOCATION_NAME = T2.LOCATION_NAME)
+              LEFT OUTER JOIN :TRANSHIPMENT_LOCATION T3 ON (T1.LOCATION_NAME = T3.LOCATION);
+              
+    
+     -----------------------------------ADD BY HENRY-------------------------------------------------------
+	 LOC_PAIR = 
+	   SELECT DISTINCT
+	       FROM_LOCATION AS FROM_LOC, 
+	       TO_LOCATION   AS TO_LOC, 
+	       MEANS_OF_TRANSPORT AS MTR 
+       FROM :TMP_ROUTE_CONNECTION;
+	     
+	 CALL "sap.tm.trp.db.systemmanagement.location::p_query_gps_info"(:LOC_PAIR, GPS_INFO);  
+	 
+	 
+	 ROUTE_CONNECTION  =
+	 
+	          SELECT  a.*, CASE WHEN b.FROM_LOC IS NULL THEN 0 ELSE 1 END AS HAS_GPS_INFO 
+	            FROM  :TMP_ROUTE_CONNECTION a 
+	 LEFT OUTER JOIN  :GPS_INFO b
+	              ON  a.FROM_LOCATION = b.FROM_LOC
+	             AND  a.TO_LOCATION = b.TO_LOC
+	             AND  a.MEANS_OF_TRANSPORT = b.MTR;
+	 
+	 
+	 -----------------------------------ADD BY HENRY---------------------------------------------------------
+    
+     MESSAGE := 'MSG_SUCCESS';	
+
+END;

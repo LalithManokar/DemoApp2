@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_location_filter_performance" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_location_filter_performance"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="LOC_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="LOC_FILTER_ID"/>
+      <variableProperties datatype="INTEGER" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="LOCATION_FILTER_ID"/>
+        <viewAttribute datatype="VARCHAR" id="GROUP_ID" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="GROUP_NAME" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_ID" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_NAME" length="100"/>
+        <viewAttribute datatype="INTEGER" id="LOCATION_FILTER_TYPE"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#LOC_FILTER_ID</localVariable>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+ BEGIN 
+ 	 
+ 	  LT_LOCATION_FILETR_INFO = SELECT DISTINCT T1.LOCATION_FILTER_ID,
+                T1.GEO_ID,
+                T1.GEO_NAME,
+                T1.USER_TYPE
+           FROM &quot;sap.tm.trp.db.filter::v_location_filter_info_sdui&quot; as T1
+ 	       WHERE T1.USER_TYPE IN (1, 2, 5, 6)
+ 	       AND LOCATION_FILTER_ID=:LOC_FILTER_ID;
+ 	        
+ 	 LOC_TREE = 
+ 	 
+ 	 SELECT T1.LOCATION_FILTER_ID,
+                T1.GEO_ID AS GROUP_ID,
+                T1.GEO_NAME AS GROUP_NAME,
+                T3.ID AS LOCATION_ID,
+                T3.NAME AS LOCATION_NAME, 
+                T1.USER_TYPE AS LOCATION_FILTER_TYPE
+           FROM :LT_LOCATION_FILETR_INFO as T1
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement::t_location_group_item&quot; AS T2
+                ON T1.GEO_ID = T2.LOCATION_GROUP_ID
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; AS T3
+                ON T2.LOCATION_ID = T3.ID
+          WHERE T1.USER_TYPE = 2
+       
+          UNION
+         SELECT T1.LOCATION_FILTER_ID, 
+                T1.GEO_ID AS GROUP_ID,
+                T1.GEO_NAME AS GROUP_NAME,
+                T3.ID AS LOCATION_ID,
+                T3.NAME AS LOCATION_NAME,
+                T1.USER_TYPE AS LOCATION_FILTER_TYPE
+           FROM :LT_LOCATION_FILETR_INFO as T1
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement::t_region_group_item&quot; AS T2
+                ON T1.GEO_ID = T2.REGION_GROUP_ID
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.semantic.location::v_zone&quot; AS T3
+                ON T2.ZONE_ID = T3.ID
+         WHERE T1.USER_TYPE = 6
+         UNION 
+        SELECT 
+                T1.LOCATION_FILTER_ID,
+                '' AS GROUP_ID,
+                '' AS GROUP_NAME,
+                T1.GEO_ID AS LOCATION_ID,
+                T1.GEO_NAME AS LOCATION_NAME,
+                T1.USER_TYPE AS LOCATION_FILTER_TYPE
+          FROM :LT_LOCATION_FILETR_INFO T1
+         WHERE    T1.USER_TYPE in (1,5);
+     
+ 	 
+ 	 
+ 	 var_out =  select  LOCATION_FILTER_ID,
+ 	                    GROUP_ID,
+                        GROUP_NAME,
+                        LOCATION_ID,
+                        LOCATION_NAME,  
+ 	                    LOCATION_FILTER_TYPE
+ 	              from  :LOC_TREE; 
+ 	            -- where  LOCATION_FILTER_ID=:LOC_FILTER_ID ;       
+ 	 
+ 	 
+ 	 
+ 	 
+ 	 
+ 	 
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="LOCATION_FILTER_ID" order="1">
+        <descriptions defaultDescription="LOCATION_FILTER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_FILTER_ID"/>
+      </attribute>
+      <attribute id="GROUP_ID" order="2">
+        <descriptions defaultDescription="GROUP_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="GROUP_ID"/>
+      </attribute>
+      <attribute id="GROUP_NAME" order="3">
+        <descriptions defaultDescription="GROUP_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="GROUP_NAME"/>
+      </attribute>
+      <attribute id="LOCATION_ID" order="4">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_ID"/>
+      </attribute>
+      <attribute id="LOCATION_NAME" order="5">
+        <descriptions defaultDescription="LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_NAME"/>
+      </attribute>
+      <attribute id="LOCATION_FILTER_TYPE" order="6">
+        <descriptions defaultDescription="LOCATION_FLITER_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_FILTER_TYPE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

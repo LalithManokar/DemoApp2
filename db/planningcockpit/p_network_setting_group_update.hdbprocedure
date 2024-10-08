@@ -1,0 +1,75 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_network_setting_group_update" (
+	IN ID BIGINT,
+	IN DESC VARCHAR(500),
+	IN MANDATORY_COST_MODEL_ID BIGINT,
+	IN OPTIONAL_COST_MODEL_ID BIGINT,
+	IN PARAMETER_LIST "sap.tm.trp.db.planningcockpit::tt_network_setting_group_parameter_list",
+	IN VALUE_LIST "sap.tm.trp.db.planningcockpit::tt_network_setting_group_parameter_value_list"
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	--READS SQL DATA 
+AS
+USER_ID BIGINT;
+BEGIN
+DECLARE RETURN_CODE TINYINT;
+
+-- GET CURRENT USER_ID
+SELECT IFNULL(MAX(ID),-1) INTO USER_ID
+FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+-- SET INVALID FLAG IN RELATED NETWORK MODLE
+NETWORK_SETTING_GROUP_ID_LIST =	SELECT :ID AS ID FROM DUMMY;
+CALL "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_invalidate_network_by_setting_group"(:NETWORK_SETTING_GROUP_ID_LIST,'P',RETURN_CODE,MESSAGE,LOG); 
+
+
+-- UPDATE PARAMETER GROUP METADATA
+UPDATE "sap.tm.trp.db.planningcockpit::t_network_setting_group" 
+SET DESC = :DESC
+	,MANDATORY_COST_MODEL_ID = :MANDATORY_COST_MODEL_ID
+	,OPTIONAL_COST_MODEL_ID = :OPTIONAL_COST_MODEL_ID
+	,MODIFIED_BY = :USER_ID
+	,MODIFIED_AT = CURRENT_UTCTIMESTAMP
+WHERE ID = :ID
+;
+
+--DELETE PARAMETER GROUP & VALUES
+DELETE FROM "sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_group"
+WHERE NETWORK_SETTING_GROUP_ID = :ID
+;
+DELETE FROM "sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_value"
+WHERE NETWORK_SETTING_GROUP_ID = :ID
+;
+
+--INSERT PARAMETER GROUP & VALUES
+INSERT INTO "sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_group"
+SELECT
+	:ID
+	,PARAMETER_ID
+	,OPERATOR_CODE
+FROM :PARAMETER_LIST
+;
+INSERT INTO "sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_value"
+SELECT
+	:ID
+	,PARAMETER_ID
+	,VALUE
+FROM :VALUE_LIST
+;
+
+INSERT INTO "sap.tm.trp.db.planningcockpit::t_network_setting_change_history"
+VALUES
+(
+	"sap.tm.trp.db.planningcockpit::s_network_setting_group_log".NEXTVAL
+	,:ID
+	,2
+	,0
+	,''
+	,''
+	,:USER_ID
+	,CURRENT_UTCTIMESTAMP
+);
+
+END;

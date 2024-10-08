@@ -1,0 +1,109 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_calculate_stock_within_time_range"    
+(   IN loc_equip_date "sap.tm.trp.db.planningcockpit::tt_refresh_date_loc_equip",
+    IN WINDOW_END TIMESTAMP,
+    IN RESOURCE_CATEGORY_TYPE VARCHAR(10),
+    IN RESOURCE_CATEGORY VARCHAR(20),
+    OUT teu_days "sap.tm.trp.db.planningcockpit::tt_loc_equip_stock_timerange" 
+) 
+	LANGUAGE SQLSCRIPT  
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"   
+	 AS
+BEGIN
+   
+     -- GTI, GTO event tracking data for the give location and resource type
+     -- Still can't apply the time window as the events before the time window are also considered
+     -- for exmple the resource alreay stay at the location before the time window start and no gate out
+     tmp_trk = SELECT t1.RESOURCE_TYPE AS EQUIP_TYPE, t1.LOCATION_ID, t1.LOCATION_NAME, t1.EVENT_CODE,
+               t1.RESOURCE_ID AS EQUIP_ID, t1.EVENT_TIME
+               FROM "sap.tm.trp.db.semantic.event::v_gateinout_tracking_history" t1
+               INNER JOIN :loc_equip_date t2 ON (t1.LOCATION_NAME = t2.LOCATION_NAME AND t1.RESOURCE_TYPE = t2.RESOURCE_TYPE);
+     
+     -- these gate in before the window start without gate out should be considered when calculate cost
+     -- the whole quantity are considered as the initial stock at the window start
+     gatein_without_gateout_before_window = 
+               -- get the gate in before the time window and still has not gate out
+             SELECT T5.EQUIP_TYPE, T5.LOCATION_ID, T5.LOCATION_NAME,T5.EQUIP_ID, T6.REFRESH_DATE AS EVENT_TIME 
+             FROM    
+             (
+               SELECT T3.EQUIP_TYPE, T3.LOCATION_ID, T3.LOCATION_NAME,T3.EQUIP_ID, T3.EVENT_TIME
+               FROM :tmp_trk T3
+               INNER JOIN 
+               (
+                   SELECT T1.EQUIP_ID, T1.LOCATION_NAME, T1.LAST_GTI_TIME FROM
+                   (
+                     SELECT T5.EQUIP_ID, T5.LOCATION_NAME, MAX(EVENT_TIME) AS LAST_GTI_TIME
+                     FROM :tmp_trk T5
+                     INNER JOIN :loc_equip_date T6 ON (T5.LOCATION_NAME = t6.LOCATION_NAME 
+                           AND T5.EQUIP_TYPE = T6.RESOURCE_TYPE AND T5.EVENT_TIME < T6.REFRESH_DATE)          
+                     WHERE T5.EVENT_CODE = 'GTI'
+                     GROUP BY T5.EQUIP_ID, T5.LOCATION_NAME
+                   ) T1
+                   LEFT OUTER JOIN 
+                   (
+                     SELECT T5.EQUIP_ID, T5.LOCATION_NAME, MAX(EVENT_TIME) AS LAST_GTO_TIME
+                     FROM :tmp_trk T5
+                     INNER JOIN :loc_equip_date T6 ON (T5.LOCATION_NAME = t6.LOCATION_NAME 
+                           AND T5.EQUIP_TYPE = T6.RESOURCE_TYPE AND T5.EVENT_TIME < T6.REFRESH_DATE)                      
+                     WHERE T5.EVENT_CODE = 'GTO' 
+                     GROUP BY T5.EQUIP_ID, T5.LOCATION_NAME 
+                   ) T2 ON (T1.EQUIP_ID = T2.EQUIP_ID AND T1.LOCATION_NAME = T2.LOCATION_NAME AND T1.LAST_GTI_TIME < T2.LAST_GTO_TIME) 
+                   WHERE T2.EQUIP_ID IS NULL
+               ) T4 ON (T3.EQUIP_ID = T4.EQUIP_ID AND T3.LOCATION_NAME = T4.LOCATION_NAME AND T3.EVENT_TIME = T4.LAST_GTI_TIME)
+             ) T5
+             INNER JOIN :loc_equip_date T6 ON (T5.LOCATION_NAME = T6.LOCATION_NAME AND T5.EQUIP_TYPE = T6.RESOURCE_TYPE);
+     
+     gatein_within_window = 
+              SELECT T5.EQUIP_TYPE, T5.LOCATION_ID, T5.LOCATION_NAME, T5.EQUIP_ID, T5.EVENT_TIME
+              FROM :tmp_trk T5
+              INNER JOIN :loc_equip_date T6 ON (T5.LOCATION_NAME = t6.LOCATION_NAME 
+                    AND T5.EQUIP_TYPE = T6.RESOURCE_TYPE AND T5.EVENT_TIME BETWEEN T6.REFRESH_DATE AND :WINDOW_END );
+                                                 
+     -- get the gate in data from the tracking_history table
+     -- we need to get all the gate in events within the time window
+     -- and the gate in events without gate out before the time window      
+     gateins = SELECT *, ROW_NUMBER() OVER (PARTITION BY EQUIP_ID, LOCATION_NAME ORDER BY EVENT_TIME ASC) AS EQUIP_SEQ
+               FROM 
+               (                
+                SELECT * FROM :gatein_within_window                  
+                UNION                
+                SELECT * FROM :gatein_without_gateout_before_window                
+               );
+               
+     -- get the gate out data from the tracking_history table
+     -- only consider the events within the time window, as if the container gateout before the window start it does not 
+     -- effect the effect, and if the container gates out after the window end, use the window end as the faked one no need 
+     -- to care about the actual gate out time      
+     gateouts = SELECT T5.EQUIP_TYPE, T5.LOCATION_ID, T5.LOCATION_NAME, T5.EQUIP_ID, T5.EVENT_TIME,
+                ROW_NUMBER() over (PARTITION BY EQUIP_ID, LOCATION_ID ORDER BY EVENT_TIME ASC) AS EQUIP_SEQ
+                FROM :tmp_trk T5
+                INNER JOIN :loc_equip_date T6 ON (T5.LOCATION_NAME = t6.LOCATION_NAME 
+                      AND T5.EQUIP_TYPE = T6.RESOURCE_TYPE AND T5.EVENT_TIME BETWEEN T6.REFRESH_DATE AND :WINDOW_END )
+                WHERE T5.EVENT_CODE = 'GTO';               
+                 
+     -- Get the [gate in time, gate out time] for each equipment id
+     -- The method is to join gate in and gate out data  with same sequence as one pair, as the event should be like 
+     -- gatein -- gateout -- gatein -- gateout, otherwise something wrong with the event data               
+     stay_days = SELECT t1.EQUIP_ID, t1.EQUIP_TYPE AS RESOURCE_TYPE, t1.LOCATION_ID, t1.LOCATION_NAME,
+                 t1.EVENT_TIME AS STAY_START, IFNULL(t2.EVENT_TIME,:WINDOW_END) AS STAY_END
+                 FROM :gateins t1
+                 LEFT OUTER JOIN :gateouts t2 ON (t1.EQUIP_ID = t2.EQUIP_ID AND t1.LOCATION_ID = t2.LOCATION_ID 
+                      AND t1.EQUIP_SEQ = t2.EQUIP_SEQ AND t1.EVENT_TIME < t2.EVENT_TIME);
+                      
+     
+     -- if container, UOM use TUE, else UOM use PCS              
+     teu_days = 
+                SELECT t1.LOCATION_NAME, 
+                       t1.RESOURCE_TYPE,  
+                       t6.REFRESH_DATE, 
+                       CASE WHEN UPPER(:RESOURCE_CATEGORY_TYPE)='CN' THEN t1.STAY_DAYS * t5.TEU_COUNT ELSE t1.STAY_DAYS END AS INITIAL_TEU FROM
+                (
+                  SELECT LOCATION_NAME, RESOURCE_TYPE, SUM(DAYS_BETWEEN(STAY_START, STAY_END)) AS STAY_DAYS  
+                  FROM :stay_days 
+                  GROUP BY LOCATION_NAME, RESOURCE_TYPE
+                ) t1   
+                INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_type" t5 ON (t1.RESOURCE_TYPE = t5.RESOURCE_TYPE_CODE) 
+                INNER JOIN :loc_equip_date t6 ON (t1.LOCATION_NAME = t6.LOCATION_NAME AND t1.RESOURCE_TYPE = t6.RESOURCE_TYPE);                           
+                     
+
+END

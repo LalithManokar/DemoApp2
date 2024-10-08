@@ -1,0 +1,55 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT T1.ID,
+                 T1.CODE,
+                 T1.NAME,
+                 T1.RESOURCE_CATEGORY,
+                 T1.INSTANT_ENABLED,
+                 IFNULL(T3.DESC, T1.DESC) AS DESC,
+                 T2.OBJECT_NAME AS STORED_PROCEDURE_NAME,
+                 T2.META_TABLE_NAME AS META_DATA_TABLE_NAME,
+                 T2.SCHEMA_NAME AS SCHEMA_NAME,
+                 T7.ID AS TYPE_ID,
+                 T7.TYPE AS TYPE,
+                 T9.DESC AS TYPE_NAME,
+                 IFNULL(T6.PARENT_ID, T6.ID) AS CATEGORY_ID,
+                 T8.DESC AS CATEGORY,
+                 T4.USERNAME AS CREATED_BY,
+                 T1.CREATE_ON AS CREATED_ON,
+                 T5.USERNAME AS MODIFIED_BY,
+                 T1.LAST_MODIFIED_ON AS MODIFIED_ON,
+                 IFNULL(T1.LAST_MODIFIED_ON, T1.CREATE_ON) AS MODIFIED_TIME,
+                 COST_MODEL_T.COST_MODEL_FILTER_ID,
+                 COST_MODEL_T.COST_MODEL_FILTER_NAME
+            FROM \"sap.tm.trp.db.pipeline::t_pipeline_model\" AS T1
+                 LEFT OUTER JOIN \"sap.tm.trp.db.pipeline::t_pipeline_entry_point\" AS T2
+                 ON T1.ENTRY_POINT_ID = T2.ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.pipeline::t_pipeline_model_t\" AS T3
+                 ON T1.ID = T3.ID AND T3.SPRAS = IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E')
+                 LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS T4
+                 ON T1.CREATE_BY = T4.ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS T5
+                 ON T1.LAST_MODIFIED_BY = T5.ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.pipeline::t_pipeline_model_type\" AS T6
+                 ON T1.PIPELINE_MODEL_TYPE_ID = T6.ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.pipeline::t_pipeline_model_type_t\" AS T8
+                 ON IFNULL(T6.PARENT_ID, T6.ID) = T8.ID  AND T8.SPRAS = IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E')
+                 LEFT OUTER JOIN \"sap.tm.trp.db.objectregistration::t_object_type\" AS T7
+                 ON T6.OBJECT_TYPE_ID = T7.ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.objectregistration::t_object_type_t\" AS T9
+                 ON T9.SPRAS = IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E') AND T7.ID = T9.ID
+                 LEFT OUTER JOIN (select T1.PIPELINE_MODEL_ID AS ID, T1.COST_MODEL_ID AS COST_MODEL_FILTER_ID, T2.name AS COST_MODEL_FILTER_NAME
+                 FROM \"sap.tm.trp.db.pipeline::t_pipeline_model_cost_model\" T1 INNER JOIN
+                 \"sap.tm.trp.db.costmodel::t_cost_model_new\" T2 ON T1.COST_MODEL_ID = T2.ID) AS COST_MODEL_T
+                 ON T1.ID = COST_MODEL_T.ID";
+
+depends_on_table = ["sap.tm.trp.db.pipeline::t_pipeline_model_type_t", 
+                    "sap.tm.trp.db.objectregistration::t_object_type", 
+                    "sap.tm.trp.db.objectregistration::t_object_type_t",
+                    "sap.tm.trp.db.pipeline::t_pipeline_model_type", 
+                    "sap.tm.trp.db.pipeline::t_pipeline_model", 
+                    "sap.tm.trp.db.pipeline::t_pipeline_entry_point", 
+                    "sap.tm.trp.db.pipeline::t_pipeline_model_t", 
+                    "sap.tm.trp.db.pipeline::t_pipeline_model_cost_model", 
+                    "sap.tm.trp.db.costmodel::t_cost_model_new"];
+                    
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

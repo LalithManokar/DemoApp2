@@ -1,0 +1,56 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_cost_model_carrier_check"(
+   IN CARRIER_ID_LIST "sap.tm.trp.db.costmodel::tt_carrier_id_with_dataset",
+    OUT DATASET_WITH_CARRIER_CONFLICT "sap.tm.trp.db.costmodel::tt_cost_dataset_name"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    
+  --check if dataset's carrier is empty, then cost model's carrier should be empty:
+/*  DATASET_WITH_CARRIER_CONFLICT =  
+  SELECT T4.NAME
+  FROM 
+  (
+    SELECT T1.COST_DATASET_ID AS ID
+    FROM :CARRIER_ID_LIST T1
+    LEFT OUTER JOIN 
+    (   --Get the carrier list of the cost dataset
+       SELECT T1.COST_DATASET_ID,IFNULL(T2.CARRIER_ID,'*') AS CARRIER_ID
+       FROM :CARRIER_ID_LIST T1
+       LEFT OUTER JOIN "sap.tm.trp.db.costmodel::t_cost_dataset_carrier" T2
+       ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID)
+   
+     ) T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID AND (T1.CARRIER_ID = T2.CARRIER_ID OR (T2.CARRIER_ID = '*')))
+     WHERE T2.COST_DATASET_ID IS NULL
+   ) T3
+   INNER JOIN "sap.tm.trp.db.costmodel::t_cost_dataset" T4 ON (T3.ID = T4.ID);
+*/
+
+--Newly added code starts--
+R1=SELECT T1.COST_DATASET_ID,IFNULL(T2.CARRIER_ID,'*') AS CARRIER_ID
+       FROM :CARRIER_ID_LIST T1
+       LEFT OUTER JOIN "sap.tm.trp.db.costmodel::t_cost_dataset_carrier" T2
+       ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID);
+       
+R2=SELECT T1.COST_DATASET_ID AS ID,T2.COST_DATASET_ID
+    FROM :CARRIER_ID_LIST T1
+    LEFT OUTER JOIN 
+    :R1 AS T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID AND T1.CARRIER_ID = T2.CARRIER_ID)
+INTERSECT
+SELECT T1.COST_DATASET_ID AS ID,T2.COST_DATASET_ID
+    FROM :CARRIER_ID_LIST T1
+    LEFT OUTER JOIN 
+    :R1 AS T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID AND T2.CARRIER_ID = '*');
+     
+DATASET_WITH_CARRIER_CONFLICT =  
+  SELECT T4.NAME
+  FROM 
+  (
+    SELECT * FROM :R2 WHERE COST_DATASET_ID IS NULL
+   ) T3
+   INNER JOIN "sap.tm.trp.db.costmodel::t_cost_dataset" T4 ON (T3.ID = T4.ID);
+--Newly added code ends--
+
+END;

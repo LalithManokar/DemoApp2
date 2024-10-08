@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_tracking_history_by_resid" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_tracking_history_by_resid"/>
+  <localVariables>
+    <variable id="IN_RESOURCE_ID" parameter="true">
+      <descriptions defaultDescription="IN_RESOURCE_ID"/>
+      <variableProperties datatype="VARCHAR" defaultValue="''" length="22" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_ID" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_ID" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION" length="50"/>
+        <viewAttribute datatype="TIMESTAMP" id="TIME"/>
+        <viewAttribute datatype="VARCHAR" id="CHANGED_FIELD" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="BEFORE_VALUE" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="NEW_VALUE" length="50"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_RESOURCE_ID</localVariable>
+      <definition>BEGIN 
+            
+   var_out = SELECT T1.RESOURCE_ID,
+                    T1.RESOURCE_NAME AS RESOURCE,
+                    T1.LOCATION_ID,
+                    T1.LOCATION_NAME AS LOCATION,
+                    T1.EVENT_TIME AS TIME,
+                    T3.DESC AS CHANGED_FIELD,
+                    T1.BEFORE_VALUE,
+                    T1.NEW_VALUE
+               FROM &quot;sap.tm.trp.db.semantic.event::v_tracking_history&quot; T1
+               INNER JOIN &quot;sap.tm.trp.db.semantic.resource::v_resource_master&quot; T2
+               ON (T1.RESOURCE_ID = T2.RESOURCE_ID)
+               INNER JOIN 
+               ( SELECT DISTINCT RES_TYPE
+                 FROM &quot;sap.tm.trp.db.systemmanagement.user::v_resource_auth&quot;) RES_AUTH
+               ON (T2.RESOURCE_TYPE_CODE = RES_AUTH.RES_TYPE)
+               LEFT JOIN &quot;sap.tm.trp.db.semantic.event::v_table_field_description&quot; T3 
+               ON (T1.CHANGED_TABLE = T3.TABNAME AND T1.CHANGED_FIELD = T3.FIELDNAME)
+               WHERE T1.RESOURCE_ID = :IN_RESOURCE_ID; 
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="RESOURCE_ID" order="1">
+        <descriptions defaultDescription="RESOURCE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_ID"/>
+      </attribute>
+      <attribute id="RESOURCE" order="2">
+        <descriptions defaultDescription="RESOURCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE"/>
+      </attribute>
+      <attribute id="LOCATION_ID" order="3">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_ID"/>
+      </attribute>
+      <attribute id="LOCATION" order="4">
+        <descriptions defaultDescription="LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION"/>
+      </attribute>
+      <attribute id="TIME" order="5">
+        <descriptions defaultDescription="TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME"/>
+      </attribute>
+      <attribute id="CHANGED_FIELD" order="6">
+        <descriptions defaultDescription="CHANGED_FIELD"/>
+        <keyMapping columnObjectName="Script_View" columnName="CHANGED_FIELD"/>
+      </attribute>
+      <attribute id="BEFORE_VALUE" order="7">
+        <descriptions defaultDescription="BEFORE_VALUE"/>
+        <keyMapping columnObjectName="Script_View" columnName="BEFORE_VALUE"/>
+      </attribute>
+      <attribute id="NEW_VALUE" order="8">
+        <descriptions defaultDescription="NEW_VALUE"/>
+        <keyMapping columnObjectName="Script_View" columnName="NEW_VALUE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

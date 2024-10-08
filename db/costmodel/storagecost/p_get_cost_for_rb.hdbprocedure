@@ -1,0 +1,41 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel.storagecost::p_get_cost_for_rb"(
+	    IN SD_PLAN_ID BIGINT,
+        IN RESOURCE_CATEGORY VARCHAR(20),
+		IN COST_MODEL_ID INTEGER,
+		IN SD_RESULT "sap.tm.trp.db.costmodel.storagecost::tt_sd_result",      
+        OUT STORAGE_COST DOUBLE
+	)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+	  DECLARE START_TIME TIMESTAMP;
+	  DECLARE END_TIME TIMESTAMP;
+      DECLARE TIME_OFFSET BIGINT;
+	  
+	  SELECT MIN (START_TIME), MAX(END_TIME) INTO START_TIME, END_TIME FROM :SD_RESULT;
+  
+      --get time filter
+      CALL "sap.tm.trp.db.costmodel.storagecost::p_get_time_offset"(:SD_PLAN_ID, TIME_OFFSET);
+	  
+      CALL "sap.tm.trp.db.costmodel.storagecost::p_get_resource_type_teu" (:RESOURCE_CATEGORY,RESOURCE_TYPE_TEU);  
+      
+      LOCATION_RESOURCE_TYPE_LIST = SELECT DISTINCT LOCATION,RESOURCE_TYPE FROM :SD_RESULT;
+
+	  CALL "sap.tm.trp.db.costmodel.storagecost::p_get_dataset" (:COST_MODEL_ID,:LOCATION_RESOURCE_TYPE_LIST,COST_DATASET_ORIGIN);  
+	  
+	  CALL "sap.tm.trp.db.costmodel.storagecost::p_get_settlement_stock" (:COST_DATASET_ORIGIN,:SD_RESULT,:RESOURCE_TYPE_TEU,SETTLEMENT_STOCK);  
+	  
+	  CALL "sap.tm.trp.db.costmodel.storagecost::p_get_storage_time" (:SD_RESULT,STORAGE_TIME);  
+      
+      CALL "sap.tm.trp.db.costmodel.storagecost::p_calculate_time_based_cost" (:TIME_OFFSET,:STORAGE_TIME,:COST_DATASET_ORIGIN,:RESOURCE_TYPE_TEU,TIME_COST);  
+      CALL "sap.tm.trp.db.costmodel.storagecost::p_calculate_quantity_based_cost" (:TIME_OFFSET,:STORAGE_TIME,:SETTLEMENT_STOCK,:COST_DATASET_ORIGIN,:RESOURCE_TYPE_TEU,QUANTITY_COST);  
+	  
+	  SELECT IFNULL(SUM(COST),0) INTO STORAGE_COST FROM (
+	  	SELECT COST FROM :TIME_COST
+	  	UNION ALL
+	  	SELECT COST FROM :QUANTITY_COST
+	  );
+	 
+END;

@@ -1,0 +1,372 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.planBubble::p_call_plan_bubbleView_rule" ( 
+IN  PLAN_EXECUTION_ID BIGINT,
+in IN_TBL "sap.tm.trp.db.hrf.planBubble::t_SD_KPI_BubbleRule_input",
+OUT OUTPUT_RECORDS INTEGER
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    DECLARE SCRIPT VARCHAR(5000);
+    DECLARE RULE_SP VARCHAR(200);
+    DECLARE NUM_AMOUNT_DECIMAL_POINT INTEGER;
+    DECLARE ZERO DOUBLE;
+    DECLARE PLAN_BUBBLE_VIEW INTEGER := 1 ;
+    NUM_AMOUNT_DECIMAL_POINT := 2; 
+    ZERO := 0.0001;
+
+  select T1.SP into RULE_SP
+  from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule" T1
+  inner join "sap.tm.trp.db.hrf.ruleManage::t_planBubbleView_assigned_rule" T2
+  on T1.RULE_ID = T2.RULE_ID and 
+     T2.PLAN_BUBBLE_VIEW_ID = :PLAN_BUBBLE_VIEW;
+  
+      
+  truncate table "sap.tm.trp.db.hrf.planBubble::t_hrf_planBubbleView_inputGlobalTemp";
+  truncate table "sap.tm.trp.db.hrf.planBubble::t_hrf_planBubbleView_outputGlobalTemp";
+  insert into "sap.tm.trp.db.hrf.planBubble::t_hrf_planBubbleView_inputGlobalTemp"
+    (select 
+     TIME_INTERVAL_ID,
+     TIME_FILTER_DESC,
+     SEQUENCE,
+     START_TIME,
+     TIME_STEP,
+     STOCK,
+     SUPPLY,
+     DEMAND,
+     BALANCE_SUPPLY_DEMAND,
+	 BALANCE_STOCK_SUPPLY_DEMAND,
+	 MIN_SAFETY_STOCK,
+	 MAX_SAFETY_STOCK,
+	 MAX_CAPACITY,
+	 IDLE_RATE,
+	 STORAGE_COST,
+	 DWELL_TIME,
+	 IMPORT_EXPORT,
+	 UNIT,
+	 SD_KPI_FLAG,
+	 PLAN_EXECUTION_ID,
+	 PLAN_MODEL_ID,
+	 PLAN_MODEL_TYPE_ID,
+	 PLAN_MODEL_CATEGORY_ID,
+	 FILTER_TYPE,
+	 FILTER_GROUP_ID,
+	 PIPELINE_MODEL_ID,
+	 NODE_ID,
+	 NODE_NAME,
+	 NODE_VISIBLE,
+	 NODE_OUTPUT_KEYS,
+	 METADATA_NODE_ID,
+	 DATA_OBJECT_FORMAT,
+	 LOCATION_ID,
+	 LOCATION_NAME,
+	 LOCATION_TYPE,
+	 EQUIP_TYPE_ID,
+	 EQUIP_TYPE_NAME,
+	 EQUIP_TYPE_TYPE     
+     from :IN_TBL);
+  
+
+     SCRIPT := 'call '|| :RULE_SP ||'("sap.tm.trp.db.hrf.planBubble::t_hrf_planBubbleView_inputGlobalTemp",
+   "sap.tm.trp.db.hrf.planBubble::t_hrf_planBubbleView_outputGlobalTemp",
+    "sap.tm.trp.db.hrf.ruleManage::t_hrf_actions_results") with overview'; 
+
+ execute immediate(:SCRIPT); 
+
+    tmp_tbl_planBubbleView_output =
+    select 	distinct
+     T1.BALANCE_SUPPLY_DEMAND,
+	 T1.DEMAND,
+	 T1.SUPPLY,
+	 T1.STOCK,
+	 T1.TIME_STEP,
+	 T1.START_TIME,
+	 T1.SEQUENCE,
+	 T1.TIME_FILTER_DESC,
+	 T1.TIME_INTERVAL_ID,
+	 T1.BALANCE_STOCK_SUPPLY_DEMAND,
+	 T1.MIN_SAFETY_STOCK,
+	 T1.MAX_SAFETY_STOCK,
+	 T1.MAX_CAPACITY,
+	 T1.IDLE_RATE,
+	 T1.STORAGE_COST,
+	 T1.DWELL_TIME,
+	 T1.IMPORT_EXPORT,
+	 T1.UNIT,
+	 T1.SD_KPI_FLAG,
+	 T1.PLAN_EXECUTION_ID,
+	 T1.PLAN_MODEL_ID,
+	 T1.PLAN_MODEL_TYPE_ID,
+	 T1.PLAN_MODEL_CATEGORY_ID,
+	 T1.FILTER_TYPE,
+	 T1.FILTER_GROUP_ID,
+	 T1.PIPELINE_MODEL_ID,
+	 T1.NODE_ID,
+	 T1.NODE_NAME,
+	 T1.NODE_VISIBLE,
+	 T1.NODE_OUTPUT_KEYS,
+	 T1.METADATA_NODE_ID,
+	 T1.DATA_OBJECT_FORMAT,
+	 T1.LOCATION_ID,
+	 T1.LOCATION_NAME,
+	 T1.LOCATION_TYPE,
+	 T1.EQUIP_TYPE_ID,
+	 T1.EQUIP_TYPE_NAME,
+	 T1.EQUIP_TYPE_TYPE,    
+     'SDKPIPlanBubble rule' as RULE_NAME,
+     T2.ROW_ID,
+     T2.MESSAGE,    
+     T2.SURPLUS_DEFICIT_NUM,
+     T2.THRESHOLD
+    from "sap.tm.trp.db.hrf.planBubble::t_hrf_planBubbleView_outputGlobalTemp" T2
+    inner join "sap.tm.trp.db.hrf.planBubble::t_hrf_planBubbleView_inputGlobalTemp" T1
+    on T1.PLAN_EXECUTION_ID = T2.PLAN_EXECUTION_ID and  
+       T1.NODE_ID =  T2.NODE_ID and 
+    --T1.LOCATION_TYPE = T2.LOCATION_TYPE and 
+       T1.LOCATION_ID = T2.LOCATION_ID and 
+       --T1.EQUIP_TYPE_TYPE = T2.EQUIP_TYPE_TYPE and 
+       T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID and 
+       T1.SEQUENCE = T2.SEQUENCE;
+       
+    --normalizing
+      tmp_tbl_planBubbleView_score_output= 
+                SELECT  
+			     T1.BALANCE_SUPPLY_DEMAND,
+				 T1.DEMAND,
+				 T1.SUPPLY,
+				 T1.STOCK,
+				 T1.TIME_STEP,
+				 T1.START_TIME,
+				 T1.SEQUENCE,
+				 T1.TIME_FILTER_DESC,
+				 T1.TIME_INTERVAL_ID,
+				 T1.BALANCE_STOCK_SUPPLY_DEMAND,
+				 T1.MIN_SAFETY_STOCK,
+				 T1.MAX_SAFETY_STOCK,
+				 T1.MAX_CAPACITY,
+				 T1.IDLE_RATE,
+				 T1.STORAGE_COST,
+				 T1.DWELL_TIME,
+				 T1.IMPORT_EXPORT,
+				 T1.UNIT,
+				 T1.SD_KPI_FLAG,
+				 T1.PLAN_EXECUTION_ID,
+				 T1.PLAN_MODEL_ID,
+				 T1.PLAN_MODEL_TYPE_ID,
+				 T1.PLAN_MODEL_CATEGORY_ID,
+				 T1.FILTER_TYPE,
+				 T1.FILTER_GROUP_ID,
+				 T1.PIPELINE_MODEL_ID,
+				 T1.NODE_ID,
+				 T1.NODE_NAME,
+				 T1.NODE_VISIBLE,
+				 T1.NODE_OUTPUT_KEYS,
+				 T1.METADATA_NODE_ID,
+				 T1.DATA_OBJECT_FORMAT,
+				 T1.LOCATION_ID,
+				 T1.LOCATION_NAME,
+				 T1.LOCATION_TYPE,
+				 T1.EQUIP_TYPE_ID,
+				 T1.EQUIP_TYPE_NAME,
+				 T1.EQUIP_TYPE_TYPE,   
+			     T1.RULE_NAME,
+			     T1.ROW_ID,
+			     T1.MESSAGE,    
+			     T1.SURPLUS_DEFICIT_NUM,
+			     T1.THRESHOLD,
+                 T5.ALERT_SCORE_NORMALIZED
+          FROM :tmp_tbl_planBubbleView_output T1
+          INNER JOIN
+          (
+                    SELECT T41.PLAN_EXECUTION_ID,
+                           T41.NODE_ID,
+                           T41.LOCATION_ID,
+                           T41.EQUIP_TYPE_ID,
+                           T41.SEQUENCE,
+                           T41.ALERT_SCORE,
+                           T42.ALERT_SCORE_RANGE,
+                           CASE WHEN T42.ALERT_SCORE_RANGE > :ZERO 
+                           THEN CEIL(T41.ALERT_SCORE - T42.ALERT_SCORE_MIN)/T42.ALERT_SCORE_RANGE*(100-1)+1 
+                           ELSE 50 
+                           END AS ALERT_SCORE_NORMALIZED
+                    FROM
+                    (
+                         SELECT T1.PLAN_EXECUTION_ID,
+                                T1.NODE_ID,
+                                T1.LOCATION_ID,
+                                T1.EQUIP_TYPE_ID,
+                                T1.SEQUENCE,
+                                ABS(T1.SURPLUS_DEFICIT_NUM) as ALERT_SCORE  
+                         FROM :tmp_tbl_planBubbleView_output T1
+                    )T41,
+                    (     
+                             SELECT (MAX(T4.ALERT_SCORE) - MIN(T4.ALERT_SCORE)) AS ALERT_SCORE_RANGE,
+                                    MIN(T4.ALERT_SCORE) AS ALERT_SCORE_MIN
+                             FROM
+                             (
+                                 SELECT ABS(T1.SURPLUS_DEFICIT_NUM) as ALERT_SCORE
+                                 FROM :tmp_tbl_planBubbleView_output T1
+                             )T4
+                   )T42
+               )T5
+          ON (T1.PLAN_EXECUTION_ID = T5.PLAN_EXECUTION_ID and 
+              T1.NODE_ID = T5.NODE_ID and 
+              T1.LOCATION_ID = T5.LOCATION_ID and 
+              T1.EQUIP_TYPE_ID = T5.EQUIP_TYPE_ID and 
+              T1.SEQUENCE = T5.SEQUENCE ) ;
+    --normal and alert
+     tmp_tbl_planBubbleView_normal_alert_output= 
+                SELECT  
+			     T1.BALANCE_SUPPLY_DEMAND,
+				 T1.DEMAND,
+				 T1.SUPPLY,
+				 T1.STOCK,
+				 T1.TIME_STEP,
+				 T1.START_TIME,
+				 T1.SEQUENCE,
+				 T1.TIME_FILTER_DESC,
+				 T1.TIME_INTERVAL_ID,
+				 T1.BALANCE_STOCK_SUPPLY_DEMAND,
+				 T1.MIN_SAFETY_STOCK,
+				 T1.MAX_SAFETY_STOCK,
+				 T1.MAX_CAPACITY,
+				 T1.IDLE_RATE,
+				 T1.STORAGE_COST,
+				 T1.DWELL_TIME,
+				 T1.IMPORT_EXPORT,
+				 T1.UNIT,
+				 T1.SD_KPI_FLAG,
+				 T1.PLAN_EXECUTION_ID,
+				 T1.PLAN_MODEL_ID,
+				 T1.PLAN_MODEL_TYPE_ID,
+				 T1.PLAN_MODEL_CATEGORY_ID,
+				 T1.FILTER_TYPE,
+				 T1.FILTER_GROUP_ID,
+				 T1.PIPELINE_MODEL_ID,
+				 T1.NODE_ID,
+				 T1.NODE_NAME,
+				 T1.NODE_VISIBLE,
+				 T1.NODE_OUTPUT_KEYS,
+				 T1.METADATA_NODE_ID,
+				 T1.DATA_OBJECT_FORMAT,
+				 T1.LOCATION_ID,
+				 T1.LOCATION_NAME,
+				 T1.LOCATION_TYPE,
+				 T1.EQUIP_TYPE_ID,
+				 T1.EQUIP_TYPE_NAME,
+				 T1.EQUIP_TYPE_TYPE,    
+                  T2.RULE_NAME,
+                  T2.ROW_ID,
+                  T2.MESSAGE,   
+                  T2.SURPLUS_DEFICIT_NUM,
+                  T2.THRESHOLD,
+                  T2.ALERT_SCORE_NORMALIZED
+          FROM :IN_TBL T1 
+          left outer join :tmp_tbl_planBubbleView_score_output T2
+          on (T1.PLAN_EXECUTION_ID = T2.PLAN_EXECUTION_ID and 
+              T1.NODE_ID = T2.NODE_ID and 
+              T1.LOCATION_ID = T2.LOCATION_ID and 
+              T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID and 
+              T1.SEQUENCE = T2.SEQUENCE  ) ;
+              
+    --aggregate alert_num, alert_score
+    tmp_tbl_planBubbleView_aggregatedAlertNumScore_output = 
+
+             
+   select 
+     T1.PLAN_EXECUTION_ID,
+     T1.NODE_ID,
+     T1.LOCATION_ID,
+     T1.EQUIP_TYPE_ID, 
+     T1.SEQUENCE,
+     CASE WHEN (MESSAGE = 'Surplus' or MESSAGE = 'Deficit')
+         THEN 1
+         ELSE 0
+     END as ALERT_NUM,
+     CASE WHEN (MESSAGE = 'Surplus' or MESSAGE = 'Deficit') 
+         THEN ALERT_SCORE_NORMALIZED
+         ELSE 0
+     END as ALERT_AGGREGATED_SCORE
+    from :tmp_tbl_planBubbleView_normal_alert_output T1;
+
+   
+   --OUT_TBL = 
+   insert into "sap.tm.trp.db.hrf.planBubble::t_SD_KPI_BubbleRule_output"
+    (             SELECT  
+				 T1.PLAN_EXECUTION_ID,
+				 T1.PLAN_MODEL_ID,
+				 T1.PLAN_MODEL_TYPE_ID,
+				 T1.PLAN_MODEL_CATEGORY_ID,
+				 T1.FILTER_TYPE,
+				 T1.FILTER_GROUP_ID,
+				 T1.PIPELINE_MODEL_ID,
+				 T1.NODE_ID,
+				 T1.NODE_NAME,
+				 T1.NODE_VISIBLE,
+				 T1.NODE_OUTPUT_KEYS,
+				 T1.METADATA_NODE_ID,
+				 T1.DATA_OBJECT_FORMAT,
+				 
+				 T1.LOCATION_ID,
+				 T1.LOCATION_NAME,
+				 T1.LOCATION_TYPE,
+				 T1.EQUIP_TYPE_ID,
+				 T1.EQUIP_TYPE_NAME,
+				 T1.EQUIP_TYPE_TYPE,  
+				   
+				 T1.TIME_INTERVAL_ID,
+				 T1.TIME_FILTER_DESC,
+			     T1.SEQUENCE,
+			     T1.START_TIME,	
+				 T1.TIME_STEP,	     	     
+					
+				 T1.STOCK,
+				 T1.SUPPLY,	
+				 T1.DEMAND,			     
+			     T1.BALANCE_SUPPLY_DEMAND,
+				 T1.BALANCE_STOCK_SUPPLY_DEMAND,
+				  		
+				 T1.MIN_SAFETY_STOCK,
+				 T1.MAX_SAFETY_STOCK,
+				 T1.MAX_CAPACITY,
+				 
+				 T1.IDLE_RATE,
+				 T1.STORAGE_COST,
+				 T1.DWELL_TIME,
+				 T1.IMPORT_EXPORT,
+				 
+				 T1.UNIT,
+				 T1.SD_KPI_FLAG,
+				 	 
+                  T1.RULE_NAME,
+                  T1.ROW_ID,
+                  T1.MESSAGE,   
+                  T1.SURPLUS_DEFICIT_NUM,
+                  T1.THRESHOLD,
+                  CASE WHEN ( SURPLUS_DEFICIT_NUM > 0 and  MAX_CAPACITY > :ZERO)
+                         THEN ROUND(SURPLUS_DEFICIT_NUM/MAX_CAPACITY*100,:NUM_AMOUNT_DECIMAL_POINT)
+                       WHEN ( SURPLUS_DEFICIT_NUM > 0 and  MAX_CAPACITY <= :ZERO)
+                         THEN ROUND(SURPLUS_DEFICIT_NUM/(MAX_CAPACITY+1)*100,:NUM_AMOUNT_DECIMAL_POINT)
+                       WHEN (SURPLUS_DEFICIT_NUM < 0 and MIN_SAFETY_STOCK >:ZERO)
+                         THEN ROUND(ABS(SURPLUS_DEFICIT_NUM)/MIN_SAFETY_STOCK*100,:NUM_AMOUNT_DECIMAL_POINT)
+                       WHEN (SURPLUS_DEFICIT_NUM < 0 and MIN_SAFETY_STOCK <=:ZERO)
+                         THEN ROUND(ABS(SURPLUS_DEFICIT_NUM)/(MIN_SAFETY_STOCK+1)*100,:NUM_AMOUNT_DECIMAL_POINT)
+                       ELSE 0
+                  END as SURPLUS_DEFICIT_PERCENT,
+                  T1.ALERT_SCORE_NORMALIZED,
+                  T2.ALERT_NUM,
+                  T2.ALERT_AGGREGATED_SCORE
+          FROM :tmp_tbl_planBubbleView_normal_alert_output T1 
+          left outer join :tmp_tbl_planBubbleView_aggregatedAlertNumScore_output T2
+          on (T1.PLAN_EXECUTION_ID = T2.PLAN_EXECUTION_ID and 
+              T1.NODE_ID = T2.NODE_ID and 
+              T1.LOCATION_ID = T2.LOCATION_ID and 
+              T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID and 
+              T1.SEQUENCE = T2.SEQUENCE) 
+        );
+        
+   select COUNT(1) into OUTPUT_RECORDS 
+   from "sap.tm.trp.db.hrf.planBubble::t_SD_KPI_BubbleRule_output" T1
+   where T1.PLAN_EXECUTION_ID = :PLAN_EXECUTION_ID;
+END;

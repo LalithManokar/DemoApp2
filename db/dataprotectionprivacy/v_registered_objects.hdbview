@@ -1,0 +1,19 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT T1.ID,
+                 T1.CODE,
+                 T1.NAME,
+                 T1.DESC,
+                 T1.CREATED_BY AS CREATED_BY,
+                 T1.MODIFIED_BY AS MODIFIED_BY
+            FROM \"sap.tm.trp.db.objectregistration::v_calculation_model_ui\" AS T1
+           UNION
+          SELECT T1.ID,
+                 T1.CODE,
+                 T1.NAME,
+                 T1.DESC,
+                 T1.CREATED_BY AS CREATED_BY,
+                 T1.MODIFIED_BY AS MODIFIED_BY
+            FROM \"sap.tm.trp.db.objectregistration::v_alert_rule_ui\" AS T1";
+
+depends_on_view = ["sap.tm.trp.db.objectregistration::v_calculation_model_ui", 
+                   "sap.tm.trp.db.objectregistration::v_alert_rule_ui"];

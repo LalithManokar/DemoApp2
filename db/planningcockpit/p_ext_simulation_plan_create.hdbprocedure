@@ -1,0 +1,120 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_ext_simulation_plan_create"(
+    IN NAME VARCHAR(200),
+    IN SD_PLAN_ID VARCHAR(22),
+    IN NETWORK_SETTING_GROUP_ID BIGINT,
+    IN DESC VARCHAR(500),
+    IN RESOURCE_CATEGORY VARCHAR(20), 
+    OUT SIMULATION_ID BIGINT,
+    OUT REPEATED_NAME VARCHAR(200),
+    OUT MESSAGE VARCHAR(200)
+)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    DECLARE USER_ID BIGINT;
+    DECLARE USER_NAME VARCHAR(60);
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE V_COUNT INT;
+    DECLARE SCENARIO_ID BIGINT;
+    DECLARE EXCUTE_ID BIGINT;
+    DECLARE PIPELINE_MODEL_COUNT INTEGER;
+    DECLARE STOCK_NODE_FLAG INTEGER;
+    DECLARE LOCATION_FILTER_ID BIGINT;
+    DECLARE LOCATION_FILTER_TYPE INTEGER;
+    DECLARE PLAN_STATUS INTEGER;
+    DECLARE GEO_NUM_IN_RES INTEGER;
+    DECLARE PRI_LOC_NUM_SET INTEGER;
+    DECLARE PRIMARY_LOC_NOT_SET INTEGER := 0;
+    DECLARE CUR_TIMESTAMP TIMESTAMP := CURRENT_UTCTIMESTAMP;
+    DECLARE SD_PLAN_OK INTEGER := 0;
+
+    -- The sd plan should be in 'ok' status
+	SELECT IFNULL(MAX(ID), 0) INTO PLAN_STATUS 
+	FROM "sap.tm.trp.db.pipeline::t_plan_model" 
+	WHERE ID = :SD_PLAN_ID AND STATUS = :SD_PLAN_OK;
+	
+	-- The latest execution result
+	SELECT IFNULL(MAX(ID), 0) INTO EXCUTE_ID 
+	FROM "sap.tm.trp.db.pipeline::t_plan_execution" 
+	WHERE PLAN_MODEL_ID = :SD_PLAN_ID;	
+        
+    --have both supply and demand data flag
+    SELECT COUNT(*) INTO PIPELINE_MODEL_COUNT
+    FROM "sap.tm.trp.db.pipeline::t_plan_model" AS A
+    INNER JOIN "sap.tm.trp.db.pipeline::v_pipeline_has_supply_demand" AS B
+    ON A.PIPELINE_MODEL_ID = B.PIPELINE_MODEL_ID
+    WHERE B.HAS_SUPPLY_DEMAND = 0 AND A.ID = :SD_PLAN_ID;
+    
+    --have stock flag
+    -- remove this constraint as the solver interface change(stock has been merged into SD) 
+    --SELECT COUNT(*) INTO STOCK_NODE_FLAG
+    --FROM "sap.tm.trp.db.pipeline::t_plan_model" AS A
+    --INNER JOIN "sap.tm.trp.db.pipeline::v_pipeline_node" B
+    --ON (A.PIPELINE_MODEL_ID = B.PIPELINE_MODEL_ID AND UPPER (B.NAME) LIKE '%STOCK%')
+    --WHERE B.RESULT_VISIBLE = 1 AND A.ID = :SD_PLAN_ID;
+    
+    -- Get count of GEO in execution result
+    SELECT COUNT(DISTINCT LOCATION_ID) INTO GEO_NUM_IN_RES
+    FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"
+    WHERE  PLAN_EXECUTION_ID = :EXCUTE_ID;
+                       
+    -- primary location must be set if aggregate location filter is used
+    -- inner join is used, so if the primary location is not set, the geo will be filterd out
+    CALL "sap.tm.trp.db.planningcockpit::p_get_loc_primaryloc_by_executionId" (:EXCUTE_ID,loc_list);
+    
+    SELECT COUNT(DISTINCT LOCATION_ID) INTO PRI_LOC_NUM_SET FROM :loc_list;
+    
+    -- GEO number and primary location number must be the same otherwise primary locations are not set fully
+    IF :GEO_NUM_IN_RES <> :PRI_LOC_NUM_SET THEN 
+       PRIMARY_LOC_NOT_SET := 1;
+    END IF;
+        
+    IF :PIPELINE_MODEL_COUNT > 0 THEN
+        MESSAGE := 'MSG_CALC_PLAN_NOT_VALID';
+    ELSEIF :PRIMARY_LOC_NOT_SET > 0 THEN
+        MESSAGE := 'MSG_PRIMARY_LOC_NOT_SET'; 
+    ELSEIF :EXCUTE_ID = 0 OR :GEO_NUM_IN_RES = 0 THEN
+       MESSAGE := 'MSG_SD_PLAN_NOT_EXECUTED';    
+    ELSEIF :PLAN_STATUS = 0 THEN 
+       MESSAGE := 'MSG_PLAN_STATUS_CHANGED';      
+    ELSE
+	    SELECT COUNT(*) INTO V_COUNT FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan"
+	     WHERE SD_PLAN_ID = :SD_PLAN_ID
+	       AND PLAN_STATUS = 0;
+	    
+	    IF  V_COUNT<>0 THEN
+	        MESSAGE:='MSG_ERROR_SAME_SD_PLAN_RECORD_EXIST';
+	        
+	        SELECT MAX(NAME) INTO REPEATED_NAME
+	        FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan"
+	        WHERE SD_PLAN_ID = :SD_PLAN_ID
+	        AND PLAN_STATUS = 0;
+	    ELSE          
+	    SELECT SPRAS INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code"; 
+	    
+	    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+	    SELECT USERNAME INTO USER_NAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";  
+	    
+	    SELECT "sap.tm.trp.db.planningcockpit::s_simulation".NEXTVAL INTO SIMULATION_ID FROM DUMMY;   
+
+	    
+	  --create simulation plan 
+	    INSERT INTO "sap.tm.trp.db.planningcockpit::t_simulation_plan"
+	                (ID, CODE, NAME, PLAN_STATUS, SD_PLAN_ID, NETWORK_SETTING_GROUP_ID,EXCUTE_ID, CREATED_BY, CREATED_ON,MODIFIED_BY,MODIFIED_ON, STATUS,RESOURCE_CATEGORY)
+	         VALUES (:SIMULATION_ID, UPPER(:NAME), :NAME, 0,:SD_PLAN_ID,:NETWORK_SETTING_GROUP_ID,:EXCUTE_ID, :USER_ID, :CUR_TIMESTAMP,:USER_ID, :CUR_TIMESTAMP, 0,:RESOURCE_CATEGORY);
+	    INSERT INTO "sap.tm.trp.db.planningcockpit::t_simulation_plan_t"(ID, SPRAS, DESC)
+	         VALUES (:SIMULATION_ID, :SPRAS, :DESC);	    
+         
+	  --insert related record into lock table   
+	    INSERT INTO "sap.tm.trp.db.planningcockpit::t_lock" 
+	                 (SESSION_ID,USER_ID,SIMULATION_ID,LAST_MODIFYED_ON)                
+	         VALUES  ('planningcockpit',:USER_ID,:SIMULATION_ID,null) ;       
+	                 
+	         
+	    MESSAGE := 'MSG_SUCCESS_STATUS' ; 
+	    
+	    END IF;  
+    END IF;
+END;

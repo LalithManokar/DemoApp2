@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" id="cv_inactive_plans_jobs" applyPrivilegeType="ANALYTIC_PRIVILEGE" dataCategory="CUBE" schemaVersion="2.3" defaultClient="$$client$$" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" scriptParametersCaseSensitive="true" enforceSqlExecution="false">
+<descriptions defaultDescription="cv_inactive_plans_jobs"/>
+<localVariables/>
+<variableMappings/>
+<dataSources/>
+<calculationViews>
+  <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+    <viewAttributes>
+      <viewAttribute id="MODEL_TYPE" datatype="VARCHAR" length="500"/>
+      <viewAttribute id="MODEL_ID" datatype="BIGINT"/>
+
+      <viewAttribute id="MODEL_NAME" datatype="VARCHAR" length="200"/>
+    </viewAttributes>
+    <calculatedViewAttributes/>
+    <definition>/********* Begin Procedure Script ************/
+BEGIN
+   
+   CALL &quot;SAP_TM_TRP&quot;.&quot;sap.tm.trp.db.consistencycheck::p_get_inactive_ruleset_groups&quot;(GROUP1);
+
+   CALL &quot;SAP_TM_TRP&quot;.&quot;sap.tm.trp.db.consistencycheck::p_get_inactive_plans&quot;(PLAN1);
+
+   var_out = select 'PLAN' AS MODEL_TYPE,ID AS MODEL_ID, NAME AS MODEL_NAME from :PLAN1
+             UNION
+             SELECT SCHEDULE_TYPE AS MODEL_TYPE, ID AS MODEL_ID, RULE_NAME AS MODEL_NAME FROM :GROUP1;
+
+END /********* End Procedure Script ************/  </definition>
+  </calculationView>
+</calculationViews>
+<logicalModel id="Script_View">
+  <attributes>
+    <attribute id="MODEL_TYPE" order="1">
+      <keyMapping columnObjectName="Script_View" columnName="MODEL_TYPE"/>
+    </attribute>
+    <attribute id="MODEL_NAME" order="3">
+      <keyMapping columnObjectName="Script_View" columnName="MODEL_NAME"/>
+    </attribute>
+  </attributes>
+  <calculatedAttributes/>
+  <baseMeasures>
+    <measure id="MODEL_ID" order="2" aggregationType="count" measureType="simple">
+      <descriptions defaultDescription="COL"/>
+      <measureMapping columnObjectName="Script_View" columnName="MODEL_ID"/>
+    </measure>
+  </baseMeasures>
+  <calculatedMeasures/>
+  <restrictedMeasures/>
+  <localDimensions/>
+</logicalModel>
+<layout>
+  <shapes>
+    <shape expanded="true" modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+      <upperLeftCorner x="40" y="85"/>
+    </shape>
+  </shapes>
+</layout>
+</Calculation:scenario>

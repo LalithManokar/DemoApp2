@@ -1,0 +1,76 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_update_global_dataset" (
+    IN from_date DATE,
+    IN to_date DATE,
+    IN config "sap.tm.trp.routing.db.common::tt_config",
+    IN connection_list "sap.tm.trp.routing.db.dataset::tt_connection",
+    IN connection_carrier "sap.tm.trp.routing.db.dataset::tt_connection_carrier", 
+	OUT return_code TINYINT,
+	OUT message "sap.tm.trp.routing.db.common::tt_message",
+	OUT log "sap.tm.trp.routing.db.common::tt_message"
+	)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING"
+   AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+    DECLARE msg_param TABLE(placeholder INTEGER, value NVARCHAR(100));
+	DECLARE global_dataset_id BIGINT := 0;
+	DECLARE global_dataset_code NVARCHAR(50) := 'TM_INTERMODAL';
+	DECLARE path_count INTEGER;
+    DECLARE dataset_code NVARCHAR(50);
+    DECLARE msg_params TABLE(PLACEHOLDER INTEGER, VALUE NVARCHAR(100));
+	
+	-- Check whether the dataset exist or not
+	DECLARE EXIT HANDLER FOR SQL_ERROR_CODE 1299
+    BEGIN
+        return_code = 1;
+        msg_param = SELECT 0 AS placeholder, '' AS value FROM DUMMY WHERE 1 <> 1;
+	    CALL "SAP_TM_ROUTING"."sap.tm.trp.routing.db.common::p_get_text"
+        ('MSG_GLOBAL_DATASET_NOT_EXIST', :msg_param, 'E', :message);
+    END;
+    
+    -- Lock global dataset and check existence
+    SELECT code INTO dataset_code FROM "sap.tm.trp.routing.db.dataset::t_dataset"
+    WHERE id = :global_dataset_id FOR UPDATE;
+	
+	-- Get basic path from connector
+	CALL "sap.tm.trp.routing.db.connector::p_build_basic_path" (
+	    to_timestamp(:from_date), to_timestamp(:to_date), 
+	    :return_code, path_list_tmp, path_conn_list_tmp, :message);
+	
+	IF return_code <> 0 THEN
+	    RETURN;
+    END IF;
+    
+    SELECT COUNT(*) INTO path_count FROM :path_list_tmp;
+    
+    msg_param = SELECT 0 AS PLACEHOLDER, TO_VARCHAR(:path_count) AS VALUE FROM DUMMY;
+    call "sap.tm.trp.routing.db.common::p_get_text"
+    ('MSG_BASIC_PATH_RETRIEVED', :msg_param, 'I', :log);
+	
+	paths = select id, name, type, from_location, to_location, mtr, carrier
+	from :path_list_tmp;
+    		
+    path_connection = select path_id, sequence, from_location,
+    to_location, distance, duration, stay_time, cutoff_offset, availability_offset
+    from :path_conn_list_tmp;
+    
+    locations = SELECT '' AS location_id FROM DUMMY WHERE 1 <> 1;
+	
+	CALL "sap.tm.trp.routing.db.dataset::p_update_dataset"(
+	    :global_dataset_id, :from_date, :to_date, :locations, :connection_list, :connection_carrier, 
+	    :paths, :path_connection, :return_code, :message);
+    
+    IF :return_code = 0 THEN
+        msg_param = SELECT 0 AS PLACEHOLDER, :dataset_code AS VALUE FROM DUMMY;
+	    CALL "SAP_TM_ROUTING"."sap.tm.trp.routing.db.common::p_get_text"
+        ('MSG_DATASET_UPDATED_SUCCESS', :msg_param, 'I', :message_tmp);
+        
+        message = SELECT * FROM :message
+        UNION ALL SELECT * FROM :message_tmp;
+    END IF;
+END
+;

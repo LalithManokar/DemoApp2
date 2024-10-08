@@ -1,0 +1,78 @@
+schema = "SAP_TM_TRP";
+query = "-- List All Geo Infos Belonged to Filters (Select Type Mix)
+         SELECT DISTINCT T1.FILTER_GROUP_ID,
+                T2.LOCATION_ID AS GEO_ID,
+                LOC.XPOS AS XPOS,
+                LOC.YPOS AS YPOS,
+                1 AS USER_TYPE
+           FROM \"sap.tm.trp.db.filter::t_filter_location_filter\" AS T1
+                INNER JOIN \"sap.tm.trp.db.filter::t_location_filter_location\" AS T2
+                ON T1.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID
+                INNER JOIN \"sap.tm.trp.db.semantic.location::v_location\" AS LOC
+                ON T2.LOCATION_ID = LOC.ID 
+          UNION
+         SELECT DISTINCT T1.FILTER_GROUP_ID,
+                T2.LOCATION_ID AS LOCATION_ID,
+                LOC.XPOS AS XPOS,
+                LOC.YPOS AS YPOS,
+                1 AS USER_TYPE
+           FROM \"sap.tm.trp.db.filter::t_filter_location_filter\" AS T1
+                INNER JOIN \"sap.tm.trp.db.filter::t_location_filter_location\" AS T3
+                ON T1.LOCATION_FILTER_ID = T3.LOCATION_FILTER_ID
+                INNER JOIN \"sap.tm.trp.db.systemmanagement::t_location_group_item\" AS T2
+                ON T3.LOCATION_GROUP_ID = T2.LOCATION_GROUP_ID
+                INNER JOIN \"sap.tm.trp.db.semantic.location::v_location\" AS LOC
+                ON T2.LOCATION_ID = LOC.ID
+          UNION
+         SELECT DISTINCT T1.FILTER_GROUP_ID,
+                T3.ZONE_ID AS GEO_ID,
+                ZON.XPOS AS XPOS,
+                ZON.YPOS AS YPOS,
+                2 AS USER_TYPE
+           FROM \"sap.tm.trp.db.filter::t_filter_location_filter\" AS T1
+                INNER JOIN \"sap.tm.trp.db.filter::t_location_filter_zone\" AS T3
+                ON T1.LOCATION_FILTER_ID = T3.LOCATION_FILTER_ID
+                INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_zone_ui\" AS ZON
+                ON T3.ZONE_ID = ZON.ID
+          UNION
+         SELECT DISTINCT T1.FILTER_GROUP_ID,
+                T2.ZONE_ID AS GEO_ID,
+                ZON.XPOS AS XPOS,
+                ZON.YPOS AS YPOS,
+                2 AS USER_TYPE
+           FROM \"sap.tm.trp.db.filter::t_filter_location_filter\" AS T1
+                INNER JOIN \"sap.tm.trp.db.filter::t_location_filter_zone\" AS T3
+                ON T1.LOCATION_FILTER_ID = T3.LOCATION_FILTER_ID
+                INNER JOIN \"sap.tm.trp.db.systemmanagement::t_zone_group_item\" AS T2
+                ON T3.ZONE_GROUP_ID = T2.ZONE_GROUP_ID
+                INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_zone_ui\" AS ZON
+                ON T2.ZONE_ID = ZON.ID
+          UNION
+         SELECT DISTINCT T1.FILTER_GROUP_ID,
+                T3.ZONE_ID AS GEO_ID,
+                REG.XPOS AS XPOS,
+                REG.YPOS AS YPOS,
+                3 AS USER_TYPE
+           FROM \"sap.tm.trp.db.filter::t_filter_location_filter\" AS T1
+                INNER JOIN \"sap.tm.trp.db.filter::t_location_filter_region\" AS T3
+                ON T1.LOCATION_FILTER_ID = T3.LOCATION_FILTER_ID
+                INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_region_coordinate\" AS REG
+                ON T3.ZONE_ID = REG.REGION_ID
+          UNION
+         SELECT DISTINCT T1.FILTER_GROUP_ID,
+                T2.ZONE_ID AS GEO_ID,
+                REG.XPOS AS XPOS,
+                REG.YPOS AS YPOS,
+                3 AS USER_TYPE
+           FROM \"sap.tm.trp.db.filter::t_filter_location_filter\" AS T1
+                INNER JOIN \"sap.tm.trp.db.filter::t_location_filter_region\" AS T3
+                ON T1.LOCATION_FILTER_ID = T3.LOCATION_FILTER_ID
+                INNER JOIN \"sap.tm.trp.db.systemmanagement::t_region_group_item\" AS T2
+                ON T3.REGION_GROUP_ID = T2.REGION_GROUP_ID
+                INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_region_coordinate\" AS REG
+                ON T2.ZONE_ID = REG.REGION_ID
+       ORDER BY FILTER_GROUP_ID";
+       
+ depends_on_view = ["sap.tm.trp.db.semantic.location::v_location", "sap.tm.trp.db.systemmanagement.location::v_zone_ui", "sap.tm.trp.db.systemmanagement.location::v_region_coordinate"];
+ depends_on_table = ["sap.tm.trp.db.filter::t_location_filter_location","sap.tm.trp.db.filter::t_location_filter_zone","sap.tm.trp.db.filter::t_location_filter_region", "sap.tm.trp.db.filter::t_filter_location_filter", "sap.tm.trp.db.systemmanagement::t_location_group_item", "sap.tm.trp.db.systemmanagement::t_zone_group_item", "sap.tm.trp.db.systemmanagement::t_region_group_item"];
+       

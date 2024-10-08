@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_lease_contract_history_details_by_equip" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_lease_contract_history_equip_details"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="LEASE_CONTRACT_ID" parameter="true">
+      <descriptions defaultDescription="LEASE_CONTRACT_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="EQUIPMENT_CODE" parameter="true">
+      <descriptions defaultDescription="EQUIPMENT_CODE"/>
+      <variableProperties datatype="VARCHAR" length="22" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="EQUIPMENT_CODE_TYPE" parameter="true">
+      <descriptions defaultDescription="EQUIPMENT_CODE_TYPE"/>
+      <variableProperties datatype="INTEGER" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="RESOURCE_CATEGORY" parameter="true">
+      <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+      <variableProperties datatype="VARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="EQUIPMENT_ID" length="40"/>
+        <viewAttribute datatype="VARCHAR" id="EQUIPMENT_TYPE" length="10"/>
+        <viewAttribute datatype="TIMESTAMP" id="ON_HIRE_DATE"/>
+        <viewAttribute datatype="NVARCHAR" id="ON_HIRE_LOCATION" length="100"/>
+        <viewAttribute datatype="TIMESTAMP" id="OFF_HIRE_DATE"/>
+        <viewAttribute datatype="NVARCHAR" id="OFF_HIRE_LOCATION" length="100"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#LEASE_CONTRACT_ID</localVariable>
+      <localVariable>#EQUIPMENT_CODE</localVariable>
+      <localVariable>#EQUIPMENT_CODE_TYPE</localVariable>
+      <localVariable>#RESOURCE_CATEGORY</localVariable>
+      <definition>BEGIN 
+    DECLARE AUTH SMALLINT;
+    DECLARE ON_HIRE_TYPE SMALLINT := 1;
+    DECLARE OFF_HIRE_TYPE SMALLINT := 2;
+ 	DECLARE CUSTOMCONDITION CONDITION FOR SQL_ERROR_CODE 10001;/* Custom Error Code = 10001*/
+
+	/*User Defined exception handler */
+	
+	DECLARE EXIT HANDLER FOR CUSTOMCONDITION RESIGNAL ;
+	
+	CALL &quot;SAP_TM_TRP&quot;.&quot;sap.tm.trp.db.leasecontract::p_check_lease_authorization&quot;(
+	  	:AUTH
+		);	
+	IF AUTH = 0 THEN
+		/* Signaling Custom error and setting the Custom Error Message */
+		SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'USER IS NOT AUTHORIZED TO ACCESS LEASE ';
+	END IF;     
+
+    
+IF :EQUIPMENT_CODE_TYPE = 1 THEN 
+	var_out = 
+	SELECT 
+		ONH.EQUIPMENT_ID,
+		ONH.EQUIPMENT_TYPE,
+		ONH.ON_HIRE_DATE,
+		ONH.ON_HIRE_LOCATION,
+		OFFH.OFF_HIRE_DATE,
+		OFFH.OFF_HIRE_LOCATION
+	FROM (SELECT 
+			   LH.RESOURCE_NAME AS EQUIPMENT_ID,
+			   LH.RESOURCE_TYPE AS EQUIPMENT_TYPE,
+		       LH.EVENT_TIME AS ON_HIRE_DATE,
+		       LH.LOCATION_NAME AS ON_HIRE_LOCATION,
+		       ROW_NUMBER() over (partition by RESOURCE_ID order by EVENT_TIME) as ROW_NUM
+		  FROM &quot;sap.tm.trp.db.semantic.event::v_lease_resource_history&quot; LH
+	      INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot; LC
+	            	ON LH.LEASE_CONTRACT_REFERENCE = LC.LEASE_CONTRACT_REFERENCE
+	      INNER JOIN &quot;sap.tm.trp.db.semantic.resource::t_resource_category&quot; RCS
+	                ON LH.RESOURCE_CATEGORY = RCS.MAPPING_CODE AND RCS.CODE = :RESOURCE_CATEGORY     					
+		  WHERE LH.HIRE_TYPE= :ON_HIRE_TYPE
+		  AND LC.ID=:LEASE_CONTRACT_ID 
+		  AND LH.RESOURCE_TYPE =:EQUIPMENT_CODE
+		  ) ONH
+	LEFT OUTER JOIN 
+	      (SELECT 
+		       LH.RESOURCE_NAME AS EQUIPMENT_ID,
+		       LH.EVENT_TIME AS OFF_HIRE_DATE,
+		       LH.LOCATION_NAME AS OFF_HIRE_LOCATION,
+		       ROW_NUMBER() over (partition by RESOURCE_ID order by EVENT_TIME) as ROW_NUM
+		  FROM &quot;sap.tm.trp.db.semantic.event::v_lease_resource_history&quot; LH
+	      INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot; LC
+	            	ON LH.LEASE_CONTRACT_REFERENCE = LC.LEASE_CONTRACT_REFERENCE
+	      INNER JOIN &quot;sap.tm.trp.db.semantic.resource::t_resource_category&quot; RCS
+	                ON LH.RESOURCE_CATEGORY = RCS.MAPPING_CODE AND RCS.CODE = :RESOURCE_CATEGORY      	
+		  WHERE LH.HIRE_TYPE= :OFF_HIRE_TYPE 
+		  AND LC.ID=:LEASE_CONTRACT_ID 
+		  AND LH.RESOURCE_TYPE =:EQUIPMENT_CODE
+		  ) OFFH
+	ON ONH.EQUIPMENT_ID = OFFH.EQUIPMENT_ID AND ONH.ROW_NUM = OFFH.ROW_NUM;
+ELSE IF :EQUIPMENT_CODE_TYPE = 2 THEN 
+	var_out = 
+	SELECT 
+		ONH.EQUIPMENT_ID,
+        ONH.EQUIPMENT_TYPE,		
+		ONH.ON_HIRE_DATE,
+		ONH.ON_HIRE_LOCATION,
+		OFFH.OFF_HIRE_DATE,
+		OFFH.OFF_HIRE_LOCATION
+	FROM (SELECT 
+			   LH.RESOURCE_NAME AS EQUIPMENT_ID,
+			   LH.RESOURCE_TYPE AS EQUIPMENT_TYPE,
+		       LH.EVENT_TIME AS ON_HIRE_DATE,
+		       LH.LOCATION_NAME AS ON_HIRE_LOCATION,
+		       ROW_NUMBER() over (partition by RESOURCE_ID order by EVENT_TIME) as ROW_NUM
+		  FROM &quot;sap.tm.trp.db.semantic.event::v_lease_resource_history&quot; LH
+	      INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot; LC ON LH.LEASE_CONTRACT_REFERENCE = LC.LEASE_CONTRACT_REFERENCE
+	      INNER JOIN &quot;sap.tm.trp.db.semantic.resource::t_resource_category&quot; RCS
+	                ON LH.RESOURCE_CATEGORY = RCS.MAPPING_CODE AND RCS.CODE = :RESOURCE_CATEGORY  
+	      INNER JOIN 
+	      ( SELECT DISTINCT EGI.EQUI_CODE 
+		  	FROM &quot;sap.tm.trp.db.systemmanagement::t_equipment_group&quot; EG
+			INNER JOIN &quot;sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth&quot; EGI ON EG.ID = EGI.EQUIPMENT_GROUP_ID 
+		    WHERE EG.CODE = :EQUIPMENT_CODE
+		  ) RES ON LH.RESOURCE_TYPE = RES.EQUI_CODE 
+		  WHERE LH.HIRE_TYPE= :ON_HIRE_TYPE
+		  AND LC.ID=:LEASE_CONTRACT_ID  
+		  ) ONH
+	LEFT OUTER JOIN 
+	      (SELECT 
+		       LH.RESOURCE_NAME AS EQUIPMENT_ID,
+		       LH.EVENT_TIME AS OFF_HIRE_DATE,
+		       LH.LOCATION_NAME AS OFF_HIRE_LOCATION,
+		       ROW_NUMBER() over (partition by RESOURCE_ID order by EVENT_TIME) as ROW_NUM
+		  FROM &quot;sap.tm.trp.db.semantic.event::v_lease_resource_history&quot; LH
+	      INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot; LC ON LH.LEASE_CONTRACT_REFERENCE = LC.LEASE_CONTRACT_REFERENCE
+	      INNER JOIN &quot;sap.tm.trp.db.semantic.resource::t_resource_category&quot; RCS
+	                ON LH.RESOURCE_CATEGORY = RCS.MAPPING_CODE AND RCS.CODE = :RESOURCE_CATEGORY  
+	      INNER JOIN          
+	      ( SELECT DISTINCT EGI.EQUI_CODE 
+		  	FROM &quot;SAP_TM_TRP&quot;.&quot;sap.tm.trp.db.systemmanagement::t_equipment_group&quot; EG 
+			INNER JOIN &quot;SAP_TM_TRP&quot;.&quot;sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth&quot; EGI ON EG.ID = EGI.EQUIPMENT_GROUP_ID 
+			WHERE EG.CODE = :EQUIPMENT_CODE
+           ) RES ON LH.RESOURCE_TYPE = RES.EQUI_CODE  
+		  WHERE LH.HIRE_TYPE= :OFF_HIRE_TYPE
+		  AND LC.ID=:LEASE_CONTRACT_ID 		  
+		  ) OFFH
+	ON ONH.EQUIPMENT_ID = OFFH.EQUIPMENT_ID AND ONH.ROW_NUM = OFFH.ROW_NUM;
+END IF;
+END IF;
+END</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="EQUIPMENT_ID" order="1">
+        <descriptions defaultDescription="EQUIPMENT_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_ID"/>
+      </attribute>
+      <attribute id="EQUIPMENT_TYPE" order="2">
+        <descriptions defaultDescription="EQUIPMENT_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_TYPE"/>
+      </attribute>
+      <attribute id="ON_HIRE_DATE" order="3">
+        <descriptions defaultDescription="ON_HIRE_DATE"/>
+        <keyMapping columnObjectName="Script_View" columnName="ON_HIRE_DATE"/>
+      </attribute>
+      <attribute id="ON_HIRE_LOCATION" order="4">
+        <descriptions defaultDescription="ON_HIRE_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="ON_HIRE_LOCATION"/>
+      </attribute>
+      <attribute id="OFF_HIRE_DATE" order="5">
+        <descriptions defaultDescription="OFF_HIRE_DATE"/>
+        <keyMapping columnObjectName="Script_View" columnName="OFF_HIRE_DATE"/>
+      </attribute>
+      <attribute id="OFF_HIRE_LOCATION" order="6">
+        <descriptions defaultDescription="OFF_HIRE_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="OFF_HIRE_LOCATION"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

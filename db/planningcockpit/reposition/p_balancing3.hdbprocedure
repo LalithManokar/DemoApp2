@@ -1,0 +1,197 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::p_balancing3"(
+IN name_value_conf "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_name_value_conf",
+IN t_supply_demand "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_supply_demand_range",
+IN t_route "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_route",
+IN t_route_cap "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_route_cap",
+IN t_type_teu "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_type_teu",
+IN t_storage_cost "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_storage_cost_time",
+IN t_safety_stock "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_safety_stock",
+IN t_penalty_cost "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_penalty_cost",
+OUT t_route_res "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_route_res",
+OUT t_bottleneck "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_bottleneck",
+OUT t_new_supply_demand "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_supply_demand_range",
+OUT t_new_route_cap "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_route_cap",
+OUT v_obj DOUBLE,
+OUT solver_runtime INT,
+OUT flag VARCHAR(20)
+)
+LANGUAGE SQLSCRIPT 
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN 
+
+DECLARE v_obj1 DOUBLE;
+DECLARE flag1 VARCHAR(20);
+DECLARE solver_runtime1 INT;
+
+
+--solve demand
+select * from :t_supply_demand;
+
+
+t_node_s_tbl = SELECT A."START_TIME",
+					  A."END_TIME",
+					  A."LOCATION",
+					  A."CONTAINER_TYPE",
+					  0 AS "SUPPLY",
+					  0 AS "DEMAND"
+					  -- Confirmed by Terry, target stock will not counted into the demand value, now the demand value = current demand + minimum stock value
+					  --IFNULL(B."TARGET_STOCK",0) AS "DEMAND"
+			   FROM :t_supply_demand A
+			   LEFT JOIN :t_safety_stock B
+			   ON A."LOCATION"=B."LOCATION"
+			   AND A."CONTAINER_TYPE"=B."CONTAINER_TYPE";
+
+t_node_s_tbl_aug = SELECT ROW_NUMBER() OVER() AS "KEY",
+						  *
+				    FROM :t_node_s_tbl
+				    ORDER BY "START_TIME";
+
+t_node_s_key = SELECT "KEY",
+					  "LOCATION",
+					  "CONTAINER_TYPE"
+			   FROM :t_node_s_tbl_aug;
+			   
+t_node_s_extract = SELECT MIN("KEY") AS "KEY" FROM :t_node_s_key GROUP BY "LOCATION","CONTAINER_TYPE";
+
+t_node_s_get = SELECT A."START_TIME",
+					  A."END_TIME",
+					  A."LOCATION",
+					  A."CONTAINER_TYPE",
+					  A."SUPPLY",
+					  A."DEMAND"
+				FROM :t_node_s_tbl_aug A
+				INNER JOIN :t_node_s_extract B
+				ON A."KEY"=B."KEY";
+
+t_supply_demand_aug = SELECT * FROM :t_supply_demand
+				  UNION ALL
+				  SELECT * FROM :t_node_s_get;
+				  
+t_supply_demand_aug = SELECT "START_TIME",
+						 "END_TIME",
+						 "LOCATION",
+						 "CONTAINER_TYPE",
+						 SUM("SUPPLY") AS "SUPPLY",
+						 SUM("DEMAND") AS "DEMAND"
+				  FROM :t_supply_demand_aug
+				  GROUP BY "START_TIME",
+						   "END_TIME",
+						   "LOCATION",
+						   "CONTAINER_TYPE";		  
+
+CALL "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::p_balancing2"(
+:name_value_conf,
+:t_supply_demand_aug,
+:t_route,
+:t_route_cap,
+:t_type_teu,
+:t_storage_cost,
+:t_penalty_cost,
+t_route_res,
+t_bottleneck,
+v_obj,
+solver_runtime,
+flag);
+
+
+--update sd plan and capacity
+
+t_delta_supply_demand = SELECT A."START_TIME",
+				    		   A."END_TIME",
+							   A."LOCATION",
+							   A."CONTAINER_TYPE",
+							   IFNULL(B."QUANTITY",0) AS "SUPPLY",
+							   IFNULL(C."QUANTITY",0) AS "DEMAND"
+						FROM :t_supply_demand A
+						LEFT JOIN :t_route_res B
+						ON A."LOCATION"=B."TO_LOCATION"
+						AND A."CONTAINER_TYPE"=B."CONTAINER_TYPE"
+						AND SECONDS_BETWEEN(A."START_TIME",B."TO_TIME")>=0
+						AND SECONDS_BETWEEN(A."END_TIME",B."TO_TIME")<0
+						LEFT JOIN :t_route_res C
+						ON A."LOCATION"=C."FROM_LOCATION"
+						AND A."CONTAINER_TYPE"=C."CONTAINER_TYPE"
+						AND SECONDS_BETWEEN(A."START_TIME",C."FROM_TIME")>=0
+						AND SECONDS_BETWEEN(A."END_TIME",C."FROM_TIME")<0;
+						
+
+t_new_supply_demand = SELECT * FROM :t_supply_demand
+					  UNION ALL
+					  SELECT * FROM :t_delta_supply_demand;
+
+t_new_supply_demand = SELECT "START_TIME",
+							 "END_TIME",
+							 "LOCATION",
+							 "CONTAINER_TYPE",
+							 SUM("SUPPLY") AS "SUPPLY",
+							 SUM("DEMAND") AS "DEMAND"
+					  FROM :t_new_supply_demand
+					  GROUP BY "START_TIME",
+							 "END_TIME",
+							 "LOCATION",
+							 "CONTAINER_TYPE";
+
+t_delta_group_cap = SELECT A."GROUP_ID",
+						   A."CONTAINER_TYPE",
+						   B."QUANTITY"
+					FROM :t_route_cap A
+					INNER JOIN :t_route_res B
+					ON A."CONTAINER_TYPE"=B."CONTAINER_TYPE"
+					AND A."ROUTE_ID"=B."ROUTE_ID";
+
+t_delta_group_cap = SELECT "GROUP_ID",
+						   "CONTAINER_TYPE",
+						   SUM("QUANTITY") AS "QUANTITY"
+					FROM :t_delta_group_cap
+					GROUP BY "GROUP_ID","CONTAINER_TYPE";
+
+--teu based
+t_new_route_cap = SELECT A."ROUTE_ID",
+						 A."CONTAINER_TYPE",
+						 A."GROUP_ID",
+						 IFNULL(A."CAPACITY"-B."QUANTITY"*"TEU",A."CAPACITY") AS "CAPACITY" ,
+						 A."TYPE"
+				  FROM :t_route_cap A
+				  LEFT JOIN :t_delta_group_cap B
+				  ON A."GROUP_ID"=B."GROUP_ID"
+				  AND A."CONTAINER_TYPE"=B."CONTAINER_TYPE"
+				  LEFT JOIN :t_type_teu C
+				  ON A."CONTAINER_TYPE"=C."CONTAINER_TYPE";
+
+
+--teu based
+t_bottleneck = SELECT  A."GROUP_ID",
+					   IFNULL(A."CAPACITY"-B."QUANTITY"*"TEU",A."CAPACITY") AS "REMAINING_SPACE" 
+			   FROM :t_route_cap A
+			   LEFT JOIN :t_delta_group_cap B
+			   ON A."GROUP_ID"=B."GROUP_ID"
+			   AND A."CONTAINER_TYPE"=B."CONTAINER_TYPE"
+			   LEFT JOIN :t_type_teu C
+			   ON A."CONTAINER_TYPE"=C."CONTAINER_TYPE";			  
+
+t_bottleneck = SELECT "GROUP_ID",
+					  MIN("REMAINING_SPACE") AS "REMAINING_SPACE"
+			   FROM :t_bottleneck 
+			   GROUP BY "GROUP_ID";
+
+
+			  
+t_route_res = SELECT "ROUTE_ID",
+					 "CONTAINER_TYPE",
+					 SUM("QUANTITY") AS "QUANTITY",
+					 SUM("TOTAL_COST") AS "TOTAL_COST",
+					 "FROM_LOCATION",
+					 "TO_LOCATION",
+					 "FROM_TIME",
+					 "TO_TIME"
+			  FROM :t_route_res
+			  GROUP BY "ROUTE_ID",
+					 "CONTAINER_TYPE",
+					 "FROM_LOCATION",
+					 "TO_LOCATION",
+					 "FROM_TIME",
+					 "TO_TIME";
+
+END;

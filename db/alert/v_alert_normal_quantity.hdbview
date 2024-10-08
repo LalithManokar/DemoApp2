@@ -1,0 +1,22 @@
+//To define the HDB view file use the following syntax: 
+schema = "SAP_TM_TRP";
+query = "
+select 
+     t.PLAN_EXECUTION_ID,
+     t.NODE_ID as PIPELINE_NODE_ID,
+     t.LOCATION_ID as LOC_ZONE_REGION_ID,
+     Sum(CASE WHEN MESSAGE = 'Alert'
+         THEN 1
+         ELSE 0
+     END ) as ALERT_NUM,
+     Max(CASE WHEN MESSAGE = 'Alert'
+         THEN ALERT_SCORE_NORMALIZING
+         ELSE 0
+     END) as ALERT_SCORE,
+     t.FILTER_TYPE as LOC_ZONE_REGION_GROUP_FLAG
+    from \"sap.tm.trp.db.alert::t_alert_DT_output_alertScore_timeInterval\" t
+    group by t.PLAN_EXECUTION_ID,t.FILTER_TYPE,t.NODE_ID,t.LOCATION_ID
+    
+ ";
+ 
+ depends_on_table = ["sap.tm.trp.db.alert::t_alert_DT_output_alertScore_timeInterval"];

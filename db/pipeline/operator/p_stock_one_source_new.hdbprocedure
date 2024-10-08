@@ -1,0 +1,15 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline.operator::p_stock_one_source_new" (
+IN input1 "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+OUT sum "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets" 
+)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+ sum = 
+	SELECT 'STOCK' AS NODE_ID, T1.GEO_ID, T1.GEO_NAME, T1.GEO_FILTER_TYPE, T1.EQUIP_TYPE, T1.EQUIP_NAME, T1.EQUIP_FILTER_TYPE, 
+	       T1.TIME_INTERVAL_ID, T1.SEQUENCE, T1.START_TIME, T1.END_TIME, T1.INTER_SECONDS, 'STOCK' AS OUTPUT_KEY, 
+	       T1.OUTPUT_VALUE, T1.UNIT
+    FROM  :input1 T1; 
+END;

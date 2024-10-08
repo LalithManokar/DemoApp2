@@ -1,0 +1,18 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline.operator.instant::p_time_interval_source" (
+	IN BASIC_DATASET_T "sap.tm.trp.db.supplydemand.instant::tt_sd_output",
+    OUT DATASET_T "sap.tm.trp.db.supplydemand.instant::tt_sd_output"
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+
+--fetch time period details - created with custom node_id to add missing node period for provisional stock operator/pipeline 
+  DATASET_T =   
+    SELECT NODE_ID,GEO_ID,GEO_NAME,GEO_FILTER_TYPE, EQUIP_TYPE,EQUIP_NAME,EQUIP_FILTER_TYPE,
+           TIME_INTERVAL_ID,SEQUENCE,START_TIME,END_TIME,INTER_SECONDS,
+           OUTPUT_KEY, OUTPUT_VALUE,UNIT
+    FROM :BASIC_DATASET_T
+    WHERE NODE_ID = '$$SD_PLAN_TIME_INTERVAL$$';
+END;

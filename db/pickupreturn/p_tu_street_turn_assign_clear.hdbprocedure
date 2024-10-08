@@ -1,0 +1,20 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_tu_street_turn_assign_clear" (
+    IN RULE_ID  BIGINT,
+    IN TU_ID VARCHAR(22)  
+ ) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+/***************************** 
+	Write your procedure logic 
+ *****************************/
+   UPDATE "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft" 
+      SET STREETTURN_TU_ID ='',
+          FLAG = 0
+    WHERE RULE_ID = :RULE_ID
+      AND TU_ID = :TU_ID; 
+ 
+END;
+  

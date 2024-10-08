@@ -1,0 +1,50 @@
+schema = "SAP_TM_TRP";
+query = "
+SELECT
+    ALERT_GRP_TBL.ALERT_RULE_GROUP_ID AS ID,
+    ALERT_GRP_TBL.CODE,
+    ALERT_GRP_TBL.NAME,
+    IFNULL(I18N_TEXT_TBL.DESC, ALERT_GRP_TBL.DESC) AS DESC,
+    ALERT_GRP_TBL.ALERT_RULE_GROUP_CATEGORY_ID AS CATEGORY_ID,
+    CATEGORY_T_TBL.DESC AS CATEGORY_NAME,
+    OBJ_TYPE_TBL.ID AS CONTAINING_OBJECT_TYPE_ID,
+    OBJ_TYPE_TBL.NAME AS CONTAINING_OBJECT_TYPE_NAME,
+    T4.DESC AS VISIBILITY_DESC,
+    ALERT_GRP_TBL.ALLOWED_USAGE AS VISIBILITY,
+    USER_TBL_CREATE.USERNAME AS CREATED_BY,
+    ALERT_GRP_TBL.CREATE_ON  AS CREATED_TIME,
+    USER_TBL_MODIFY.USERNAME AS MODIFIED_BY,
+    IFNULL(ALERT_GRP_TBL.LAST_MODIFIED_ON, ALERT_GRP_TBL.CREATE_ON) AS MODIFIED_TIME,
+    ALERT_GRP_TBL.RESOURCE_CATEGORY as RESOURCE_CATEGORY
+FROM
+    \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group\" AS ALERT_GRP_TBL
+    INNER JOIN \"sap.tm.trp.db.systemmanagement::t_visibility_type\" T3 ON T3.CODE = ALERT_GRP_TBL.ALLOWED_USAGE
+    LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement::t_visibility_type_t\" T4 ON T4.ID = T3.ID AND T4.SPRAS = IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E')
+    LEFT OUTER JOIN \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_category\" AS GRP_CATEGORY_TBL
+    ON ALERT_GRP_TBL.ALERT_RULE_GROUP_CATEGORY_ID = GRP_CATEGORY_TBL.ALERT_RULE_GROUP_CATEGORY_ID
+    LEFT OUTER JOIN \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_category_t\" AS CATEGORY_T_TBL
+    ON CATEGORY_T_TBL.ID = GRP_CATEGORY_TBL.ALERT_RULE_GROUP_CATEGORY_ID AND CATEGORY_T_TBL.SPRAS = IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E')
+    LEFT OUTER JOIN \"sap.tm.trp.db.objectregistration::t_object_type\" AS OBJ_TYPE_TBL
+    ON GRP_CATEGORY_TBL.CONTAINING_OBJECT_TYPE_ID = OBJ_TYPE_TBL.ID
+    LEFT OUTER JOIN \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_t\" AS I18N_TEXT_TBL
+    ON ALERT_GRP_TBL.ALERT_RULE_GROUP_ID = I18N_TEXT_TBL.ID AND I18N_TEXT_TBL.SPRAS = IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E')
+    LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS USER_TBL_CREATE
+    ON ALERT_GRP_TBL.CREATE_BY = USER_TBL_CREATE.ID
+    LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS USER_TBL_MODIFY
+    ON ALERT_GRP_TBL.LAST_MODIFIED_BY = USER_TBL_MODIFY.ID
+    LEFT JOIN \"sap.tm.trp.db.systemmanagement.user::cv_get_username\" T1 ON T1.USERNAME = USER_TBL_CREATE.USERNAME
+WHERE (ALERT_GRP_TBL.ALLOWED_USAGE = 'G' OR T1.USERNAME IS NOT NULL)
+";
+depends_on_table = [
+    "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group",
+    "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_category",
+    "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_category_t",
+    "sap.tm.trp.db.objectregistration::t_object_type",
+    "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_t",
+    "sap.tm.trp.db.systemmanagement::t_visibility_type",
+    "sap.tm.trp.db.systemmanagement::t_visibility_type_t"
+];
+depends_on_view = ["sap.tm.trp.db.systemmanagement.user::cv_get_username",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"
+]; 
+

@@ -1,0 +1,33 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_handling_based_cost_trigger_refresh_info_prepare"(
+   IN COST_DATASET_ID BIGINT,
+   OUT DATASET_CONNECTION_INFO  "sap.tm.trp.db.costmodel::tt_cost_dataset_connection_info",
+   OUT HANDLING_BASED_OUT "sap.tm.trp.db.costmodel::tt_handling_based_cost_trigger_refersh"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    READS SQL DATA
+    AS
+BEGIN
+--Note the replace * using base equip type has been done by kevin in middle layer, so remove following code:
+    /*DECLARE VAR_BASE_EQUIP_TYPE VARCHAR(50);
+
+     --Get the base equip type :
+     SELECT IFNULL(MAX(BASE_EQUIP_TYPE),'') INTO VAR_BASE_EQUIP_TYPE
+     FROM "sap.tm.trp.db.systemmanagement::t_config";
+     */
+  
+    HANDLING_BASED_OUT = --SELECT T1.LOCATION_NAME,MAP(T1.RESOURCE_TYPE,'*',:VAR_BASE_EQUIP_TYPE,T1.RESOURCE_TYPE) AS RESOURCE_TYPE,
+     SELECT T1.LOCATION_NAME,T1.RESOURCE_TYPE,
+    T1.HANDLING_TYPE, T1.FROM_MOT,T1.TO_MOT,T1.UOM_CODE,NULL AS COST,WILD_STAR_COUNT
+    FROM "sap.tm.trp.db.costmodel::t_handling_based_cost" T1
+    INNER JOIN "sap.tm.trp.db.costmodel::t_cost_dataset" T2 ON (T1.COST_DATASET_ID = T2.ID)
+    WHERE T1.COST_DATASET_ID = :COST_DATASET_ID 
+     AND DAYS_BETWEEN(T1.LAST_MODIFIED_ON,CURRENT_UTCTIMESTAMP) > T2.EXPIRED_DURATION ;
+    
+     SQL_DATASET_IDS = SELECT :COST_DATASET_ID AS ID FROM DUMMY;
+    
+    CALL "sap.tm.trp.db.costmodel::sp_get_connection_info_of_dataset"(:SQL_DATASET_IDS,DATASET_CONNECTION_INFO);
+  
+   
+END;

@@ -1,0 +1,110 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_register_TRPRule_of_new_created_HRFRule" (
+    IN RULE_NAME VARCHAR(50),
+    IN RULE_DESC VARCHAR(200),
+    IN RULE_TYPE_ID INTEGER,
+    IN SP VARCHAR(200),
+    OUT OUT_RULE_ID BIGINT 
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    DECLARE RULE_ID BIGINT;
+    DECLARE PARAM_KEY VARCHAR(50);
+    DECLARE RULE_TYPE_DESC VARCHAR(50);
+    DECLARE USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE CREATE_TIME TIMESTAMP;
+    DECLARE synonymName VARCHAR(200);
+    DECLARE synonymExistSQL VARCHAR(500);
+    DECLARE dropSQL VARCHAR(500);
+    DECLARE createSQL VARCHAR(500); 
+    DECLARE IN_SP VARCHAR(500);
+    DECLARE IN_SN VARCHAR(500);
+    DECLARE targetExistSQL VARCHAR(500);
+    DECLARE SCRIPT VARCHAR(2000);
+    PARAM_KEY := 'THRESHOLD';
+  
+   
+    SELECT "sap.tm.trp.db.pipeline::s_pipeline_model".NEXTVAL INTO RULE_ID
+    FROM DUMMY;
+    
+    OUT_RULE_ID := RULE_ID;
+    
+    select T1.RULE_TYPE_DESC into RULE_TYPE_DESC 
+    from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData" T1
+    where T1.RULE_TYPE_ID = :RULE_TYPE_ID;
+    
+    select IFNULL(MAX(T1.ID),-1) into USER_ID
+    from "sap.tm.trp.db.systemmanagement.user::t_user" T1
+    where T1.USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    SELECT SPRAS INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+    
+    IF(:RULE_TYPE_ID = 10) then
+    	         
+	synonymName = 'sap.tm.trp.db.stock::p_get_stock_alert';
+
+    SELECT COUNT(1) into synonymExistSQL FROM SYNONYMS WHERE SCHEMA_NAME = 'PUBLIC' AND SYNONYM_NAME = :synonymName;
+    SELECT SUBSTR_BEFORE(:SP,'".') into IN_SN FROM DUMMY;
+    SELECT SUBSTR_AFTER(:IN_SN,'"') into IN_SN FROM DUMMY;
+    SELECT SUBSTR_AFTER(:SP,'."') into IN_SP FROM DUMMY;
+    SELECT SUBSTR_BEFORE(:IN_SP,'"') into IN_SP FROM DUMMY;
+    SELECT COUNT(1) into targetExistSQL FROM PROCEDURES WHERE SCHEMA_NAME = :IN_SN AND PROCEDURE_NAME = :IN_SP;
+    
+    if(:synonymExistSQL > 0) then
+    SCRIPT := 'DROP PUBLIC SYNONYM "'|| :synonymName ||'" ';  
+    execute immediate(:SCRIPT);  
+    end if;
+    
+    if(:targetExistSQL > 0) then
+    SCRIPT := 'CREATE PUBLIC SYNONYM "'|| :synonymName || '" for "'|| escape_double_quotes(:IN_SN) ||'" . "'||escape_double_quotes(:IN_SP)||'" ';  
+	execute immediate(:SCRIPT); 
+    end if;
+    
+    END IF;
+    /*insert into "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule" 
+    values(ALERT_RULE_ID,
+           ALERT_NAME,
+           ALERT_DESC,
+           ALERT_RULE_TYPE_ID,
+           ALERT_RULE_TYPE_DESC,
+           SP,
+           :PARAM_KEY,
+           USER_ID,
+           -- CURRENT_TIMESTAMP,
+           CURRENT_UTCTIMESTAMP,
+           USER_ID,
+           CREAT_TIME);
+     */
+    select CURRENT_UTCTIMESTAMP into CREATE_TIME from dummy;
+    insert into "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule" 
+    (
+      RULE_ID,
+      CODE,
+      NAME,
+      DESC, 
+      RULE_TYPE_ID,
+      RULE_TYPE_DESC,
+      SP,
+      CREATE_BY,
+      CREATE_ON,
+      LAST_MODIFIED_BY,
+      LAST_MODIFIED_ON
+    )
+    values(:RULE_ID,
+           :RULE_NAME,
+           :RULE_NAME,
+           :RULE_DESC,
+           :RULE_TYPE_ID,
+           :RULE_TYPE_DESC,
+           :SP,
+           :USER_ID,
+           :CREATE_TIME,
+           :USER_ID,
+           :CREATE_TIME);
+    
+    INSERT INTO "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule_t"(ID, SPRAS, DESC)
+    VALUES(:RULE_ID, :SPRAS, :RULE_DESC);
+END;

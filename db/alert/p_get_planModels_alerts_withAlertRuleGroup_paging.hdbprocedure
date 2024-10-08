@@ -1,0 +1,146 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert::p_get_planModels_alerts_withAlertRuleGroup_paging" ( 
+IN SORT_BY_ID INTEGER,
+IN ORDER_ID INTEGER,
+IN PLAN_MODEL_ID_LIST "sap.tm.trp.db.alert::tt_planModelList_UI_Dashboard",
+IN SKIP_AMOUNT INTEGER,
+IN TOP_AMOUNT INTEGER,
+OUT OUTPUT "sap.tm.trp.db.alert::tt_planModel_alert_UI_Dashboard_timeInterval_withoutGis"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+    DECLARE SQL1 VARCHAR(5000);
+    DECLARE ORDER_BY_FIELD VARCHAR(20);
+    DECLARE TMP VARCHAR(20);
+    
+    DECLARE PLAN_EXECUTION_ID_EXIST INTEGER;
+    
+    DECLARE SORT_BY_PRIORITY INTEGER;
+    DECLARE SORT_BY_LOCATION INTEGER;
+    DECLARE SORT_BY_TIME INTEGER;
+    DECLARE SORT_BY_OWNER INTEGER;
+    DECLARE ORDER_ASC INTEGER;
+    DECLARE ORDER_DESC INTEGER;
+    DECLARE MESSAGE_ALERT VARCHAR(10) := 'Alert';
+    SORT_BY_PRIORITY := 1;
+    SORT_BY_LOCATION := 2;
+    SORT_BY_TIME := 3;
+    SORT_BY_OWNER := 4;
+    ORDER_ASC := 1;
+    ORDER_DESC := 2;
+    
+ 	select count(T1.PLAN_EXECUTION_ID) into PLAN_EXECUTION_ID_EXIST
+	from 
+	(
+		select t1.PLAN_MODEL_ID,
+               t2.EXECUTION_ID as PLAN_EXECUTION_ID
+        from :PLAN_MODEL_ID_LIST t1
+        inner join "sap.tm.trp.db.pipeline::v_plan_default_node_latest_execution" t2
+        on t1.PLAN_MODEL_ID = t2.PLAN_MODEL_ID
+	) T1;
+	
+    IF (PLAN_EXECUTION_ID_EXIST > 0 and SKIP_AMOUNT >= 0 and TOP_AMOUNT >= 0  )
+	THEN    
+	    TEMP_TBL = 
+	    SELECT distinct
+	     ALERT_REASON,
+	     T1.ALERT_SCORE,
+	     T1.PLAN_EXECUTION_ID,
+	     FILTER_TYPE,
+	     T1.PLAN_MODEL_ID,
+	     T2.NAME as PLAN_MODEL_NAME,
+	     T4.ALERT_RULE_GROUP_ID,
+	     T4.NAME as ALERT_RULE_GROUP_NAME,
+	     T1.PIPELINE_MODEL_ID,
+	     NODE_ID,
+	     T1.NODE_NAME as NAME,
+	     T1.LOCATION_ID,
+	     LOCATION_NAME,
+	     EQUIP_TYPE_ID,
+	     START_TIME as TIME,
+	     STOCK,
+	     SUPPLY,
+	     DEMAND,
+	     MIN_SAFETY_STOCK,
+	     MAX_SAFETY_STOCK,
+	     MESSAGE,
+	     OWNER,
+	     LOCATION_FILTER_TYPE 
+	    FROM "sap.tm.trp.db.alert::t_planModel_alert_forUI_timeInterval_withoutGis" T1
+	    inner join 
+	    (
+	        select t1.PLAN_MODEL_ID,
+	               t2.EXECUTION_ID as PLAN_EXECUTION_ID
+	        from :PLAN_MODEL_ID_LIST t1
+	        inner join "sap.tm.trp.db.pipeline::v_plan_default_node_latest_execution" t2
+	        on t1.PLAN_MODEL_ID = t2.PLAN_MODEL_ID
+	    ) T11
+	   on ( T1.MESSAGE = 'Alert' and
+	        T1.PLAN_MODEL_ID = T11.PLAN_MODEL_ID and 
+	        T1.PLAN_EXECUTION_ID = T11.PLAN_EXECUTION_ID)
+	   inner join "sap.tm.trp.db.pipeline::t_plan_model" T2
+	   on T1.PLAN_MODEL_ID = T2.ID
+	   inner join "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_assign_plan_model" T3
+	   on T1.PLAN_MODEL_ID = T3.PLAN_MODEL_ID
+	   inner join "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group" T4
+	   on T3.ALERT_RULE_GROUP_ID = T4.ALERT_RULE_GROUP_ID;
+	  
+      -- Optional -- SORT_BY:   1: Priority, 2: Location, 3: Time, 4: Owner. (default: 1: Priority)
+      -- Optional -- ORDER:   1: asc, 2: desc ((default :   1: Priority desc, 2: Location asc, 3: Time asc, 4: Owner asc.)
+       
+	    IF ( (:SORT_BY_ID = :SORT_BY_PRIORITY or :SORT_BY_ID = -1) and (:ORDER_ID = :ORDER_DESC or :ORDER_ID = -1) )
+	    THEN
+	      OUTPUT = select * from :TEMP_TBL t
+	         where t.MESSAGE = :MESSAGE_ALERT
+	         order by t.ALERT_SCORE desc, t.TIME DESC, t.PLAN_MODEL_ID,t.NODE_ID, t.LOCATION_NAME,t.EQUIP_TYPE_ID
+	         LIMIT :TOP_AMOUNT OFFSET :SKIP_AMOUNT;
+	    ELSEIF ( (:SORT_BY_ID = :SORT_BY_PRIORITY or :SORT_BY_ID = -1) and (:ORDER_ID = :ORDER_ASC) )
+	    THEN
+	      OUTPUT = select * from :TEMP_TBL t
+	         where t.MESSAGE = :MESSAGE_ALERT
+	         order by t.ALERT_SCORE asc, t.TIME DESC,t.PLAN_MODEL_ID,t.NODE_ID, t.LOCATION_NAME,t.EQUIP_TYPE_ID
+	         LIMIT :TOP_AMOUNT OFFSET :SKIP_AMOUNT;
+	    ELSEIF (:SORT_BY_ID = :SORT_BY_LOCATION and (:ORDER_ID = :ORDER_ASC or :ORDER_ID = -1))
+	    THEN
+	      OUTPUT = select * from :TEMP_TBL t
+	         where t.MESSAGE = :MESSAGE_ALERT
+	         order by t.LOCATION_NAME asc, t.TIME DESC, t.PLAN_MODEL_ID,t.ALERT_SCORE desc,t.NODE_ID,t.EQUIP_TYPE_ID
+             LIMIT :TOP_AMOUNT OFFSET :SKIP_AMOUNT;
+ 	    ELSEIF (:SORT_BY_ID = :SORT_BY_LOCATION and (:ORDER_ID = :ORDER_DESC ))
+	    THEN
+	      OUTPUT = select * from :TEMP_TBL t
+	         where t.MESSAGE = :MESSAGE_ALERT
+	         order by t.LOCATION_NAME desc,t.TIME DESC,t.PLAN_MODEL_ID,t.ALERT_SCORE desc,t.NODE_ID,t.EQUIP_TYPE_ID
+             LIMIT :TOP_AMOUNT OFFSET :SKIP_AMOUNT;       
+	    ELSEIF (:SORT_BY_ID = :SORT_BY_TIME and (:ORDER_ID = :ORDER_ASC or :ORDER_ID = -1))
+	    THEN    
+	      OUTPUT = select * from :TEMP_TBL t
+	         where t.MESSAGE = :MESSAGE_ALERT
+	         order by t.TIME asc,t.PLAN_MODEL_ID, t.ALERT_SCORE desc,t.NODE_ID, t.LOCATION_NAME,t.EQUIP_TYPE_ID
+             LIMIT :TOP_AMOUNT OFFSET :SKIP_AMOUNT;  
+	    ELSEIF (:SORT_BY_ID = :SORT_BY_TIME and (:ORDER_ID = :ORDER_DESC))
+	    THEN    
+	      OUTPUT = select * from :TEMP_TBL t
+	         where t.MESSAGE = :MESSAGE_ALERT
+	         order by t.TIME desc,t.PLAN_MODEL_ID,t.ALERT_SCORE desc,t.NODE_ID, t.LOCATION_NAME,t.EQUIP_TYPE_ID
+             LIMIT :TOP_AMOUNT OFFSET :SKIP_AMOUNT;   
+	    ELSEIF (:SORT_BY_ID = :SORT_BY_OWNER and (:ORDER_ID = :ORDER_ASC or :ORDER_ID = -1))
+	    THEN 
+	      OUTPUT = select * from :TEMP_TBL t
+	         where t.MESSAGE = :MESSAGE_ALERT
+	         order by t.OWNER asc, t.TIME DESC,t.PLAN_MODEL_ID,t.ALERT_SCORE desc,t.NODE_ID, t.LOCATION_NAME,t.EQUIP_TYPE_ID
+             LIMIT :TOP_AMOUNT OFFSET :SKIP_AMOUNT; 
+	    ELSEIF (:SORT_BY_ID = :SORT_BY_OWNER and (:ORDER_ID = :ORDER_DESC))
+	    THEN 
+	      OUTPUT = select * from :TEMP_TBL t
+	         where t.MESSAGE = :MESSAGE_ALERT
+	         order by t.OWNER desc, t.TIME DESC,t.PLAN_MODEL_ID,t.ALERT_SCORE desc,t.NODE_ID, t.LOCATION_NAME,t.EQUIP_TYPE_ID
+             LIMIT :TOP_AMOUNT OFFSET :SKIP_AMOUNT;         
+	    END IF;        
+
+    /*ELSE
+	*/
+     END IF;   
+END;

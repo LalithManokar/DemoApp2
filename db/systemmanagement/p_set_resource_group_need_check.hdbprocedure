@@ -1,0 +1,19 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_set_resource_group_need_check"(
+    IN IN_CODE VARCHAR(50)
+    ,IN IN_TYPE VARCHAR(50)
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    --READS SQL DATA
+AS
+BEGIN
+    DECLARE CURSOR RESOURCE_FILTER_CURSOR FOR
+        SELECT CODE
+        FROM "sap.tm.trp.db.whereusedlist::cv_get_used_list"(placeholder."$$IN_CODE$$"=>:IN_CODE,placeholder."$$TYPE$$"=>:IN_TYPE)
+        WHERE CATEGORY = 'Resource Filter';
+    
+    FOR RESOURCE_FILTER AS RESOURCE_FILTER_CURSOR DO
+        CALL "sap.tm.trp.db.filter::p_set_location_filter_need_check"(RESOURCE_FILTER.CODE, 'RESOURCE_FILTER');
+    END FOR;
+END;

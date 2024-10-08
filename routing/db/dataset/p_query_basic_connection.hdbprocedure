@@ -1,0 +1,91 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_query_basic_connection"(
+	IN dataset_id BIGINT, 
+	IN view_type CHAR(1), -- F means full view, D means delta view, M means merged view
+	IN from_location NVARCHAR(50),
+	IN to_location NVARCHAR(50),
+	IN mtr NVARCHAR(10),
+	OUT connection "sap.tm.trp.routing.db.dataset::tt_connection_out", 
+	OUT connection_carrier "sap.tm.trp.routing.db.dataset::tt_connection_carrier" 
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA "SAP_TM_ROUTING"
+READS SQL DATA
+AS
+BEGIN
+	DECLARE manual_source CONSTANT CHAR = 'M';
+	DECLARE system_source CONSTANT CHAR = 'S';
+	DECLARE accumulate_conn_id TABLE(id BIGINT);
+	DECLARE accumulate_conflict_conn_id TABLE(id BIGINT);
+	DECLARE loc_pair_cnt, mtr_cnt INTEGER;
+    
+	accumulate_conn_id = 
+	SELECT 0 AS id
+	FROM DUMMY
+	WHERE 1 != 1;
+
+	accumulate_conflict_conn_id = 
+	SELECT 0 AS id
+	FROM DUMMY
+	WHERE 1 != 1;
+
+	IF :view_type = 'M' THEN
+		CALL "sap.tm.trp.routing.db.dataset::p_get_basic_conn_merged_view" (:dataset_id, :from_location, :to_location, :mtr, accumulate_conn_id, accumulate_conflict_conn_id);
+	ELSEIF :view_type = 'D' THEN
+		conn_data_all = 
+		SELECT id, dataset_id, from_location, to_location, mtr, action, source, hash
+		FROM "sap.tm.trp.routing.db.dataset::t_connection" AS A LEFT OUTER JOIN "sap.tm.trp.routing.db.dataset::t_connection_carrier" AS B ON A.id = B.connection_id
+		WHERE dataset_id = :dataset_id AND source = :manual_source;
+
+        CALL "sap.tm.trp.routing.db.dataset::p_filter_conn_by_from_to_loc_mtr"(:conn_data_all, :from_location, :to_location, :mtr, conn_data);
+
+		accumulate_conn_id = 
+		SELECT id
+		FROM :conn_data;
+	ELSEIF :view_type = 'F' THEN
+		CALL "sap.tm.trp.routing.db.dataset::p_get_basic_conn_merged_view" (:dataset_id, :from_location, :to_location, :mtr, accumulate_conn_id, accumulate_conflict_conn_id);
+
+		conn_data_all = 
+		SELECT id, dataset_id, from_location, to_location, mtr, action, source, hash
+		FROM "sap.tm.trp.routing.db.dataset::t_connection" AS A LEFT OUTER JOIN "sap.tm.trp.routing.db.dataset::t_connection_carrier" AS B ON A.id = B.connection_id
+		WHERE dataset_id = :dataset_id AND source = :manual_source;
+
+        CALL "sap.tm.trp.routing.db.dataset::p_filter_conn_by_from_to_loc_mtr"(:conn_data_all, :from_location, :to_location, :mtr, conn_data);
+
+		accumulate_conn_id = 
+		SELECT id 
+		FROM :accumulate_conn_id
+		UNION
+		SELECT id
+		FROM :conn_data;
+	END IF;
+
+	-- Fetch merged connection and connection_carrier data
+	IF :view_type != 'F' THEN
+    	connection = 
+    	SELECT A.id, external_id, from_location, to_location, mtr, distance, duration, 
+    	CASE WHEN A.dataset_id = :dataset_id AND a.source = :manual_source THEN action
+    	ELSE NULL END AS action, source, '' AS conflict_flag, created_by, created_on, changed_by, changed_on
+    	FROM "sap.tm.trp.routing.db.dataset::t_connection" AS A INNER JOIN :accumulate_conn_id AS B ON A.id = B.id;
+    ELSE
+        top_conflict_conn_id = 
+        SELECT A.id, 'X' AS conflict_flag
+        FROM "sap.tm.trp.routing.db.dataset::t_connection" AS A INNER JOIN :accumulate_conflict_conn_id AS B ON A.id = B.id
+		WHERE dataset_id = :dataset_id AND source = :manual_source;
+		
+    	connection = 
+    	SELECT A.id, external_id, from_location, to_location, mtr, distance, duration, 
+    	CASE WHEN A.dataset_id = :dataset_id AND a.source = :manual_source THEN action
+    	ELSE NULL END AS action, source, IFNULL(conflict_flag, '') AS conflict_flag, created_by, created_on, changed_by, changed_on
+    	FROM "sap.tm.trp.routing.db.dataset::t_connection" AS A INNER JOIN :accumulate_conn_id AS B ON A.id = B.id
+    	LEFT OUTER JOIN :top_conflict_conn_id AS C ON B.id = C.id;
+	END IF;
+
+	connection_carrier = 
+	SELECT connection_id, IFNULL(carrier, '') AS carrier
+	FROM :accumulate_conn_id AS A INNER JOIN "sap.tm.trp.routing.db.dataset::t_connection_carrier" AS B ON A.id = B.connection_id;
+
+	--conflict_conn = 
+	--SELECT A.id, dataset_id
+	--FROM "sap.tm.trp.routing.db.dataset::t_connection" AS A INNER JOIN :accumulate_conflict_conn_id AS B ON A.id = B.id;
+END;

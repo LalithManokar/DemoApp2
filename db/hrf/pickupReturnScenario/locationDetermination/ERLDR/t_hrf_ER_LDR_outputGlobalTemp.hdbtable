@@ -1,0 +1,29 @@
+table.schemaName = "SAP_TM_TRP";
+table.temporary = true;
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "HRF_RESULT_ID"; sqlType = CHAR; length = 32; nullable = false;}, 
+    {name = "RULE_ID"; sqlType = CHAR; length = 32; nullable = false;}, 
+    {name = "RULE_NAME"; sqlType = NVARCHAR; length = 256; nullable = false;}, 
+    {name = "RULE_PACKAGE"; sqlType = NVARCHAR; length = 256; nullable = false;},
+    {name = "RULE_TEMPLATE_NAME"; sqlType = NVARCHAR; length = 256; }, 
+    {name = "RULE_TEMPLATE_PACKAGE"; sqlType = NVARCHAR; length = 256;},
+      
+    {name = "PR_RULE_ID"; sqlType = BIGINT;},
+    {name = "TU_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "EQUIPMENT_ID";sqlType = VARCHAR; length = 32;},
+    {name = "LOCATION_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "PLANNED_DATE"; sqlType = TIMESTAMP; },  
+    {name = "TU_TYPE"; sqlType = VARCHAR; length = 2;},
+    {name = "PLAN_EXECUTION_ID"; sqlType = BIGINT; },
+    {name = "NODE_ID"; sqlType = BIGINT; },
+    {name = "DEPOT_ID"; sqlType = VARCHAR; length = 32;},  
+    {name = "COST_MODEL_ID"; sqlType = BIGINT;},
+        
+    {name = "ROW_ID"; sqlType = CHAR; length = 32;},  
+    {name = "EXCLUSION_FLAG"; sqlType = VARCHAR; length = 3;},  
+    {name = "LOC_RANK"; sqlType = DOUBLE;},
+    {name = "ER_LDR"; sqlType = VARCHAR; length = 3;}
+    ];
+    
+    

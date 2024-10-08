@@ -1,0 +1,77 @@
+schema = "SAP_TM_TRP";
+query  = "
+          SELECT T1.ID,
+                 T1.CODE,
+                 T1.NAME AS SCENARIO_NAME,
+                 T2.DESC AS SCENARIO_DESC,
+                 T1.ACTIVITY_STATUS AS ACTIVITY_STATUS_CODE,
+                 T15.ACTIVITY_STATUS_NAME,
+                 T15.ACTIVITY_STATUS_DESC,
+                 T1.ALERT_NUM,
+                 T1.FRESH_FLAG,
+                 IFNULL(T3.ACTIVITY_COST, 0) + IFNULL(T1.BALANCING_COST,0) + IFNULL(T1.STORAGE_COST,0) AS TOTAL_COST,
+                 IFNULL(T3.ACTIVITY_COST, 0) AS ACTIVITY_COST,
+                 T1.BALANCING_COST AS BALANCING_COST,
+                 T1.REL_SM_PLAN_ID,
+                 T1.CURRENCY,
+                 IFNULL(T1.STATUS,0) AS STATUS,
+                 T16.SCENARIO_STATUS_NAME AS STATUS_NAME,
+                 T16.SCENARIO_STATUS_DESC AS STATUS_DESC,
+                 T1.STORAGE_COST,
+                 MAP(T4.SCENARIO_ID,NULL,0,1) AS HAS_LOG_FLAG
+                 FROM \"sap.tm.trp.db.planningcockpit::t_scenario\" AS T1
+                 INNER JOIN \"sap.tm.trp.db.planningcockpit::t_simulation_plan\" AS T0 ON (T1.REL_SM_PLAN_ID = T0.ID)
+                 LEFT OUTER JOIN \"sap.tm.trp.db.planningcockpit::t_scenario_t\" AS T2
+                 ON T1.ID = T2.ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE
+                 ON T2.SPRAS = LANGUAGE.SPRAS
+                 
+                 LEFT OUTER JOIN 
+                 ( 
+                    SELECT T12.STATUS AS ACTIVITY_STATUS,IFNULL(T14.NAME,T12.NAME) AS ACTIVITY_STATUS_NAME,
+                    IFNULL(T14.DESC,T12.DESC) AS ACTIVITY_STATUS_DESC
+			                   FROM \"sap.tm.trp.db.planningcockpit::t_status\" T12 
+			                   LEFT OUTER JOIN
+			                   (
+			                     SELECT T13.STATUS,T13.CATEGORY,T13.NAME,T13.DESC
+			                     FROM  \"sap.tm.trp.db.planningcockpit::t_status_t\" T13 
+			                     INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" T14 ON (T13.LANG_CODE = T14.SPRAS)
+			                   ) T14 ON (T12.STATUS = T14.STATUS AND T12.CATEGORY = T14.CATEGORY)
+			                    WHERE T12.CATEGORY = '02'	
+                 )T15 ON (T1.ACTIVITY_STATUS = T15.ACTIVITY_STATUS)
+                LEFT OUTER JOIN 
+                 ( 
+                    SELECT T12.STATUS AS SCENARIO_STATUS,IFNULL(T14.NAME,T12.NAME) AS SCENARIO_STATUS_NAME,
+                    IFNULL(T14.DESC,T12.DESC) AS SCENARIO_STATUS_DESC
+			                   FROM \"sap.tm.trp.db.planningcockpit::t_status\" T12 
+			                   LEFT OUTER JOIN
+			                   (
+			                     SELECT T13.STATUS,T13.CATEGORY,T13.NAME,T13.DESC
+			                     FROM  \"sap.tm.trp.db.planningcockpit::t_status_t\" T13 
+			                     INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" T14 ON (T13.LANG_CODE = T14.SPRAS)
+			                   ) T14 ON (T12.STATUS = T14.STATUS AND T12.CATEGORY = T14.CATEGORY)
+			                    WHERE T12.CATEGORY = '04'	
+                 )T16 ON (IFNULL(T1.STATUS,0) = T16.SCENARIO_STATUS)
+                 LEFT OUTER JOIN (
+                     SELECT REL_SCENARIO_ID,SUM(COST) AS ACTIVITY_COST
+                     FROM \"sap.tm.trp.db.planningcockpit::t_activity\"
+                     GROUP BY REL_SCENARIO_ID
+                  ) T3 ON (T1.ID = T3.REL_SCENARIO_ID)
+                  LEFT OUTER JOIN (
+                  SELECT DISTINCT SCENARIO_ID FROM \"sap.tm.trp.db.planningcockpit::t_trq_write_log\"
+                  ) T4 ON (T1.ID = T4.SCENARIO_ID)
+                  
+         ";
+         
+  depends_on_table = ["sap.tm.trp.db.planningcockpit::t_scenario",
+                    "sap.tm.trp.db.planningcockpit::t_scenario_t",
+                    "sap.tm.trp.db.planningcockpit::t_status",
+                    "sap.tm.trp.db.planningcockpit::t_simulation_plan",
+                    "sap.tm.trp.db.planningcockpit::t_status_t",
+                    "sap.tm.trp.db.planningcockpit::t_activity",
+                    "sap.tm.trp.db.planningcockpit::t_trq_write_log"
+                    ];
+                   
+depends_on_view  = ["sap.tm.trp.db.semantic.common::v_lang_code"];
+         
+

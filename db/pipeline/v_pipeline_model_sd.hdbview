@@ -1,0 +1,13 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT DISTINCT A.ID
+            FROM \"sap.tm.trp.db.pipeline::t_pipeline_model\" AS A
+                 INNER JOIN \"sap.tm.trp.db.pipeline::t_pipeline_node\" AS B
+                 ON A.ID = B.PIPELINE_MODEL_ID
+                 INNER JOIN \"sap.tm.trp.db.pipeline::t_pipeline_node_layout\" AS C
+                 ON B.ID = C.NODE_ID
+           WHERE UPPER(C.KEY) = 'OUTPUTKEY'
+                 AND UPPER(C.VALUE) = 'SUPPLY,DEMAND'";
+
+depends_on_table = ["sap.tm.trp.db.pipeline::t_pipeline_model",
+                    "sap.tm.trp.db.pipeline::t_pipeline_node",
+                    "sap.tm.trp.db.pipeline::t_pipeline_node_layout"];

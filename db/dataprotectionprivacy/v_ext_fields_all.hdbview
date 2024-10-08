@@ -1,0 +1,17 @@
+schema = "SAP_TM_TRP";
+query  = "
+SELECT
+     ext.ID
+    ,ext.NAME
+    ,ext.DISPLAY_NAME
+    ,ext.DESCRIPTION
+    ,au.USERNAME AS ADDED_BY
+    ,ext.ADDED_ON
+    ,eu.USERNAME AS EDITED_BY
+FROM \"sap.tm.trp.db.common::t_extended_fields\" ext
+LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" au ON au.ID= ext.ADDED_BY
+LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" eu ON eu.ID= ext.EDITED_BY 
+";
+
+depends_on_table = ["sap.tm.trp.db.common::t_extended_fields"]; 
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

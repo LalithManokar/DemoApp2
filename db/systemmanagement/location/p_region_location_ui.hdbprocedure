@@ -1,0 +1,13 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.location::p_region_location_ui"(IN REGION_IDS "sap.tm.trp.db.systemmanagement.location::tt_regional_id",
+OUT OUT_LOCATION_LIST "sap.tm.trp.db.systemmanagement.location::tt_location_info")
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    OUT_LOCATION_LIST = SELECT DISTINCT T1.LOCATION_ID,T1.NAME,T1.DESC,T1.COUNTRY_CODE,T1.COUNTRY_NAME,
+    T1.STATE_CODE,T1.STATE_NAME,T1.CITY_ID,T1.CITY_NAME,
+    T1.XPOS,T1.YPOS,T1.POSTAL_CODE,T1.RANK
+    FROM "sap.tm.trp.db.systemmanagement.location::v_region_location_ui" T1
+    INNER JOIN :REGION_IDS T2 ON (T1.ROOT_ID = T2.ID);
+END;

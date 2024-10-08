@@ -1,0 +1,16 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT;},
+    {name = "NAME"; sqlType = VARCHAR; length = 20;},
+    {name = "NEXT_EXECUTION_TIME"; sqlType = TIMESTAMP;},
+    {name = "START_TIME"; sqlType = TIMESTAMP;},
+    {name = "EXPIRY_TIME"; sqlType = TIMESTAMP;},
+    {name = "RECURRENCE_TYPE"; sqlType = VARCHAR; length = 50;},
+    {name = "RECURRENCE_INTERVAL"; sqlType = INTEGER;},
+    {name = "RECURRENCE_DAY"; sqlType = INTEGER;},
+    {name = "SCHEDULE_TYPE"; sqlType = VARCHAR; length = 500;},
+    {name = "EXECUTE_WORKING_HOUR"; sqlType = VARCHAR; length = 1;},
+    {name = "START_WORKING_HOUR_TIME"; sqlType = TIMESTAMP;},
+    {name = "END_WORKING_HOUR_TIME"; sqlType = TIMESTAMP;}
+];

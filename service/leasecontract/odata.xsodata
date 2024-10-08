@@ -1,0 +1,40 @@
+service {
+//lease visibility details
+"sap.tm.trp.db.leasecontract::cv_lease_contract_visibility" as "leaseDetails"  key generate local "KEY" parameters via entity
+        create forbidden update forbidden delete forbidden;
+
+// lease-->overview,equipment details
+ "sap.tm.trp.db.leasecontract::cv_lease_contract_equipment_overview" as "leaseEquipOverview" key generate local "KEY" parameters via entity
+        create forbidden update forbidden delete forbidden;
+
+ //lease-->overview ,contract details and summary
+ "sap.tm.trp.db.leasecontract::cv_lease_contract_overview" as "leaseOverview" key generate local "KEY" parameters via entity
+        create forbidden update forbidden delete forbidden;
+
+
+ //lease-->term details 
+ "sap.tm.trp.db.leasecontract::cv_lease_contract_term_details" as "leaseTermDetails" key generate local "KEY" parameters via entity
+        create forbidden update forbidden delete forbidden;
+
+ //lease-->history summary
+ "sap.tm.trp.db.leasecontract::cv_lease_contract_history_summary" as "leaseHistory" key generate local "KEY" parameters via entity
+        create forbidden update forbidden delete forbidden;
+
+ //lease-->history summary -by equipment
+ "sap.tm.trp.db.leasecontract::cv_lease_contract_history_details_by_equip" as "leaseEquipHistory"
+    key generate local "KEY" parameters via entity
+    create forbidden update forbidden delete forbidden;
+
+ //planning-cockpit lease availability details
+ "sap.tm.trp.db.leasecontract::cv_lease_contract_availability" as "leaseContractAvailability"
+    key generate local "KEY"
+    parameters via entity "LeaseContractAvailability"
+    results property "Execute"
+    create forbidden update forbidden delete forbidden;
+
+   // lease master
+   "sap.tm.trp.db.leasecontract::t_lease_contract" as "LeaseContracts"
+   create forbidden update forbidden delete forbidden;
+
+
+}

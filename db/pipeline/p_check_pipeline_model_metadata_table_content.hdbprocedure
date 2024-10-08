@@ -1,0 +1,46 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_check_pipeline_model_metadata_table_content" (
+	IN METADATA_TABLE "sap.tm.trp.db.pipeline::tt_pipeline_metadata",
+    OUT ERROR_MSG NVARCHAR(256),
+    OUT IS_VALID SMALLINT,
+    OUT ERROR_MSG_TABLE "sap.tm.trp.db.pipeline::t_pipeline_check_result_temp"
+)
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA "SAP_TM_TRP"
+READS SQL DATA
+AS
+BEGIN
+	DECLARE ROW_COUNT SMALLINT;
+	IS_VALID := 1; -- default value is true
+
+	-- check the metadata table content
+	-- 1. the node name should be not same with container node
+	SELECT COUNT(*) INTO ROW_COUNT
+	FROM :METADATA_TABLE
+	WHERE KEY = 'sap.afm.nodeType' AND	NODE_NAME IN
+		(SELECT NODE_NAME 
+		 FROM :METADATA_TABLE 
+		 WHERE KEY = 'sap.afm.nodeType' AND TO_VARCHAR(VALUE) = 'ContainerNode'); -- one container node
+
+	IF (:ROW_COUNT > 1) THEN
+		IS_VALID := 0;
+		ERROR_MSG := 'MSG_ERR_NODE_NAME_SHOULD_NOT_BE_SAME_WITH_CONTAINER_NODE';
+	ELSE
+		-- 2. The (metadata) nodeId should be unique in the flowgraph i.e. one metadata node id should only mapped to only one node name
+		SELECT COUNT(*)	INTO ROW_COUNT
+		FROM (
+			SELECT VALUE AS METADATA_NODE_ID, COUNT(NODE_NAME) AS NODE_NUM
+			FROM (
+			  SELECT KEY, TO_VARCHAR(VALUE) AS VALUE, NODE_NAME 
+			  FROM :METADATA_TABLE)
+			WHERE KEY = 'nodeID'
+			GROUP BY VALUE) WHERE NODE_NUM > 1;
+		IF (:ROW_COUNT > 0) THEN
+			IS_VALID := 0;
+			ERROR_MSG := 'MSG_ERR_NODE_ID_SHOULD_BE_UNIQUE';
+		END IF;
+	END IF;
+
+	ERROR_MSG_TABLE = SELECT :ERROR_MSG AS ERROR_MSG, :IS_VALID AS IS_VALID FROM DUMMY;
+
+END;

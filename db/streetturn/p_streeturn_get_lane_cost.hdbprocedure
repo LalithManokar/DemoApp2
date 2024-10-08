@@ -1,0 +1,89 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.streetturn::p_streeturn_get_lane_cost" (
+	IN IV_RULE_ID BIGINT,
+    IN IT_LANE_LIST "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_lane_list",
+    IN IT_CARRIER "sap.tm.trp.db.pickupreturn::tt_carrier_list",
+    IN IT_TU "sap.tm.trp.db.streetturn.algorithm::tt_streetturn_tu",
+    OUT IT_LANE_OUTPUT "sap.tm.trp.db.streetturn.algorithm::tt_trans" -- lanes
+   )
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    READS SQL DATA AS  
+BEGIN
+
+    --Rule INFO
+    DECLARE LV_COST_MODEL_ID BIGINT;
+    
+    --Get realted location rule info
+    SELECT IFNULL (MAX (MANDATORY_COST_MODEL_ID),0) INTO LV_COST_MODEL_ID
+    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" t1
+    LEFT JOIN "sap.tm.trp.db.planningcockpit::v_network_setting_group" t2
+    ON t1.NETWORK_SETTING_GROUP_ID = t2.ID
+    WHERE t1.ID = :IV_RULE_ID;
+                             
+    QUERY_LIST = SELECT DISTINCT T1.FROM_LOCATION AS FROM_LOCATION_NAME,
+                        T1.TO_LOCATION AS TO_LOCATION_NAME,
+                        T1.MTR AS TRANSPORTATION_MODE_CODE,
+                        IFNULL(T2.CARRIER_ID,'') AS CARRIER_ID,
+                        T1.DISTANCE,
+                        T1.DURATION
+                 FROM :IT_LANE_LIST T1
+                 LEFT OUTER JOIN :IT_CARRIER T2
+                 ON (T1.ID = T2.CONNECTION_ID);
+    
+    
+      from_location_list = SELECT DISTINCT 
+      							  CONTAINER_TYPE AS RESOURCE_TYPE,
+                                  CUSTOMER_LOCATION AS LOCATION
+                           FROM :IT_TU WHERE "MODE" = 'RETURN' ;
+
+      to_location_list =   SELECT DISTINCT 
+      							  CONTAINER_TYPE AS RESOURCE_TYPE,
+                                  CUSTOMER_LOCATION AS LOCATION
+                           FROM :IT_TU WHERE "MODE" = 'PICKUP' ;
+                                   
+      LANE_INFO = SELECT DISTINCT T1.FROM_LOCATION_NAME  as FROM_LOCATION,
+		                          T1.TO_LOCATION_NAME  as TO_LOCATION,
+		                          T1.TRANSPORTATION_MODE_CODE as MTR,
+		                          T1.CARRIER_ID  as CARRIER,
+		                          T2.RESOURCE_TYPE,
+		                          T1.DISTANCE,
+		                          T1.DURATION
+                   FROM :QUERY_LIST T1
+                   JOIN "sap.tm.trp.db.semantic.location::v_all_location" T4
+      			   ON T1.FROM_LOCATION_NAME = T4."NAME"
+      			   JOIN "sap.tm.trp.db.semantic.location::v_all_location" T5
+      			   ON T1.TO_LOCATION_NAME = T5."NAME"
+                   INNER JOIN :from_location_list T2
+                   ON (T4.ID = T2.LOCATION)
+                   INNER JOIN :to_location_list T3
+                   ON (T5.ID = T3.LOCATION);
+                   
+     
+                    
+	   CALL "sap.tm.trp.routing.db.cost::p_calculate_connection_transport_cost"(
+	        :LV_COST_MODEL_ID,
+	        :LANE_INFO,
+	        LT_CALCULATED_TRANSPORT_COST 
+	   );
+    
+    
+    IT_LANE_OUTPUT = SELECT A.FROM_LOCATION,
+                            A.TO_LOCATION,
+                            A.MTR, 
+                            B.DURATION,
+                            A.COST                            
+                      FROM  :LT_CALCULATED_TRANSPORT_COST A
+                INNER JOIN  (SELECT FROM_LOCATION,
+                                    TO_LOCATION,
+                                    MTR,                                    
+                                    AVG(DURATION) AS DURATION 
+                              FROM :LANE_INFO 
+                              GROUP BY FROM_LOCATION,TO_LOCATION,MTR)B
+                        ON  A.FROM_LOCATION = B.FROM_LOCATION
+                       AND  A.TO_LOCATION = B.TO_LOCATION
+                       AND  A.MTR = B.MTR;    
+    
+	
+ 
+END;

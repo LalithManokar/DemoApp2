@@ -1,0 +1,11 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "ID"; sqlType = INTEGER; nullable = false;},
+    {name = "DESC"; sqlType = VARCHAR; length = 32;},
+    {name = "PARENT_ID"; sqlType = INTEGER;},
+    {name = "CODE";sqlType = NVARCHAR; length = 20; nullable = true; unique = true;},
+    {name = "OBJECT_TYPE_ID"; sqlType = INTEGER; comment = "Refer to ID in db.objectregistration::t_object_type";},
+    {name = "PROCEDURE_CONSTRAINT"; sqlType = VARCHAR; length = 100; comment = "Filter value when choosing procedures for calculation model";}
+    ];
+table.primaryKey.pkcolumns = ["ID"];

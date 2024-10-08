@@ -1,0 +1,36 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.customization::p_ext_resource_category_delete"(
+    IN ID BIGINT
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE RESOURCE_CATEGORY_NAME VARCHAR(20);
+    
+    SELECT IFNULL(MAX(CODE),'') INTO RESOURCE_CATEGORY_NAME
+    FROM "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings"
+    WHERE ID = :ID;
+        
+    DELETE FROM "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings"
+    WHERE ID = :ID;
+    	    
+    DELETE FROM "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings_t"
+    WHERE ID = :ID;
+    	
+    DELETE FROM "sap.tm.trp.db.semantic.resource::t_resource_category"
+    WHERE CODE = :RESOURCE_CATEGORY_NAME;
+    	
+    DELETE FROM "sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters_value"
+    WHERE RESOURCE_CATEGORY_NAME = :RESOURCE_CATEGORY_NAME;
+    
+    DELETE FROM "sap.tm.trp.db.systemmanagement::t_config_cust"
+    WHERE CODE = :RESOURCE_CATEGORY_NAME;
+    
+    DELETE FROM "sap.tm.trp.db.systemmanagement.customization::t_resource_category_object_registration"
+    WHERE RESOURCE_CATEGORY_ID = :ID;
+    
+    DELETE FROM "sap.tm.trp.db.systemmanagement.customization::t_resource_category_extended_columns"
+    WHERE RESOURCE_CATEGORY_ID = :ID;
+    
+END;

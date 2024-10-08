@@ -1,0 +1,19 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_role_region_create" (
+  IN ROLE_ID BIGINT,
+  IN REGION_IDS "sap.tm.trp.db.systemmanagement.location::tt_regional_id") 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+    --CALL "sap.tm.trp.db.systemmanagement.location::p_zone_hierarchy_relation_check"(:REGION_IDS, O_REGION_IDS);
+    
+    O_REGION_IDS = SELECT T1.ID
+                   FROM :REGION_IDS T1
+                   INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_role_check_region_ui" T2
+                   ON (T1.ID = T2.ID);
+    
+    INSERT INTO "sap.tm.trp.db.systemmanagement.user::t_role_region" (ROLE_ID, ROOT_ID) 
+    SELECT :ROLE_ID, ID FROM :O_REGION_IDS;
+    
+END;

@@ -1,0 +1,35 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_location_filter_visible_consistency_check"(
+    IN VISIBLE_FLAG VARCHAR(3),
+    IN ITEMS "sap.tm.trp.db.pipeline::tt_geo_id",
+    IN FILTER_TYPE INTEGER,
+    OUT ERR_NUM INTEGER
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    ERR_NUM := 0;
+    IF :FILTER_TYPE = 2 AND :VISIBLE_FLAG = 'G' THEN
+        SELECT COUNT(VISIBLE_FLAG) INTO ERR_NUM
+        FROM "sap.tm.trp.db.systemmanagement::t_location_group" AS T1
+        INNER JOIN :ITEMS AS T2
+        --ON TO_VARCHAR(T1.ID) = T2.ID
+        ON T1.ID = T2.ID
+        WHERE VISIBLE_FLAG = 'P';
+    ELSEIF :FILTER_TYPE = 4 AND :VISIBLE_FLAG = 'G' THEN
+        SELECT COUNT(VISIBLE_FLAG) INTO ERR_NUM
+        FROM "sap.tm.trp.db.systemmanagement::t_zone_group" AS T1
+        INNER JOIN :ITEMS AS T2
+        --ON TO_VARCHAR(T1.ID) = T2.ID
+        ON T1.ID = T2.ID
+        WHERE VISIBLE_FLAG = 'P';
+    ELSEIF :FILTER_TYPE = 6 AND :VISIBLE_FLAG = 'G' THEN
+        SELECT COUNT(VISIBLE_FLAG) INTO ERR_NUM
+        FROM "sap.tm.trp.db.systemmanagement::t_region_group" AS T1
+        INNER JOIN :ITEMS AS T2
+        --ON TO_VARCHAR(T1.ID) = T2.ID
+        ON T1.ID = T2.ID
+        WHERE VISIBLE_FLAG = 'P';
+    END IF;
+END;

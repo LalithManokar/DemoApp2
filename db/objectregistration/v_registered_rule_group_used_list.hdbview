@@ -1,0 +1,30 @@
+schema="SAP_TM_TRP";
+query= "SELECT            A.ID,
+                          C.CATEGORY,
+                          C.ID AS PLAN_MODEL_ID,
+                          C.NAME AS NAME,
+                          C.DESCRIPTION,
+                          IFNULL(D.USERNAME, E.USERNAME) AS MODIFIED_BY,
+                          IFNULL(C.LAST_MODIFIED_ON, C.CREATE_ON) AS MODIFIED_ON
+                     FROM \"sap.tm.trp.db.alert.alert_rule_group::cv_alert_rule_group\" AS A
+                          INNER JOIN  (SELECT T1.ID,
+                                                   T1.NAME,
+                                                   T1.DESC AS DESCRIPTION,
+                                                   T1.ALERT_RULE_GROUP_ID,
+                                                   T1.LAST_MODIFIED_ON,
+                                                   T1.CREATE_ON,
+                                                   T1.CREATE_BY,
+                                                   T1.LAST_MODIFIED_BY,
+                                                   T2.DESC  AS CATEGORY from  \"sap.tm.trp.db.pipeline::t_plan_model\"  T1,
+                                                             \"sap.tm.trp.db.pipeline::t_plan_model_type\"  T2
+                                            WHERE T1.PLAN_MODEL_CATEGORY_ID=T2.ID) C
+                          ON A.ID = C.ALERT_RULE_GROUP_ID
+                          LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\"AS D
+                          ON C.CREATE_BY = D.ID
+                          LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\"AS E
+                          ON C.LAST_MODIFIED_BY = E.ID";
+
+depends_on_table = ["sap.tm.trp.db.pipeline::t_plan_model",
+                    "sap.tm.trp.db.pipeline::t_plan_model_type"];
+depends_on_view  = ["sap.tm.trp.db.alert.alert_rule_group::cv_alert_rule_group",
+                    "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

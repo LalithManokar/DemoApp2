@@ -1,0 +1,80 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_loc_primaryloc_by_executionId" (
+  IN EXECUTION_ID BIGINT,
+  OUT OUT_LOCATION_INFO "sap.tm.trp.db.planningcockpit::tt_loc_or_primaryloc"
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP  
+  	READS SQL DATA 
+AS
+BEGIN
+ 
+
+   
+     -- This procedure return location for filter of location type, and primary location for filter of aggregate type
+  	 DECLARE LOCATION_TYPE INTEGER := 1;
+	 DECLARE LOCATION_GROUP_TYPE INTEGER := 2;
+	 DECLARE REGION_TYPE INTEGER :=5;
+	 DECLARE REGION_GROUP_TYPE INTEGER :=6;
+     DECLARE filter_type INTEGER;
+     DECLARE EXIT HANDLER FOR SQLEXCEPTION
+     SELECT ::SQL_ERROR_CODE, ::SQL_ERROR_MESSAGE FROM DUMMY;
+
+     -- Get location filter type
+     SELECT IFNULL(MAX(LOCATION_FILTER_TYPE),0) INTO filter_type
+     FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"
+     WHERE PLAN_EXECUTION_ID = :EXECUTION_ID;
+     
+     -- Location filter
+     IF :filter_type = :LOCATION_TYPE THEN 
+
+         OUT_LOCATION_INFO = 
+                 SELECT DISTINCT T1.LOCATION_ID AS GEO_ID,T1.LOCATION_NAME AS GEO_NAME,
+                 T1.LOCATION_ID,T1.LOCATION_NAME,LOCATION_FILTER_TYPE AS GEO_TYPE
+                 FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T1
+                 WHERE T1.PLAN_EXECUTION_ID = :EXECUTION_ID;                 
+                
+     -- Location group filter           
+     ELSEIF :filter_type = :LOCATION_GROUP_TYPE THEN           
+
+        OUT_LOCATION_INFO = 
+                 SELECT T1.LOCATION_ID AS GEO_ID,T1.LOCATION_NAME AS GEO_NAME,
+                 T2.PRIME_LOC_ID AS LOCATION_ID,T3.NAME AS LOCATION_NAME,T1.LOCATION_FILTER_TYPE AS GEO_TYPE
+                 FROM (
+                       SELECT DISTINCT LOCATION_ID,LOCATION_NAME,LOCATION_FILTER_TYPE
+                       FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"
+                       WHERE  PLAN_EXECUTION_ID = :EXECUTION_ID
+                 )T1
+                 INNER JOIN  "sap.tm.trp.db.systemmanagement::t_location_group" T2 ON (T1.LOCATION_ID = T2.ID)
+                 INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T3 ON (T2.PRIME_LOC_ID = T3.ID);
+                
+  
+     -- Region filter
+     -- (currently, there is no concept of region, that's always zone. But some region related views still can be used to avoid mass code changes)      
+     ELSEIF :filter_type = :REGION_TYPE THEN
+
+       OUT_LOCATION_INFO = 
+                 SELECT T1.LOCATION_ID AS GEO_ID,T1.LOCATION_NAME AS GEO_NAME,T2.PRIME_LOC_ID AS LOCATION_ID,
+                 T2.PRIME_LOC_NAME AS LOCATION_NAME,T1.LOCATION_FILTER_TYPE AS GEO_TYPE
+                 FROM
+                 ( SELECT DISTINCT LOCATION_ID,LOCATION_NAME,LOCATION_FILTER_TYPE
+                   FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" 
+                   WHERE PLAN_EXECUTION_ID = :EXECUTION_ID
+                 ) T1 
+                 INNER JOIN "sap.tm.trp.db.systemmanagement.location::t_zone_primary_location" T2 ON (T1.LOCATION_NAME = T2.ZONE_NAME);
+                              
+     -- Region group filter           
+     ELSEIF :filter_type = :REGION_GROUP_TYPE THEN            
+
+          OUT_LOCATION_INFO = SELECT T1.LOCATION_ID AS GEO_ID,T1.LOCATION_NAME AS GEO_NAME,
+          T2.PRIME_LOC_ID AS LOCATION_ID,T3.NAME AS LOCATION_NAME,T1.LOCATION_FILTER_TYPE AS GEO_TYPE
+           FROM 
+           ( SELECT DISTINCT LOCATION_ID,LOCATION_NAME,LOCATION_FILTER_TYPE
+             FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" 
+             WHERE PLAN_EXECUTION_ID = :EXECUTION_ID
+            ) T1 
+           INNER JOIN "sap.tm.trp.db.systemmanagement::t_region_group" T2 ON (T1.LOCATION_ID = T2.ID)
+           INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T3 ON (T2.PRIME_LOC_ID = T3.ID);
+                  
+     END IF;         
+END;

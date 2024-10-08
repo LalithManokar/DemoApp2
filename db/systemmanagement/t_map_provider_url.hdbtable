@@ -1,0 +1,8 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "PROVIDER_ID"; sqlType = INTEGER; nullable = false;},
+    {name = "SERVER_ID"; sqlType = VARCHAR; length = 25; nullable = false;},
+    {name = "URL"; sqlType = VARCHAR; length = 255; nullable = false;}
+    ];   
+table.primaryKey.pkcolumns = ["PROVIDER_ID", "SERVER_ID"];

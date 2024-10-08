@@ -1,0 +1,237 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_location_assign_copytoall" (
+    IN LOCATION_ID VARCHAR(22),
+    IN LOCATION_RULE_ID  BIGINT,
+    IN TU_IDS "sap.tm.trp.db.pickupreturn::tt_tu_list",
+    OUT ASSIGN_STATUS_INVALID "sap.tm.trp.db.pickupreturn::tt_tu_assign_status",
+    OUT ASSIGN_STATUS_SUCCESS "sap.tm.trp.db.pickupreturn::tt_tu_assign_status"
+   )
+	LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE COUNT_FILTER INTEGER;
+    DECLARE ASSIGN_LOC VARCHAR(20);
+
+    --get selected TU info
+    TUS = SELECT DISTINCT RULE_ID,
+                 TRANSPORTATION_ID AS TU_ID,
+                 QUANTITY,
+                 RESOURCE_TYPE
+          FROM "sap.tm.trp.db.pickupreturn::v_location_rule_assignment_draft"
+          WHERE TRANSPORTATION_ID IN (SELECT TU_ID FROM :TU_IDS)
+          AND RULE_ID = :LOCATION_RULE_ID
+          AND FLAG <> 2;  --only auto and unassign
+
+    --get assigned TU valid status
+    /*
+    CALL "sap.tm.trp.db.pickupreturn::p_required_compare_capacity" (
+      :LOCATION_ID,
+      :LOCATION_RULE_ID,
+      :TUS,
+      VALID_STATUS
+    );
+    */
+
+    --Change assign status
+    TU_STATUS = SELECT DISTINCT T1.RULE_ID,
+				               T1.USER,
+				               T1.TU_ID,
+				               T1.TU_TYPE_CODE,
+				               T1.EXECUTION_STATUS_CODE,
+				               T1.SHIPPER_ID,
+				               T1.CONSIGNEE_ID,
+				               T1.RESOURCE_TYPE,
+				               T1.QUANTITY,
+				               T1.ASSIGN_QUANTITY,
+				               T1.RESOURCE_NUMBER,
+				               T1.SOURCE_LOCATION_ID,
+				               T1.DESTINATION_LOCATION_ID,
+				               T1.POL,
+				               T1.POD,
+				               T1.DATE,
+				               CASE WHEN T3.TU_ID is NULL THEN T1.PRE_LOCATION_ID
+				                 ELSE :LOCATION_ID END AS PRE_LOCATION_ID,  
+				               T1.CUR_LOCATION_ID,
+				               T1.PRE_DATE,
+				               T1.CUR_DATE,
+				               T1.OP_SETTING_TYPE,
+				               T1.SCHEDULE_TIME_TYPE,
+				               T1.PLANNING_RELEVANT,
+				               T1.CUSTOMER_CODE,
+				               T1.ITE_KEY,
+				               T1.LIFECYCLE_CODE,
+				               T1.BOOKING_DATE,
+				               --CASE WHEN T2.ASSIGN_STATUS = 0 THEN T1.ASSIGN_STATUS
+							   --ELSE CASE WHEN T2.ASSIGN_STATUS IS NOT NULL THEN T2.ASSIGN_STATUS 
+				                     --ELSE T1.ASSIGN_STATUS 
+				                     --END
+				                --END AS ASSIGN_STATUS,
+				               1 AS ASSIGN_STATUS,
+				               T1.RULE_TYPE,
+				               T1.SAVE_TIME,
+				               CASE WHEN T3.TU_ID is NULL THEN T1.FLAG
+				                 ELSE 2 END AS FLAG,
+				               T1.BOOKING_REFERENCE,
+							   T1.MOT,
+							   T1.MEANS_OF_TRANSPORTATION,
+							   T1.CARRIER_POL,
+							   T1.CARRIER_POD,
+							   T1.VOYAGE_POL,
+							   T1.VOYAGE_POD,
+							   T1.SPECIAL_INSTRUCTION_CODE,
+							   T1.SPECIAL_INSTRUCTION_NAME,
+							   T1.LAST_LOCATION_ID,
+							   T1.LAST_LOCATION_NAME,
+							   T1.LEASE_AGREEMENT,
+							   T1.LEASE_TYPE_CODE,
+							   T1.LEASE_TYPE,
+						       T1.ASSIGNED_RESOURCE,
+						       T1.VESSEL_CUTOFF_TIME,
+						       T1.VESSEL_ARRIVAL_DATE,
+							   T1.VESSEL_POL,
+							   T1.VESSEL_POD,
+							   CASE WHEN T3.TU_ID IS NULL THEN T1.STREETTURN_TU_ID
+				               ELSE ''  END AS   STREETTURN_TU_ID,
+							   T1.INVALID,
+							   T1.PLAN_STATUS
+	              FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft" T1
+	              LEFT JOIN :TUS T3
+	              ON (T1.TU_ID = T3.TU_ID)
+	              WHERE
+	              --T1.TU_ID IN (SELECT TU_ID FROM :TU_IDS)
+	              --AND (T1.PRE_LOCATION_ID = '' OR T1.PRE_LOCATION_ID IS NULL)
+	              T1.USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username")
+	              AND T1.RULE_ID = :LOCATION_RULE_ID;
+
+	  --update valid flag in TU view table
+      DELETE FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft"
+      WHERE USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username")
+      AND RULE_ID = :LOCATION_RULE_ID;
+
+      INSERT INTO "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft"(
+                   RULE_ID,
+	               USER,
+	               TU_ID,
+	               TU_TYPE_CODE,
+	               EXECUTION_STATUS_CODE,
+	               SHIPPER_ID,
+	               CONSIGNEE_ID,
+	               RESOURCE_TYPE,
+	               QUANTITY,
+	               ASSIGN_QUANTITY,
+	               RESOURCE_NUMBER,
+	               SOURCE_LOCATION_ID,
+	               DESTINATION_LOCATION_ID,
+	               POL,
+	               POD,
+	               DATE,
+	               PRE_LOCATION_ID,
+	               CUR_LOCATION_ID,
+	               PRE_DATE,
+	               CUR_DATE,
+	               OP_SETTING_TYPE,
+	               SCHEDULE_TIME_TYPE,
+	               PLANNING_RELEVANT,
+	               CUSTOMER_CODE,
+	               ITE_KEY,
+	               LIFECYCLE_CODE,
+	               BOOKING_DATE,
+	               ASSIGN_STATUS,
+	               RULE_TYPE,
+	               SAVE_TIME,
+	               FLAG,
+	               BOOKING_REFERENCE,
+				   MOT,
+				   MEANS_OF_TRANSPORTATION,
+				   CARRIER_POL,
+				   CARRIER_POD,
+				   VOYAGE_POL,
+				   VOYAGE_POD,
+				   SPECIAL_INSTRUCTION_CODE,
+				   SPECIAL_INSTRUCTION_NAME,
+				   LAST_LOCATION_ID,
+				   LAST_LOCATION_NAME,
+				   LEASE_AGREEMENT,
+				   LEASE_TYPE_CODE,
+				   LEASE_TYPE,
+			       ASSIGNED_RESOURCE,
+			       VESSEL_CUTOFF_TIME,
+			       VESSEL_ARRIVAL_DATE,
+				   VESSEL_POL,
+				   VESSEL_POD,
+				   STREETTURN_TU_ID,
+				   INVALID,
+				   PLAN_STATUS)
+	    SELECT RULE_ID,
+			   USER,
+			   TU_ID,
+			   TU_TYPE_CODE,
+			   EXECUTION_STATUS_CODE,
+			   SHIPPER_ID,
+			   CONSIGNEE_ID,
+			   RESOURCE_TYPE,
+			   QUANTITY,
+			   ASSIGN_QUANTITY,
+			   RESOURCE_NUMBER,
+			   SOURCE_LOCATION_ID,
+			   DESTINATION_LOCATION_ID,
+			   POL,
+			   POD,
+			   DATE,
+			   PRE_LOCATION_ID,  
+			   CUR_LOCATION_ID,
+			   PRE_DATE,
+			   CUR_DATE,
+			   OP_SETTING_TYPE,
+			   SCHEDULE_TIME_TYPE,
+			   PLANNING_RELEVANT,
+			   CUSTOMER_CODE,
+			   ITE_KEY,
+			   LIFECYCLE_CODE,
+			   BOOKING_DATE,
+			   ASSIGN_STATUS,
+			   RULE_TYPE,
+			   SAVE_TIME,
+			   FLAG,
+			   BOOKING_REFERENCE,
+			   MOT,
+			   MEANS_OF_TRANSPORTATION,
+			   CARRIER_POL,
+			   CARRIER_POD,
+			   VOYAGE_POL,
+			   VOYAGE_POD,
+			   SPECIAL_INSTRUCTION_CODE,
+			   SPECIAL_INSTRUCTION_NAME,
+			   LAST_LOCATION_ID,
+			   LAST_LOCATION_NAME,
+			   LEASE_AGREEMENT,
+			   LEASE_TYPE_CODE,
+			   LEASE_TYPE,
+			   ASSIGNED_RESOURCE,
+			   VESSEL_CUTOFF_TIME,
+			   VESSEL_ARRIVAL_DATE,
+			   VESSEL_POL,
+			   VESSEL_POD,
+			   STREETTURN_TU_ID,
+			   INVALID,
+			   PLAN_STATUS
+		  FROM :TU_STATUS;
+
+    ASSIGN_STATUS_INVALID = SELECT RULE_ID,
+                                   TU_ID,
+                                   QUANTITY,
+                                   ASSIGN_STATUS,
+                                   'MSG_NOT_ENOUGH_STOCK' AS MESSAGE_KEY 
+                            FROM :TU_STATUS 
+                            WHERE ASSIGN_STATUS = 2
+                            AND TU_ID IN (SELECT TU_ID FROM :TU_IDS);
+    ASSIGN_STATUS_SUCCESS = SELECT RULE_ID,
+                                   TU_ID,
+                                   QUANTITY,
+                                   ASSIGN_STATUS,
+                                   'MSG_SUCCESS' AS MESSAGE_KEY 
+                            FROM :TU_STATUS 
+                            WHERE ASSIGN_STATUS = 1
+                            AND TU_ID IN (SELECT TU_ID FROM :TU_IDS);
+END;

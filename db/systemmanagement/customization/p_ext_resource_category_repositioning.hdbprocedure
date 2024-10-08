@@ -1,0 +1,64 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.customization::p_ext_resource_category_repositioning"(
+    IN RESOURCE_CATEGORY VARCHAR(20),
+    OUT TRQ_ITEM_CATEGORY VARCHAR(3),
+    OUT MOVEMENT_TYPE VARCHAR(3),
+    OUT UOM VARCHAR(3),
+    OUT SALES_ORGNIZATION VARCHAR(60),
+    OUT TRQ_CATEGORY VARCHAR(2),
+    OUT TRQ_ITEM_TYPE VARCHAR(4),
+    OUT TRQ_TYPE VARCHAR(4),
+    OUT BUILD_TU VARCHAR(1),
+    OUT TRAFFIC_DIRECTION VARCHAR(10),
+    OUT TRANSPORTATION_MODE_CATEGORY VARCHAR(10),
+    OUT TRANSPORTATION_MODE VARCHAR(2)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    	SELECT IFNULL (MAX (VALUE),NULL) INTO TRQ_ITEM_CATEGORY                
+        FROM "sap.tm.trp.db.systemmanagement.customization::v_repositioning_column_desc"
+        WHERE ID = 1 AND RESOURCE_CATEGORY_NAME = :RESOURCE_CATEGORY;
+                            
+        SELECT IFNULL (MAX (VALUE),NULL) INTO MOVEMENT_TYPE                
+        FROM "sap.tm.trp.db.systemmanagement.customization::v_repositioning_column_desc"
+        WHERE ID = 2 AND RESOURCE_CATEGORY_NAME = :RESOURCE_CATEGORY;
+        
+        SELECT IFNULL (MAX (VALUE),NULL) INTO UOM                
+        FROM "sap.tm.trp.db.systemmanagement.customization::v_repositioning_column_desc"
+        WHERE ID = 3 AND RESOURCE_CATEGORY_NAME = :RESOURCE_CATEGORY;
+        
+        SELECT IFNULL (MAX (VALUE),NULL) INTO SALES_ORGNIZATION                
+        FROM "sap.tm.trp.db.systemmanagement.customization::v_repositioning_column_desc"
+        WHERE ID = 4 AND RESOURCE_CATEGORY_NAME = :RESOURCE_CATEGORY;
+        
+        SELECT IFNULL (MAX (VALUE),NULL) INTO TRQ_CATEGORY                
+        FROM "sap.tm.trp.db.systemmanagement.customization::v_repositioning_column_desc"
+        WHERE ID = 5 AND RESOURCE_CATEGORY_NAME = :RESOURCE_CATEGORY;
+        
+        SELECT IFNULL (MAX (VALUE),NULL) INTO TRQ_ITEM_TYPE                
+        FROM "sap.tm.trp.db.systemmanagement.customization::v_repositioning_column_desc"
+        WHERE ID = 6 AND RESOURCE_CATEGORY_NAME = :RESOURCE_CATEGORY;
+        
+        SELECT IFNULL (MAX (VALUE),NULL) INTO TRQ_TYPE                
+        FROM "sap.tm.trp.db.systemmanagement.customization::v_repositioning_column_desc"
+        WHERE ID = 7 AND RESOURCE_CATEGORY_NAME = :RESOURCE_CATEGORY;
+        
+        SELECT IFNULL (MAX (VALUE),NULL) INTO BUILD_TU                
+        FROM "sap.tm.trp.db.systemmanagement.customization::v_repositioning_column_desc"
+        WHERE ID = 8 AND RESOURCE_CATEGORY_NAME = :RESOURCE_CATEGORY;
+        
+        SELECT IFNULL (MAX (VALUE),NULL) INTO TRAFFIC_DIRECTION                
+        FROM "sap.tm.trp.db.systemmanagement.customization::v_repositioning_column_desc"
+        WHERE ID = 9 AND RESOURCE_CATEGORY_NAME = :RESOURCE_CATEGORY;
+        
+        SELECT IFNULL (MAX (VALUE),NULL) INTO TRANSPORTATION_MODE_CATEGORY                
+        FROM "sap.tm.trp.db.systemmanagement.customization::v_repositioning_column_desc"
+        WHERE ID = 10 AND RESOURCE_CATEGORY_NAME = :RESOURCE_CATEGORY;
+        
+        SELECT IFNULL (MAX (VALUE),NULL) INTO TRANSPORTATION_MODE                
+        FROM "sap.tm.trp.db.systemmanagement.customization::v_repositioning_column_desc"
+        WHERE ID = 11 AND RESOURCE_CATEGORY_NAME = :RESOURCE_CATEGORY;
+    
+END;

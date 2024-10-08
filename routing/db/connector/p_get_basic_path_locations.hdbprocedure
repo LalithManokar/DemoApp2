@@ -1,0 +1,57 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.connector::p_get_basic_path_locations"(
+	IN start_time DATE, 
+	IN end_time DATE, 
+	OUT locations TABLE (location_id NVARCHAR(50))
+)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA SAP_TM_ROUTING
+    READS SQL DATA AS
+BEGIN
+	DECLARE count INTEGER;
+    
+    SELECT count(*) INTO count
+    FROM "sap.tm.trp.db.semantic.schedule::v_schedule_filter";
+    
+    -- Just filter the schedule WHEN there is any entry in the filter cofig table
+    IF count = 0 THEN
+        schedules = select distinct s.db_key
+        from "sap.tm.trp.db.semantic.schedule::v_schedule" s
+        WHERE val_from_date < :end_time
+        AND val_to_date > :start_time;
+    ELSE
+        schedules = select distinct s.db_key
+        FROM "sap.tm.trp.db.semantic.schedule::v_schedule" s
+        INNER JOIN "sap.tm.trp.db.semantic.schedule::v_schedule_filter" AS f
+        ON s.schedule_type = f.schedule_type
+        WHERE val_from_date < :end_time
+        AND val_to_date > :start_time;
+    END IF;
+    
+    -- Location name might be intial due to some error in source system
+    schedule_locations = SELECT DISTINCT location_name AS location_id
+    from "sap.tm.trp.db.semantic.schedule::v_schedule_location" as l
+    inner join :schedules as s
+    on l.parent_key = s.db_key
+    WHERE location_name <> '' AND location_name IS NOT NULL;
+    
+    -- Find freight orders whose first stop will depart between the time range
+    tor = SELECT DISTINCT o.db_key
+    FROM "sap.tm.trp.db.semantic.order::v_freight_order" AS o
+    INNER JOIN "sap.tm.trp.db.semantic.order::v_freight_order_stop" s
+    ON o.db_key = s.freight_order_key
+    AND s.stop_seq_pos = 'F'
+    WHERE tor_cat = 'BO'
+    AND s.sel_time > :start_time
+    AND  s.sel_time < :end_time;
+    
+    -- Location name might be intial due to some error in source system
+    tor_locations = SELECT DISTINCT location_name AS location_id
+    FROM "sap.tm.trp.db.semantic.order::v_freight_order_stop"
+    WHERE freight_order_key IN (SELECT db_key FROM :tor)
+    AND location_name <> '' AND location_name IS NOT NULL;
+    
+    locations = SELECT * FROM :schedule_locations
+    UNION SELECT * FROM :tor_locations;
+    
+END;

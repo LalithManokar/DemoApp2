@@ -1,0 +1,134 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_prepare_sd_initial_stock"    
+    (IN SIMULATION_ID BIGINT,      
+     IN SCENARIO_ID  BIGINT, 
+     IN SD_PLAN_ID BIGINT,
+     OUT t_supply_demand "sap.tm.trp.db.planningcockpit::tt_supply_demand_for_solver",
+     OUT init_stock "sap.tm.trp.db.planningcockpit::tt_initial_stock" 
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"   
+	 AS
+BEGIN
+   
+
+  DECLARE TMP_EXECUTION_ID BIGINT;
+  DECLARE TMP_NODE_ID BIGINT;
+  DECLARE TMP_STOCK_NODE_FLAG INTEGER;
+
+  DECLARE ACT_REPO INTEGER := 1;
+  DECLARE ACT_REPO_PROPOSED INTEGER := 2;
+  DECLARE ACT_ON_HIRE INTEGER := 3;
+  DECLARE ACT_M_R INTEGER := 5;
+  DECLARE ACT_OFF_HIRE INTEGER  := 7;
+  DECLARE ACT_REPO_AVOID INTEGER := 9;
+  DECLARE ACT_STATUS_DRAFT INTEGER := 0;
+    
+  --get execution id 
+  SELECT IFNULL(MAX(EXCUTE_ID),0) INTO TMP_EXECUTION_ID
+  FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan"
+  WHERE ID = :SIMULATION_ID; 
+ 
+  --get default node
+  CALL  "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid"(:TMP_EXECUTION_ID, TMP_NODE_ID); 
+  
+  -- get initial stock and indepent sd
+  CALL "sap.tm.trp.db.planningcockpit::p_origin_sd_initial_stock_extractor"(:SD_PLAN_ID, :TMP_EXECUTION_ID,:TMP_NODE_ID, tmp_sd_origin, init_stock); 
+  
+  -- SD plan is executed on aggregate location, while activity is created on primary locations
+  -- need to map the aggregate location SD result to primary location to merge with activies and feed to solver
+
+  -- get geo and location mapping 
+  CALL "sap.tm.trp.db.planningcockpit::p_get_loc_primaryloc_by_executionId"(:TMP_EXECUTION_ID, GEO_LOCATION_MAPPING);  
+            
+  sd_origin = SELECT T3.TIME_INTERVAL_ID, T3.START_TIME, T3.END_TIME, T4.LOCATION_ID, T4.LOCATION_NAME, T3.EQUIP_TYPE_ID,
+                     T3.SUPPLY, T3.DEMAND 
+              FROM :tmp_sd_origin T3
+              INNER JOIN :GEO_LOCATION_MAPPING T4 ON (T3.LOCATION_ID = T4.GEO_ID);  
+ 
+
+  intervals = SELECT DISTINCT TIME_INTERVAL_ID, START_TIME, END_TIME 
+              FROM :sd_origin;  
+
+  ac_interval = 
+             SELECT T1.*, 
+             T2.TIME_INTERVAL_ID AS FROM_TIME_INTERVAL_ID, T2.START_TIME AS FROM_START_TIME, T2.END_TIME AS FROM_END_TIME,
+             T3.TIME_INTERVAL_ID AS TO_TIME_INTERVAL_ID, T3.START_TIME AS TO_START_TIME, T3.END_TIME AS TO_END_TIME FROM 
+             ( SELECT ID, ACTIVITY_TYPE, EQUIP_TYPE, QUANTITY, FROM_LOC_NAME, TO_LOC_NAME, START_DATE,END_DATE, ACTIVITY_STATUS_CODE
+               FROM "sap.tm.trp.db.planningcockpit::v_activity_ui" 
+               WHERE REL_SCENARIO_ID  = :SCENARIO_ID  AND ACTIVITY_STATUS_CODE  = :ACT_STATUS_DRAFT  
+             ) T1        
+             LEFT OUTER JOIN :intervals T2 ON (T1.START_DATE BETWEEN T2.START_TIME AND T2.END_TIME)
+             LEFT OUTER JOIN :intervals T3 ON (T1.END_DATE BETWEEN T3.START_TIME AND T3.END_TIME);             
+             
+                             
+  --supply and demand data with activity effect
+   t_supply_demand =
+    SELECT T3.START_TIME, T3.END_TIME, T1.LOCATION_NAME AS LOCATION, T1.EQUIP_TYPE AS CONTAINER_TYPE, T1.SUPPLY, T1.DEMAND 
+    FROM 
+    (
+        SELECT TIME_INTERVAL_ID, LOCATION_NAME, EQUIP_TYPE, SUM(SUPPLY) AS SUPPLY, SUM(DEMAND) AS DEMAND 
+        FROM 
+        (
+            SELECT TIME_INTERVAL_ID, LOCATION_NAME, EQUIP_TYPE_ID AS EQUIP_TYPE, SUPPLY, DEMAND
+            FROM :sd_origin
+            -- merge reposition activity record
+            UNION ALL
+            (
+            SELECT FROM_TIME_INTERVAL_ID AS TIME_INTERVAL_ID, FROM_LOC_NAME, EQUIP_TYPE, 0 AS SUPPLY, QUANTITY AS DEMAND
+            FROM :ac_interval
+            WHERE ACTIVITY_TYPE = :ACT_REPO OR ACTIVITY_TYPE = :ACT_REPO_PROPOSED            
+            ) 
+            UNION ALL
+            (
+            SELECT TO_TIME_INTERVAL_ID AS TIME_INTERVAL_ID, TO_LOC_NAME , EQUIP_TYPE, QUANTITY AS SUPPLY, 0 AS DEMAND
+            FROM :ac_interval
+            WHERE ACTIVITY_TYPE = :ACT_REPO OR ACTIVITY_TYPE = :ACT_REPO_PROPOSED            
+            )  
+            -- merge reposition avoidance activity record   
+            UNION ALL
+            (
+            SELECT FROM_TIME_INTERVAL_ID AS TIME_INTERVAL_ID, FROM_LOC_NAME , EQUIP_TYPE, 0 AS SUPPLY, QUANTITY AS DEMAND
+            FROM :ac_interval
+            WHERE ACTIVITY_TYPE = :ACT_REPO_AVOID            
+            ) 
+            UNION ALL
+            (
+            SELECT TO_TIME_INTERVAL_ID AS TIME_INTERVAL_ID, TO_LOC_NAME, EQUIP_TYPE, QUANTITY AS SUPPLY, 0 AS DEMAND
+            FROM :ac_interval
+            WHERE ACTIVITY_TYPE = :ACT_REPO_AVOID
+            ) 
+            -- merge on-hire activity record     
+            UNION ALL
+            (
+            SELECT FROM_TIME_INTERVAL_ID AS TIME_INTERVAL_ID, FROM_LOC_NAME, EQUIP_TYPE, QUANTITY AS SUPPLY, 0 AS DEMAND
+            FROM :ac_interval
+            WHERE ACTIVITY_TYPE = :ACT_ON_HIRE
+            )     
+            -- merge off-hire activity record     
+            UNION ALL
+            (
+            SELECT FROM_TIME_INTERVAL_ID AS TIME_INTERVAL_ID, FROM_LOC_NAME , EQUIP_TYPE, 0 AS SUPPLY, QUANTITY  AS DEMAND
+            FROM :ac_interval
+            WHERE ACTIVITY_TYPE = :ACT_OFF_HIRE
+            )  
+            -- merge M&R activity record( this activity has time range, but only one location, so only from_location is used)
+            UNION ALL
+            (
+            SELECT FROM_TIME_INTERVAL_ID AS TIME_INTERVAL_ID, FROM_LOC_NAME , EQUIP_TYPE, 0 AS SUPPLY, QUANTITY AS DEMAND
+            FROM :ac_interval
+            WHERE ACTIVITY_TYPE = :ACT_M_R
+            ) 
+            UNION ALL
+            (
+            SELECT TO_TIME_INTERVAL_ID AS TIME_INTERVAL_ID, FROM_LOC_NAME, EQUIP_TYPE, QUANTITY AS SUPPLY, 0 AS DEMAND
+            FROM :ac_interval
+            WHERE ACTIVITY_TYPE = :ACT_M_R
+            )     
+    	) 
+  	    GROUP BY TIME_INTERVAL_ID, LOCATION_NAME, EQUIP_TYPE
+    ) T1 
+    --  only the locations in the location filter are considered????
+    INNER JOIN :tmp_sd_origin T3 ON (T1.LOCATION_NAME = T3.LOCATION_NAME AND T1.TIME_INTERVAL_ID = T3.TIME_INTERVAL_ID AND T1.EQUIP_TYPE = T3.EQUIP_TYPE_ID );  
+
+END

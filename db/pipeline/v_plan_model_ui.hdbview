@@ -1,0 +1,89 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT DISTINCT T1.ID,
+                 T1.NAME,
+                 T1.DESC AS DESC,
+                 T1.FILTER_GROUP_ID,
+                 T3.TIME_FILTER_ID AS TIME_FILTER_ID,
+                 T3.FILTER_TYPE,
+                 T4.DESC AS TIME_FILTER_NAME,
+                 T1.PLAN_MODEL_TYPE_ID AS PLAN_TYPE_ID,
+                 ALERT_RULE.ALERT_RULE_GROUP_ID,
+                 ALERT_RULE.NAME AS ALERT_RULE_GROUP_NAME,
+                 ALERT_RULE.DESC AS ALERT_RULE_GROUP_DESC,
+                 T2.DESC AS PLAN_TYPE_NAME,
+                 T1.PIPELINE_MODEL_ID AS PIPELINE_MODEL_ID,
+                 T12.ID AS PLAN_MODEL_CATEGORY_ID,
+                 T12.DESC AS PLAN_MODEL_CATEGORY_DESC,
+                 T12.PARENT_ID AS PLAN_MODEL_CATEGORY_PARENT_ID,
+                 A1.ID AS EQUIPMENT_FILTER_ID,
+                 A1.DESC AS EQUIPMENT_FILTER_NAME,
+                 A2.ID AS LOCATION_FILTER_ID,
+                 A2.DESC AS LOCATION_FILTER_NAME,
+                 A2.LOCATION_TYPE,
+                 T9.EXECUTION_ID,
+                 T9.EXECUTION_ID AS EXCUTE_ID,
+                 T13.EXECUTE_ON AS LAST_EXECUTION_TIME,
+                 T9.NODE_ID,
+                 T10.GROUP_ID,
+                 T1.USAGE,
+                 T1.USAGE_CODE
+            FROM \"sap.tm.trp.db.pipeline::t_plan_model\" AS T1
+                 LEFT JOIN \"sap.tm.trp.db.pipeline::t_plan_model_type\" AS T2
+                 ON T1.PLAN_MODEL_TYPE_ID = T2.ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_assign_plan_model\" AS PLAN_ALERT_RULE
+                 ON T1.ID = PLAN_ALERT_RULE.PLAN_MODEL_ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group\" AS ALERT_RULE
+                 ON PLAN_ALERT_RULE.ALERT_RULE_GROUP_ID = ALERT_RULE.ALERT_RULE_GROUP_ID
+                 LEFT JOIN \"sap.tm.trp.db.filter::t_filter_group\" AS T3
+                 ON T1.FILTER_GROUP_ID = T3.ID
+                 LEFT JOIN \"sap.tm.trp.db.filter::t_time_filter\" AS T4
+                 ON T3.TIME_FILTER_ID = T4.ID
+                 LEFT JOIN \"sap.tm.trp.db.filter::t_filter_equipment_filter\" AS T5 ON T3.ID = T5.FILTER_GROUP_ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.filter::t_equipment_filter\" AS A1 ON T5.EQUIPMENT_FILTER_ID = A1.ID AND A1.RESOURCE_CATEGORY = T5.RESOURCE_CATEGORY
+                 LEFT JOIN \"sap.tm.trp.db.filter::t_filter_location_filter\" AS T7
+                 ON T3.ID = T7.FILTER_GROUP_ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.filter::t_location_filter\" AS A2
+                 ON T7.LOCATION_FILTER_ID = A2.ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.pipeline::v_plan_default_node_latest_execution\" AS T9
+                 ON T1.ID = T9.PLAN_MODEL_ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.pipeline::t_plan_execution\" AS T13
+                 ON T9.EXECUTION_ID = T13.ID
+                 LEFT OUTER JOIN (SELECT RANK() OVER(ORDER BY TIME_FILTER_ID, EQUIPMENT_FILTER_ID, LOCATION_FILTER_ID desc) AS GROUP_ID,
+                                         ID,
+                                         TIME_FILTER_ID,
+                                         EQUIPMENT_FILTER_ID,
+                                         LOCATION_FILTER_ID  
+                                    FROM \"sap.tm.trp.db.filter::v_filter_time_equip_loc\") T10
+                 ON T1.FILTER_GROUP_ID = T10.ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.pipeline::t_pipeline_model\" AS T11
+                 ON T1.PIPELINE_MODEL_ID = T11.ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.pipeline::t_pipeline_model_type\" AS T12
+                 ON T11.PIPELINE_MODEL_TYPE_ID = T12.ID
+           WHERE T1.PLAN_MODEL_TYPE_ID = 1
+                 OR ((T1.PLAN_MODEL_TYPE_ID = 2 OR T1.PLAN_MODEL_TYPE_ID = 3)
+                     AND T3.USER_ID = 
+                     (SELECT ID
+                                          FROM \"sap.tm.trp.db.systemmanagement.user::t_user\"
+                                         WHERE USERNAME = (SELECT USERNAME FROM \"sap.tm.trp.db.systemmanagement.user::cv_get_username\")))";
+               
+
+depends_on_view = ["sap.tm.trp.db.filter::v_filter_time_equip_loc", 
+					"sap.tm.trp.db.pipeline::v_plan_default_node_latest_execution", 
+					"sap.tm.trp.db.systemmanagement.user::cv_get_username"
+					];
+depends_on_table = ["sap.tm.trp.db.pipeline::t_pipeline_model", 
+					"sap.tm.trp.db.pipeline::t_pipeline_model_type",
+					"sap.tm.trp.db.systemmanagement.user::t_user", 
+					"sap.tm.trp.db.filter::t_location_filter", 
+					"sap.tm.trp.db.filter::t_filter_location_filter", 
+					"sap.tm.trp.db.filter::t_equipment_filter", 
+					"sap.tm.trp.db.filter::t_filter_equipment_filter",
+					"sap.tm.trp.db.pipeline::t_plan_model", 
+					"sap.tm.trp.db.pipeline::t_plan_model_type", 
+					"sap.tm.trp.db.filter::t_filter_group", 
+					"sap.tm.trp.db.filter::t_time_filter", 
+					"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_assign_plan_model", 
+					"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group", 
+					"sap.tm.trp.db.pipeline::t_plan_execution"
+					];
+                 

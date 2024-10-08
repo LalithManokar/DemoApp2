@@ -1,0 +1,16 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "CONDITION_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "LEASE_CONTRACT_REFERENCE"; sqlType = NVARCHAR; length = 100; nullable = false;},
+    {name = "HIRE_TYPE"; sqlType = TINYINT;  comment = "0 -  onhire , 1 - offhire"; nullable = true;},
+	{name = "LOCATION_TYPE"; sqlType = TINYINT; nullable = true; comment = "1- depo location 2- location group 3 - Zone 4 - Zone group 5 - Region 6 - Region group";},
+	{name = "LOCATION"; sqlType = NVARCHAR; length = 22; nullable = true;},
+	{name = "EQUIPMENT"; sqlType = NVARCHAR; length = 50; nullable = true;},
+    {name = "MIN_HIRE_QUANTITY"; sqlType = INTEGER; nullable = true; comment = "Minimum quantity to be leased";},
+	{name = "MAX_HIRE_QUANTITY"; sqlType = INTEGER; nullable = true; comment = "Maximum quantity to be leased";},  
+	{name = "ACTIVE"; sqlType = TINYINT; nullable = false;},
+	{name = "ACTION_TIME"; sqlType = TIMESTAMP; nullable = true; },
+    {name = "CONNECTION_ID"; sqlType = VARCHAR; length = 100; nullable = true; },  
+    {name = "IND_UPD"; sqlType = INTEGER; } 
+];

@@ -1,0 +1,24 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+{name = "PICKUP_AND_RETURN_RULESET_NAME"; sqlType = VARCHAR; length = 200; },
+{name = "DESCRIPTION"; sqlType = VARCHAR; length = 500; },
+{name = "RULESET_TYPE"; sqlType = VARCHAR; length = 20; comment="1:pick up  2:return"; },
+{name = "VISIBILITY"; sqlType = VARCHAR; length = 100; },
+{name = "DUE_TO_PICK_OR_RETURN";sqlType= VARCHAR; length = 20; },
+{name = "TIME_MEASURE"; sqlType = VARCHAR; length = 100; },
+{name = "LOCATION_FILTER"; sqlType = VARCHAR; length = 100; },
+{name = "RESOURCE_FILTER"; sqlType = VARCHAR; length = 100; },
+{name = "EXCLUDE_PROCESSED_TU"; sqlType = VARCHAR; length = 500; },
+{name = "EXCLUSION_RULE"; sqlType = VARCHAR; length = 50; },
+{name = "SD_PLAN"; sqlType = VARCHAR; length = 200; unique = true; },
+{name = "NETWORK_SETTINGS"; sqlType = VARCHAR; length = 50; },
+{name = "OPTIMIZATION_SETTINGS"; sqlType = VARCHAR; length = 100; },
+{name = "LOCATION_DETERMINATION_RULE"; sqlType = VARCHAR; length = 100; },
+{name = "AUTOMATIC_OPTIMIZATION"; sqlType = VARCHAR; length = 100; },
+{name = "MANUAL_OR_AUTOMATIC"; sqlType = VARCHAR; length = 100; },
+{name = "HANDLING_TIME_BUFFER"; sqlType = VARCHAR; length = 20; },
+{name = "MAXIMUM_HITS"; sqlType = VARCHAR; length = 20; },
+{name = "KEEP_EXECUTION_RUN"; sqlType = VARCHAR; length = 30; },
+{name = "SELECTION_DATE"; sqlType = VARCHAR; length = 100; }
+];

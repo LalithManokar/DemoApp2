@@ -1,0 +1,129 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage::p_gen_owners_timeInterval" ( 
+IN IN_EXECUTION_ID BIGINT, 
+IN IN_FILTER_TYPE INTEGER,
+IN  IN_PLAN_MODEL_TYPE_ID INTEGER,
+OUT OUT_TBL "sap.tm.trp.db.hrf::tt_location_owners") 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+   AS
+BEGIN
+	DECLARE LOCATION_EQUIP INTEGER;
+	DECLARE LOCATION_EQUIP_GROUP INTEGER;
+		    
+	DECLARE LOCATION_GROUP_EQUIP INTEGER;
+	DECLARE LOCATION_GROUP_EQUIP_GROUP INTEGER;
+	    
+	DECLARE REGION_EQUIP INTEGER;
+	DECLARE REGION_EQUIP_GROUP INTEGER;
+		    
+	DECLARE REGION_GROUP_EQUIP INTEGER;
+	DECLARE REGION_GROUP_EQUIP_GROUP INTEGER;
+		    
+	LOCATION_EQUIP :=1;
+	LOCATION_EQUIP_GROUP :=7;	    
+
+	REGION_EQUIP := 3;
+	REGION_EQUIP_GROUP := 9;
+		    
+	LOCATION_GROUP_EQUIP := 4;
+	LOCATION_GROUP_EQUIP_GROUP :=10;		    
+
+	REGION_GROUP_EQUIP :=6;
+	REGION_GROUP_EQUIP_GROUP := 12;
+	
+	--persistent/temporary plan
+    IF (:IN_PLAN_MODEL_TYPE_ID = 1 or :IN_PLAN_MODEL_TYPE_ID = 2 or :IN_PLAN_MODEL_TYPE_ID = 99)
+        THEN   
+	    DISTINCT_LOC_TBL = SELECT DISTINCT LOCATION_ID 
+		       FROM "sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_DeltaFlag" 
+		       WHERE PLAN_EXECUTION_ID = :IN_EXECUTION_ID;
+    --persistent KPI plan
+	ELSEIF(:IN_PLAN_MODEL_TYPE_ID = 4)
+        THEN	
+        DISTINCT_LOC_TBL = SELECT DISTINCT LOCATION_ID 
+		       FROM "sap.tm.trp.db.hrf.kpi::t_trp_hrf_KPI_cus_output_withoutDelta"
+		       WHERE PLAN_EXECUTION_ID = :IN_EXECUTION_ID;  
+    END IF;
+     		       		
+	--LOCATION
+	-- For location, both depot manager and regional planner are fetched
+	IF(:IN_FILTER_TYPE = :LOCATION_EQUIP OR :IN_FILTER_TYPE = :LOCATION_EQUIP_GROUP) 
+	THEN
+		OUT_LOCATION_USER = 
+			SELECT DISTINCT T1.LOCATION_ID,
+			       T4.USERNAME 
+			FROM :DISTINCT_LOC_TBL as T1
+		    INNER JOIN "sap.tm.trp.db.systemmanagement.user::t_role_location" T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+			INNER JOIN "sap.tm.trp.db.systemmanagement.user::t_user_role" T3 ON (T2.ROLE_ID = T3.ROLE_ID)
+			LEFT JOIN "sap.tm.trp.db.systemmanagement.user::t_user" T4 ON (T3.USER_ID = T4.ID)
+			
+			UNION 
+			
+			SELECT DISTINCT T1.LOCATION_ID,
+			       T5.USERNAME
+			FROM :DISTINCT_LOC_TBL T1
+			INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+			INNER JOIN "sap.tm.trp.db.systemmanagement.user::t_role_region" T3 ON (T2.ZONE_ID = T3.ROOT_ID)
+			INNER JOIN "sap.tm.trp.db.systemmanagement.user::t_user_role" T4 ON (T3.ROLE_ID = T4.ROLE_ID)
+			LEFT JOIN "sap.tm.trp.db.systemmanagement.user::t_user" T5 ON (T4.USER_ID = T5.ID);				
+
+	--REGION             
+	ELSEIF (:IN_FILTER_TYPE = :REGION_EQUIP OR :IN_FILTER_TYPE = :REGION_EQUIP_GROUP) 
+	THEN
+		OUT_LOCATION_USER = 
+			SELECT DISTINCT T1.LOCATION_ID,
+			                T4.USERNAME
+			FROM :DISTINCT_LOC_TBL as T1
+			INNER JOIN "sap.tm.trp.db.systemmanagement.user::t_role_region" T2 ON (T1.LOCATION_ID = T2.ROOT_ID)
+			INNER JOIN "sap.tm.trp.db.systemmanagement.user::t_user_role" T3 ON (T2.ROLE_ID = T3.ROLE_ID)
+			LEFT JOIN "sap.tm.trp.db.systemmanagement.user::t_user" T4 ON (T3.USER_ID = T4.ID);
+			
+	--LOCATION GROUP
+	-- For location, both depot manager and regional planner are fetched	
+	ELSEIF (:IN_FILTER_TYPE = :LOCATION_GROUP_EQUIP OR :IN_FILTER_TYPE = :LOCATION_GROUP_EQUIP_GROUP) 
+	THEN
+		OUT_LOCATION_USER =
+			SELECT DISTINCT T1.LOCATION_ID,
+			                T4.USERNAME
+			FROM :DISTINCT_LOC_TBL as T1					
+			INNER JOIN "sap.tm.trp.db.systemmanagement::t_location_group_item" T5 ON (T1.LOCATION_ID = T5.LOCATION_GROUP_ID)
+			INNER JOIN "sap.tm.trp.db.systemmanagement.user::t_role_location" T2 ON (T5.LOCATION_ID = T2.LOCATION_ID)
+			INNER JOIN "sap.tm.trp.db.systemmanagement.user::t_user_role" T3 ON (T2.ROLE_ID = T3.ROLE_ID)
+			LEFT JOIN "sap.tm.trp.db.systemmanagement.user::t_user" T4 ON (T3.USER_ID = T4.ID)
+			
+			UNION 
+			
+			SELECT DISTINCT T1.LOCATION_ID,
+			       T6.USERNAME
+			FROM :DISTINCT_LOC_TBL T1 
+			INNER JOIN "sap.tm.trp.db.systemmanagement::t_location_group_item" T5 ON (T1.LOCATION_ID = T5.LOCATION_GROUP_ID)
+            INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T2 ON (T5.LOCATION_ID = T2.LOCATION_ID)
+			INNER JOIN "sap.tm.trp.db.systemmanagement.user::t_role_region" T3 ON (T2.ZONE_ID = T3.ROOT_ID)
+			INNER JOIN "sap.tm.trp.db.systemmanagement.user::t_user_role" T4 ON (T3.ROLE_ID = T4.ROLE_ID)
+			LEFT JOIN "sap.tm.trp.db.systemmanagement.user::t_user" T6 ON (T4.USER_ID = T6.ID);   
+		             
+	--REGION GROUP
+	ELSEIF (:IN_FILTER_TYPE = :REGION_GROUP_EQUIP OR :IN_FILTER_TYPE = :REGION_GROUP_EQUIP_GROUP) 
+	THEN
+		OUT_LOCATION_USER =
+		SELECT DISTINCT T1.LOCATION_ID,
+		                T4.USERNAME
+		FROM :DISTINCT_LOC_TBL as T1
+		INNER JOIN "sap.tm.trp.db.systemmanagement::t_region_group_item" T5 ON (T1.LOCATION_ID = T5.REGION_GROUP_ID)
+		INNER JOIN "sap.tm.trp.db.systemmanagement.user::t_role_region" T2 ON (T5.ZONE_ID = T2.ROOT_ID)
+		INNER JOIN "sap.tm.trp.db.systemmanagement.user::t_user_role" T3 ON (T2.ROLE_ID = T3.ROLE_ID)
+		LEFT JOIN "sap.tm.trp.db.systemmanagement.user::t_user" T4 ON (T3.USER_ID = T4.ID);
+    ELSE
+	END IF;  
+    
+    OUT_TBL = SELECT T1.LOCATION_ID,
+              SUBSTRING(RTRIM(T1.USERNAME,','),1,500) AS OWNERS
+	FROM
+	(
+		SELECT LOCATION_ID,string_agg(concat(USERNAME,',')) AS USERNAME
+		FROM :OUT_LOCATION_USER 
+		GROUP BY LOCATION_ID
+	)T1;
+
+END;

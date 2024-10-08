@@ -1,0 +1,17 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_schedule_plan_to_template_plan" ( 
+    IN PLAN_MODEL_ID BIGINT
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+ 
+
+
+    DECLARE PLAN_STAUTS_OK INT := 0;
+    DECLARE PLAN_MODEL_TYPE INTEGER := 2;
+    CALL "sap.tm.trp.db.pipeline::p_update_plan_type" (:PLAN_MODEL_ID,:PLAN_MODEL_TYPE);
+    UPDATE "sap.tm.trp.db.pipeline::t_plan_model" SET STATUS = :PLAN_STAUTS_OK
+    WHERE ID = :PLAN_MODEL_ID;
+END;

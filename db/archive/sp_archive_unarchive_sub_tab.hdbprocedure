@@ -1,0 +1,62 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_archive_unarchive_sub_tab"(
+		IN RULE_ID BIGINT, 
+		IN EXECUTION_ID BIGINT, 
+		IN CHILD_TAB_NAME NVARCHAR(500), 
+		OUT STATUS_CODE INTEGER,
+		OUT RECORD_COUNT BIGINT,
+		OUT MESSAGE NVARCHAR(5000)
+	)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+
+	DECLARE SCHEMA_NAME NVARCHAR(20) DEFAULT 'SAP_TM_TRP';
+    DECLARE CHILD_HOT_TEM_TAB NVARCHAR(500);
+    DECLARE CHILD_WARM_TAB NVARCHAR(500);
+    DECLARE SQL_STT NVARCHAR(5000);
+    DECLARE COLUMN_STR NVARCHAR(1000);
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        STATUS_CODE := 2;
+        SELECT ::SQL_ERROR_MESSAGE INTO MESSAGE FROM DUMMY;
+    END; 
+
+    --initialize status code
+    STATUS_CODE := 0;
+    MESSAGE := 'Success';
+    CHILD_HOT_TEM_TAB := '';
+    CHILD_WARM_TAB := '';
+    SQL_STT := '';
+    COLUMN_STR := '';
+
+    
+
+    --move unarchived rows from warm table into child temporary table
+    CHILD_WARM_TAB := :CHILD_TAB_NAME || '_warm'; --child warm table
+    SELECT REPLACE(REPLACE(:CHILD_TAB_NAME,'.','_'),'::','_') || '_hot_temp' INTO CHILD_HOT_TEM_TAB FROM DUMMY; --child hot temporary table
+	SELECT STRING_AGG(COLUMN_NAME,',') INTO COLUMN_STR FROM TABLE_COLUMNS WHERE SCHEMA_NAME = :SCHEMA_NAME AND TABLE_NAME = :CHILD_TAB_NAME;
+	SQL_STT := 
+	'INSERT INTO "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_HOT_TEM_TAB) || '" (' || escape_single_quotes(:COLUMN_STR) || ') SELECT ' || escape_single_quotes(:COLUMN_STR) || ' FROM "'
+	|| :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_WARM_TAB) || '" ' || 'WHERE TRP_EXECUTION_ID = ' || :EXECUTION_ID;
+	EXECUTE IMMEDIATE :SQL_STT; --insert to temp table
+	--delete unarchived rows from warm table
+	SQL_STT :=
+	'DELETE FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_WARM_TAB) || '" ' || 'WHERE TRP_EXECUTION_ID = ' || :EXECUTION_ID;
+	EXECUTE IMMEDIATE :SQL_STT; --delete corresponding rows in warm table
+	--insert unarchived rows into child table
+	SQL_STT := 'INSERT INTO "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_TAB_NAME) || '" (' || escape_single_quotes(:COLUMN_STR) || ') SELECT '
+	|| escape_single_quotes(:COLUMN_STR) || ' FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_HOT_TEM_TAB) || '"';
+	EXECUTE IMMEDIATE :SQL_STT;
+	
+	--clear child temp table
+	SQL_STT :=
+	'DELETE FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_HOT_TEM_TAB) || '"';
+	EXECUTE IMMEDIATE :SQL_STT;
+
+	RECORD_COUNT := ::ROWCOUNT;
+     
+
+END;

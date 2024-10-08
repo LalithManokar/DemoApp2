@@ -1,0 +1,22 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "LEASE_CONTRACT_ID"; sqlType = VARCHAR; length = 20; nullable = false;},
+    {name = "LOCATION_ID"; sqlType = VARCHAR; length = 22; nullable = false;},
+    {name = "RESOURCE_TYPE"; sqlType = VARCHAR; length = 22; nullable = false;},       
+    {name = "PLANNED_HIRE_TIME"; sqlType = TIMESTAMP; nullable = false;comment="same as activity start time";},
+    {name = "ACTUAL_HIRE_TIME"; sqlType = TIMESTAMP; nullable = false;},  
+    {name = "PLANNED_QUANTITY"; sqlType = INTEGER; nullable = false;}, 
+    {name = "ACTIVITY_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "SCENARIO_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "SCENARIO_NAME"; sqlType = VARCHAR; length = 50; nullable = false;},
+    {name = "FINALIZE_FLAG"; sqlType = BIGINT; nullable = true;comment="Plan finalize flag:0-not finalized,1-finalized";},
+    {name = "ACTUAL_HIRE_QUANTITY"; sqlType = INTEGER; nullable = true;},    
+    {name = "CREATED_BY"; sqlType = BIGINT; nullable = true;},
+    {name = "MODIFIED_BY"; sqlType = BIGINT; nullable = true;},
+    {name = "CREATED_ON"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "MODIFIED_ON"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "HIRE_COMPLETED"; sqlType = TINYINT; comment="Planed on-hire complete flag:0-not complete,1-complete";},
+    {name = "HIRE_TYPE"; sqlType = INTEGER; nullable = false; comment="ONHIRE:1 OFFHIRE:2";}
+]; 
+ 

@@ -1,0 +1,40 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT DISTINCT
+				 T0.RESOURCE_ID AS EQUIP_ID,
+ 	             T0.RESOURCE_NAME AS RESOURCE,
+                 T2.RESOURCE_TYPE_CODE AS RESOURCE_TYPE,
+                 T2.RESOURCE_TYPE_DESC AS TYPE_DESC,
+                 T1.CURRENT_LOCATION AS LAST_LOCATION,
+                 T1.BLOCK_STATUS_CODE AS RESOURCE_STATUS_CODE,
+                 T1.BLOCK_STATUS_DESC AS RESOURCE_STATUS,               
+                 T1.MOVEMENT_STATUS_CODE AS MOVEMENT_STATUS,
+                 T1.MOVEMENT_STATUS_DESC AS MOVEMENT_STATUS_DESCRIPTION,
+                 T0.OWNERSHIP_CODE,
+                 T4.DESC AS OWNERSHIP,
+                 T0.LEASE_CONTRACT_REF AS LEASING_ID,  
+                 T0.MAX_GROSS_WEIGHT,
+                 T0.FOOD_GRADE_IND AS FOOD_GRADE_CODE,
+                 T5.DESC AS FOOD_GRADE,
+                 TO_DATE(T0.BUILDDATE) AS BUILT_DATE,
+                 T0.RESOURCE_CONDITION AS RESOURCE_CONDITION,
+                 TO_TIMESTAMP(T0.ON_HIRE_DT) AS ON_HIRE_DATE,
+                 TO_TIMESTAMP(T0.OFF_HIRE_DT) AS OFF_HIRE_DATE,
+                 T0.SPECIAL_INSTRUCTION AS SPECIAL_INSTRUCTION_CODE,
+                 T6.DESC AS SPECIAL_INSTRUCTION_NAME,
+                 CASE WHEN T0.ON_HIRE_DT = 0 OR T0.ON_HIRE_DT IS NULL THEN 0 ELSE 1 END AS HAS_ON_HIRE_DATE,
+                 CASE WHEN T0.OFF_HIRE_DT = 0 OR T0.OFF_HIRE_DT IS NULL THEN 0 ELSE 1 END AS HAS_OFF_HIRE_DATE
+          FROM \"sap.tm.trp.db.semantic.resource::v_resource_master\" T0
+          LEFT JOIN \"sap.tm.trp.db.semantic.resource::v_resource_status\" T1 ON T1.RESOURCE_ID = T0.RESOURCE_ID
+          LEFT JOIN \"sap.tm.trp.db.semantic.resource::v_resource_type\" T2 
+          ON (T2.RESOURCE_TYPE_CODE = T0.RESOURCE_TYPE_CODE AND T2.EQUI_TYPE = T0.EQUITYPE)
+          LEFT JOIN \"sap.tm.trp.db.semantic.resource::v_ownership_t\" T4 ON T4.CODE = T0.OWNERSHIP_CODE
+          LEFT JOIN \"sap.tm.trp.db.semantic.resource::v_food_grade_t\" T5 ON T5.CODE = T0.FOOD_GRADE_IND
+          LEFT JOIN \"sap.tm.trp.db.semantic.resource::v_special_instruction_t\" T6 ON (T6.CODE = T0.SPECIAL_INSTRUCTION)
+          ";
+
+depends_on_view = ["sap.tm.trp.db.semantic.resource::v_resource_master", 
+                    "sap.tm.trp.db.semantic.resource::v_resource_status", 
+                    "sap.tm.trp.db.semantic.resource::v_resource_type",
+                    "sap.tm.trp.db.semantic.resource::v_ownership_t",
+                    "sap.tm.trp.db.semantic.resource::v_food_grade_t",
+                    "sap.tm.trp.db.semantic.resource::v_special_instruction_t"];

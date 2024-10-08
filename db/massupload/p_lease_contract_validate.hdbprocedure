@@ -1,0 +1,148 @@
+
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_lease_contract_validate" ( 
+IN LEASE_CONTRACT_INPUT "sap.tm.trp.db.massupload::tt_lease_contract_upload",
+    IN ERROR_LIMIT INTEGER,
+    OUT INVALID_ITEMS "sap.tm.trp.db.massupload::tt_massupload_invalid_item"
+ ) 
+	LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+
+
+BEGIN
+
+--Variable declarartion
+ 
+ DECLARE CNT INT;
+ DECLARE DUP INT;
+ DECLARE CNT1 INT;
+
+
+  ITEMS =  SELECT LC.LEASE_TYPE_CODE, LC.ROW_INDEX FROM :LEASE_CONTRACT_INPUT LC WHERE LC.LEASE_TYPE_CODE
+		        NOT IN (SELECT CODE FROM "sap.tm.trp.db.leasecontract::t_lease_contract_type");
+	
+	
+	--Validate if LEASE_CODE_TYPE exists in system 
+  INVALID_ITEMS =  SELECT     A.ROW_INDEX,
+	               		      2 AS COL_INDEX,
+		               		 'LEASE_TYPE_CODE_NOT_EXIST' AS REASON_CODE
+		          			 FROM :ITEMS AS A;
+		          			 
+	--Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;	
+	          			 
+  ITEM1 = SELECT L.LESSOR_CODE,L.ROW_INDEX FROM :LEASE_CONTRACT_INPUT  L WHERE L.LESSOR_CODE 
+              NOT IN (SELECT CODE FROM "sap.tm.trp.db.leasecontract::t_lessor");
+  
+            
+    -- Validate if LESSOR_CODE exists in the system
+   INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS
+                    union all
+                          SELECT B.ROW_INDEX,
+                          3 AS COL_INDEX,
+                          'LESSOR_CODE_NOT_EXISTS' AS REASON_CODE
+                          FROM :ITEM1 B;
+                          
+    --Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;
+    
+  -- Getting Equipment type from view 
+
+  	ITEMS_2 =   SELECT ROW_INDEX FROM (
+			        SELECT LCI.EQUIPMENT,LCI.ROW_INDEX,
+				    CASE WHEN LCI.EQUIPMENT =  EQ1.RESOURCE_TYPE_CODE THEN '1'
+	    	      	     WHEN LCI.EQUIPMENT = EQ2.CODE THEN '1'
+	    	      	     WHEN LCI.EQUIPMENT = '' THEN '1'  
+	    	      	     ELSE '0'
+	    	      	     END AS FLAG1    
+					FROM :LEASE_CONTRACT_INPUT LCI
+			        LEFT JOIN "sap.tm.trp.db.semantic.resource::v_resource_type" EQ1
+			        ON LCI.EQUIPMENT = EQ1.RESOURCE_TYPE_CODE
+			        LEFT JOIN "sap.tm.trp.db.systemmanagement::t_equipment_group" EQ2
+			        ON LCI.EQUIPMENT = EQ2.CODE) 
+			        WHERE FLAG1 = '0';
+			
+	--VALIDATE if equipment is match 
+	INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS
+                    union all
+                    SELECT   Y.ROW_INDEX,
+	               		      12 AS COL_INDEX,
+		               		 'EQUIPMENT_MISMATCH' AS REASON_CODE
+		          			 FROM :ITEMS_2 AS Y;
+		         	         	         	         
+	--Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;	
+	         	         
+--Duplicate LEASE_CONTRACT_REFERENCE from CSV file
+	ITEM = SELECT * FROM :LEASE_CONTRACT_INPUT;
+    SELECT COUNT(*) INTO CNT1 FROM :ITEM;
+    
+    IF CNT1>1
+    THEN 
+  
+	NOT_MATCHING = SELECT DISTINCT ROW_INDEX FROM (
+       SELECT S.LEASE_CONTRACT_REFERENCE,
+    S.START_TIME,
+    S.END_TIME,
+    S.CURRENCY_CODE,
+    S.UNIT,
+    S.MAX_HIRE_QUANTITY,
+    S.MIN_HIRE_QUANTITY,
+    S.ACTIVE,
+    S.UNIT_TYPE,
+    S.LEASE_TYPE_CODE,
+    S.LESSOR_CODE,
+    S.EQUIPMENT,
+    S.PER_DIEM,
+    S.PER_DIEM_ACTIVE,
+    S.ROW_INDEX
+    FROM :ITEM AS S,:ITEM AS T
+    WHERE S.LEASE_CONTRACT_REFERENCE =T.LEASE_CONTRACT_REFERENCE
+    AND S.START_TIME = T.START_TIME
+    AND S.END_TIME = T.END_TIME
+    AND S.CURRENCY_CODE =T.CURRENCY_CODE
+    AND S.UNIT =T.UNIT
+    AND S.MAX_HIRE_QUANTITY= T.MAX_HIRE_QUANTITY
+    AND S.MIN_HIRE_QUANTITY = T.MIN_HIRE_QUANTITY 
+    AND S.ACTIVE = T.ACTIVE
+    AND S.UNIT_TYPE = T.UNIT_TYPE
+    AND S.LEASE_TYPE_CODE = T.LEASE_TYPE_CODE
+    AND S.LESSOR_CODE= T.LESSOR_CODE
+    AND S.EQUIPMENT = T.EQUIPMENT
+    AND S.ROW_INDEX != T.ROW_INDEX
+    
+  );
+   
+   
+   INVALID_ITEMS =SELECT * FROM :INVALID_ITEMS
+                 UNION ALL
+                                   SELECT E.ROW_INDEX,
+                                   12 AS COL_INDEX,
+                                   'VALIDATION_MISMATCH' AS REASON_CODE
+                                   FROM :NOT_MATCHING AS E;
+
+END IF;
+  
+				        
+   
+--Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;   
+			
+END; 

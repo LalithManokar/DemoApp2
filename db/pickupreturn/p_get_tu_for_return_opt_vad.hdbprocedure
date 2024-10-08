@@ -1,0 +1,43 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_get_tu_for_return_opt_vad" (
+    IN VAL_MOT_CAT VARCHAR(200),
+    IN START_T NVARCHAR(200),
+    IN END_T NVARCHAR(200) ) 
+
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+    BEGIN
+
+      tu_key_rot = select t1.tor_id, t7.FREIGHT_ORDER_STOP_KEY, ROW_NUMBER() OVER (PARTITION BY t1.tor_id ORDER BY t7.SEL_TIME DESC) AS END_SEQ
+                from "sap.tm.trp.db.pickupreturn::t_ord_fil_by_loc_return_temp" T1
+                inner join "sap.tm.trp.db.semantic.order::v_transportation_unit" T2 on t1.TOR_ID = t2.TOR_ID 
+                inner join "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T3 on t3.tu_key = t2.db_key 
+                inner join "sap.tm.trp.db.semantic.order::v_transportation_unit_item" t4 on t4.db_key = t3.leading_item_key 
+                inner join "sap.tm.trp.db.semantic.order::v_transportation_unit_stage" t5 on t5.tu_key = t4.tu_key and t5.mot_cat = :VAL_MOT_CAT 
+                inner join "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t6 on t6.db_key = t5.FROM_STOP_KEY 
+                inner join "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t7 on t7.db_key = t5.TO_STOP_KEY;
+                
+    tu_list = select t1.tor_id, t3.arrival_utc as vad
+            from :tu_key_rot t1
+            inner join "sap.tm.trp.db.semantic.order::v_freight_order_stop" t2 on t1.FREIGHT_ORDER_STOP_KEY = t2.db_key
+            inner join "sap.tm.trp.db.semantic.schedule::v_departure_location" t3 ON (t3.DB_KEY = t2.SCHED_STOP_KEY AND t3.PARENT_KEY = t2.SCHED_DEP_KEY) 
+            where t1.END_SEQ = 1 and CAST(t3.arrival_utc as VARCHAR) between :START_T AND :END_T;
+     
+     
+     
+     
+    tu = select * from  "sap.tm.trp.db.pickupreturn::t_ord_fil_by_loc_return_temp";
+     
+      TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_ord_fil_by_loc_return_temp";
+        INSERT INTO "sap.tm.trp.db.pickupreturn::t_ord_fil_by_loc_return_temp"(
+                    
+                    TOR_ID,
+                    
+                    PLANNED_DEPARTURE_TIME,
+                   
+                    PLANNED_ARRIVAL_TIME)
+                    select t21.TOR_ID,t22.PLANNED_DEPARTURE_TIME,
+    t22.PLANNED_ARRIVAL_TIME from :tu_list t21 inner join :tu t22 on (t21.TOR_ID = t22.TOR_ID);
+
+END;

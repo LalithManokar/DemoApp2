@@ -1,0 +1,26 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "output of p_get_stock_chart for location&equip";
+table.columns = [
+  {name = "GEO_ID"; sqlType = VARCHAR; length = 32;},
+  {name = "GEO_NAME"; sqlType = VARCHAR; length = 50;},
+  {name = "GEO_DESC"; sqlType = VARCHAR; length = 500;},
+  {name = "GEO_TYPE"; sqlType = INTEGER;},
+  {name = "RESOURCE_TYPE_CODE";sqlType = VARCHAR; length = 32;},
+  {name = "RESOURCE_TYPE_NAME"; sqlType = VARCHAR; length = 50;},
+  {name = "RESOURCE_TYPE_DESC"; sqlType = VARCHAR; length = 500;},
+  {name = "RESOURCE_TYPE"; sqlType = INTEGER;},
+  {name = "STOCK_DETAIL_CATEGORY"; sqlType = VARCHAR; length = 20;},
+  {name = "TOTAL_AVAILABLE_STOCK_PCS"; sqlType = DOUBLE;},
+  {name = "TOTAL_UNAVAILABLE_STOCK_PCS"; sqlType = DOUBLE;},
+  {name = "AVAILABLE_STOCK_PCS"; sqlType = DOUBLE;},
+  {name = "UNAVAILABLE_STOCK_PCS"; sqlType = DOUBLE;},
+  {name = "TOTAL_AVAILABLE_STOCK_TEU"; sqlType = DOUBLE;},
+  {name = "TOTAL_UNAVAILABLE_STOCK_TEU"; sqlType = DOUBLE;},
+  {name = "AVAILABLE_STOCK_TEU"; sqlType = DOUBLE;},
+  {name = "UNAVAILABLE_STOCK_TEU"; sqlType = DOUBLE;},
+  {name = "MIN_SAFETY_STOCK"; sqlType = DOUBLE;},
+  {name = "MAX_SAFETY_STOCK"; sqlType = DOUBLE;},
+  {name = "OVERALL_STOCK_DETAIL_PCS"; sqlType = DOUBLE;},
+  {name = "OVERALL_STOCK_DETAIL_TEU"; sqlType = DOUBLE;}
+];

@@ -1,0 +1,62 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_network_setting_group_create" (
+	IN NAME VARCHAR(200),
+	IN DESC VARCHAR(500),
+	IN MANDATORY_COST_MODEL_ID BIGINT,
+	IN OPTIONAL_COST_MODEL_ID BIGINT,
+	IN PARAMETER_LIST "sap.tm.trp.db.planningcockpit::tt_network_setting_group_parameter_list",
+	IN VALUE_LIST "sap.tm.trp.db.planningcockpit::tt_network_setting_group_parameter_value_list",
+	IN RESOURCE_CATEGORY NVARCHAR(50),
+	OUT GROUP_ID BIGINT
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	--READS SQL DATA 
+AS
+USER_ID BIGINT;
+BEGIN
+
+-- GET CURRENT USER_ID
+SELECT IFNULL(MAX(ID),-1) INTO USER_ID
+FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+-- GENERATE PARAMETER GROUP ID
+SELECT "sap.tm.trp.db.planningcockpit::s_network_setting_group".NEXTVAL INTO GROUP_ID FROM DUMMY;
+
+-- INSERT PARAMETER GROUP METADATA
+INSERT INTO "sap.tm.trp.db.planningcockpit::t_network_setting_group" 
+(ID,CODE,NAME,DESC,MANDATORY_COST_MODEL_ID,OPTIONAL_COST_MODEL_ID,CREATED_BY,CREATED_AT,MODIFIED_BY,MODIFIED_AT,RESOURCE_CATEGORY) VALUES 
+(:GROUP_ID,UPPER(:NAME),:NAME,:DESC,:MANDATORY_COST_MODEL_ID,:OPTIONAL_COST_MODEL_ID,:USER_ID,CURRENT_UTCTIMESTAMP,:USER_ID,CURRENT_UTCTIMESTAMP,:RESOURCE_CATEGORY)
+;
+
+--INSERT PARAMETER GROUP & VALUES
+INSERT INTO "sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_group"
+SELECT
+	:GROUP_ID
+	,PARAMETER_ID
+	,OPERATOR_CODE
+FROM :PARAMETER_LIST
+;
+INSERT INTO "sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_value"
+SELECT
+	:GROUP_ID
+	,PARAMETER_ID
+	,VALUE
+FROM :VALUE_LIST
+;
+
+INSERT INTO "sap.tm.trp.db.planningcockpit::t_network_setting_change_history"
+VALUES
+(
+	"sap.tm.trp.db.planningcockpit::s_network_setting_group_log".NEXTVAL
+	,:GROUP_ID
+	,1
+	,0
+	,''
+	,''
+	,:USER_ID
+	,CURRENT_UTCTIMESTAMP
+);
+
+END;

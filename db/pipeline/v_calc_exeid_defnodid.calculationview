@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.2" id="v_calc_exeid_defnodid" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="v_calc_exeid_defnodid"/>
+  <localVariables>
+    <variable id="PLAN_ID" parameter="true">
+      <descriptions defaultDescription="PLAN_ID"/>
+      <variableProperties datatype="INTEGER" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="EXECUTION_ID"/>
+        <viewAttribute datatype="INTEGER" id="DEFAULT_NODE_ID"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#PLAN_ID</localVariable>
+      <definition> 
+  
+ BEGIN 
+    DECLARE DEFAULT_NODE_ID INTEGER;
+    DECLARE EXECUTION_ID BIGINT;
+    
+    CALL &quot;sap.tm.trp.db.pipeline::p_get_executeid_by_planid&quot;(:PLAN_ID, EXECUTION_ID);
+    CALL &quot;sap.tm.trp.db.pipeline::p_get_default_node_by_executionid&quot; (EXECUTION_ID, DEFAULT_NODE_ID);
+    
+ 	 var_out = SELECT :EXECUTION_ID AS EXECUTION_ID,
+ 	                  :DEFAULT_NODE_ID AS DEFAULT_NODE_ID
+ 	             FROM DUMMY; 
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <attributes/>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="EXECUTION_ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="EXECUTION_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="EXECUTION_ID"/>
+      </measure>
+      <measure id="DEFAULT_NODE_ID" order="2" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DEFAULT_NODE_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="DEFAULT_NODE_ID"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

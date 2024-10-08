@@ -1,0 +1,45 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_quantity_based_storage_cost_upload"(
+    IN QUANTITY_BASED_COST "sap.tm.trp.db.costmodel::tt_quantity_based_storage_cost",
+    IN CONNECTION_ID VARCHAR(100),
+    IN ACTION VARCHAR(20),
+    IN SEQUENCE INTEGER
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE USER_ID BIGINT;
+    DECLARE ACTION_CODE_APPEND VARCHAR(20):='APPEND';
+    DECLARE ACTION_CODE_OVERRIDE VARCHAR(20) :='OVERRIDE';
+    DECLARE HAS_OVERRIDE_ACTION_FLAG INTEGER :=0; --1: HAS OVERRIDE, 0: NO OVERRIDE
+    DECLARE VAR_CURRENT_UTCTIMESTAMP TIMESTAMP := CURRENT_UTCTIMESTAMP;
+    DECLARE VAR_DATASOURCE_CSV VARCHAR(20) :='CSV';
+    DECLARE CSV_HAS_ERROR_FLAG INTEGER := 0; -- 0： no error, 1: has error
+    
+     CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+    
+      --log the action into temporary history table. will log it into history table when click save button.
+      INSERT INTO "sap.tm.trp.db.costmodel::t_cost_dataset_history_temporary"(ID,COST_DATASET_ID,USER_ID,ACTION_CODE,ACTION_TIME,CONNECTION_ID)
+      VALUES("sap.tm.trp.db.costmodel::s_cost_dataset_history".NEXTVAL,NULL,:USER_ID,:ACTION,:VAR_CURRENT_UTCTIMESTAMP,:CONNECTION_ID);
+    
+    --if :ACTION = :ACTION_CODE_OVERRIDE then delete the previous records:(It should be only one override action in t_handling_cost_temporary, if the action of the new uploaded csv is overried, the previous override records will be deleted.)
+    DELETE FROM "sap.tm.trp.db.costmodel::t_quantity_based_storage_cost_temporary" 
+    WHERE CONNECTION_ID = :CONNECTION_ID AND :ACTION = :ACTION_CODE_OVERRIDE;
+    
+    INSERT INTO "sap.tm.trp.db.costmodel::t_quantity_based_storage_cost_temporary"
+    (ROW_NUM,LOCATION_NAME, RESOURCE_TYPE,FREE_POOL_TYPE,START_AT,START_TIME,
+    THRESHOLD_FROM,THRESHOLD_TO,UOM_CODE,PER_DIEM_COST,WILD_STAR_COUNT,
+    ACTION_CODE,SEQUENCE,ACTION_TIME,CONNECTION_ID)
+    SELECT ROW_INDEX,
+           --ROW_NUMBER () OVER () AS ROW_INDEX,
+           LOCATION_NAME,
+           RESOURCE_TYPE,FREE_POOL_TYPE,START_AT,START_TIME,
+           THRESHOLD_FROM,THRESHOLD_TO,UOM_CODE,PER_DIEM_COST,
+           ( LENGTH( LOCATION_NAME||RESOURCE_TYPE||UOM_CODE ) - 
+           LENGTH(REPLACE(LOCATION_NAME||RESOURCE_TYPE||UOM_CODE,'*',''))  
+           )AS WILD_STAR_COUNT,
+           :ACTION,:SEQUENCE,:VAR_CURRENT_UTCTIMESTAMP,:CONNECTION_ID
+      FROM :QUANTITY_BASED_COST;
+   
+END;

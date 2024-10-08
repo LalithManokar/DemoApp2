@@ -1,0 +1,20 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    
+    {name = "LEASE_CONTRACT_REFERENCE"; sqlType = NVARCHAR; length = 100;},
+    {name = "LEASE_TYPE_CODE"; sqlType = NVARCHAR; length = 22; nullable = false;},
+    {name = "LESSOR_CODE"; sqlType = NVARCHAR; length = 22; nullable = false;},
+	{name = "START_TIME"; sqlType = TIMESTAMP;},
+    {name = "END_TIME"; sqlType = TIMESTAMP; },
+	{name = "CURRENCY_CODE"; sqlType = NVARCHAR; length = 3;},
+	{name = "UNIT"; sqlType = NVARCHAR; length = 3; },
+	{name = "MAX_HIRE_QUANTITY"; sqlType = INTEGER; },
+	{name = "MIN_HIRE_QUANTITY"; sqlType = INTEGER; },
+	{name = "ACTIVE"; sqlType = VARCHAR; length =5;},
+	{name = "UNIT_TYPE"; sqlType = NVARCHAR; length = 50;},
+	{name = "EQUIPMENT" ; sqlType = NVARCHAR; length = 50;},
+	{name = "PER_DIEM" ;  sqlType =DECIMAL; length = 18; scale = 0;},
+	{name = "PER_DIEM_ACTIVE" ;  sqlType = VARCHAR; length =5;},
+	{name = "ROW_INDEX"; sqlType = INTEGER;}
+];

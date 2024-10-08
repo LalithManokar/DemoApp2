@@ -1,0 +1,33 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_special_instruction_clear"(
+    IN LOCATION_RULE_ID BIGINT,
+    OUT RULR_CONTAINER_SI INTEGER
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+   DECLARE USER_NAME VARCHAR(60);
+   DECLARE TABLE_AMOUNT INTEGER;
+   
+   SELECT IFNULL (MAX (USERNAME),'') INTO USER_NAME 
+   FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+   
+   SELECT COUNT(*) INTO TABLE_AMOUNT
+   FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction"
+   WHERE RULE_ID = :LOCATION_RULE_ID
+   AND USER = :USER_NAME;
+   
+   IF :TABLE_AMOUNT > 0 THEN
+     DELETE FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction"
+     WHERE RULE_ID = :LOCATION_RULE_ID
+     AND USER = :USER_NAME;
+     
+   END IF ;
+   
+   SELECT COUNT(*) INTO RULR_CONTAINER_SI 
+   FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction"
+   WHERE RULE_ID = :LOCATION_RULE_ID
+   AND USER = :USER_NAME;
+   
+END;

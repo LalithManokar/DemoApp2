@@ -1,0 +1,27 @@
+schema = "SAP_TM_TRP";
+query = "-- List Filter Type For Alert Calculation
+         SELECT DISTINCT T1.ID AS EXECUTION_ID,
+                CASE T3.LOCATION_TYPE || T3.EQUI_TYPE
+                  WHEN '11' THEN 1
+                  WHEN '31' THEN 2
+                  WHEN '51' THEN 3
+                  WHEN '21' THEN 4
+                  WHEN '41' THEN 5
+                  WHEN '61' THEN 6
+                  WHEN '12' THEN 7
+                  WHEN '32' THEN 8
+                  WHEN '52' THEN 9
+                  WHEN '22' THEN 10
+                  WHEN '42' THEN 11
+                  WHEN '62' THEN 12
+                END AS FLAG
+           FROM \"sap.tm.trp.db.pipeline::t_plan_execution\" AS T1
+                INNER JOIN \"sap.tm.trp.db.pipeline::t_plan_model\" AS T2
+                ON T1.PLAN_MODEL_ID = T2.ID
+                INNER JOIN \"sap.tm.trp.db.filter::v_filter_group\" AS T3
+                ON T2.FILTER_GROUP_ID = T3.ID";
+                
+depends_on_view = ["sap.tm.trp.db.filter::v_filter_group"];
+depends_on_table = ["sap.tm.trp.db.pipeline::t_plan_execution", "sap.tm.trp.db.pipeline::t_plan_model"];
+               
+                

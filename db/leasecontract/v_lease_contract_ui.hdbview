@@ -1,0 +1,28 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT T1.ID,
+                 T1.LEASE_CONTRACT_REFERENCE,  
+                 T1.LEASE_TYPE,                                
+                 T1.LESSOR_ID,
+                 T1.START_TIME,
+                 T1.END_TIME,
+                 T1.CURRENCY_CODE,
+                 T1.UNIT,
+                 T1.CREATED_ON,
+                 T1.CREATED_BY,
+                 T1.MODIFIED_ON,
+                 T1.MODIFIED_BY,
+                 T1.MAX_HIRE_QUANTITY,
+                 T1.MIN_HIRE_QUANTITY,
+                 T1.ACTIVE,
+                 T1.CODE,
+                 T1.LESSOR_CODE,
+                 T1.LEASE_TYPE_CODE,
+                 T2.CODE AS RESOURCE_CATEGORY,
+                 T1.UNIT_TYPE
+            FROM \"sap.tm.trp.db.leasecontract::t_lease_contract\" AS T1
+            INNER JOIN \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings\" T2 
+	        ON (T1.RESOURCE_CATEGORY = T2.CODE) 
+           ";
+
+depends_on_table = ["sap.tm.trp.db.leasecontract::t_lease_contract", 
+                    "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings"]; 

@@ -1,0 +1,10 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT;},
+    {name = "PLAN_MODEL_ID"; sqlType = BIGINT;},
+    {name = "EXECUTION_STATUS"; sqlType = VARCHAR; length = 20; nullable = true; unique = true;}, 
+    {name = "EXECUTION_TIME"; sqlType = TIMESTAMP;},
+    {name = "EXECUTION_ID"; sqlType = BIGINT;}
+    ];
+table.primaryKey.pkcolumns = ["ID"];

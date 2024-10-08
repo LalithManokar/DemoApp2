@@ -1,0 +1,16 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE; 
+
+table.columns =
+ [
+    {name = "ID"; sqlType =BIGINT; nullable = false;},
+    {name = "DATA_OBJ"; sqlType = VARCHAR; length = 50;},
+    {name = "USER_ID"; sqlType =BIGINT;  },
+    {name = "REC_CRTD"; sqlType =BIGINT;  },
+    {name = "REC_UPD"; sqlType =BIGINT;  },
+    {name = "RECORD_CNT"; sqlType =BIGINT;  },
+    {name = "UPLOAD_TIME"; sqlType =TIMESTAMP;  },
+    {name = "STATUS_TYPE_ID"; sqlType = INTEGER;}
+]; 
+
+table.primaryKey.pkcolumns = ["ID"];  

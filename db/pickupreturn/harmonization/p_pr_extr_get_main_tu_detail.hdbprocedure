@@ -1,0 +1,428 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::p_pr_extr_get_main_tu_detail" ( IN  iv_from_tmstmp decimal(15, 0),
+	IN  iv_to_tmstmp   decimal(15, 0),    
+    IN  it_dep_tu "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::tt_pr_extr_dependent_out_str",
+    OUT ot_tu_harmonized "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::t_pr_harmonized_tu_list"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	--DEFAULT SCHEMA <default_schema_name>
+	READS SQL DATA AS
+BEGIN
+
+--Pickup & Return Redesign: Main TU Delta Extractor 
+
+-- Local variable declaration
+    DECLARE LV_TU_TYPE_EP VARCHAR(2);
+    DECLARE LV_TU_TYPE_ER VARCHAR(2);
+    DECLARE LV_TOR_CAT_TU VARCHAR(2); 
+    DECLARE LV_STOP_ROLE_TL VARCHAR(2);
+    DECLARE LV_STOP_ROLE_TF VARCHAR(2);
+    DECLARE LV_DEPARTURED INTEGER;
+    DECLARE LV_UNLOADED INTEGER;
+    DECLARE LV_MOT_CAT_2 VARCHAR(1);
+    DECLARE LV_MOT_CAT_3 VARCHAR(1);   
+    
+-- Local variable configuration    
+    LV_TU_TYPE_EP := 'EP';
+    LV_TU_TYPE_ER := 'ER';
+    LV_TOR_CAT_TU := 'TU';
+    LV_STOP_ROLE_TL := 'TL'; 
+    LV_STOP_ROLE_TF := 'TF'; 
+    LV_DEPARTURED := 0;
+    LV_UNLOADED := 0;
+    LV_MOT_CAT_2 := '2';
+    LV_MOT_CAT_3 := '3';
+    
+-- Get Item category  
+    lt_tu_item_cat_all = SELECT DISTINCT A.VALUE 
+        	     		     FROM  "sap.tm.trp.db.systemmanagement::t_config_cust" A
+        	                 WHERE A.KEY  = 'ITEM_CAT'; 
+
+-- Get TU list based on change pointer for filter
+	lt_tu_header = select DB_KEY
+       			       from "sap.tm.trp.db.semantic.order::v_transportation_unit"
+	   				   where (changed_on > iv_from_tmstmp AND changed_on <= iv_to_tmstmp)		                         
+	                                                  OR 
+	                         (DB_KEY in (select tu_key from :it_dep_tu))
+                         ;
+-- No TUs found, just exit
+	if IS_EMPTY(:lt_tu_header) then
+		return;
+	end if;
+
+-- Main Processing  
+
+    -- Get all tu list for empty pickup & Empty return  
+    LT_TU_BASIC_DETAIL =   SELECT DISTINCT  TU_UNIT.TOR_ID AS TU_ID,
+                                        TU_UNIT.DB_KEY AS TU_KEY,
+        								TU_UNIT.MOVEMENT_CAT AS TU_TYPE_CODE,
+        								TU_UNIT.EXECUTION_STATUS AS EXECUTION_STATUS_CODE,
+        								TU_UNIT.LIFECYCLE AS LIFECYCLE_CODE,
+       									TU_UNIT.CHANGED_ON,
+       									TU_UNIT.PLAN_STATUS,
+        								TU_ITEM.ITEM_CAT AS ITEM_CAT,
+        								TU_ITEM.TRQ_KEY AS BOOKING_ID,
+        								TU_ITEM.RESOURCE_CATEGORY AS RESOURCE_CATEGORY,
+        								TU_STOP_TF.LOCATION_ID AS FIRST_STOP_LOC_ID,
+        								TU_STOP_TF.LOCATION_NAME AS FIRST_STOP_LOC_NAME,
+        								TU_STOP_TL.LOCATION_ID AS LAST_STOP_LOC_ID,
+        								TU_STOP_TL.LOCATION_NAME AS LAST_STOP_LOC_NAME,
+        								TU_STOP_TF.SEL_TIME AS FIRST_STOP_SEL_TIME,
+        								TU_STOP_TL.SEL_TIME AS LAST_STOP_SEL_TIME    
+    				  FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" TU_UNIT
+    				  INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" TU_ITEM
+    					    ON TU_UNIT.DB_KEY = TU_ITEM.TU_KEY AND  
+    					       TU_UNIT.TOR_CAT = :LV_TOR_CAT_TU AND 
+    					       TU_UNIT.MOVEMENT_CAT = :LV_TU_TYPE_EP AND
+                               TU_ITEM.ITEM_CAT IN (SELECT VALUE FROM :lt_tu_item_cat_all)
+                      INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" TU_STOP_TF
+                            ON TU_UNIT.DB_KEY = TU_STOP_TF.TU_KEY 
+                      INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" TU_STOP_TL
+                            ON TU_UNIT.DB_KEY = TU_STOP_TL.TU_KEY  AND TU_STOP_TL.stop_role = :LV_STOP_ROLE_TL
+                      WHERE TU_STOP_TF.STOP_ROLE = :LV_STOP_ROLE_TF AND
+                            TU_STOP_TF.DEPARTURED = :LV_DEPARTURED AND 
+                            TU_STOP_TF.STOP_FIX = '' AND
+                            TU_UNIT.DB_KEY    in (select * from :lt_tu_header )    AND
+                            TU_ITEM.TU_KEY    in (select * from :lt_tu_header )    AND
+                            TU_STOP_TF.TU_KEY in (select * from :lt_tu_header )    AND
+                            TU_STOP_TL.TU_KEY in (select * from :lt_tu_header )
+                            
+			UNION ALL    
+
+    				SELECT DISTINCT   TU_UNIT.TOR_ID AS TU_ID,
+        						      TU_UNIT.DB_KEY AS TU_KEY,
+                                      TU_UNIT.MOVEMENT_CAT AS TU_TYPE_CODE,
+                                      TU_UNIT.EXECUTION_STATUS AS EXECUTION_STATUS_CODE,
+                                      TU_UNIT.LIFECYCLE AS LIFECYCLE_CODE,
+                                      TU_UNIT.CHANGED_ON,
+                                      TU_UNIT.PLAN_STATUS,
+                                      TU_ITEM.ITEM_CAT AS ITEM_CAT,
+                                      TU_ITEM.TRQ_KEY AS BOOKING_ID,
+                                      TU_ITEM.RESOURCE_CATEGORY AS RESOURCE_CATEGORY,
+                                      TU_STOP_TF.LOCATION_ID AS FIRST_STOP_LOC_ID,
+                                      TU_STOP_TF.LOCATION_NAME AS FIRST_STOP_LOC_NAME,
+                                      TU_STOP_TL.LOCATION_ID AS LAST_STOP_LOC_ID,
+                                      TU_STOP_TL.LOCATION_NAME AS LAST_STOP_LOC_NAME,
+                                      TU_STOP_TF.SEL_TIME AS FIRST_STOP_SEL_TIME,
+                                      TU_STOP_TL.SEL_TIME AS LAST_STOP_SEL_TIME    
+    
+                   FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" TU_UNIT
+                   INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" TU_ITEM
+                         ON TU_UNIT.DB_KEY = TU_ITEM.TU_KEY AND 
+                            TU_UNIT.TOR_CAT = :LV_TOR_CAT_TU AND 
+                            TU_UNIT.MOVEMENT_CAT = :LV_TU_TYPE_ER AND
+                            TU_ITEM.ITEM_CAT IN (SELECT VALUE FROM :lt_tu_item_cat_all)
+    			   INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" TU_STOP_TL
+                         ON TU_UNIT.DB_KEY = TU_STOP_Tl.TU_KEY 
+                   INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" TU_STOP_TF
+                         ON TU_UNIT.DB_KEY = TU_STOP_Tf.TU_KEY AND TU_STOP_TF.stop_role = :LV_STOP_ROLE_TF
+                   WHERE TU_STOP_Tl.STOP_ROLE = :LV_STOP_ROLE_TL AND
+                         TU_STOP_Tl.UNLOADED = :LV_UNLOADED AND
+                         TU_STOP_Tl.STOP_FIX = '' AND
+                         TU_UNIT.DB_KEY    in (select * from :lt_tu_header )    AND
+                         TU_ITEM.TU_KEY    in (select * from :lt_tu_header )    AND
+                         TU_STOP_TF.TU_KEY in (select * from :lt_tu_header )    AND
+                         TU_STOP_TL.TU_KEY in (select * from :lt_tu_header );
+	                     
+----Information based on basic tu list-------------------  
+    
+    LT_ORDER_DETAILS =  SELECT  BASIC.TU_ID,
+        					 BASIC.TU_KEY,
+                             TRQ.SHIPPER_ID AS SHIPPER_ID,
+                             TRQ.SHIPPER AS SHIPPER_NAME,
+                             TRQ.CONSIGNEE_ID AS CONSIGNEE_ID,
+		                     TRQ.CONSIGNEE AS CONSIGNEE_NAME,
+		                     TRQ.CUSTOMER_ID AS CUSTOMER_CODE,
+		                     TRQ.CUSTOMER_NAME AS CUSTOMER_NAME,
+		                     TRQ.ORDER_DATE AS BOOKING_DATE,
+		                     TRQ_ID AS BOOKING_REFERENCE
+                     FROM :LT_TU_BASIC_DETAIL BASIC
+                     LEFT JOIN "sap.tm.trp.db.semantic.order::v_customer_order" TRQ
+                          ON BASIC.BOOKING_ID = TRQ.DB_KEY;
+    
+    LT_PLANNING_RELEVANT =  SELECT DISTINCT BASIC.TU_ID, 
+                                         BASIC.TU_KEY, 
+                                         PLANNING_RELEVANT
+                         FROM :LT_TU_BASIC_DETAIL BASIC
+                         LEFT OUTER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_haulage_type" TU_HAULAGE
+                              ON BASIC.TU_KEY = TU_HAULAGE.TU_KEY;
+                        -- GROUP BY BASIC.TU_KEY, BASIC.TU_ID;
+    
+    LT_ITEM =  SELECT  basic.tu_id,
+                    basic.tu_key,
+    	            MAX(tu_item.DB_KEY) AS ITE_KEY,
+    	            --LAST_VALUE(tu_item.LEADING_ITEM_KEY order by tu_item.DB_KEY asc) AS LEADING_ITEM_KEY,
+    	            MAX(tu_item.LEADING_ITEM_KEY) AS LEADING_ITEM_KEY,
+    	            --LAST_VALUE(tu_item.RESOURCE_TYPE order by tu_item.DB_KEY asc) AS RESOURCE_TYPE,
+    	            MAX(tu_item.RESOURCE_TYPE) AS RESOURCE_TYPE,
+    	            SUM(tu_item.QUA_PCS_VAL) AS QUANTITY,
+    	            SUM(CASE WHEN tu_item.RESOURCE_NAME <> '' THEN 1 ELSE 0 END) AS ASSIGN_QUANTITY,
+    	            --LAST_VALUE(tu_item.RESOURCE_NAME order by tu_item.DB_KEY asc) AS ASSIGNED_RESOURCE,
+    	            MAX(tu_item.RESOURCE_NAME) AS ASSIGNED_RESOURCE,
+    	            --LAST_VALUE(tu_item.PLATENUMBER   order by tu_item.DB_KEY asc) AS RESOURCE_NUMBER
+    	            MAX(tu_item.PLATENUMBER) AS RESOURCE_NUMBER
+            FROM :LT_TU_BASIC_DETAIL basic
+            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item_resource" tu_item
+	              ON (basic.TU_KEY = tu_item.TU_KEY AND 
+	                  tu_item.ITEM_CAT IN (SELECT VALUE FROM :lt_tu_item_cat_all) )
+	        GROUP BY basic.tu_id, basic.tu_key;
+
+----Information based on basic item list-------------------      
+    
+    LT_MOT = SELECT TU_ID,
+                 TU_KEY,
+                 MOT,
+                 MTR_TCO
+          FROM   (SELECT BASIC.TU_ID,
+                       BASIC.TU_KEY, 
+                       TU_STAGE.MOT,
+                       TU_STAGE.MTR_TCO,
+                       ROW_NUMBER() OVER (PARTITION BY BASIC.ITE_KEY ORDER BY TU_STAGE.MOT_CAT DESC) AS PRIORITY_SEQ
+                  FROM :LT_item BASIC
+                  LEFT OUTER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stage" TU_STAGE
+                       ON BASIC.TU_KEY = TU_STAGE.TU_KEY)
+          WHERE PRIORITY_SEQ = 1;
+    
+    LT_LEADING_TU_KEY = SELECT 
+                            BASIC.TU_ID,
+                            BASIC.TU_KEY,
+                            TU_ITEM.TU_KEY AS LEADING_TU_KEY
+                        FROM :LT_ITEM BASIC
+                        INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" TU_ITEM
+                        ON BASIC.LEADING_ITEM_KEY = TU_ITEM.DB_KEY;
+
+----Information based on LEADING ITEM-------------------
+
+    LT_STAGE_SEQUENCE =  SELECT BASIC.TU_ID,
+                             BASIC.TU_KEY,
+                             TU_STAGE.TU_KEY AS LEADING_TU_KEY,
+                             MIN(SEQUENCE) AS START_SEQ,
+                             MAX(SEQUENCE) AS END_SEQ
+                      FROM :LT_LEADING_TU_KEY BASIC 
+                      INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stage" TU_STAGE
+                            ON BASIC.LEADING_TU_KEY = TU_STAGE.TU_KEY AND 
+                            (TU_STAGE.MOT_CAT = :LV_MOT_CAT_3)
+                      GROUP BY BASIC.TU_ID, BASIC.TU_KEY, TU_STAGE.TU_KEY;
+    
+    LT_POL  =  SELECT BASIC.TU_ID,
+                   BASIC.TU_KEY,
+                   BASIC.LEADING_TU_KEY,
+                   TU_STOP.LOCATION_ID AS POL,
+                   tu_stop.location_name as pol_name,
+                   TU_stop.FREIGHT_ORDER_STOP_KEY as POL_FREIGHT_ORDER_STOP_KEY,
+                   TU_STAGE.CARRIER AS STAGE_CARRIER_POL,
+                   TU_STAGE.VESSEL AS STAGE_VESSEL_POL,
+                   TU_STAGE.VOYAGE AS STAGE_VOYAGE_POL
+            FROM :lt_stage_sequence basic
+            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stage" TU_stage
+                  ON basic.LEADING_TU_KEY = TU_STAGE.TU_KEY AND 
+                     BASIC.start_seq = TU_stage.sequence and
+                     TU_STAGE.MOT_CAT = :LV_MOT_CAT_3
+            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" TU_stop
+                  ON TU_stage.from_stop_key = TU_stop.db_key AND 
+                     TU_stage.tu_key = TU_STOP.tu_key;
+    
+
+    LT_POL_VESSEL_CARRIER = SELECT BASIC.TU_ID,
+                                BASIC.TU_KEY,
+                                TU_STAGE.CARRIER AS FREIGHT_CARRIER_POL,
+                                TU_STAGE.VESSEL AS FREIGHT_VESSEL_POL,
+                                TU_STOP.SCHED_STOP_KEY AS POL_SCHED_STOP_KEY,
+                                TU_STOP.SCHED_DEP_KEY AS POL_SCHED_DEP_KEY
+                         FROM :lt_POL BASIC
+                         INNER JOIN "sap.tm.trp.db.semantic.order::v_freight_order_stop" TU_STOP
+                               ON BASIC.POL_FREIGHT_ORDER_STOP_KEY = TU_STOP.DB_KEY
+                         INNER JOIN "sap.tm.trp.db.semantic.order::v_freight_order_stage" TU_STAGE
+                               ON TU_STOP.db_key = TU_STAGE.from_stop_key;
+    
+    LT_POD = SELECT BASIC.TU_ID,
+                BASIC.TU_KEY,
+                BASIC.LEADING_TU_KEY,
+                TU_STOP.LOCATION_ID AS POD,
+                tu_stop.location_name as poD_name,
+                TU_stop.FREIGHT_ORDER_STOP_KEY as POD_FREIGHT_ORDER_STOP_KEY,
+                TU_STAGE.CARRIER AS STAGE_CARRIER_POD,
+                TU_STAGE.VESSEL AS STAGE_VESSEL_POD,
+                TU_STAGE.VOYAGE AS STAGE_VOYAGE_POD
+          FROM :lt_stage_sequence basic
+          INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stage" TU_stage
+                ON basic.LEADING_TU_KEY = TU_STAGE.TU_KEY AND 
+                   BASIC.END_seq = TU_stage.sequence and
+                   TU_STAGE.MOT_CAT = :LV_MOT_CAT_3
+          INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" TU_stop
+                ON TU_stage.TO_stop_key = TU_stop.db_key AND 
+                   TU_stage.tu_key = TU_STOP.tu_key;
+    
+    
+    LT_POD_VESSEL_CARRIER =  SELECT  BASIC.TU_ID,
+                                BASIC.TU_KEY,
+                                TU_STAGE.CARRIER AS FREIGHT_CARRIER_POD,
+                                TU_STAGE.VESSEL AS FREIGHT_VESSEL_POD,
+                                TU_STOP.SCHED_STOP_KEY AS POD_SCHED_STOP_KEY,
+                                TU_STOP.SCHED_DEP_KEY AS POD_SCHED_DEP_KEY
+                          FROM :lt_POD BASIC
+                          INNER JOIN "sap.tm.trp.db.semantic.order::v_freight_order_stop" TU_STOP
+                                ON BASIC.POD_FREIGHT_ORDER_STOP_KEY = TU_STOP.DB_KEY
+                          INNER JOIN "sap.tm.trp.db.semantic.order::v_freight_order_stage" TU_STAGE
+                                ON TU_STOP.db_key = TU_STAGE.from_stop_key;
+     
+----Final List------------------- 
+
+    LT_FINAL_HARMONIZED =  SELECT  BASIC.TU_KEY,
+                                item.ITE_KEY,
+        						BASIC.TU_ID,
+        						BASIC.TU_TYPE_CODE,
+        						BASIC.RESOURCE_CATEGORY,
+        						BASIC.ITEM_CAT,
+        						BASIC.EXECUTION_STATUS_CODE,
+        						BASIC.PLAN_STATUS,
+        						item.RESOURCE_TYPE,
+        						MOT.MTR_TCO AS MTR_TCO,
+        						LEADING_KEY.LEADING_TU_KEY AS LEADING_ITEM_KEY,
+        						item.QUANTITY,
+        						item.ASSIGNED_RESOURCE,
+        						item.ASSIGN_QUANTITY,
+        						item.RESOURCE_NUMBER,
+        						BOOKING.SHIPPER_ID,
+        					    BOOKING.SHIPPER_NAME,
+        						BASIC.FIRST_STOP_LOC_ID,
+        						BASIC.FIRST_STOP_LOC_NAME,
+        					    BOOKING.CONSIGNEE_ID,
+        					    BOOKING.CONSIGNEE_NAME,
+        						BASIC.LAST_STOP_LOC_ID,
+        						BASIC.LAST_STOP_LOC_NAME,
+        						MOT.MOT AS MOT,
+        						BASIC.FIRST_STOP_SEL_TIME,
+        						BASIC.LAST_STOP_SEL_TIME,
+        					    PL.planning_relevant,
+        						BASIC.LIFECYCLE_CODE,
+        						BOOKING.CUSTOMER_CODE,
+        						BOOKING.CUSTOMER_NAME,
+        						BOOKING.BOOKING_DATE,
+        						BOOKING.BOOKING_REFERENCE,
+        						POL.POL,
+        						POL.POL_NAME,
+        						POD.POD,
+        					    POD.POD_NAME,
+        						POL.STAGE_CARRIER_POL,
+                                POD.STAGE_CARRIER_POD,
+                                VCL.FREIGHT_CARRIER_POL,
+                                VCD.FREIGHT_CARRIER_POD,
+        						POL.STAGE_VOYAGE_POL AS STAGE_VOYAGE_POL,
+        						POD.STAGE_VOYAGE_POD AS STAGE_VOYAGE_POD,
+        						CURRENT_TIMESTAMP AS CUTOFF_UTC_POL,
+        						CURRENT_TIMESTAMP AS ARRIVAL_UTC_POD,
+        					    vcl.POL_SCHED_STOP_KEY,
+        						vcl.POL_SCHED_DEP_KEY,
+        						vcd.POD_SCHED_STOP_KEY,
+        						vcd.POD_SCHED_DEP_KEY,
+        						POL.STAGE_VESSEL_POL,
+        						POD.STAGE_VESSEL_POD,
+        						VCL.FREIGHT_VESSEL_POL,
+        						VCD.FREIGHT_VESSEL_POD,
+        						'' AS CD_DELETE_FLAG,
+       						    --CURRENT_TIMESTAMP AS CD_UPDATED_DATE,  "The to timestamp should be updated date    
+                				TO_TIMESTAMP(:iv_to_tmstmp) AS CD_UPDATED_DATE,      
+                				BASIC.CHANGED_ON,
+                				POL.POL_FREIGHT_ORDER_STOP_KEY,
+                				POD.POD_FREIGHT_ORDER_STOP_KEY
+        
+    					FROM :LT_TU_BASIC_DETAIL BASIC
+    					LEFT JOIN :lt_mot MOT
+         					 ON BASIC.TU_ID = MOT.TU_ID
+    					LEFT JOIN :lt_planning_relevant pl
+        					 ON BASIC.TU_ID = PL.TU_ID
+    					LEFT JOIN :lt_POL POL
+         					 ON BASIC.TU_ID = POL.TU_ID
+         			    LEFT JOIN :LT_LEADING_TU_KEY LEADING_KEY
+         			         ON BASIC.TU_ID =  LEADING_KEY.TU_ID
+    			 	    LEFT JOIN :LT_POD POD
+                             ON BASIC.TU_ID = POD.TU_ID
+                        LEFT JOIN :lt_POL_vessel_carrier VCL
+                             ON BASIC.TU_ID = VCL.TU_ID
+                        LEFT JOIN :lt_POD_vessel_carrier VCD
+                             ON BASIC.TU_ID = VCD.TU_ID
+                        LEFT JOIN :LT_ORDER_DETAILS BOOKING
+                             ON BASIC.TU_ID = BOOKING.TU_ID
+                        LEFT JOIN :lt_item item
+                             ON basic.tu_id = item.tu_id;
+ 
+    -- Adding Leading_tu/booking_tu change pointes to the final set                       
+    OT_TU_HARMONIZED =    SELECT   BASIC.TU_KEY,
+                                BASIC.ITE_KEY,
+        						BASIC.TU_ID,
+        						BASIC.TU_TYPE_CODE,
+        						BASIC.RESOURCE_CATEGORY,
+        						BASIC.ITEM_CAT,
+        						BASIC.EXECUTION_STATUS_CODE,
+        						BASIC.PLAN_STATUS,
+        						BASIC.RESOURCE_TYPE,
+        						BASIC.MTR_TCO,
+        						BASIC.LEADING_ITEM_KEY,
+        						BASIC.QUANTITY,
+        						BASIC.ASSIGNED_RESOURCE,
+        						BASIC.ASSIGN_QUANTITY,
+        						BASIC.RESOURCE_NUMBER,
+        						BASIC.SHIPPER_ID,
+        					    BASIC.SHIPPER_NAME,
+        						BASIC.FIRST_STOP_LOC_ID,
+        						BASIC.FIRST_STOP_LOC_NAME,
+        					    BASIC.CONSIGNEE_ID,
+        					    BASIC.CONSIGNEE_NAME,
+        						BASIC.LAST_STOP_LOC_ID,
+        						BASIC.LAST_STOP_LOC_NAME,
+        						BASIC.MOT,
+        						BASIC.FIRST_STOP_SEL_TIME,
+        						BASIC.LAST_STOP_SEL_TIME,
+        					    BASIC.planning_relevant,
+        						BASIC.LIFECYCLE_CODE, 
+        						BASIC.CUSTOMER_CODE,
+        						BASIC.CUSTOMER_NAME,
+        						BASIC.BOOKING_DATE,
+        						BASIC.BOOKING_REFERENCE,
+        						BASIC.POL,
+        						BASIC.POL_NAME,
+        						BASIC.POD,
+        					    BASIC.POD_NAME,
+        						BASIC.STAGE_CARRIER_POL,
+        						BASIC.STAGE_CARRIER_POD,
+        						BASIC.FREIGHT_CARRIER_POL,
+        						BASIC.FREIGHT_CARRIER_POD,
+        						BASIC.STAGE_VOYAGE_POL,
+        						BASIC.STAGE_VOYAGE_POD,
+        						BASIC.CUTOFF_UTC_POL,
+        						BASIC.ARRIVAL_UTC_POD,
+        					    BASIC.POL_SCHED_STOP_KEY, 
+        						BASIC.POL_SCHED_DEP_KEY,
+        						BASIC.POD_SCHED_STOP_KEY,
+        						BASIC.POD_SCHED_DEP_KEY,
+        					    BASIC.STAGE_VESSEL_POL,
+        						BASIC.STAGE_VESSEL_POD,
+        						BASIC.FREIGHT_VESSEL_POL,
+        						BASIC.FREIGHT_VESSEL_POD,
+        						BASIC.CD_DELETE_FLAG,
+       						    BASIC.CD_UPDATED_DATE,   
+                				TO_TIMESTAMP(BASIC.CHANGED_ON) as CD_CHANGE_DATE_EP_ER_TU,                             
+        					   --Get the last stored date to avoid overwriting with null 
+                               CASE tu_leading_tu.changed_on
+             						WHEN NULL THEN (tu_existing.CD_CHANGE_DATE_LEADING_TU)
+                       				ELSE tu_leading_tu.changed_on
+        						END AS CD_CHANGE_DATE_LEADING_TU,                    
+        						--Get the last stored date to avoid overwriting with null
+        						CASE tu_booking.changed_on
+             						 WHEN NULL THEN tu_existing.CD_CHANGE_DATE_BOOKING
+                       				 ELSE tu_booking.changed_on
+        						END AS CD_CHANGE_DATE_BOOKING,
+        						BASIC.POL_FREIGHT_ORDER_STOP_KEY,
+        						BASIC.POD_FREIGHT_ORDER_STOP_KEY
+        						
+                       FROM  :LT_FINAL_HARMONIZED BASIC                       
+                       LEFT OUTER JOIN "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::t_pr_harmonized_tu_list" as tu_existing
+                             ON tu_existing.TU_KEY = BASIC.tu_key
+	                   LEFT OUTER JOIN (select tu_key, changed_on from :it_dep_tu where node = 'LEADING_TU') as tu_leading_tu
+	                         ON tu_leading_tu.TU_KEY = BASIC.tu_key
+	                   LEFT OUTER JOIN (select tu_key, changed_on from :it_dep_tu where node = 'BOOKING_TU') as tu_booking
+	                         ON tu_booking.TU_KEY = BASIC.tu_key
+	                    --add more join based on dependency;
+                        ;                      
+END;

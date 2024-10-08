@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_sd_plan_get_by_filters" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_sd_plan_get_by_filters"/>
+  <defaultSchema schemaName=""/>
+  <localVariables>
+    <variable id="IN_LOCATION_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="IN_LOCATION_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_EQUIPMENT_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="IN_EQUIPMENT_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="VARCHAR" id="NAME" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="DESC" length="500"/>
+        <viewAttribute datatype="INTEGER" id="PLAN_TYPE_ID"/>
+        <viewAttribute datatype="VARCHAR" id="PLAN_TYPE_NAME" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="VISIBILITY" length="10"/>
+        <viewAttribute datatype="BIGINT" id="EQUIPMENT_FILTER_ID"/>
+        <viewAttribute datatype="VARCHAR" id="EQUIPMENT_FILTER_NAME" length="50"/>
+        <viewAttribute datatype="BIGINT" id="LOCATION_FILTER_ID"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_FILTER_NAME" length="50"/>
+        <viewAttribute datatype="BIGINT" id="TIME_FILTER_ID"/>
+        <viewAttribute datatype="VARCHAR" id="TIME_FILTER_NAME" length="50"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_LOCATION_FILTER_ID</localVariable>
+      <localVariable>#IN_EQUIPMENT_FILTER_ID</localVariable>
+      <definition> 
+  
+ BEGIN 
+    SPECIFIED_LOC_ITEM = 
+        SELECT LOCATION_FILTER_ID,
+               LOCATION_ID,
+               LOCATION_FILTER_TYPE
+          FROM &quot;sap.tm.trp.db.pickupreturn::v_location_filter_location_all&quot;
+         WHERE LOCATION_FILTER_ID = :IN_LOCATION_FILTER_ID;
+    
+    SD_PLAN_LOC_ITEM =
+        SELECT ID AS PLAN_MODEL_ID,
+               LOCATION_ID
+          FROM &quot;sap.tm.trp.db.pipeline::cv_get_plan_list&quot; AS A
+               INNER JOIN &quot;sap.tm.trp.db.pickupreturn::v_location_filter_location_all&quot; AS B
+               ON A.LOCATION_FILTER_ID = B.LOCATION_FILTER_ID
+         WHERE A.PLAN_TYPE_ID = 1 OR A.PLAN_TYPE_ID = 2;
+    
+    SD_PLAN_EQUI_ITEM = 
+        SELECT ID AS PLAN_MODEL_ID,
+               EQUI_CODE
+          FROM &quot;sap.tm.trp.db.pipeline::cv_get_plan_list&quot; AS A
+               INNER JOIN &quot;sap.tm.trp.db.pickupreturn::v_equipment_filter_equi_type_all&quot; AS B
+               ON A.RESOURCE_FILTER_ID = B.EQUIPMENT_FILTER_ID
+         WHERE A.PLAN_TYPE_ID = 1 OR A.PLAN_TYPE_ID = 2;
+    
+    FILTERED_PLAN_BY_LOC = 
+        SELECT A.PLAN_MODEL_ID,
+               A.LOCATION_ID
+          FROM :SD_PLAN_LOC_ITEM AS A
+               INNER JOIN :SPECIFIED_LOC_ITEM AS B
+               ON A.LOCATION_ID = B.LOCATION_ID;
+    
+    IF :IN_EQUIPMENT_FILTER_ID &lt;> 0 THEN
+        SPECIFIED_EQUI_ITEM = 
+            SELECT EQUIPMENT_FILTER_ID,
+                   EQUI_CODE,
+                   EQUIPMENT_FILTER_TYPE
+              FROM &quot;sap.tm.trp.db.pickupreturn::v_equipment_filter_equi_type_all&quot;
+             WHERE EQUIPMENT_FILTER_ID = :IN_EQUIPMENT_FILTER_ID;
+        
+        FILTERED_PLAN_BY_EQUI = 
+            SELECT A.PLAN_MODEL_ID,
+                   A.EQUI_CODE
+              FROM :SD_PLAN_EQUI_ITEM AS A
+                   INNER JOIN :SPECIFIED_EQUI_ITEM AS B
+                   ON A.EQUI_CODE = B.EQUI_CODE;
+        
+        FILTERED_SD_PLAN = 
+            SELECT A.PLAN_MODEL_ID
+            FROM 
+            (SELECT A.PLAN_MODEL_ID
+              FROM (SELECT PLAN_MODEL_ID, COUNT(LOCATION_ID) AS NUMBER FROM :FILTERED_PLAN_BY_LOC GROUP BY PLAN_MODEL_ID) AS A
+                   INNER JOIN (SELECT COUNT(LOCATION_ID) AS NUMBER FROM :SPECIFIED_LOC_ITEM GROUP BY LOCATION_FILTER_ID) AS B
+                   ON A.NUMBER = B.NUMBER) AS A
+             INNER JOIN 
+            (SELECT A.PLAN_MODEL_ID
+              FROM (SELECT PLAN_MODEL_ID, COUNT(EQUI_CODE) AS NUMBER FROM :FILTERED_PLAN_BY_EQUI GROUP BY PLAN_MODEL_ID) AS A
+                   INNER JOIN (SELECT COUNT(EQUI_CODE) AS NUMBER FROM :SPECIFIED_EQUI_ITEM GROUP BY EQUIPMENT_FILTER_ID) AS B
+                   ON A.NUMBER = B.NUMBER) AS B
+             ON A.PLAN_MODEL_ID = B.PLAN_MODEL_ID;
+    ELSE
+        FILTERED_SD_PLAN = 
+            SELECT A.PLAN_MODEL_ID
+              FROM (SELECT PLAN_MODEL_ID, COUNT(LOCATION_ID) AS NUMBER FROM :FILTERED_PLAN_BY_LOC GROUP BY PLAN_MODEL_ID) AS A
+                   INNER JOIN (SELECT COUNT(LOCATION_ID) AS NUMBER FROM :SPECIFIED_LOC_ITEM GROUP BY LOCATION_FILTER_ID) AS B
+                   ON A.NUMBER = B.NUMBER;
+    END IF;
+    
+    var_out = 
+        SELECT DISTINCT A.ID,
+               A.NAME,
+               A.DESC,
+               A.PLAN_TYPE_ID,
+               A.PLAN_TYPE_NAME,
+               A.VISIBILITY,
+               A.RESOURCE_FILTER_ID AS EQUIPMENT_FILTER_ID,
+               A.RESOURCE_FILTER_NAME AS EQUIPMENT_FILTER_NAME,
+               A.LOCATION_FILTER_ID AS LOCATION_FILTER_ID,
+               A.LOCATION_FILTER_NAME,
+               A.TIME_FILTER_ID,
+               A.TIME_FILTER_NAME
+          FROM &quot;sap.tm.trp.db.pipeline::cv_get_plan_list&quot; A
+               INNER JOIN :FILTERED_SD_PLAN B
+               ON A.ID = B.PLAN_MODEL_ID
+         WHERE (A.PLAN_TYPE_ID = 1 OR A.PLAN_TYPE_ID = 2) AND A.LOCATION_FILTER_TYPE = 1;
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <attributes>
+      <attribute id="NAME" order="2">
+        <descriptions defaultDescription="NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="DESC" order="3">
+        <descriptions defaultDescription="DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+      <attribute id="PLAN_TYPE_NAME" order="5">
+        <descriptions defaultDescription="PLAN_TYPE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_TYPE_NAME"/>
+      </attribute>
+      <attribute id="VISIBILITY" order="6">
+        <descriptions defaultDescription="VISIBILITY"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY"/>
+      </attribute>
+      <attribute id="EQUIPMENT_FILTER_ID" order="7">
+        <descriptions defaultDescription="EQUIPMENT_FILTER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_FILTER_ID"/>
+      </attribute>
+      <attribute id="EQUIPMENT_FILTER_NAME" order="8">
+        <descriptions defaultDescription="EQUIPMENT_FILTER_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_FILTER_NAME"/>
+      </attribute>
+      <attribute id="LOCATION_FILTER_ID" order="9">
+        <descriptions defaultDescription="LOC_FILTER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_FILTER_ID"/>
+      </attribute>
+      <attribute id="LOCATION_FILTER_NAME" order="10">
+        <descriptions defaultDescription="LOCATION_FILTER_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_FILTER_NAME"/>
+      </attribute>
+      <attribute id="TIME_FILTER_ID" order="11">
+        <descriptions defaultDescription="TIME_FILTER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_FILTER_ID"/>
+      </attribute>
+      <attribute id="TIME_FILTER_NAME" order="12">
+        <descriptions defaultDescription="TIME_FILTER_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_FILTER_NAME"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="ID"/>
+      </measure>
+      <measure id="PLAN_TYPE_ID" order="4" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="PLAN_TYPE_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="PLAN_TYPE_ID"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

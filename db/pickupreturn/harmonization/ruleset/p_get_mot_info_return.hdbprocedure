@@ -1,0 +1,17 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_get_mot_info_return" ( 
+    IN lt_tu_detail_list "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_ord_filtered_tu_return",
+    OUT out_mot "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_mot_info"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_TRP"
+   READS SQL DATA AS
+BEGIN
+  
+    out_mot = SELECT t1.tor_id, T1.MOT, T4.DESC AS MEANS_OF_TRANSPORTATION  
+                     FROM :lt_tu_detail_list T1
+                     LEFT OUTER JOIN "sap.tm.trp.db.semantic.common::v_mtr_map" T3 ON (T1.MOT = T3.MOT AND T1.MTR_TCO = T3.MTR)
+                     LEFT OUTER JOIN "sap.tm.trp.db.semantic.common::v_transportation_means" T4 ON (T3.TRP_MTR = T4.CODE)
+                     ;
+  
+END

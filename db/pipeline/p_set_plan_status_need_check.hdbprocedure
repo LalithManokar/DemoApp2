@@ -1,0 +1,22 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_set_plan_status_need_check" (
+ IN IN_CODE VARCHAR(50)
+,IN IN_TYPE VARCHAR(50)
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	--DEFAULT SCHEMA <default_schema_name>
+	--READS SQL DATA 
+AS
+BEGIN
+ 
+
+
+
+UPDATE "sap.tm.trp.db.pipeline::t_plan_model"
+SET STATUS = 1
+WHERE CODE IN (
+	SELECT CODE FROM "sap.tm.trp.db.whereusedlist::cv_get_used_list"(placeholder."$$IN_CODE$$"=>:IN_CODE,placeholder."$$TYPE$$"=>:IN_TYPE)
+	)
+;
+ 
+END;

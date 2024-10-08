@@ -1,0 +1,81 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_geo_group_visible_in_filter_check"(
+    IN GROUP_ID VARCHAR(22),
+    IN TYPE INTEGER,
+    OUT ERR_NUM INTEGER,
+    OUT FILTER_NAME VARCHAR(50)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE VISIBLE VARCHAR(3);
+    
+    IF :TYPE = 1 THEN
+        SELECT IFNULL(MAX(VISIBLE_FLAG), '') INTO VISIBLE
+          FROM "sap.tm.trp.db.systemmanagement::t_location_group" AS A
+         WHERE ID = :GROUP_ID;
+    ELSEIF :TYPE = 2 THEN
+        SELECT IFNULL(MAX(VISIBLE_FLAG), '') INTO VISIBLE
+          FROM "sap.tm.trp.db.systemmanagement::t_zone_group" AS A
+         WHERE ID = :GROUP_ID;
+    ELSEIF :TYPE = 3 THEN
+        SELECT IFNULL(MAX(VISIBLE_FLAG), '') INTO VISIBLE
+          FROM "sap.tm.trp.db.systemmanagement::t_region_group" AS A
+         WHERE ID = :GROUP_ID;
+    END IF;
+    
+    IF :VISIBLE = 'G' THEN
+        IF :TYPE = 1 THEN
+            GEO_ITEMS = SELECT DISTINCT LOCATION_FILTER_ID
+                          FROM "sap.tm.trp.db.filter::t_location_filter_location"
+                         WHERE LOCATION_GROUP_ID = :GROUP_ID;
+    
+            GEO_COUNT = SELECT DISTINCT B.LOCATION_FILTER_ID
+                         FROM "sap.tm.trp.db.filter::t_location_filter" AS A
+                              INNER JOIN :GEO_ITEMS AS B
+                              ON A.ID = B.LOCATION_FILTER_ID
+                        WHERE A.VISIBLE_FLAG = 'G';
+    
+            SELECT COUNT(*) INTO ERR_NUM
+              FROM :GEO_COUNT;
+         
+        ELSEIF :TYPE = 2 THEN
+            GEO_ITEMS = SELECT DISTINCT LOCATION_FILTER_ID
+                          FROM "sap.tm.trp.db.filter::t_location_filter_zone"
+                         WHERE ZONE_GROUP_ID = :GROUP_ID;
+    
+            GEO_COUNT = SELECT DISTINCT B.LOCATION_FILTER_ID
+                         FROM "sap.tm.trp.db.filter::t_location_filter" AS A
+                              INNER JOIN :GEO_ITEMS AS B
+                              ON A.ID = B.LOCATION_FILTER_ID
+                        WHERE A.VISIBLE_FLAG = 'G';
+    
+            SELECT COUNT(*) INTO ERR_NUM
+              FROM :GEO_COUNT;
+         
+        ELSEIF :TYPE = 3 THEN
+            GEO_ITEMS = SELECT DISTINCT LOCATION_FILTER_ID
+                          FROM "sap.tm.trp.db.filter::t_location_filter_region"
+                         WHERE REGION_GROUP_ID = :GROUP_ID;
+    
+            GEO_COUNT = SELECT DISTINCT B.LOCATION_FILTER_ID
+                         FROM "sap.tm.trp.db.filter::t_location_filter" AS A
+                              INNER JOIN :GEO_ITEMS AS B
+                              ON A.ID = B.LOCATION_FILTER_ID
+                        WHERE A.VISIBLE_FLAG = 'G';
+    
+            SELECT COUNT(*) INTO ERR_NUM
+              FROM :GEO_COUNT;
+        END IF;
+    ELSE
+        ERR_NUM := 0;
+    END IF;
+    
+    IF :ERR_NUM > 0 THEN
+       SELECT TOP 1 DESC INTO FILTER_NAME
+         FROM :GEO_COUNT AS A
+              INNER JOIN "sap.tm.trp.db.filter::t_location_filter" AS B
+              ON A.LOCATION_FILTER_ID = B.ID;
+    END IF;
+END;

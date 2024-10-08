@@ -1,0 +1,71 @@
+//To define the HDB view file use the following syntax: 
+schema = "SAP_TM_TRP";
+query = "
+select T11.EXECUTION_ID,
+       T11.PIPELINE_MODEL_ID,
+       T11.ALERT_RULE_GROUP_ID,
+       IFNULL(T21.DESC, T2.NAME) AS ALERT_RULE_GROUP_NAME,
+       T4.RULE_ID,
+       IFNULL(T41.DESC, T4.NAME) AS RULE_NAME,
+       T4.SP,
+       T5.RULE_TYPE_ID,
+       IFNULL(T51.DESC, T5.RULE_TYPE_DESC) AS RULE_TYPE_DESC,
+       T5.DATA_OBJECT_ID,
+       IFNULL(T52.DESC, T5.DATA_OBJECT_FORMAT) AS DATA_OBJECT_FORMAT
+from 
+(
+  select T1.EXECUTION_ID,
+         T1.PIPELINE_MODEL_ID,
+         IFNULL(T2.ALERT_RULE_GROUP_ID,1) AS ALERT_RULE_GROUP_ID
+   from 
+   (select 
+           EXECUTION_ID,                        
+           VALUE as PIPELINE_MODEL_ID
+    from  \"sap.tm.trp.db.pipeline::t_execution_context\" where KEY = 'PIPELINE_MODEL_ID' ) as T1
+    inner join
+   (select EXECUTION_ID,
+           VALUE as ALERT_RULE_GROUP_ID
+    from \"sap.tm.trp.db.pipeline::t_execution_context\" where KEY = 'ALERT_RULE_GROUP_ID' ) as T2
+    on T1.EXECUTION_ID = T2.EXECUTION_ID 
+) T11
+INNER JOIN \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group\" T2
+ON (T11.ALERT_RULE_GROUP_ID = T2.ALERT_RULE_GROUP_ID) 
+INNER JOIN \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule_group_items\" T3
+          ON (T11.ALERT_RULE_GROUP_ID = T3.ALERT_RULE_GROUP_ID)
+          INNER JOIN  \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule\" T4
+          ON (T3.RULE_ID = T4.RULE_ID)
+          INNER JOIN  \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData\" T5
+          ON (T4.RULE_TYPE_ID = T5.RULE_TYPE_ID)
+ 
+
+    LEFT OUTER JOIN \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_t\" AS T21
+    ON T2.ALERT_RULE_GROUP_ID = T21.ID
+    LEFT OUTER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE21
+    ON T21.SPRAS = LANGUAGE21.SPRAS
+    
+    
+    LEFT OUTER JOIN \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule_t\" AS T41
+    ON T4.RULE_ID = T41.ID
+    LEFT OUTER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE41
+    ON T41.SPRAS = LANGUAGE41.SPRAS
+    LEFT OUTER JOIN \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData_t\" AS T51
+    ON T5.RULE_TYPE_ID = T51.ID
+    LEFT OUTER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE51
+    ON T51.SPRAS = LANGUAGE51.SPRAS
+    LEFT OUTER JOIN \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObjectFormat_t\" AS T52
+    ON T5.DATA_OBJECT_ID = T52.ID
+    LEFT OUTER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE52
+    ON T52.SPRAS = LANGUAGE52.SPRAS          
+ORDER BY T11.PIPELINE_MODEL_ID, T11.EXECUTION_ID desc
+";
+depends_on_table = ["sap.tm.trp.db.pipeline::t_execution_context",
+                    "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group",
+                    "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_t",
+                    "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule_group_items",
+                    "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule",
+                    "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule_t",
+                    "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData",
+                    "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData_t",
+                    "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObjectFormat_t"];
+
+ depends_on_view  = ["sap.tm.trp.db.semantic.common::v_lang_code"];

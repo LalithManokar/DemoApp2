@@ -1,0 +1,57 @@
+schema = "SAP_TM_TRP";
+query = "SELECT ID,ITEM_ID,XPOS,YPOS FROM (
+         SELECT ROW_NUMBER() OVER(PARTITION BY T1.ID ORDER BY ZONE.XPOS DESC, ZONE.YPOS DESC) AS RANK,
+                T1.ID,
+                --TO_VARCHAR(T2.ZONE_ID) AS ITEM_ID,
+                T2.ZONE_ID AS ITEM_ID,
+                ZONE.XPOS AS XPOS,
+                ZONE.YPOS AS YPOS
+           FROM \"sap.tm.trp.db.filter::t_location_filter\" AS T1
+                INNER JOIN \"sap.tm.trp.db.filter::t_location_filter_zone\" AS T2
+                ON T1.ID = T2.LOCATION_FILTER_ID
+                INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_zone_ui\" AS ZONE
+                ON T2.ZONE_ID = ZONE.ID)
+          WHERE RANK = 1
+          UNION
+         SELECT ID,ITEM_ID,XPOS,YPOS FROM (
+         SELECT ROW_NUMBER() OVER(PARTITION BY T1.ID ORDER BY ZONE.XPOS DESC, ZONE.YPOS DESC) AS RANK,
+                T1.ID,
+                --TO_VARCHAR(T2.ZONE_ID) AS ITEM_ID,
+                T2.ZONE_ID AS ITEM_ID,
+                ZONE.XPOS AS XPOS,
+                ZONE.YPOS AS YPOS
+           FROM \"sap.tm.trp.db.filter::t_location_filter\" AS T1
+                INNER JOIN \"sap.tm.trp.db.filter::t_location_filter_region\" AS T2
+                ON T1.ID = T2.LOCATION_FILTER_ID
+                INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_zone_ui\" AS ZONE
+                ON T2.ZONE_ID = ZONE.ID)
+          WHERE RANK = 1
+          UNION
+         SELECT ID,ITEM_ID,XPOS,YPOS FROM (
+         SELECT ROW_NUMBER() OVER(PARTITION BY T1.ID ORDER BY LOC.XPOS DESC, LOC.YPOS DESC) AS RANK,
+                T1.ID,
+                --TO_VARCHAR(T2.LOCATION_ID) AS ITEM_ID,
+                T2.LOCATION_ID AS ITEM_ID,
+                LOC.XPOS AS XPOS,
+                LOC.YPOS AS YPOS
+           FROM \"sap.tm.trp.db.filter::t_location_filter\" AS T1
+                INNER JOIN \"sap.tm.trp.db.filter::t_location_filter_location\" AS T2
+                ON T1.ID = T2.LOCATION_FILTER_ID
+                INNER JOIN \"sap.tm.trp.db.semantic.location::v_location\" AS LOC
+                ON T2.LOCATION_ID = LOC.ID)
+          WHERE RANK = 1
+          UNION
+         --SELECT ID,TO_VARCHAR(ITEM_ID) AS ITEM_ID,XPOS,YPOS
+         SELECT ID,ITEM_ID AS ITEM_ID,XPOS,YPOS
+           FROM \"sap.tm.trp.db.filter::v_location_filter_group_coordinate\"
+          UNION
+         --SELECT ID,TO_VARCHAR(ITEM_ID) AS ITEM_ID,XPOS,YPOS
+         SELECT ID,ITEM_ID AS ITEM_ID,XPOS,YPOS
+           FROM \"sap.tm.trp.db.filter::v_zone_filter_group_coordinate\"
+          UNION
+         --SELECT ID,TO_VARCHAR(ITEM_ID) AS ITEM_ID,XPOS,YPOS
+         SELECT ID,ITEM_ID AS ITEM_ID,XPOS,YPOS
+           FROM \"sap.tm.trp.db.filter::v_region_filter_group_coordinate\"";
+       
+depends_on_view = ["sap.tm.trp.db.filter::v_region_filter_group_coordinate", "sap.tm.trp.db.filter::v_zone_filter_group_coordinate", "sap.tm.trp.db.filter::v_location_filter_group_coordinate", "sap.tm.trp.db.systemmanagement.location::v_zone_ui", "sap.tm.trp.db.semantic.location::v_location"];
+depends_on_table = ["sap.tm.trp.db.filter::t_location_filter_location", "sap.tm.trp.db.filter::t_location_filter_region","sap.tm.trp.db.filter::t_location_filter", "sap.tm.trp.db.filter::t_location_filter_zone"];

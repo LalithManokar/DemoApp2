@@ -1,0 +1,118 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.streetturn.algorithm::p_streetturn20" (
+IN v_tuid VARCHAR(50), -- selected tu id
+IN v_type VARCHAR(20), -- selected tu's category 'PICKUP'/'RETURN'
+IN t_conf "sap.tm.trp.db.streetturn.algorithm::tt_conf", -- configure table, could be empty
+IN t_trans "sap.tm.trp.db.streetturn.algorithm::tt_trans", -- lanes
+IN t_tu "sap.tm.trp.db.streetturn.algorithm::tt_streetturn_tu", -- to be suggested tu set including selected tu
+OUT t_suggest "sap.tm.trp.db.streetturn.algorithm::tt_streetturn_rank", -- output pairs with ranking
+OUT flag VARCHAR(50)
+ )
+LANGUAGE SQLSCRIPT 
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+READS SQL DATA
+AS
+BEGIN 
+
+DECLARE count0 INT;
+DECLARE lv_rank_number BIGINT;
+DECLARE lv_ahead_time BIGINT;
+
+select IFNULL (MAX ("VALUE"),1) into lv_rank_number from :t_conf where "NAME" = 'RANK_NUMBER';
+select IFNULL (MAX ("VALUE"),0) into lv_ahead_time from :t_conf where "NAME" = 'AHEAD_TIME';
+
+flag := 'SUCCESS';
+
+IF :v_type = 'PICKUP' THEN
+	-- filter for lanes
+	t_select_tu = SELECT * FROM :t_tu WHERE "TU_ID"=:v_tuid AND "MODE"=:v_type;
+	SELECT COUNT(*) INTO count0 FROM :t_select_tu;
+	
+	IF count0>1 THEN
+	flag := 'SELECT MULTIPLE TUs!';
+	t_select_tu = SELECT TOP 1 * FROM :t_select_tu;
+	END IF;
+	
+	t_trans_filter = SELECT trans.*,T4."ID" as TO_LOC_ID,T5."ID" as FROM_LOC_ID FROM :t_trans trans
+					 JOIN "sap.tm.trp.db.semantic.location::v_all_location" T4
+					 ON  trans.TO_LOCATION = T4."NAME"
+					 JOIN "sap.tm.trp.db.semantic.location::v_all_location" T5
+					 ON  trans.FROM_LOCATION = T5."NAME" 
+			 		 WHERE T4."ID" IN (SELECT "CUSTOMER_LOCATION" FROM :t_select_tu);
+					 
+	t_tu_filter = SELECT * FROM :t_tu WHERE "MODE"='RETURN';
+	
+	
+	t_valid_pairs = SELECT C."TU_ID",
+             		       A."DURATION",
+			       A."COST",
+			       SECONDS_BETWEEN(C."PLANNED_TIME",B."PLANNED_TIME")-A."DURATION" AS "AHEAD_TIME"
+			FROM :t_trans_filter A
+			INNER JOIN :t_select_tu B
+			ON A."TO_LOC_ID"=B."CUSTOMER_LOCATION"
+			INNER JOIN :t_tu_filter C
+			ON A."FROM_LOC_ID"=C."CUSTOMER_LOCATION"
+			AND ( SECONDS_BETWEEN(C."PLANNED_TIME",B."PLANNED_TIME") - A."DURATION" ) >= :lv_ahead_time
+			AND B."CONTAINER_TYPE"=C."CONTAINER_TYPE"
+			AND B."QUANTITY"=C."QUANTITY";
+	
+	t_suggest_no = SELECT TOP :lv_rank_number
+						 "TU_ID","DURATION","COST","AHEAD_TIME"
+				   FROM :t_valid_pairs 
+		           ORDER BY "DURATION","COST","AHEAD_TIME";
+		           
+	t_suggest = SELECT "TU_ID",
+			    	   ROW_NUMBER() OVER() AS "RANK",
+			    	   "DURATION","COST","AHEAD_TIME"
+	            FROM :t_suggest_no;
+				
+ELSEIF :v_type = 'RETURN' THEN
+	-- filter for lanes
+	t_select_tu = SELECT * FROM :t_tu WHERE "TU_ID"=:v_tuid AND "MODE"=:v_type;
+	SELECT COUNT(*) INTO count0 FROM :t_select_tu;
+
+	IF count0>1 THEN
+	flag := 'SELECT MULTIPLE TUs!';
+	t_select_tu = SELECT TOP 1 * FROM :t_select_tu;
+	END IF;
+	
+	t_trans_filter = SELECT trans.*,T4."ID" as TO_LOC_ID,T5."ID" as FROM_LOC_ID FROM :t_trans trans
+					 JOIN "sap.tm.trp.db.semantic.location::v_all_location" T4
+					 ON  trans.TO_LOCATION = T4."NAME"
+					 JOIN "sap.tm.trp.db.semantic.location::v_all_location" T5
+					 ON  trans.FROM_LOCATION = T5."NAME" 
+			 		 WHERE T5."ID" IN (SELECT "CUSTOMER_LOCATION" FROM :t_select_tu);
+					 
+					 
+	t_tu_filter = SELECT * FROM :t_tu WHERE "MODE"='PICKUP';
+	
+	
+	t_valid_pairs = SELECT C."TU_ID",
+			       A."DURATION",
+			       A."COST",
+			      SECONDS_BETWEEN(B."PLANNED_TIME",C."PLANNED_TIME")-A."DURATION" AS "AHEAD_TIME"
+			FROM :t_trans_filter A
+			INNER JOIN :t_select_tu B
+			ON A."FROM_LOC_ID"=B."CUSTOMER_LOCATION"
+			INNER JOIN :t_tu_filter C
+			ON A."TO_LOC_ID"=C."CUSTOMER_LOCATION"
+			AND ( SECONDS_BETWEEN(B."PLANNED_TIME",C."PLANNED_TIME") - A."DURATION" ) >= :lv_ahead_time
+			AND B."CONTAINER_TYPE"=C."CONTAINER_TYPE"
+			AND B."QUANTITY"=C."QUANTITY";
+					
+	t_suggest_no = SELECT TOP :lv_rank_number
+						"TU_ID","DURATION","COST","AHEAD_TIME"
+				   FROM :t_valid_pairs 
+		           ORDER BY "DURATION","COST","AHEAD_TIME";
+		           
+	t_suggest = SELECT "TU_ID",
+			    	   ROW_NUMBER() OVER() AS "RANK",
+			    	   "DURATION","COST","AHEAD_TIME"
+	            FROM :t_suggest_no;
+
+ELSE flag := 'INVALID TYPE';
+
+END IF;
+
+
+END;

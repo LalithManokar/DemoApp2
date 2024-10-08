@@ -1,0 +1,13 @@
+table.schemaName = "SAP_TM_ROUTING_TEST";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "COST_MODEL_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "PRIORITY"; sqlType = INTEGER; },
+    {name = "LOCATION_NAME"; sqlType = VARCHAR; length = 50; nullable = false;},
+    {name = "FROM_MOT"; sqlType = VARCHAR; length = 10;},
+    {name = "TO_MOT"; sqlType = VARCHAR; length = 10;},
+    {name = "RESOURCE_TYPE"; sqlType = NVARCHAR; length = 20;},
+    {name = "ACT_TYPE"; sqlType = NVARCHAR; length = 10;}, // Load, unload, transshipment, gate-in, gate-out
+    {name = "COST"; sqlType = DOUBLE; nullable = false;},
+    {name = "WILD_STAR_COUNT"; sqlType = INTEGER;}
+];

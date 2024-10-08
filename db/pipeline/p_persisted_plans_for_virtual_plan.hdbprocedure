@@ -1,0 +1,41 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_persisted_plans_for_virtual_plan" (
+	IN in_persisted_plan_ids "sap.tm.trp.db.pipeline::tt_plan_id_list",
+	OUT plan_info_out "sap.tm.trp.db.pipeline::tt_persisted_plan_info"
+	)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+
+plan_info_out =
+SELECT T1.ID, 
+       T1.PLAN_TYPE_ID, 
+       T1.PLAN_TYPE_NAME,
+       T1.OUTPUT_NODE_NAME AS KPI_TYPE,
+       T1.NAME,
+       T1.DESC,
+       RESOURCE_FILTER_ID ,
+       RESOURCE_FILTER_NAME ,
+       LOCATION_FILTER_ID,
+       LOCATION_FILTER_NAME,
+       TIME_FILTER_ID,
+       TIME_FILTER_NAME,
+       VISIBILITY,
+       VISIBILITY_DESC ,
+       CREATED_BY,
+       MODIFIED_TIME AS LAST_MODIFIED_TIME,
+       T1.EXPIRY_TIME, 
+       T1.LAST_EXECUTION_STATUS, 
+       T1.PLAN_STATUS, 
+       T1.PLAN_STATUS_DESC,
+       T1.USAGE,
+       T1.USAGE_CODE,
+       T1.USAGE_DESC
+ FROM "sap.tm.trp.db.pipeline::cv_get_plan_list_with_schedule_wrapper" T1
+ INNER JOIN :in_persisted_plan_ids T2 ON (T1.ID = T2.ID)
+ INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_model" T4 ON (T1.CALCULATION_MODEL_ID = T4.ID AND ( INSTANT_ENABLED IS NULL OR INSTANT_ENABLED = ''));
+ --LEFT OUTER JOIN "sap.tm.trp.db.pipeline::v_schedule_details" T3 ON (T2.ID = T3.ID);
+
+END;
+

@@ -1,0 +1,41 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_register_pipeline_model_available_alertRuleGroup" (
+IN IN_PIPELINE_MODEL_TYPE_ID BIGINT,
+IN PIPELINE_MODEL_ID BIGINT,
+OUT SUCCESS_FLAG INTEGER ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+DECLARE PIPELINE_MODEL_EXISTING INTEGER;
+DECLARE PIPELINE_MODEL_NAME VARCHAR(200);
+
+DECLARE CURSOR ALERT_RULE_GROUP_CURSOR FOR
+        SELECT DISTINCT T1.ALERT_RULE_GROUP_ID,
+                        T1.NAME as ALERT_RULE_GROUP_NAME
+        FROM  "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group" T1
+        where T1.ALERT_RULE_GROUP_CATEGORY_ID = :IN_PIPELINE_MODEL_TYPE_ID;    
+        
+    select COUNT(T1.ID) into PIPELINE_MODEL_EXISTING 
+    from "sap.tm.trp.db.pipeline::t_pipeline_model" T1
+    where T1.ID = :PIPELINE_MODEL_ID;
+        
+    IF ( :PIPELINE_MODEL_EXISTING > 0 )
+    THEN
+        select T1.NAME into PIPELINE_MODEL_NAME
+        from "sap.tm.trp.db.pipeline::t_pipeline_model" T1
+        where T1.ID = :PIPELINE_MODEL_ID;
+        
+        FOR ALERT_RULE_GROUP AS ALERT_RULE_GROUP_CURSOR DO
+            insert into "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_map_pipeline_model_metaData"
+            values(ALERT_RULE_GROUP.ALERT_RULE_GROUP_ID, ALERT_RULE_GROUP.ALERT_RULE_GROUP_NAME, :PIPELINE_MODEL_ID, :PIPELINE_MODEL_NAME );
+        END FOR;
+
+        select count(*)-1 into SUCCESS_FLAG 
+        from "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_map_pipeline_model_metaData" T1
+        where T1.PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;
+    ELSE
+        SUCCESS_FLAG := -1;
+    END IF;
+    
+END;

@@ -1,0 +1,12 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT;},
+    {name = "SCHEDULE_ID"; sqlType = BIGINT; comment="-1:fake job log id for execute pipeline right now";},
+    {name = "MODEL_ID"; sqlType = BIGINT;},
+    {name = "CREATE_DATE"; sqlType = TIMESTAMP;},
+    {name = "SCHEDULE_FLAG"; sqlType = SMALLINT;},
+    {name = "SCHEDULE_TYPE"; sqlType = VARCHAR; length = 500;}
+];
+
+table.primaryKey.pkcolumns = ["ID"];

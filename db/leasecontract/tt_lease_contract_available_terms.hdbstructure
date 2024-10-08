@@ -1,0 +1,20 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "lease contract hire terms with availabilty(used for planning cockpit ui)";
+table.columns = [
+{name = "ID";sqlType = BIGINT;},
+{name = "LEASE_CONTRACT_ID";sqlType = BIGINT;},
+{name = "LEASE_CONTRACT_REFERENCE";sqlType = NVARCHAR;length=100;},
+{name = "LESSOR";sqlType = NVARCHAR;length=100;},
+{name = "LEASE_CONTRACT_TYPE";sqlType = NVARCHAR;length=100;},
+{name = "START_TIME";sqlType = TIMESTAMP;},
+{name = "END_TIME";sqlType = TIMESTAMP;},
+{name = "MAX_HIRE_QUOTA";sqlType = INTEGER;},
+{name = "USED_QUOTA";sqlType = INTEGER;},
+{name = "ACTUAL_AVAILABLE_QUANTITY";sqlType = INTEGER;},
+{name = "HIRE_FEE";sqlType = DECIMAL; precision = 13; scale = 3;},
+{name = "DEMAND_QUANTITY_HIRE_COST";sqlType = DECIMAL; precision = 13; scale = 3;},
+{name = "CURRENCY";sqlType = NVARCHAR;length=3;},
+{name = "UNIT";sqlType = NVARCHAR;length=3;},
+{name = "RESOURCE_CATEGORY";sqlType = NVARCHAR;length=50;}
+];

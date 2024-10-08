@@ -1,0 +1,169 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_location_filter_save" (
+	IN RESOURCE_CATEGORY_ID VARCHAR(20),
+    IN CONNECTION_ID VARCHAR(100),
+    OUT EXECUTION_RESULTS "sap.tm.trp.db.massupload::tt_massupload_execution_result" ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+	CURRENT_USER_ID BIGINT;
+BEGIN
+
+	--Declarations
+	DECLARE SPRAS VARCHAR(10);	
+	DECLARE LOCATION_TYPE_LOCATION INTEGER :=1;
+	DECLARE LOCATION_TYPE_LOCATION_GROUP INTEGER :=2;
+	DECLARE LOCATION_TYPE_REGION INTEGER :=5;
+	DECLARE LOCATION_TYPE_REGION_GROUP INTEGER :=6; 
+	DECLARE MAX_CAPACITY DECIMAL(18);
+	DECLARE CRTD_REC_CNT integer;
+	DECLARE UPDT_REC_CNT integer;
+	DECLARE TOTAL_REC_CNT integer;
+	 --Select data from temporary table
+	SOURCE_ID_ALL = SELECT DISTINCT
+				LOCATION_FILTER_ID,
+     			LOCATION_FILTER_NAME,
+     			VISIBILITY,
+     			LOCATION_FILTER_TYPE,
+     			DESCRIPTION,
+     			IND_UPD
+     			FROM "sap.tm.trp.db.massupload::t_locations_filter_temporary" AS TMP    			 
+     			WHERE CONNECTION_ID = :CONNECTION_ID 
+     			AND RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID; 
+     			
+    SOURCE_ID = SELECT
+                CASE WHEN LOCATION_FILTER_ID IS NULL 
+	   	        THEN "sap.tm.trp.db.filter::s_location_filter".NEXTVAL
+                ELSE LOCATION_FILTER_ID
+                END AS LOCATION_FILTER_ID,
+                LOCATION_FILTER_NAME,
+     			VISIBILITY,
+     			LOCATION_FILTER_TYPE,
+     			DESCRIPTION,
+     			IND_UPD
+     			FROM 
+     			:SOURCE_ID_ALL;
+                
+    SOURCE = 
+     			SELECT 
+     			TMP.ROW_NUM,
+     			SR.LOCATION_FILTER_ID,
+     			TMP.LOCATION_FILTER_NAME,
+     			TMP.DESCRIPTION,
+     			TMP.LOCATION_FILTER_TYPE,
+     			TMP.VISIBILITY,
+     			TMP.LOCATION_ID,
+     			TMP.LOCATION_NAME,
+     			TMP.RESOURCE_CATEGORY,
+     			TMP.USER_ID,
+     			TMP.ACTION_TIME,
+     			TMP.CONNECTION_ID,
+     			TMP.IND_UPD
+     			FROM "sap.tm.trp.db.massupload::t_locations_filter_temporary" AS TMP 
+     			INNER JOIN :SOURCE_ID AS SR
+     			ON TMP.LOCATION_FILTER_NAME = SR.LOCATION_FILTER_NAME   			 
+     			WHERE TMP.CONNECTION_ID = :CONNECTION_ID 
+     			AND TMP.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID;  
+	
+	  -- Get User Id
+	SELECT IFNULL(MAX(ID),0) INTO CURRENT_USER_ID
+	FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+	WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+	
+	--Get Language   
+	SELECT IFNULL(MAX(SPRAS),'E') INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+	
+	--Upsert Location Filter
+    UPSERT "sap.tm.trp.db.filter::t_location_filter"
+		(ID, DESC, VISIBLE_FLAG, LOCATION_TYPE, LAST_MODIFIED_BY,LAST_MODIFIED_AT,
+		CODE,RESOURCE_CATEGORY)
+    SELECT
+    	SR.LOCATION_FILTER_ID, 
+    	SR.LOCATION_FILTER_NAME, 
+    	SR.VISIBILITY, 
+    	SR.LOCATION_FILTER_TYPE,
+    	:CURRENT_USER_ID, 
+    	CURRENT_UTCTIMESTAMP,  
+ 		SR.LOCATION_FILTER_NAME,
+    	:RESOURCE_CATEGORY_ID
+    	FROM :SOURCE_ID AS SR WHERE SR.IND_UPD=1;
+    	
+    --Upsert Location Filter
+    UPSERT "sap.tm.trp.db.filter::t_location_filter"
+		(ID, DESC, VISIBLE_FLAG, LOCATION_TYPE, CREATE_BY,CREATE_AT, LAST_MODIFIED_BY,LAST_MODIFIED_AT,
+		CODE,RESOURCE_CATEGORY)
+    SELECT
+    	SR.LOCATION_FILTER_ID, 
+    	SR.LOCATION_FILTER_NAME, 
+    	SR.VISIBILITY, 
+    	SR.LOCATION_FILTER_TYPE,
+	    :CURRENT_USER_ID, 
+    	CURRENT_UTCTIMESTAMP, 
+    	:CURRENT_USER_ID, 
+    	CURRENT_UTCTIMESTAMP,  
+ 		SR.LOCATION_FILTER_NAME,
+    	:RESOURCE_CATEGORY_ID
+    	FROM :SOURCE_ID AS SR WHERE SR.IND_UPD=0;	
+	
+	--Upsert Location Filter Texts
+    UPSERT "sap.tm.trp.db.filter::t_location_filter_t"(ID, SPRAS, DESC)
+    SELECT
+    DISTINCT(LOCATION_FILTER_ID),
+    :SPRAS, 
+    DESCRIPTION   	
+    FROM :SOURCE_ID;
+	
+	
+	--Delete existing Location assignments from the location filter
+    DELETE FROM "sap.tm.trp.db.filter::t_location_filter_location" 
+    WHERE LOCATION_FILTER_ID IN (SELECT DISTINCT LOCATION_FILTER_ID FROM :SOURCE WHERE IND_UPD = 1 );
+	
+	--Insert Location Assignments to Location Filter
+    UPSERT "sap.tm.trp.db.filter::t_location_filter_location"(LOCATION_FILTER_ID, LOCATION_ID)
+    SELECT LOCATION_FILTER_ID, LOCATION_ID FROM :SOURCE WHERE LOCATION_FILTER_TYPE = :LOCATION_TYPE_LOCATION;
+    
+    --Insert Locatio Group Assignments to Location Filter
+    UPSERT "sap.tm.trp.db.filter::t_location_filter_location"(LOCATION_FILTER_ID, LOCATION_GROUP_ID)
+    SELECT LOCATION_FILTER_ID, LOCATION_ID FROM :SOURCE WHERE LOCATION_FILTER_TYPE = :LOCATION_TYPE_LOCATION_GROUP;
+    
+    
+    --Delete existing Location assignments from the location filter
+    DELETE FROM "sap.tm.trp.db.filter::t_location_filter_region" 
+    WHERE LOCATION_FILTER_ID IN (SELECT DISTINCT LOCATION_FILTER_ID FROM :SOURCE WHERE IND_UPD = 1);
+	
+	--Insert Region Assignments to Location Filter
+    UPSERT "sap.tm.trp.db.filter::t_location_filter_region"(LOCATION_FILTER_ID, ZONE_ID)
+    SELECT LOCATION_FILTER_ID, LOCATION_ID FROM :SOURCE WHERE LOCATION_FILTER_TYPE = :LOCATION_TYPE_REGION;
+    
+    --Insert Region Group Assignments to Location Filter
+    UPSERT "sap.tm.trp.db.filter::t_location_filter_region"(LOCATION_FILTER_ID, REGION_GROUP_ID)
+    SELECT LOCATION_FILTER_ID, LOCATION_ID FROM :SOURCE WHERE LOCATION_FILTER_TYPE = :LOCATION_TYPE_REGION_GROUP;
+    
+    --Get records inserted/updated
+	SELECT 
+    COUNT(LOCATION_FILTER_ID) INTO CRTD_REC_CNT FROM :source
+    WHERE ind_upd = 0;
+    
+    SELECT
+	COUNT(LOCATION_FILTER_ID) INTO UPDT_REC_CNT FROM :source
+    WHERE ind_upd = 1;	       
+    
+    --Get total records
+    SELECT COUNT(LOCATION_FILTER_ID) INTO TOTAL_REC_CNT FROM :SOURCE;
+     
+     
+	--Delete the records in temporary table.
+ 	DELETE FROM "sap.tm.trp.db.massupload::t_locations_filter_temporary" 
+    WHERE CONNECTION_ID = :CONNECTION_ID;
+    
+   
+    --Update Mass Upload Execution History table
+    EXECUTION_RESULTS = 
+		SELECT 
+			:CRTD_REC_CNT AS REC_CRTD,
+			:UPDT_REC_CNT AS REC_upd,
+			:TOTAL_REC_CNT AS RECORD_CNT from dummy;
+    
+	
+		
+END;

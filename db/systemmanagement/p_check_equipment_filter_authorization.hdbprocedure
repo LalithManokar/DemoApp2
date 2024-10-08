@@ -1,0 +1,32 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_check_equipment_filter_authorization"(
+    IN EQUIPMENT_FILTER_ID "sap.tm.trp.db.filter::tt_equipmentfilter_id",
+    OUT HAVE_AUTHORIZATION_FLAG SMALLINT
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    READS SQL DATA
+    AS
+BEGIN
+      DECLARE I_COUNT INTEGER;
+      DECLARE HAS_AUTHORIZATION_FLAG TINYINT;
+
+     call "sap.tm.trp.db.systemmanagement::p_check_location_full_authorization" (
+		 	HAVE_AUTHORIZATION_FLAG => HAS_AUTHORIZATION_FLAG
+		 );
+
+      IF :HAS_AUTHORIZATION_FLAG = 1 THEN
+     	 HAVE_AUTHORIZATION_FLAG := 1;
+     ELSE
+        SELECT COUNT(1) INTO I_COUNT
+	      FROM :EQUIPMENT_FILTER_ID  T1
+	      LEFT OUTER JOIN "sap.tm.trp.db.filter::cv_equipment_filter" T2 ON (T2.ID = T1.ID)
+	      WHERE T2.ID IS NULL;
+	      
+	      IF I_COUNT >0 THEN
+	      	HAVE_AUTHORIZATION_FLAG := 0;
+	      ELSE
+	        HAVE_AUTHORIZATION_FLAG := 1;
+	      END IF;
+     END IF;
+  END;   

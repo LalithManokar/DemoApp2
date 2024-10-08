@@ -1,0 +1,38 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_cost_model_delete"(
+   IN COST_MODEL_ID BIGINT 
+    
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+	DECLARE ACTION_DELETE_CODE VARCHAR(20) := 'DELETE';
+	DECLARE USER_ID BIGINT;
+    DECLARE RETURN_CODE TINYINT;
+   
+	CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+   
+	-- SET INVALID FLAG IN RELATED NETWORK MODLE
+	NETWORK_SETTING_GROUP_ID_LIST =
+	    SELECT T0.USED_OBJECT_ID AS ID
+	    FROM "sap.tm.trp.db.whereusedlist::v_used_cost_model" T0
+	    INNER JOIN "sap.tm.trp.db.costmodel::t_cost_model_new" T1 ON T1.NAME = T0.OBJECT_CODE
+	    WHERE T0.CATEGORY = 'Network Setting Group' AND T1.ID = :COST_MODEL_ID
+	;
+	CALL "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_invalidate_network_by_setting_group"(:NETWORK_SETTING_GROUP_ID_LIST,'C',RETURN_CODE,MESSAGE,LOG); 
+	
+	/*Note: No cascade deletion will be needed According to Terry's require: 2015/10/16 */
+   	DELETE FROM "sap.tm.trp.db.costmodel::t_cost_model_new" 
+   	WHERE ID = :COST_MODEL_ID;
+   	
+   	DELETE FROM "sap.tm.trp.db.costmodel::t_cost_model_dataset" WHERE COST_MODEL_ID = :COST_MODEL_ID;
+   	DELETE FROM "sap.tm.trp.db.costmodel::t_cost_model_carrier" WHERE COST_MODEL_ID = :COST_MODEL_ID;
+   	DELETE FROM "sap.tm.trp.db.costmodel::t_cost_model_transportation_means" WHERE COST_MODEL_ID = :COST_MODEL_ID;
+    
+	INSERT INTO "sap.tm.trp.db.costmodel::t_cost_model_history"(ID,COST_MODEL_ID,USER_ID,ACTION_CODE,ACTION_TIME)
+	VALUES ("sap.tm.trp.db.costmodel::s_cost_model_history".nextVal,:COST_MODEL_ID,:USER_ID,:ACTION_DELETE_CODE,CURRENT_UTCTIMESTAMP);
+
+	
+         
+END;

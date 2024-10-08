@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_moving_stock_active_resource_stop_information_freight_order" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_lease_contract_visibility"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="IN_Document_ID" parameter="true">
+      <descriptions defaultDescription="IN_Document_ID"/>
+      <variableProperties datatype="NVARCHAR" length="100" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_EQUIP_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="IN_EQUIP_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_RESOURCE_CATEGORY" parameter="true">
+      <descriptions defaultDescription="IN_RESOURCE_CATEGORY"/>
+      <variableProperties datatype="VARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="FREIGHTBOOKINGID" length="100"/>
+        <viewAttribute datatype="SMALLINT" id="SEQUENCE_NUMBER"/>
+        <viewAttribute datatype="NVARCHAR" id="STOP_RESOURCE_TYPE" length="40"/>
+        <viewAttribute datatype="TINYINT" id="LOCATION_IMAGE"/>
+        <viewAttribute datatype="TIMESTAMP" id="DEPARTURE_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="ARRIVAL_TIME"/>
+        <viewAttribute datatype="BIGINT" id="STOCK_LADEN"/>
+        <viewAttribute datatype="BIGINT" id="STOCK_EMPTY"/>
+        <viewAttribute datatype="BIGINT" id="LADEN_DISCHARGE"/>
+        <viewAttribute datatype="BIGINT" id="EMPTY_DISCHARGE"/>
+        <viewAttribute datatype="BIGINT" id="LADEN_LOAD"/>
+        <viewAttribute datatype="BIGINT" id="EMPTY_LOAD"/>
+        <viewAttribute datatype="NVARCHAR" id="SCH_DEP" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="VOYAGE" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="VESSEL_ID" length="40"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_Document_ID</localVariable>
+      <localVariable>#IN_EQUIP_FILTER_ID</localVariable>
+      <localVariable>#IN_RESOURCE_CATEGORY</localVariable>
+      <definition>BEGIN
+
+            DECLARE CUR_TIME TIMESTAMP;
+
+            -- apply date offset on current time 
+            SELECT ADD_DAYS(CURRENT_UTCTIMESTAMP,IFNULL(MAX(DATE_OFFSET),0)) INTO CUR_TIME
+            FROM &quot;sap.tm.trp.db.stock::t_start_time_for_user&quot;
+            WHERE USER = (SELECT USERNAME FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;);
+                
+			
+            CALL &quot;sap.tm.trp.db.filter::p_get_equiptypes_by_equip_filter_id&quot;
+                 (:IN_EQUIP_FILTER_ID, EQUIP_TYPES);
+             			
+			call &quot;sap.tm.trp.db.movingstock::p_get_moving_stock_detail_freight_order&quot;(:IN_Document_ID,:EQUIP_TYPES,:IN_RESOURCE_CATEGORY,stop_detail_result);
+			 
+			  
+			var_out = select 	T2.&quot;FreightBookingID&quot; as FREIGHTBOOKINGID, 
+								T2.&quot;SequenceNumber&quot; as SEQUENCE_NUMBER,  
+								T2.&quot;Location&quot; as STOP_RESOURCE_TYPE, 
+		
+								(case when (  NANO100_BETWEEN(:CUR_TIME, TO_TIMESTAMP(case when T2.ARRIVAL_UTC = '' then T2.DEPARTURE_UTC else T2.ARRIVAL_UTC end)) &lt;= 0 and  
+													NANO100_BETWEEN(:CUR_TIME, TO_TIMESTAMP(case when T2.DEPARTURE_UTC = '' then T2.ARRIVAL_UTC else T2.DEPARTURE_UTC end)) >= 0 )
+										then 1 -- current_location should be shown
+								 	when (  NANO100_BETWEEN(:CUR_TIME, TO_TIMESTAMP(case when T2.ARRIVAL_UTC = '' then T2.DEPARTURE_UTC else T2.ARRIVAL_UTC end)) > 0  )
+								 		then 2 -- Future Location
+								 	else
+								 		0	-- Passed Location
+								 end )as LOCATION_IMAGE,
+																		
+								(case when T2.DEPARTURE_UTC = ''
+										then null
+								 	else TO_TIMESTAMP(T2.DEPARTURE_UTC)
+								 end )as DEPARTURE_TIME,
+								 
+								(case when T2.ARRIVAL_UTC = ''
+										then null
+								 	else TO_TIMESTAMP(T2.ARRIVAL_UTC)
+								 end )as ARRIVAL_TIME, 
+								IFNULL(sum(T2.&quot;StockLaden&quot;),0) as STOCK_LADEN,
+								IFNULL(sum(T2.&quot;StockEmpty&quot;),0) as STOCK_EMPTY,				
+								IFNULL(sum(T2.&quot;LadenDischarge&quot;),0) as LADEN_DISCHARGE,
+								IFNULL(sum(T2.&quot;EmptyDischarge&quot;),0) as EMPTY_DISCHARGE, 
+								IFNULL(sum(T2.&quot;LadenLoad&quot;),0) as LADEN_LOAD,
+								IFNULL(sum(T2.&quot;EmptyLoad&quot;),0) as EMPTY_LOAD,
+								 T2.&quot;ScheduleDeparture&quot; as SCH_DEP,
+                     			T2.VOYAGE,
+                     			T2.VESSEL_ID
+				      from :stop_detail_result T2 
+				  group by  T2.&quot;FreightBookingID&quot;,T2.&quot;SequenceNumber&quot;, T2.&quot;Location&quot;, T2.ARRIVAL_UTC, T2.DEPARTURE_UTC,T2.&quot;ScheduleDeparture&quot;,T2.VOYAGE,T2.VESSEL_ID;
+					
+
+END;</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="FREIGHTBOOKINGID" order="1">
+        <descriptions defaultDescription="ACTIVE_RESOURCE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="FREIGHTBOOKINGID"/>
+      </attribute>
+      <attribute id="STOP_RESOURCE_TYPE" order="3">
+        <descriptions defaultDescription="STOP_RESOURCE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="STOP_RESOURCE_TYPE"/>
+      </attribute>
+      <attribute id="LOCATION_IMAGE" order="4">
+        <descriptions defaultDescription="LOCATION_IMAGE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_IMAGE"/>
+      </attribute>
+      <attribute id="SCH_DEP" order="13">
+        <descriptions defaultDescription="SCH_DEP"/>
+        <keyMapping columnObjectName="Script_View" columnName="SCH_DEP"/>
+      </attribute>
+      <attribute id="VOYAGE" order="14">
+        <descriptions defaultDescription="VOYAGE"/>
+        <keyMapping columnObjectName="Script_View" columnName="VOYAGE"/>
+      </attribute>
+      <attribute id="VESSEL_ID" order="15">
+        <descriptions defaultDescription="VESSEL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="VESSEL_ID"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="SEQUENCE_NUMBER" order="2" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="SEQUENCE_NUMBER"/>
+        <measureMapping columnObjectName="Script_View" columnName="SEQUENCE_NUMBER"/>
+      </measure>
+      <measure id="DEPARTURE_TIME" order="5" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="DEPARTURE_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="DEPARTURE_TIME"/>
+      </measure>
+      <measure id="ARRIVAL_TIME" order="6" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="ARRIVAL_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="ARRIVAL_TIME"/>
+      </measure>
+      <measure id="STOCK_LADEN" order="7" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="EMPTY_LOAD_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="STOCK_LADEN"/>
+      </measure>
+      <measure id="STOCK_EMPTY" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="EMPTY_DISCHARGE_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="STOCK_EMPTY"/>
+      </measure>
+      <measure id="LADEN_DISCHARGE" order="9" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="EMPTY_STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="LADEN_DISCHARGE"/>
+      </measure>
+      <measure id="EMPTY_DISCHARGE" order="10" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LADEN_LOAD_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="EMPTY_DISCHARGE"/>
+      </measure>
+      <measure id="LADEN_LOAD" order="11" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LADEN_DISCHARGE_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="LADEN_LOAD"/>
+      </measure>
+      <measure id="EMPTY_LOAD" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LADEN_STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="EMPTY_LOAD"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

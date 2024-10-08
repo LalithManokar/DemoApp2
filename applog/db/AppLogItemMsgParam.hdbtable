@@ -1,0 +1,25 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "Application Log Item Message Parameter";
+table.columns = 
+	[ 
+		{name = "_Item"; sqlType = BIGINT; nullable = false; comment = "Application Log Item (Technical) ID"; },
+		{name = "_Header.ID"; sqlType = BIGINT; nullable = false; comment = "Application Log Header (Technical) ID"; },
+		{name = "_Header.CreationDate"; sqlType = DATE; nullable = false; comment = "Application Log Header Creation Date"; },		
+		{name = "OrdinalNumberValue"; sqlType = INTEGER; comment = "Ordinal Number Value"; },
+		{name = "ParameterType.Code"; sqlType = INTEGER; comment = "Parameter Type Code"; },
+		{name = "ParameterValue.String"; sqlType = NVARCHAR; length = 1000; comment = "Parameter Value String"; },
+		{name = "ParameterValue.Amount.Content"; sqlType = DECIMAL; precision = 28; scale = 6; comment = "Parameter Value Amount Content"; },
+		{name = "ParameterValue.Amount.CurrencyCode"; sqlType = NVARCHAR; length = 3; comment = "Parameter Amount Currency Code"; },
+		{name = "ParameterValue.Quantity.Content"; sqlType = DECIMAL; precision = 31; scale = 14; comment = "Parameter Value Quantity Content"; },
+		{name = "ParameterValue.Quantity.UnitCode"; sqlType = NVARCHAR; length = 3; comment = "Parameter Quantity Unit Code"; },
+		{name = "ParameterValue.Date"; sqlType = DATE; comment = "Parameter Value Date"; },
+		{name = "ParameterValue.Time"; sqlType = TIME; comment = "Parameter Value Time"; },
+		{name = "ParameterValue.DateTime"; sqlType = TIMESTAMP; comment = "Parameter Value Date Time"; },
+		{name = "ParameterValue.Indicator"; sqlType = INTEGER; comment = "Parameter Value Indicator"; },
+		{name = "ParameterValue.Duration"; sqlType = NVARCHAR; length = 20; comment = "Parameter Value Duration"; },
+		{name = "ParameterValue.Decimal"; sqlType = DECIMAL; comment = "Parameter Value Decimal"; },
+		{name = "ParameterValue.Float"; sqlType = FLOAT; comment = "Parameter Value Float"; },
+		{name = "ParameterValue.Integer"; sqlType = INTEGER; comment = "Parameter Value Integer"; }		
+	];
+table.primaryKey.pkcolumns = ["_Item", "_Header.ID", "_Header.CreationDate", "OrdinalNumberValue"];

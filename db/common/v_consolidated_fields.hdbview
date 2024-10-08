@@ -1,0 +1,46 @@
+schema = "SAP_TM_TRP";
+query  = "
+SELECT 
+    ID,
+    PAGE_ID,
+    NAME,
+    null as MAPPED_NAME,
+    DISPLAY_NAME,
+    DISPLAY_NAME AS DESCRIPTION,
+    DATA_TYPE,
+    LENGTH,
+    SCALE,
+    SEARCHABLE,
+    FILTERABLE, 
+    TYPE,
+    CONFIGURABLE,
+    CUSTOM,
+    DEFAULT
+FROM \"sap.tm.trp.db.common::t_delivered_fields\"
+UNION ALL
+SELECT 
+    ext.ID,
+    ext.PAGE_ID,
+    ext.NAME,
+    ext.MAPPED_NAME,
+    ext.DISPLAY_NAME,
+    CASE 
+        WHEN (ext.PAGE_ID = 103 OR ext.PAGE_ID = 104) THEN DESC.DESC
+        ELSE ext.DESCRIPTION
+    END AS DESCRIPTION,
+    ext.DATA_TYPE,
+    ext.LENGTH,
+    ext.SCALE,
+    ext.SEARCHABLE,
+    ext.FILTERABLE ,
+    2 as TYPE,
+    1 as CONFIGURABLE,
+    0 as CUSTOM,
+    1 as DEFAULT 
+FROM \"sap.tm.trp.db.common::t_extended_fields\" ext
+LEFT JOIN (select ID, desc from \"sap.tm.trp.db.common::t_extended_fields_t\" ext_desc 
+    INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" lang ON (ext_desc.SPRAS = lang.SPRAS) ) DESC
+    ON ext.ID = DESC.ID";
+		  
+depends_on_table = ["sap.tm.trp.db.common::t_delivered_fields","sap.tm.trp.db.common::t_extended_fields","sap.tm.trp.db.common::t_extended_fields_t"];
+depends_on_view = ["sap.tm.trp.db.semantic.common::v_lang_code"];

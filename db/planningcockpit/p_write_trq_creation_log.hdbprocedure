@@ -1,0 +1,38 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_write_trq_creation_log" 
+(   IN SCENARIO_ID BIGINT,
+    IN RESPONSE_DATA "sap.tm.trp.db.planningcockpit::tt_write_trq_response_data",
+    OUT WRITE_SUCCESS_FLAG INTEGER
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+  DECLARE USER_ID BIGINT;
+  
+  WRITE_SUCCESS_FLAG := 0;
+    
+  IF :SCENARIO_ID <> 0 AND :SCENARIO_ID IS NOT NULL THEN
+  
+    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+    
+    INSERT INTO "sap.tm.trp.db.planningcockpit::t_trq_write_log"
+    (ID,SCENARIO_ID,ACTIVITY_ID,STATUS,TM_STATUS,MESSAGE,TRQ_ID,TRQ_ITEM_ID,SOURCE_LOCATION,REQ_DEPARTURE_TIME,
+    DESTINATION_LOCATION,REQ_ARRIVAL_TIME,RESOURCE_TYPE,QUANTITY,TU_GEN_FLAG,TU_ID,TU_ITEM_ID,
+    CREATED_BY,MODIFIED_BY,CREATED_ON,MODIFIED_ON
+   )
+      SELECT "sap.tm.trp.db.planningcockpit::s_trq_write_response".NEXTVAL AS ID,
+             :SCENARIO_ID, ACTIVITY_ID, STATUS,TM_STATUS,MESSAGE,TRQ_ID, TRQ_ITEM_ID, SOURCE_LOCATION, 
+             REQ_DEPARTURE_TIME, DESTINATION_LOCATION, REQ_ARRIVAL_TIME,  
+             RESOURCE_TYPE, QUANTITY, TU_GEN_FLAG, TU_ID, TU_ITEM_ID, :USER_ID, :USER_ID,
+             CURRENT_UTCTIMESTAMP,CURRENT_UTCTIMESTAMP
+      FROM :RESPONSE_DATA;
+      
+      WRITE_SUCCESS_FLAG := 1;
+     
+    
+     
+  END IF ;
+      
+END;

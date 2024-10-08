@@ -1,0 +1,16 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.customization::p_ext_group_type_by_category_type"(
+    IN RESOURCE_CATEGORY_TYPE VARCHAR(3),
+    OUT GROUP_TYPE "sap.tm.trp.db.systemmanagement.customization::tt_group_type"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    GROUP_TYPE = SELECT T1.RESOURCE_GROUP_TYPE,
+                        T1.GROUP_TYPE_DESC
+                 FROM "sap.tm.trp.db.semantic.resource::v_resource_group_type" T1
+                 INNER JOIN "sap.tm.trp.db.systemmanagement.customization::t_resource_category_type_group_type" T2
+                 ON (T1.RESOURCE_GROUP_TYPE = T2.GROUP_TYPE AND T2.CATEGORY_TYPE = :RESOURCE_CATEGORY_TYPE);
+    
+END;

@@ -1,0 +1,84 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_calculate_composite_path_measure" (
+    IN network_code NVARCHAR(50),
+    IN paths "sap.tm.trp.routing.db.path::tt_composite_path_in",
+	IN path_connections "sap.tm.trp.routing.db.path::tt_composite_connection_in",
+    OUT return_code INTEGER,
+    OUT message "sap.tm.trp.routing.db.common::tt_message",
+    OUT path_measures "sap.tm.trp.routing.db.path::tt_path_measure",
+	OUT path_connection_measures "sap.tm.trp.routing.db.path::tt_path_sequence_measure"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING"
+   READS SQL DATA AS
+BEGIN
+   /*************************************
+       Requirement: cost returned by p_get_transportation_based_cost_info can't contain data that only one of from_location_name and to_location_name is *
+       For each from_location_name, to_location_name, transportation_mode_code, carrier_id, there can be no more than one record that have the same priority and wild_star_count
+   *************************************/
+    DECLARE msg_params TABLE(PLACEHOLDER INTEGER, VALUE NVARCHAR(100));
+    DECLARE network_exist INTEGER;
+    DECLARE network_id BIGINT;
+    DECLARE cost_model_id BIGINT;
+    DECLARE resource_type NVARCHAR(20);
+    DECLARE base_network_id BIGINT;
+    DECLARE basic_path_type CONSTANT CHAR = 'P';
+    DECLARE basic_conn_type CONSTANT CHAR = 'C';
+    
+	DECLARE path_usage CONSTANT VARCHAR(10) = 'PATH';
+
+    return_code = 0;
+    -- check whether the input network id is illegal
+	SELECT CASE COUNT(*) WHEN 0 THEN 1 ELSE 0 END INTO return_code
+	FROM "sap.tm.trp.routing.db.path::t_network_model"
+	WHERE code = :network_code;
+
+	IF :return_code != 0 THEN
+		-- log message
+	    msg_params = SELECT 0 AS PLACEHOLDER, :network_id AS VALUE FROM DUMMY;
+	    CALL "sap.tm.trp.routing.db.common::p_get_text"('MSG_NETWORK_ID_NOT_EXIST', :msg_params, 'E', message);
+	    log = SELECT * FROM :message;
+		RETURN;
+	END IF;
+	
+	SELECT id INTO network_id
+	FROM "sap.tm.trp.routing.db.path::t_network_model"
+	WHERE code = :network_code;
+	
+	-- validate whether all start location and end location exist in current dataset
+	-- Assume all local locations maintained in base network's dataset
+	CALL "sap.tm.trp.routing.db.path::p_get_network_chain"(:network_id, network_chain);
+	
+	SELECT LAST_VALUE(id ORDER BY level) INTO base_network_id 
+	FROM :network_chain;
+	
+	-- fetch cost model id and resource type
+	CALL "sap.tm.trp.routing.db.path::p_get_network_attr"(:network_id, :path_usage, cost_model_id, resource_type);
+
+	-- compute the hash per composite path
+	-- Since there may be duplication node in basic path, currently assume the input from_location and to_location assume always to match the lowest sequence in basic path
+	-- First determine the precise node sequence for the from location and to location in basic path
+	path_conn_for_hash = 
+	SELECT A.external_id AS path_id, A.sequence, B.basic_path_id, B.path_type, B.from_location, B.to_location, from_bp_sequence, to_bp_sequence 
+	FROM (
+    	SELECT external_id, A.sequence, MIN(B.sequence) AS from_bp_sequence, FIRST_VALUE(C.sequence ORDER BY B.sequence, C.sequence) AS to_bp_sequence
+    	FROM :path_connections AS A
+    	INNER JOIN "sap.tm.trp.routing.db.dataset::t_path_connection" AS B ON A.basic_path_id = B.path_id AND A.from_location = B.from_location
+    	INNER JOIN "sap.tm.trp.routing.db.dataset::t_path_connection" AS C ON A.basic_path_id = C.path_id AND A.to_location = C.to_location
+    	WHERE A.path_type = :basic_path_type
+    	GROUP BY external_id, A.sequence
+	) AS A INNER JOIN :path_connections AS B ON A.external_id = B.external_id AND A.sequence = B.sequence
+	UNION ALL
+	SELECT external_id AS path_id, sequence, basic_path_id, path_type, from_location, to_location, 1 AS from_bp_sequence, 1 AS to_bp_sequence
+	FROM :path_connections
+	WHERE path_type = :basic_conn_type;
+
+	-- compute path connection measures and path measures
+	path_alias = 
+	SELECT external_id AS path_id, from_location, to_location
+	FROM :paths;
+	
+	CALL "sap.tm.trp.routing.db.path::p_calculate_path_measures" (:cost_model_id, :resource_type, :path_alias, :path_conn_for_hash, :path_measures, :path_connection_measures, return_code, message, log);
+   
+   
+END

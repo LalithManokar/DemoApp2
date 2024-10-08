@@ -1,0 +1,45 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert.alert_rule_group::p_alert_ruleGroup_save_check"(
+    IN ALERT_RULE_GROUP_ID BIGINT,
+    IN VISIBLE_FLAG VARCHAR(3),
+    OUT MSG VARCHAR(100),
+    OUT CODE_LIST "sap.tm.trp.db.filter::tt_save_check_code_list"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+DECLARE CNT INT;
+DECLARE CODE VARCHAR(20);
+MSG := '';
+
+-- GET CODE
+SELECT IFNULL(MAX(CODE), '') INTO CODE FROM "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group"
+WHERE ALERT_RULE_GROUP_ID = :ALERT_RULE_GROUP_ID;
+
+--(UPSIDE CHECK) CHECK THE OBJECTS' VISIBILITY IN THE USED LIST
+IF :ALERT_RULE_GROUP_ID IS NOT NULL AND :VISIBLE_FLAG = 'P'
+THEN
+    T_USED_PLAN_LIST =
+        SELECT CODE, VISIBILITY 
+        FROM "sap.tm.trp.db.whereusedlist::cv_get_used_list"(placeholder."$$IN_CODE$$"=>:CODE,placeholder."$$TYPE$$"=>'ALERT_RULE_GROUP')
+    	;
+
+    T_USED_LIST =
+    	SELECT CODE, VISIBILITY
+    	FROM (
+	        SELECT CODE, VISIBILITY FROM :T_USED_PLAN_LIST
+    	)
+    	WHERE VISIBILITY = 'G'
+    	;
+    
+    SELECT COUNT(*) INTO CNT FROM :T_USED_LIST;
+    IF :CNT > 0
+    THEN
+        MSG := 'VISIBILITY_CHECK_FAILED_USED_LIST';
+        CODE_LIST = SELECT CODE FROM :T_USED_LIST;
+        RETURN;
+    END IF;
+END IF;
+
+END;

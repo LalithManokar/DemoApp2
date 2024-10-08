@@ -1,0 +1,9 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+	{name = "GROUP_ID"; sqlType = BIGINT;},
+	{name = "SEQUENCE"; sqlType = INTEGER;},
+	{name = "LOGIC_OPERATOR"; sqlType = VARCHAR; length = 200;},
+	{name = "NODE_ID"; sqlType = BIGINT;}
+];
+table.primaryKey.pkcolumns = ["GROUP_ID","SEQUENCE"];

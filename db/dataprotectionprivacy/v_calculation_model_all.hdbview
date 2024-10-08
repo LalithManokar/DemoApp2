@@ -1,0 +1,32 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT DISTINCT
+			A.ID,
+			A.CODE,
+			A.NAME,
+			A.DESC,
+			USER_CREATE.USERNAME AS CREATED_BY,
+			USER_CHANGE.USERNAME AS MODIFIED_BY,
+			C.RESOURCE_CATEGORY
+	      FROM \"sap.tm.trp.db.pipeline::t_pipeline_model\" AS A
+	      INNER JOIN \"sap.tm.trp.db.pipeline::t_pipeline_model_type\" AS B
+		  ON (A.PIPELINE_MODEL_TYPE_ID = B.ID)
+		  LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS USER_CREATE
+	      ON (A.CREATE_BY = USER_CREATE.ID)
+		  LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS USER_CHANGE
+		  ON (A.LAST_MODIFIED_BY = USER_CHANGE.ID)
+		  INNER JOIN (SELECT A.CODE AS RESOURCE_CATEGORY,
+				B.OBJECT_ID,
+				B.OBJECT_TYPE
+				FROM \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings\" A
+				INNER JOIN \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_object_registration\" B
+				ON (A.ID = B.RESOURCE_CATEGORY_ID)) AS C
+		  ON (A.ID = C.OBJECT_ID AND C.OBJECT_TYPE = 3)
+		  GROUP BY A.ID,A.CODE,A.NAME,A.DESC,B.PARENT_ID,B.ID,USER_CREATE.USERNAME,
+		           USER_CHANGE.USERNAME,C.RESOURCE_CATEGORY";
+
+depends_on_table = ["sap.tm.trp.db.pipeline::t_pipeline_model",
+                    "sap.tm.trp.db.pipeline::t_pipeline_model_type",
+                    "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings",
+                    "sap.tm.trp.db.systemmanagement.customization::t_resource_category_object_registration"];
+
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];              

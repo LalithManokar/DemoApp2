@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_execution_result_by_executionid_base_on_map_of_the_resource" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_execution_result_by_executionid_base"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="IN_EXECUTION_ID" parameter="true">
+      <descriptions defaultDescription="IN_EXECUTION_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_NODE_ID" parameter="true">
+      <descriptions defaultDescription="IN_NODE_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_START_TIME" parameter="true">
+      <descriptions defaultDescription="IN_START_TIME"/>
+      <variableProperties datatype="TIMESTAMP" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_RESOURCE_TYPE_ID" parameter="true">
+      <descriptions defaultDescription="IN_RESOURCE_TYPE_ID"/>
+      <variableProperties datatype="NVARCHAR" defaultValue="" length="20" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_ID" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_NAME" length="200"/>
+        <viewAttribute datatype="INTEGER" id="LOCATION_FILTER_TYPE"/>
+        <viewAttribute datatype="VARCHAR" id="EQUIP_TYPE_ID" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="EQUIP_TYPE_NAME" length="100"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_TIME"/>
+        <viewAttribute datatype="INTEGER" id="SEQUENCE"/>
+        <viewAttribute datatype="VARCHAR" id="OUTPUT_KEY" length="30"/>
+        <viewAttribute datatype="DOUBLE" id="OUTPUT_VALUE"/>
+        <viewAttribute datatype="INTEGER" id="ALERT_NUM"/>
+        <viewAttribute datatype="DOUBLE" id="ALERT_SCORE"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_EXECUTION_ID</localVariable>
+      <localVariable>#IN_NODE_ID</localVariable>
+      <localVariable>#IN_START_TIME</localVariable>
+      <localVariable>#IN_RESOURCE_TYPE_ID</localVariable>
+      <definition> 
+  
+ BEGIN 
+     
+	   DECLARE NODE_ID BIGINT;
+	  DECLARE NON_EXISTS_NODE_ID BIGINT := '-1';
+	  DECLARE VAR_TIME_FILTER_ID BIGINT := 0 ;
+	 
+	  --get the node id of the execution
+	  IF :IN_NODE_ID = :NON_EXISTS_NODE_ID THEN
+       CALL &quot;sap.tm.trp.db.pipeline::p_get_default_node_by_executionid&quot; (:IN_EXECUTION_ID, NODE_ID);
+	  ELSE 
+	  NODE_ID := :IN_NODE_ID;
+	  END IF; 
+
+ var_out = SELECT DISTINCT T1.LOCATION_ID,T1.LOCATION_NAME,T1.LOCATION_FILTER_TYPE,
+      T1.EQUIP_TYPE_ID,T1.EQUIP_TYPE_NAME,
+        T1.START_TIME,
+        T1.END_TIME,
+        T1.SEQUENCE,
+        T1.OUTPUT_KEY,TO_DOUBLE(T1.OUTPUT_VALUE) AS OUTPUT_VALUE,
+      CASE LOWER(T3.MESSAGE) WHEN 'alert' THEN 1 ELSE 0 END AS ALERT_NUM,
+      CASE WHEN LOWER(T3.MESSAGE) = 'alert' THEN ALERT_SCORE_NORMALIZING ELSE 0 END AS ALERT_SCORE
+      FROM &quot;sap.tm.trp.db.pipeline::t_pipeline_output_dataset&quot; T1
+      LEFT JOIN (
+                  SELECT * FROM &quot;sap.tm.trp.db.hrf::v_SD_KPI_rules&quot;  
+                  WHERE PLAN_EXECUTION_ID = :IN_EXECUTION_ID AND NODE_ID = :IN_NODE_ID
+               )T3 ON ( T3.PLAN_EXECUTION_ID = T1.PLAN_EXECUTION_ID 
+                       AND T3.NODE_ID = T1.NODE_ID 
+                       AND T3.EQUIP_TYPE_ID = T1.EQUIP_TYPE_ID 
+                       AND T3.LOCATION_ID = T1.LOCATION_ID 
+                       AND T3.TIME_INTERVAL_ID = T1.TIME_INTERVAL_ID 
+                      )
+      WHERE  T1.PLAN_EXECUTION_ID = :IN_EXECUTION_ID
+      AND T1.NODE_ID = :NODE_ID AND T1.START_TIME = :IN_START_TIME
+      AND T1.EQUIP_TYPE_ID = :IN_RESOURCE_TYPE_ID;
+      
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="LOCATION_ID" order="1">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_ID"/>
+      </attribute>
+      <attribute id="LOCATION_NAME" order="2">
+        <descriptions defaultDescription="LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_NAME"/>
+      </attribute>
+      <attribute id="EQUIP_TYPE_ID" order="4">
+        <descriptions defaultDescription="EQUIP_TYPE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_TYPE_ID"/>
+      </attribute>
+      <attribute id="EQUIP_TYPE_NAME" order="5">
+        <descriptions defaultDescription="EQUIP_TYPE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_TYPE_NAME"/>
+      </attribute>
+      <attribute id="START_TIME" order="6">
+        <descriptions defaultDescription="TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </attribute>
+      <attribute id="END_TIME" order="7">
+        <descriptions defaultDescription="START_OFFSET"/>
+        <keyMapping columnObjectName="Script_View" columnName="END_TIME"/>
+      </attribute>
+      <attribute id="SEQUENCE" order="8">
+        <descriptions defaultDescription="TIME_DURATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="SEQUENCE"/>
+      </attribute>
+      <attribute id="OUTPUT_KEY" order="9">
+        <descriptions defaultDescription="OUTPUT_VALUE"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUTPUT_KEY"/>
+      </attribute>
+      <attribute id="OUTPUT_VALUE" order="10">
+        <descriptions defaultDescription="DEMAND"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUTPUT_VALUE"/>
+      </attribute>
+      <attribute id="ALERT_NUM" order="11">
+        <descriptions defaultDescription="FILTER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ALERT_NUM"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="LOCATION_FILTER_TYPE" order="3" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LOCATION_FILTER_TYPE_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="LOCATION_FILTER_TYPE"/>
+      </measure>
+      <measure id="ALERT_SCORE" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ALERT_SCORE"/>
+        <measureMapping columnObjectName="Script_View" columnName="ALERT_SCORE"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

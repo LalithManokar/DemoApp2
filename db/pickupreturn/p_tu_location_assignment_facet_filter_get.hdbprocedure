@@ -1,0 +1,107 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_tu_location_assignment_facet_filter_get" (
+    IN FUZZYSEARCH_TEXT VARCHAR(500),
+    IN LOC_RULE_ID BIGINT,
+    IN COLUMN_FILTER VARCHAR(5000),
+    IN RESOURCE_CATEGORY VARCHAR(50),
+    IN EXEC_STATUS_LIST_INPUT CLOB,-- "sap.tm.trp.db.pickupreturn::tt_str_list",
+    IN EQUIP_TYPE_LIST_INPUT CLOB,--"sap.tm.trp.db.pickupreturn::tt_str_list",
+    IN SHIPPER_LIST_INPUT CLOB,-- "sap.tm.trp.db.pickupreturn::tt_str_list",
+    IN CONSIGNEE_LIST_INPUT CLOB,--"sap.tm.trp.db.pickupreturn::tt_str_list",
+    IN SHIPPER_LOC_LIST_INPUT CLOB,--"sap.tm.trp.db.pickupreturn::tt_str_list",
+    IN CONSIGNEE_LOC_LIST_INPUT CLOB,--"sap.tm.trp.db.pickupreturn::tt_str_list",
+    IN POL_LIST_INPUT CLOB,-- "sap.tm.trp.db.pickupreturn::tt_str_list",
+    IN POD_LIST_INPUT CLOB,--"sap.tm.trp.db.pickupreturn::tt_str_list",
+    IN CURRENT_LOC_LIST_INPUT CLOB,-- "sap.tm.trp.db.pickupreturn::tt_str_list",
+    OUT EXEC_STATUS_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT EQUIP_TYPE_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT SHIPPER_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT CONSIGNEE_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT SHIPPER_LOC_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT CONSIGNEE_LOC_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT POL_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT POD_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT CURRENT_LOC_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list"
+)
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+    DECLARE RULE_TYPE INTEGER;
+    
+    SELECT IFNULL(MAX(RULE_TYPE),0) INTO RULE_TYPE
+    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID = :LOC_RULE_ID;
+      
+    --TUS BY FACET FILTER
+    CALL "sap.tm.trp.db.pickupreturn::p_get_tu_by_facet_filter_column_filter"(
+        :FUZZYSEARCH_TEXT,
+        :LOC_RULE_ID,
+        :RESOURCE_CATEGORY,
+        :COLUMN_FILTER,
+        :EXEC_STATUS_LIST_INPUT,
+        :EQUIP_TYPE_LIST_INPUT,
+        :SHIPPER_LIST_INPUT,
+        :CONSIGNEE_LIST_INPUT,
+        :SHIPPER_LOC_LIST_INPUT,
+        :CONSIGNEE_LOC_LIST_INPUT,
+        :POL_LIST_INPUT,
+        :POD_LIST_INPUT,
+        :CURRENT_LOC_LIST_INPUT,
+        FILTERED_OUTPUT,
+        TU_BOOKING_LIST,
+        EXEC_STATUS_LIST_OUT,
+        EQUIP_TYPE_LIST_OUT,
+        SHIPPER_LIST_OUT,
+        CONSIGNEE_LIST_OUT,
+        SHIPPER_LOC_LIST_OUT,
+        CONSIGNEE_LOC_LIST_OUT,
+        POL_LIST_OUT,
+        POD_LIST_OUT,
+        CURRENT_LOC_LIST_OUT
+    );
+    
+    --FILTER OUTPUT
+    EXEC_STATUS_LIST_OUTPUT = SELECT DISTINCT STATUS AS KEY,
+                                     STATUS AS TEXT
+                              FROM :FILTERED_OUTPUT ORDER BY KEY;
+                              
+    EQUIP_TYPE_LIST_OUTPUT = SELECT DISTINCT RESOURCE_TYPE AS KEY,
+                                    RESOURCE_TYPE AS TEXT
+                             FROM :FILTERED_OUTPUT ORDER BY KEY;
+                             
+    SHIPPER_LIST_OUTPUT = SELECT DISTINCT SHIPPER AS KEY, 
+                                 SHIPPER AS TEXT 
+                          FROM :FILTERED_OUTPUT ORDER BY KEY;
+                          
+    CONSIGNEE_LIST_OUTPUT = SELECT DISTINCT CONSIGNEE AS KEY, 
+                                   CONSIGNEE AS TEXT 
+                            FROM :FILTERED_OUTPUT ORDER BY KEY;
+                            
+    SHIPPER_LOC_LIST_OUTPUT = SELECT DISTINCT DESTINATION_LOCATION AS KEY,
+                                     DESTINATION_LOCATION AS TEXT
+                              FROM :FILTERED_OUTPUT ORDER BY KEY;
+                              
+    CONSIGNEE_LOC_LIST_OUTPUT = SELECT DISTINCT SOURCE_LOCATION AS KEY,
+                                       SOURCE_LOCATION AS TEXT
+                                FROM :FILTERED_OUTPUT ORDER BY KEY;
+                                
+    POL_LIST_OUTPUT = SELECT DISTINCT POL_NAME AS KEY,
+                             POL_NAME AS TEXT
+                      FROM :FILTERED_OUTPUT ORDER BY KEY;
+                      
+    POD_LIST_OUTPUT = SELECT DISTINCT POD_NAME AS KEY,
+                             POD_NAME AS TEXT
+                      FROM :FILTERED_OUTPUT ORDER BY KEY;
+    
+    IF	:RULE_TYPE = 1 THEN                  
+	    CURRENT_LOC_LIST_OUTPUT = SELECT DISTINCT ORIGINAL_PICKUP_LOCATION AS KEY,
+	                                     ORIGINAL_PICKUP_LOCATION AS TEXT
+	                              FROM :FILTERED_OUTPUT ORDER BY KEY;
+    ELSE
+    	CURRENT_LOC_LIST_OUTPUT = SELECT DISTINCT ORIGINAL_RETURN_LOCATION AS KEY,
+	                                     ORIGINAL_RETURN_LOCATION AS TEXT
+	                              FROM :FILTERED_OUTPUT ORDER BY KEY;
+    END IF;
+
+END;

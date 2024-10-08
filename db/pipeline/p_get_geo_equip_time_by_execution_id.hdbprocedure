@@ -1,0 +1,29 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_get_geo_equip_time_by_execution_id" ( 
+  IN EXECUTION_ID BIGINT,
+  IN DFT_NODE_ID BIGINT,  
+  OUT geos "sap.tm.trp.db.pipeline::tt_filter_location_no_expand",
+  OUT time_intervals "sap.tm.trp.db.pipeline::tt_filter_date_no_expand",
+  OUT equips "sap.tm.trp.db.pipeline::tt_filter_resource_no_expand"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN   
+    
+   result = SELECT LOCATION_ID, LOCATION_NAME, LOCATION_FILTER_TYPE, EQUIP_TYPE_ID, EQUIP_TYPE_NAME, EQUIP_FILTER_TYPE,
+            TIME_INTERVAL_ID, START_TIME, END_TIME, SEQUENCE, TIME_INTERVAL 
+            FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" 
+            WHERE PLAN_EXECUTION_ID = :EXECUTION_ID AND NODE_ID = :DFT_NODE_ID;
+
+   -- location/location group/ region/ region group 
+   geos = SELECT DISTINCT LOCATION_ID AS GEO_ID, LOCATION_NAME AS GEO_NAME, LOCATION_FILTER_TYPE AS GEO_FILTER_TYPE FROM :result; 
+    
+   -- time interval          
+   time_intervals = SELECT DISTINCT START_TIME AS START_TIMESTAMP, END_TIME AS END_TIMESTAMP, TIME_INTERVAL_ID,SEQUENCE                       
+                    FROM :result;
+     
+   -- equip types/ equip group         
+   equips = SELECT DISTINCT EQUIP_TYPE_ID AS EQUIP_CODE, EQUIP_TYPE_NAME AS EQUIP_NAME, EQUIP_FILTER_TYPE FROM :result;
+    
+END;

@@ -1,0 +1,51 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_read_dataset"(
+	IN dataset_id BIGINT, 
+	IN with_summary CHAR(1), 
+	OUT dataset "sap.tm.trp.routing.db.dataset::tt_dataset_out", 
+	OUT summary TABLE (system_path_count INTEGER, manual_path_count INTEGER, 
+	system_connection_count INTEGER, manual_connection_count INTEGER)
+)
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA "SAP_TM_ROUTING"
+READS SQL DATA AS
+BEGIN
+	DECLARE manual_source CONSTANT CHAR = 'M';
+	DECLARE system_source CONSTANT CHAR = 'S';
+	DECLARE system_path_count INTEGER; 
+	DECLARE manual_path_count INTEGER;
+	DECLARE system_connection_count INTEGER;  
+	DECLARE manual_connection_count INTEGER;
+
+	dataset = SELECT id, code, source, base_dataset_id, valid_from, valid_to, 
+	created_by, created_on, changed_by, changed_on, replicated_by, replicated_on
+	FROM "sap.tm.trp.routing.db.dataset::t_dataset"
+	WHERE id = :dataset_id;
+
+	IF :with_summary != 'X' THEN
+		RETURN;
+	END IF;
+	
+	-- Fetch merged path and path_connection data
+	SELECT COUNT(*) INTO system_path_count
+	FROM "sap.tm.trp.routing.db.dataset::t_path"
+	WHERE dataset_id = :dataset_id AND source = :system_source;
+	
+	SELECT COUNT(*) INTO manual_path_count
+	FROM "sap.tm.trp.routing.db.dataset::t_path"
+	WHERE dataset_id = :dataset_id AND source = :manual_source;
+	
+	-- Fetch merged path and path_connection data
+	SELECT COUNT(*) INTO system_connection_count
+	FROM "sap.tm.trp.routing.db.dataset::t_connection"
+	WHERE dataset_id = :dataset_id AND source = :system_source;
+	
+	SELECT COUNT(*) INTO manual_connection_count
+	FROM "sap.tm.trp.routing.db.dataset::t_connection"
+	WHERE dataset_id = :dataset_id AND source = :manual_source;
+	
+	summary = SELECT system_path_count AS system_path_count, manual_path_count AS manual_path_count,
+	system_connection_count AS system_connection_count, manual_connection_count AS manual_connection_count
+	FROM DUMMY;
+	
+END;

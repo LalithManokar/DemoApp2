@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.2" id="cv_get_default_node_by_executionid" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_default_node_by_executionid"/>
+  <localVariables>
+    <variable id="EXECUTION_ID" parameter="true">
+      <descriptions defaultDescription="EXECUTION_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="NODE_ID"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#EXECUTION_ID</localVariable>
+      <definition> 
+  
+BEGIN 
+ 	DECLARE NODE_ID BIGINT;
+ 	CALL &quot;sap.tm.trp.db.pipeline::p_get_default_node_by_executionid&quot;(:EXECUTION_ID, NODE_ID);
+ 	var_out = SELECT :NODE_ID AS NODE_ID FROM DUMMY;
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <attributes/>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="NODE_ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="NODE_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="NODE_ID"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

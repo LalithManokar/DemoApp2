@@ -1,0 +1,11 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.leasecontract::sp_lease_object_change_status" (
+IN PREV_STATUS_IN INTEGER,
+IN NEW_STATUS_IN INTEGER) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	 AS
+BEGIN
+
+update "sap.tm.trp.db.leasecontract::t_lease_object_change_track"  set STATUS=:NEW_STATUS_IN where STATUS = :PREV_STATUS_IN;
+END;

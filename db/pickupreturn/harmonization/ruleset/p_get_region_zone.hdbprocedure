@@ -1,0 +1,35 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_get_region_zone" (
+    IN IT_LOCATION "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_location_details",
+    OUT ET_LOCATION_ZONE "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_location_zone"
+) 
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_TRP
+   READS SQL DATA 
+  AS
+BEGIN
+
+    lt_location_region = select distinct a.location_id, b.ZONE_ID
+                            from :it_location a
+                            left join "sap.tm.trp.db.semantic.location::v_zone_admin_gis" b
+                            on a.country_code = b.country_code and ((b.state_code is null or b.state_code = '') or a.state_code = b.state_code);
+    
+    lt_location_postal = select distinct a.location_id, b.zone_id
+                            from :it_location a
+                            left join "sap.tm.trp.db.semantic.location::v_zone_postal_gis" b
+                            on a.country_code = b.country_code and (b.POSTAL_CODE_FROM <= a.postal_code and b.POSTAL_CODE_TO >= a.postal_code);
+                            
+    lt_location_direct = select distinct a.location_id, b.zone_id
+                                from :it_location a
+                            left join "sap.tm.trp.db.semantic.location::v_zone_location" b
+                            on a.location_id = b.location_id;
+    
+    et_location_zone = select location_id, zone_id from :lt_location_region    
+                union
+                select location_id, zone_id from :lt_location_postal
+                union 
+                select location_id, zone_id from :lt_location_direct;
+
+
+END;
+

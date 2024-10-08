@@ -1,0 +1,99 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_ext_location_filter_update"(
+    IN FILTER_ID BIGINT,
+    IN NAME VARCHAR(50),
+    IN DESC VARCHAR(500),
+    IN VISIBLE_FLAG VARCHAR(3),
+    IN ITEMS "sap.tm.trp.db.pipeline::tt_geo_id",
+    IN LOCATION_TYPE INTEGER,
+    OUT MESSAGE VARCHAR(100)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE CODE VARCHAR(20);
+    DECLARE DUP_FLAG INTEGER;
+
+    -- One location can only be set to the primary location of one aggreage location in the same location filter
+    -- otherwise there would be troubles in resource balance    
+    IF :LOCATION_TYPE > 1 THEN
+       CALL "sap.tm.trp.db.filter::p_primary_location_unique_check"(:ITEMS, :LOCATION_TYPE, DUP_FLAG);
+       
+       IF DUP_FLAG > 0 THEN 
+          MESSAGE := 'MSG_DUPLICATE_PRIMARY_LOC_USED';
+          RETURN;
+       END IF;
+       
+    END IF;
+        
+    SELECT IFNULL(MAX(ID),-100) INTO USER_ID FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    SELECT SPRAS INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+    
+    UPDATE "sap.tm.trp.db.filter::t_location_filter"
+    SET DESC = :NAME,
+        VISIBLE_FLAG = :VISIBLE_FLAG,
+        LOCATION_TYPE = :LOCATION_TYPE,
+        LAST_MODIFIED_BY = :USER_ID,
+        -- LAST_MODIFIED_AT = CURRENT_TIMESTAMP
+        LAST_MODIFIED_AT = CURRENT_UTCTIMESTAMP
+    WHERE ID = :FILTER_ID;
+    
+    UPDATE "sap.tm.trp.db.filter::t_location_filter_t"
+    SET DESC = :DESC,
+        SPRAS = :SPRAS
+    WHERE ID = :FILTER_ID;
+    
+    DELETE FROM "sap.tm.trp.db.filter::t_location_filter_location"
+    WHERE LOCATION_FILTER_ID = :FILTER_ID;
+    DELETE FROM "sap.tm.trp.db.filter::t_location_filter_zone"
+    WHERE LOCATION_FILTER_ID = :FILTER_ID;
+    DELETE FROM "sap.tm.trp.db.filter::t_location_filter_region"
+    WHERE LOCATION_FILTER_ID = :FILTER_ID;
+    
+    IF :LOCATION_TYPE = 1 THEN
+        INSERT INTO "sap.tm.trp.db.filter::t_location_filter_location"(LOCATION_FILTER_ID, LOCATION_ID)
+        SELECT :FILTER_ID, ID FROM :ITEMS;
+    ELSEIF :LOCATION_TYPE = 2 THEN
+        INSERT INTO "sap.tm.trp.db.filter::t_location_filter_location"(LOCATION_FILTER_ID, LOCATION_GROUP_ID)
+        --SELECT :FILTER_ID, TO_INTEGER(ID) FROM :ITEMS;
+        SELECT :FILTER_ID, ID FROM :ITEMS;
+    ELSEIF :LOCATION_TYPE = 3 THEN
+        INSERT INTO "sap.tm.trp.db.filter::t_location_filter_zone"(LOCATION_FILTER_ID, ZONE_ID)
+        SELECT :FILTER_ID, ID FROM :ITEMS;
+    ELSEIF :LOCATION_TYPE = 4 THEN
+        INSERT INTO "sap.tm.trp.db.filter::t_location_filter_zone"(LOCATION_FILTER_ID, ZONE_GROUP_ID)
+        --SELECT :FILTER_ID, TO_INTEGER(ID) FROM :ITEMS;
+        SELECT :FILTER_ID, ID FROM :ITEMS;
+    ELSEIF :LOCATION_TYPE = 5 THEN
+        INSERT INTO "sap.tm.trp.db.filter::t_location_filter_region"(LOCATION_FILTER_ID, ZONE_ID)
+        SELECT :FILTER_ID, ID FROM :ITEMS;
+    ELSE
+        INSERT INTO "sap.tm.trp.db.filter::t_location_filter_region"(LOCATION_FILTER_ID, REGION_GROUP_ID)
+        --SELECT :FILTER_ID, TO_INTEGER(ID) FROM :ITEMS;
+        SELECT :FILTER_ID, ID FROM :ITEMS;
+    END IF;
+    
+    PLAN_MODEL_ID_LIST = SELECT DISTINCT T1.ID 
+                           FROM "sap.tm.trp.db.pipeline::t_plan_model" AS T1
+                                INNER JOIN "sap.tm.trp.db.filter::t_filter_location_filter" AS T2
+                                ON T1.FILTER_GROUP_ID = T2.FILTER_GROUP_ID
+                          WHERE T2.LOCATION_FILTER_ID = :FILTER_ID;
+    
+    UPDATE "sap.tm.trp.db.pipeline::t_plan_model"
+    -- SET LAST_MODIFIED_ON = CURRENT_TIMESTAMP
+    SET LAST_MODIFIED_ON = CURRENT_UTCTIMESTAMP
+    WHERE ID IN (SELECT * FROM :PLAN_MODEL_ID_LIST);
+    
+    SELECT IFNULL(MAX(CODE), '') INTO CODE FROM "sap.tm.trp.db.filter::t_location_filter"
+    WHERE ID = :FILTER_ID;
+    
+    -- Set the status related with this location filter
+    CALL "sap.tm.trp.db.filter::p_set_location_filter_need_check"(:CODE, 'LOCATION_FILTER');
+    
+    MESSAGE := 'MSG_SUCCESS_STATUS';    
+END;

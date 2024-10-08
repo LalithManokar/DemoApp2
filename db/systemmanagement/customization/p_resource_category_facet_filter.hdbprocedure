@@ -1,0 +1,61 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.customization::p_resource_category_facet_filter" (
+    IN FUZZYSEARCH_TEXT VARCHAR(500),
+    IN RESOURCE_CATEGORY_TYPE_LIST_INPUT "sap.tm.trp.db.systemmanagement.customization::tt_str_list",
+    IN ENABLE_FLAG_LIST_INPUT "sap.tm.trp.db.systemmanagement.customization::tt_int_list",
+    OUT RESOURCE_CATEGORY_TYPE_OUTPUT "sap.tm.trp.db.systemmanagement.customization::tt_resource_category_facet_filter_string",
+    OUT ENABLE_FLAG_OUTPUT "sap.tm.trp.db.systemmanagement.customization::tt_resource_category_facet_filter_string"
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP"
+READS SQL DATA 
+AS
+
+BEGIN
+    DECLARE CATEGORY_TYPE_LIST_CNT INTEGER;
+    DECLARE ENABLE_FLAG_LIST_CNT INTEGER;
+    
+    RESOURCE_CATEGORYS = SELECT * FROM "sap.tm.trp.db.systemmanagement.customization::v_resource_category";
+
+    SELECT COUNT(*) INTO CATEGORY_TYPE_LIST_CNT FROM :RESOURCE_CATEGORY_TYPE_LIST_INPUT;
+    SELECT COUNT(*) INTO ENABLE_FLAG_LIST_CNT FROM :ENABLE_FLAG_LIST_INPUT;
+
+    IF :CATEGORY_TYPE_LIST_CNT = 0
+        THEN RESOURCE_CATEGORY_TYPE_LIST_INPUT = SELECT DISTINCT RESOURCE_CATEGORY_TYPE AS STR
+                                           FROM :RESOURCE_CATEGORYS;
+    END IF;
+    IF :ENABLE_FLAG_LIST_CNT = 0
+        THEN ENABLE_FLAG_LIST_INPUT = SELECT DISTINCT ENABLE_FLAG AS INT
+                                FROM :RESOURCE_CATEGORYS;
+    END IF;
+
+    RESOURCE_CATEGORY_DATA = SELECT MASTER_TBL.RESOURCE_CATEGORY_TYPE,
+                     MASTER_TBL.RESOURCE_CATEGORY_TYPE_DESC,
+                     MASTER_TBL.ENABLE_FLAG
+                FROM :RESOURCE_CATEGORYS MASTER_TBL
+			    INNER JOIN :RESOURCE_CATEGORY_TYPE_LIST_INPUT AS CATEGORY_TYPE_TBL
+			            ON IFNULL(MASTER_TBL.RESOURCE_CATEGORY_TYPE, '') = IFNULL(CATEGORY_TYPE_TBL.STR, '')
+			    INNER JOIN :ENABLE_FLAG_LIST_INPUT AS ENABLE_FLAG_TBL
+			            ON MASTER_TBL.ENABLE_FLAG = ENABLE_FLAG_TBL.INT
+		        WHERE LOWER(MASTER_TBL.NAME) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.DESC) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.ENABLE_FLAG_DESC) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.RESOURCE_CATEGORY_TYPE_DESC) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.GROUP_TYPE_DESC) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           --OR LOWER(MASTER_TBL.RES_CLASS_DESC) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.BASE_RESOURCE_TYPE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.RESOURCE_TYPE_DESC) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.CREATED_BY) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                           OR LOWER(MASTER_TBL.LAST_CHANGED_BY) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%';
+    
+    RESOURCE_CATEGORY_TYPE_OUTPUT = SELECT DISTINCT RESOURCE_CATEGORY_TYPE AS KEY, 
+                                                    RESOURCE_CATEGORY_TYPE_DESC AS TEXT 
+                                    FROM :RESOURCE_CATEGORY_DATA
+                                    ORDER BY RESOURCE_CATEGORY_TYPE;
+                        
+    ENABLE_FLAG_OUTPUT = SELECT DISTINCT ENABLE_FLAG AS KEY, 
+                                         CASE ENABLE_FLAG WHEN 0 THEN 'No' ELSE 'Yes' END AS TEXT 
+                         FROM :RESOURCE_CATEGORY_DATA;
+
+
+END;

@@ -1,0 +1,145 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_get_utc_start_time_4_timezone" ( 
+	IN TIME_FILTER_ID BIGINT,
+	IN TIMEZONE NVARCHAR(50),
+	OUT ET_STARTTIME_UTC "sap.tm.trp.db.filter::tt_utc_start_time_get"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+	--local: YYYY-MM-DD
+	--get time filter basic information plus first item unit  
+	DECLARE LV_TIME_ZONE VARCHAR(50);
+	
+	SELECT 
+	CASE WHEN ( :TIMEZONE = '' OR :TIMEZONE IS NULL ) THEN NULL
+	ELSE :TIMEZONE END AS TIME_ZONE INTO LV_TIME_ZONE
+	FROM DUMMY;
+	                
+    sql1 = SELECT  
+                 A.ID,
+                 B.ID AS ITEM_ID,                 
+                 IFNULL(:LV_TIME_ZONE,A.TIMEZONE_ID) AS TIMEZONE_ID,
+                 UTCTOLOCAL(CURRENT_UTCTIMESTAMP,IFNULL(:LV_TIME_ZONE,A.TIMEZONE_ID),'platform') AS LOCAL_TIMESTAMP_NOW,
+                 SUBSTRING(TO_VARCHAR(UTCTOLOCAL(CURRENT_UTCTIMESTAMP,IFNULL(:LV_TIME_ZONE,A.TIMEZONE_ID),'platform'),'YYYY-MM-DD HH24:MI:SS'),1,10) AS LOCAL_TIMESTAMP_STR,
+                 B.TIME_DIMENSION_UNIT_ID AS UNIT_ID,
+                 A.HOUR_START_FROM,
+                 A.MINUTE_START_FROM,
+                 A.WEEK_START_FROM,
+                 A.MONTH_START_FROM,
+                 A.DIRECTION_FLAG,
+                 A.OFFSET_FLAG
+                 --FROM "sap.tm.trp.db.filter::t_filter_group" D
+                 FROM "sap.tm.trp.db.filter::t_time_filter" A --ON D.TIME_FILTER_ID = A.ID 
+                 INNER JOIN "sap.tm.trp.db.filter::t_time_filter_interval" C ON A.ID = C.TIME_FILTER_ID AND C.SEQUENCE = 1
+                 INNER JOIN "sap.tm.trp.db.filter::t_time_filter_item" B ON C.TIME_FILTER_ITEM_ID = B.ID
+                 WHERE A.ID = :TIME_FILTER_ID;        
+                    
+    sql2 = SELECT 
+                  A.ID,
+                  A.ITEM_ID, 
+                  A.TIMEZONE_ID,  
+                  A.LOCAL_TIMESTAMP_NOW,                
+                  A.UNIT_ID,
+                  A.HOUR_START_FROM,
+                  A.MINUTE_START_FROM,
+                  A.WEEK_START_FROM,
+                  A.MONTH_START_FROM,
+                  A.DIRECTION_FLAG,
+                  A.OFFSET_FLAG,
+                  CASE 
+                  	WHEN A.UNIT_ID = 4 THEN  --MONTH TYPE
+	                    --sometimes the MONTH START DAY is 31 while current month doesn't contain this day
+					    --change automatically to the last day of the month
+	                    --get month day of current month
+	                    CASE WHEN A.MONTH_START_FROM <= DAYOFMONTH(LAST_DAY(LOCAL_TIMESTAMP_NOW)) 
+	                  	  then CONCAT (SUBSTRING(A.LOCAL_TIMESTAMP_STR,1,8), TO_VARCHAR(A.MONTH_START_FROM))
+	                    ELSE
+	                  	  CONCAT (SUBSTRING(A.LOCAL_TIMESTAMP_STR,1,8), TO_VARCHAR(DAYOFMONTH(LAST_DAY(LOCAL_TIMESTAMP_NOW))))
+                  	    END
+                  	WHEN A.UNIT_ID = 3 THEN  
+                  	    -- TRP WEEK TYPE WEEK_START_FROM:Range 0 ~ 6. 0:SUNDAY 1:MONDAY 2:Tuesday 3:Wednesday 4:Thursday 5:Friday 6:Saturday
+                        -- HANA WEEKDAY RETURN: Range 0 ~ 6.          6:SUNDAY 0:MONDAY 1:Tuesday 2:Wednesday 3:Thursday 4:Friday 5:Saturday
+                        -- Way to do mapping between them is: MOD(WEEKDAY(TIME)+1,7)  
+                  		--get week day of this week
+                  		SUBSTRING(TO_VARCHAR(ADD_DAYS(A.LOCAL_TIMESTAMP_NOW,(A.WEEK_START_FROM- MOD(WEEKDAY(A.LOCAL_TIMESTAMP_NOW)+1,7))),'YYYY-MM-DD HH24:MI:SS'),1,10)
+                  	WHEN A.UNIT_ID = 2 THEN  --DAY TYPE
+                  		SUBSTRING(TO_VARCHAR(A.LOCAL_TIMESTAMP_NOW,'YYYY-MM-DD HH24:MI:SS'),1,10)
+                  END
+                  AS MONTH_AND_DAY                                 
+                  FROM :sql1 A 
+                  WHERE A.UNIT_ID = 4 OR A.UNIT_ID = 3 OR A.UNIT_ID = 2 ; 
+                  
+          
+    sql9 = SELECT 
+                 A.ID,
+                 A.ITEM_ID, 
+                 A.UNIT_ID,
+                 A.TIMEZONE_ID,
+                 A.LOCAL_TIMESTAMP_NOW,   
+                 A.DIRECTION_FLAG,
+                 A.OFFSET_FLAG, 
+                 A.MONTH_START_FROM,
+                 TO_TIMESTAMP(MONTH_AND_DAY || ' ' || TO_VARCHAR(A.HOUR_START_FROM) || ':' || TO_VARCHAR(A.MINUTE_START_FROM)|| ':00',
+                 	'YYYY-MM-DD HH24:MI:SS') AS LOCAL_START_TIMESTAMP
+                 FROM :sql2 A
+           UNION ALL
+           -- hout type(UNIT_ID = 1) : UTC_START_TIMESTAMP IS NULL
+              SELECT 
+                 A.ID,     
+                 A.ITEM_ID, 
+                 A.UNIT_ID,          
+                 A.TIMEZONE_ID,
+                 A.LOCAL_TIMESTAMP_NOW,   
+                 A.DIRECTION_FLAG,
+                 A.OFFSET_FLAG,
+                 A.MONTH_START_FROM,
+                 A.LOCAL_TIMESTAMP_NOW AS LOCAL_START_TIMESTAMP
+                 FROM :sql1 A WHERE A.UNIT_ID = 1 AND A.OFFSET_FLAG =0
+             UNION ALL--HOUR , OFFSET =1 , 
+            --To avoid the issue of the end time of the pps is not the same for the virtual plan 
+            -- when the time filter of the virtual pan's unit is hour , should set the minute and 
+           --second to 00:00.000
+              SELECT 
+                 A.ID,     
+                 A.ITEM_ID, 
+                 A.UNIT_ID,          
+                 A.TIMEZONE_ID,
+                 A.LOCAL_TIMESTAMP_NOW,   
+                 A.DIRECTION_FLAG,
+                 A.OFFSET_FLAG,
+                 A.MONTH_START_FROM,
+                 TO_TIMESTAMP(SUBSTRING(TO_VARCHAR(A.LOCAL_TIMESTAMP_NOW,'YYYY-MM-DD HH24:MI:SS'),1,13)|| ':00:00' ,'YYYY-MM-DD HH24:MI:SS') AS LOCAL_START_TIMESTAMP
+                 FROM :sql1 A WHERE A.UNIT_ID = 1 AND A.OFFSET_FLAG =1;  
+                 
+     sql10 = SELECT 
+                 ID,
+                 ITEM_ID, 
+                 UNIT_ID,
+                 TIMEZONE_ID,
+                 DIRECTION_FLAG,
+                 OFFSET_FLAG,
+                 CASE WHEN DIRECTION_FLAG = 1 AND LOCAL_START_TIMESTAMP > LOCAL_TIMESTAMP_NOW AND UNIT_ID = 2 THEN ADD_DAYS(LOCAL_START_TIMESTAMP,-1)
+                      WHEN DIRECTION_FLAG = 1 AND LOCAL_START_TIMESTAMP > LOCAL_TIMESTAMP_NOW AND UNIT_ID = 3 THEN ADD_DAYS(LOCAL_START_TIMESTAMP,-7)
+                      --MONTH_START_FROM greater than UTC_START_TIMESTAMP, then next month use day MONTH_START_FROM
+                      WHEN DIRECTION_FLAG = 1 AND LOCAL_START_TIMESTAMP > LOCAL_TIMESTAMP_NOW AND UNIT_ID = 4 THEN ADD_MONTHS(LOCAL_START_TIMESTAMP,-1)
+                      WHEN DIRECTION_FLAG = 2 AND LOCAL_START_TIMESTAMP < LOCAL_TIMESTAMP_NOW AND UNIT_ID = 2 THEN ADD_DAYS(LOCAL_START_TIMESTAMP,1)
+                      WHEN DIRECTION_FLAG = 2 AND LOCAL_START_TIMESTAMP < LOCAL_TIMESTAMP_NOW AND UNIT_ID = 3 THEN ADD_DAYS(LOCAL_START_TIMESTAMP,7)
+                      --MONTH_START_FROM greater than LOCAL_START_TIMESTAMP, then next month use day MONTH_START_FROM
+                      WHEN DIRECTION_FLAG = 2 AND LOCAL_START_TIMESTAMP < LOCAL_TIMESTAMP_NOW AND UNIT_ID = 4 THEN ADD_MONTHS(LOCAL_START_TIMESTAMP,1)                    
+                 ELSE LOCAL_START_TIMESTAMP 
+                 END AS LOCAL_START_TIMESTAMP
+                 FROM :sql9;
+                 
+     ET_STARTTIME_UTC = 
+     		SELECT 
+                 ID,
+                 ITEM_ID, 
+                 UNIT_ID,
+                 TIMEZONE_ID,
+                 DIRECTION_FLAG,
+                 OFFSET_FLAG,
+                 LOCALTOUTC (LOCAL_START_TIMESTAMP, TIMEZONE_ID,'platform') AS UTC_START_TIMESTAMP                  
+                 FROM :sql10;
+END;

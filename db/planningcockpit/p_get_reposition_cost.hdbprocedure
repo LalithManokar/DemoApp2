@@ -1,0 +1,65 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_reposition_cost" (
+IN SIM_PLAN_ID BIGINT
+,IN RESOURCE_TYPE VARCHAR(50)
+,IN BASE_COST DOUBLE
+,IN QUANTITY INTEGER
+,OUT COST DOUBLE
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	--DEFAULT SCHEMA <default_schema_name>
+	READS SQL DATA 
+AS
+NETWORK_SETTING_GROUP_ID BIGINT;
+V_RESOURCE_CATEGORY_TYPE VARCHAR (20);
+V_RESOURCE_CATEGORY VARCHAR (20);
+BEGIN
+/***************************** 
+	Write your procedure logic 
+ *****************************/
+
+SELECT
+	NETWORK_SETTING_GROUP_ID INTO NETWORK_SETTING_GROUP_ID
+FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan"
+WHERE ID = :SIM_PLAN_ID
+;
+--get the resource category type
+     SELECT IFNULL (MAX (RESOURCE_CATEGORY_TYPE),''),IFNULL (MAX (RESOURCE_CATEGORY),'') 
+     INTO V_RESOURCE_CATEGORY_TYPE,V_RESOURCE_CATEGORY
+          FROM "sap.tm.trp.db.planningcockpit::t_network_setting_group" A
+    INNER JOIN "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings" B
+            ON A.RESOURCE_CATEGORY=B.CODE
+         WHERE A.ID = :NETWORK_SETTING_GROUP_ID;   
+
+RESOURCE_TYPES = SELECT DISTINCT T1.RESOURCE_TYPE_CODE,T2.TEU_COUNT
+                FROM "sap.tm.trp.db.semantic.resource::v_resource_type_with_category" T1
+                INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_type" T2
+                ON (T1.RESOURCE_TYPE_CODE = T2.RESOURCE_TYPE_CODE)
+                WHERE T1.RESOURCE_CATEGORY = :V_RESOURCE_CATEGORY;
+
+-- GET NETWORK SETTING GROUP PARAMETERS
+--CALL "sap.tm.trp.db.planningcockpit::p_get_network_setting_group_parameter_value"(:NETWORK_SETTING_GROUP_ID,TMP);
+CALL "sap.tm.trp.db.planningcockpit::p_get_setting_group_parameter_value_for_usage" (:NETWORK_SETTING_GROUP_ID,'PATH_ROUTE',TMP);
+
+-- CALCULATE THE COST BASE ON THE RATIO BETWEEN BASE/INPUT RESOURCE TYPES' TEU COUNT
+SELECT CASE WHEN :V_RESOURCE_CATEGORY_TYPE='RC' then :BASE_COST * :QUANTITY
+            ELSE (RESOURCE_TYPE_TEU / BASE_TYPE_TEU) * :BASE_COST * :QUANTITY END INTO COST
+FROM (
+	SELECT
+		T0.BASE_TYPE
+		,ifnull(T1.TEU_COUNT,1) AS BASE_TYPE_TEU
+		,ifnull(T2.TEU_COUNT,1) AS RESOURCE_TYPE_TEU
+	FROM (
+		SELECT 
+			IFNULL(MAX(VALUE),'RC_20HC') AS BASE_TYPE 
+		FROM :TMP 
+		WHERE NAME = 'BASE_RESOURCE_TYPE'
+	) T0
+	INNER JOIN :RESOURCE_TYPES T1 ON T1.RESOURCE_TYPE_CODE = T0.BASE_TYPE
+	INNER JOIN :RESOURCE_TYPES T2 ON T2.RESOURCE_TYPE_CODE = :RESOURCE_TYPE
+)
+;
+
+
+
+END;

@@ -1,0 +1,52 @@
+schema = "SAP_TM_TRP"; 
+
+
+query = " 
+--First part: Equipmment Type EQUIP_CODE_TYPE = 1
+SELECT 
+	T0.LOCATION_ID AS ID,
+	T0.LOCATION_TYPE AS TYPE,
+	T0.EQUIP_CODE AS RESOURCE_ID,
+	T0.EQUIP_CODE_TYPE AS RESOURCE_TYPE,
+	T0.EQUIP_CODE AS RESOURCE_NAME,
+	T1.RESOURCE_TYPE_DESC AS RESOURCE_DESC,
+	T0.MIN_SAFETY AS MIN_SAFETY_STOCK,
+	T0.MAX_SAFETY AS MAX_SAFETY_STOCK,
+	T0.MAX_CAPACITY AS MAX_PHYSICAL_STOCK,
+	T0.RESOURCE_CATEGORY AS RESOURCE_CATEGORY
+FROM \"sap.tm.trp.db.stock::t_stock_config\" T0 
+INNER JOIN (SELECT DISTINCT RESOURCE_TYPE_CODE,RESOURCE_TYPE_DESC ,RESOURCE_CATEGORY
+             FROM \"sap.tm.trp.db.semantic.resource::v_resource_type_with_category\") T1 
+ON (T0.EQUIP_CODE = T1.RESOURCE_TYPE_CODE AND T0.EQUIP_CODE_TYPE = 1 AND T1.RESOURCE_CATEGORY = T0.RESOURCE_CATEGORY)
+WHERE T0.LOCATION_HEAD_FLAG = 0 AND T0.LOCATION_TYPE = 1
+
+UNION
+
+--Second part: Equipmment group EQUIP_CODE_TYPE = 2
+SELECT 
+	T0.LOCATION_ID AS ID,
+	T0.LOCATION_TYPE AS TYPE,
+	T0.EQUIP_CODE AS RESOURCE_ID,
+	T0.EQUIP_CODE_TYPE AS RESOURCE_TYPE,
+	--Name FROM t_equipment_group table
+	T1.DESC AS RESOURCE_NAME,
+	--Description FROM language table
+	T2.DESC AS RESOURCE_DESC,
+	T0.MIN_SAFETY AS MIN_SAFETY_STOCK,
+	T0.MAX_SAFETY AS MAX_SAFETY_STOCK,
+	T0.MAX_CAPACITY AS MAX_PHYSICAL_STOCK,
+	T0.RESOURCE_CATEGORY AS RESOURCE_CATEGORY
+FROM \"sap.tm.trp.db.stock::t_stock_config\" T0 
+LEFT JOIN \"sap.tm.trp.db.systemmanagement::t_equipment_group\" T1 ON T0.EQUIP_CODE = T1.ID AND T0.EQUIP_CODE_TYPE = 2
+INNER JOIN  \"sap.tm.trp.db.systemmanagement::t_equipment_group_t\" T2 ON T1.ID = T2.ID
+WHERE T0.LOCATION_HEAD_FLAG = 0 AND T0.LOCATION_TYPE = 1
+
+";
+
+depends_on_view = ["sap.tm.trp.db.semantic.resource::v_resource_type_with_category"];
+depends_on_table = ["sap.tm.trp.db.stock::t_stock_config",
+                    "sap.tm.trp.db.systemmanagement::t_equipment_group",
+                    "sap.tm.trp.db.systemmanagement::t_equipment_group_t"];
+
+
+     

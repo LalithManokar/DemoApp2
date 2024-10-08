@@ -1,0 +1,20 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "PLAN_EXECUTION_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "NODE_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "LOCATION_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "LOCATION_NAME"; sqlType = VARCHAR; length = 200;},
+    {name = "LOCATION_FILTER_TYPE"; sqlType = INTEGER;comment = "1:location,2:location group,3:zone,4:zone group,5:region,6:region group.";},
+    {name = "EQUIP_TYPE_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "EQUIP_TYPE_NAME"; sqlType = VARCHAR; length = 100;},
+    {name = "EQUIP_FILTER_TYPE"; sqlType = INTEGER;comment = "1:resource,2: resource group";},
+    {name = "OUTPUT_KEY"; sqlType = VARCHAR; length = 200; },
+    {name = "OUTPUT_VALUE"; sqlType = VARCHAR; length = 300;},
+    {name = "TIME_INTERVAL_ID"; sqlType = BIGINT;},
+    {name = "START_TIME"; sqlType = TIMESTAMP;},
+    {name = "END_TIME"; sqlType = TIMESTAMP;},
+    {name = "SEQUENCE"; sqlType = INTEGER;},
+    {name = "TIME_INTERVAL"; sqlType = BIGINT;comment = "length of the interval";},
+    {name = "UNIT"; sqlType = VARCHAR; length = 32;}
+];

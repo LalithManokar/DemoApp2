@@ -1,0 +1,379 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.availabilitycheck::p_get_aggregate_execution_result_for_virtual_plan_eac"(
+  IN IN_VIRTUAL_PLAN_MODEL_ID BIGINT,
+  IN IN_PP_EXECUTION_ID BIGINT,
+  IN LOCATION_ID_LIST "sap.tm.trp.db.pipeline::tt_location_id_list",
+  IN IN_METADATA_NODE_ID VARCHAR(50),
+  OUT RESULT_OUTPUT "sap.tm.trp.db.availabilitycheck::tt_agg_output_result_for_vp_eac",  
+  OUT NO_DATA_PLAN_LIST "sap.tm.trp.db.pipeline::tt_plan_model_id_list"  
+)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN	
+    /**************************************************************************************************
+	get all the execution result by execution id for virtual plan
+	if the node has child nodes, then the node result comes from the sum of child nodes
+	otherwise get the node value itself
+	***************************************************************************************************/
+
+     DECLARE VAR_TIME_FILTER_ID BIGINT;
+     DECLARE VAR_DIRECTION_FLAG INT;
+     DECLARE VAR_MAX_NEWEST_EXECUTION_ID BIGINT;
+     DECLARE DIRECTION_FUTURE INTEGER := 2;
+     DECLARE DIRECTION_HISTORY INTEGER := 1;
+     DECLARE  ADDREGAT_METHOD_KEY VARCHAR(30) := 'AGGREGATIONMETHOD';
+ 	 DECLARE  ADDREGAT_METHOD_SUM_VALUE VARCHAR(30) := 'SUM';
+ 	 DECLARE  ADDREGAT_METHOD_MEAN_VALUE VARCHAR(30) := 'MEAN';
+ 	 DECLARE ROW_COUNT INTEGER := 0;
+
+ 	 SELECT COUNT(1) INTO ROW_COUNT FROM :LOCATION_ID_LIST;
+
+ 	 IF ROW_COUNT = 0 THEN
+
+          LOCATION_ID_LIST =  SELECT LOCATION_ID AS ID
+          FROM "sap.tm.trp.db.pipeline::t_virtual_tree_location_info"
+          WHERE  VIRTUAL_PLAN_MODEL_ID = :IN_VIRTUAL_PLAN_MODEL_ID;
+
+ 	 END IF;
+
+ 	 --Get all the execution ids for the vritual plan
+
+     SQL_EXECUTION_IDS =  SELECT A.PLAN_MODEL_ID,
+                                 MAX(A.ID) AS NEWEST_EXECUTION_ID 
+                          FROM  "sap.tm.trp.db.pipeline::t_plan_execution" A
+		                  INNER JOIN "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" B
+		                      ON (A.PLAN_MODEL_ID = B.PERSISTED_PLAN_MODEL_ID)
+		                  WHERE B.VIRTUAL_PLAN_MODEL_ID = :IN_VIRTUAL_PLAN_MODEL_ID
+		                        AND (
+		                               (:IN_PP_EXECUTION_ID <> 0 AND  A.ID <=:IN_PP_EXECUTION_ID) OR 
+		                               (:IN_PP_EXECUTION_ID = 0 AND 1 =1)
+		                            )
+		                  GROUP BY A.PLAN_MODEL_ID;    
+
+	--get the max execution id (which is the reference persisted plan's newest execution id) among those newest execution id of each persisted plan
+	SELECT IFNULL(MAX(NEWEST_EXECUTION_ID),-1) INTO  VAR_MAX_NEWEST_EXECUTION_ID
+	FROM :SQL_EXECUTION_IDS;
+
+
+	 --Get the direction flag:
+	 -- 1: PAST, 2: FUTURE:
+	SELECT IFNULL(MAX(VALUE),0) INTO VAR_DIRECTION_FLAG
+	   FROM "sap.tm.trp.db.pipeline::t_execution_context" T1
+	   WHERE KEY = 'TIME_FILTER_DIRECTION' AND EXECUTION_ID = :VAR_MAX_NEWEST_EXECUTION_ID;
+
+	--Get the equip type of the virtual plan:	                  
+	                      
+    EQUIP_TYPE_IDS_OF_VP = SELECT EQUIP_TYPE_ID FROM "sap.tm.trp.db.pickupreturn::cv_auth_equip_code_by_planid"(PLACEHOLDER."$$IV_PLAN_ID$$"=>:IN_VIRTUAL_PLAN_MODEL_ID);                
+    
+    lt_t_pipeline_dataset = select * 
+                            from "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"
+                            where PLAN_EXECUTION_ID in (select NEWEST_EXECUTION_ID from :SQL_EXECUTION_IDS);
+    
+    lt_t_pipeline_output_dataset = select T1.*, T2.*
+				FROM :SQL_EXECUTION_IDS T1
+				--INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T2
+				INNER JOIN :lt_t_pipeline_dataset T2				
+				ON (T1.NEWEST_EXECUTION_ID = T2.PLAN_EXECUTION_ID);
+
+	lt_output_dataset_equi_loc = select A.*
+				FROM :lt_t_pipeline_output_dataset A
+				INNER JOIN :LOCATION_ID_LIST C ON (A.LOCATION_ID = C.ID)
+				INNER JOIN :EQUIP_TYPE_IDS_OF_VP F ON (A.EQUIP_TYPE_ID = F.EQUIP_TYPE_ID );
+
+
+	lt_output_dataset_newest_exec_id = SELECT  DISTINCT B.START_TIME,B.END_TIME,B.SEQUENCE,B.TIME_INTERVAL
+				FROM :lt_t_pipeline_output_dataset B
+				WHERE B.PLAN_EXECUTION_ID = :VAR_MAX_NEWEST_EXECUTION_ID; 
+
+
+	IF :VAR_DIRECTION_FLAG = :DIRECTION_FUTURE THEN
+
+
+        	--get the plan model which have no intersection with the reference execution;
+        	NO_DATA_PLAN_LIST = SELECT T0.PLAN_MODEL_ID
+        	FROM :SQL_EXECUTION_IDS T0
+        	LEFT OUTER JOIN
+        	(
+        		   --the execution which have intersection with the reference execution id:
+        		   SELECT DISTINCT T3.PLAN_MODEL_ID
+        		   FROM
+        		    (
+        		              SELECT DISTINCT PLAN_MODEL_ID,END_TIME
+        		              FROM :lt_t_pipeline_output_dataset
+
+        		     )T3
+        		   INNER JOIN
+        		   (
+        		      SELECT DISTINCT END_TIME
+        		      FROM :lt_output_dataset_newest_exec_id
+
+        		   )T4 ON (T3.END_TIME = T4.END_TIME)
+        	)T5 ON (T0.PLAN_MODEL_ID = T5.PLAN_MODEL_ID)
+        	WHERE T5.PLAN_MODEL_ID IS NULL;
+
+        	--Get the head execution result(not include the break down result) of the vp that have intersection with the reference execution
+          --becuase the drill down node do not have alert, so could not sum the alert of the drill down
+          --the alert of the virtual plan should be the alert of the reference (newest one) execution
+        --note: if it is the reference execution alert, becuase the reference execution may be the execution of pp1, it do not contain all the locations
+        --of the vp, so some location may have no alert. in order to solve the issue, following procedure calculate the newest execution for each location,
+        --no mater it is reference or not.
+
+        	HEAD_EXECUTION  = SELECT DISTINCT T1.PLAN_EXECUTION_ID,
+        	                                  T1.NODE_ID,
+        	                                  T1.OUTPUT_KEY,
+        	                                  T1.LOCATION_ID,
+        	                                  T1.LOCATION_NAME,
+        	                                  T1.EQUIP_TYPE_ID,
+        	                                  T1.EQUIP_TYPE_NAME AS EQUIP_NAME,        	                                 
+        	                                  T1.OUTPUT_VALUE,
+        	                                  --The start time, end time, sequence ,interval should be the reference execution's
+        	                                  T3.START_TIME,
+        	                                  T3.END_TIME,
+        	                                  T3.SEQUENCE,
+        	                                  T3.TIME_INTERVAL,
+        	                                  CASE 
+        	                                      WHEN T8.NODE_ID IS NULL THEN 0 
+        	                                      ELSE 1 
+        	                                  END AS HAS_DRILLDOWN_FLAG,
+        	                                  T1.value as drilldown_node_nav_type
+        	                   FROM (
+        	      --The execution results list for the VP (exclude the break down result):
+        	      SELECT A.*, B.value FROM :lt_output_dataset_equi_loc A
+        	      INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" D ON (A.NODE_ID = D.ID)
+        	       LEFT OUTER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node_misc_info" B
+                    ON (D.ID = B.NODE_ID AND LOWER(B.KEY) = 'navigationtype')
+        	      WHERE D.METADATA_NODE_ID = :IN_METADATA_NODE_ID --this criteria is used to exclude other node of the execution, also, it will exclude the breakdown of the input node
+        	   ) T1
+        	INNER JOIN (
+        	       --The reference execution: (T1.END_TIME = T3.END_TIME means the execution have intersection with the reference execution.)
+        	      SELECT  DISTINCT B.START_TIME,B.END_TIME,B.SEQUENCE,B.TIME_INTERVAL
+        	            FROM :lt_t_pipeline_output_dataset B
+				        INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" D ON (B.NODE_ID = D.ID)
+				        WHERE B.PLAN_EXECUTION_ID = :VAR_MAX_NEWEST_EXECUTION_ID
+				        AND D.METADATA_NODE_ID = :IN_METADATA_NODE_ID
+        	)T3 ON (T1.END_TIME = T3.END_TIME)        
+             LEFT OUTER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node_logical_hierarchy" T8 ON (T1.NODE_ID = T8.NODE_ID AND T1.OUTPUT_KEY= T8.OUTPUT_KEY);
+
+          --the newest execution head result for each location, equip,...
+        	HEAD_EXECUTION_NEWEST_TMP = SELECT T0.LOCATION_ID,
+        	                                   T0.EQUIP_TYPE_ID,
+        	                                   T0.OUTPUT_KEY,
+        	                                   T0.END_TIME,
+        	                                   MAX(T0.PLAN_EXECUTION_ID) AS MAX_EXECUTION_ID
+        	                           FROM :HEAD_EXECUTION T0
+        	                           GROUP BY T0.LOCATION_ID,T0.EQUIP_TYPE_ID,T0.OUTPUT_KEY,T0.END_TIME;
+
+
+        	HEAD_EXECUTION_NEWEST  = SELECT T1.PLAN_EXECUTION_ID,
+        	                                T1.NODE_ID,
+        	                                T1.OUTPUT_KEY,
+        	                                T1.LOCATION_ID,
+        	                                T1.LOCATION_NAME,
+        	                                T1.EQUIP_TYPE_ID,
+        	                                T1.EQUIP_NAME,        								   
+        	                                T1.OUTPUT_VALUE,
+        	                                T1.START_TIME,
+        	                                T1.END_TIME,
+        	                                T1.SEQUENCE,
+        	                                T1.TIME_INTERVAL,
+        	                                T1.HAS_DRILLDOWN_FLAG,
+        	                                T1.drilldown_node_nav_type
+        	                        FROM :HEAD_EXECUTION T1
+        	                        INNER JOIN :HEAD_EXECUTION_NEWEST_TMP T2              
+                                   ON (T1.LOCATION_ID = T2.LOCATION_ID AND 
+                                       T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID AND
+                                       T1.OUTPUT_KEY = T2.OUTPUT_KEY AND 
+                                       T1.END_TIME = T2.END_TIME AND 
+                                       T1.PLAN_EXECUTION_ID = T2.MAX_EXECUTION_ID);
+
+	ELSEIF :VAR_DIRECTION_FLAG = :DIRECTION_HISTORY THEN
+
+        	--get the plan model which have no intersection with the reference execution;
+        	NO_DATA_PLAN_LIST = SELECT T0.PLAN_MODEL_ID
+        	FROM :SQL_EXECUTION_IDS T0
+        	LEFT OUTER JOIN
+        	(
+        		   --the execution which have intersection with the reference execution id:
+        		   SELECT DISTINCT T3.PLAN_MODEL_ID
+        		   FROM
+        		    (
+        		              SELECT DISTINCT PLAN_MODEL_ID,START_TIME
+        		              FROM :lt_t_pipeline_output_dataset
+
+        		     )T3
+        		   INNER JOIN
+        		   (
+        		      SELECT DISTINCT START_TIME
+        		      FROM :lt_output_dataset_newest_exec_id
+        		   )T4 ON (T3.START_TIME = T4.START_TIME)
+        	)T5 ON (T0.PLAN_MODEL_ID = T5.PLAN_MODEL_ID)
+        	WHERE T5.PLAN_MODEL_ID IS NULL;
+
+        	--Get the head execution result(not include the break down result) of the vp that have intersection with the reference execution
+          --becuase the drill down node do not have alert, so could not sum the alert of the drill down
+          --the alert of the virtual plan should be the alert of the reference (newest one) execution
+        --note: if it is the reference execution alert, becuase the reference execution may be the execution of pp1, it do not contain all the locations
+        --of the vp, so some location may have no alert. in order to solve the issue, following procedure calculate the newest execution for each location,
+        --no mater it is reference or not.
+
+        	HEAD_EXECUTION  = SELECT DISTINCT T1.PLAN_EXECUTION_ID,
+        	                                  T1.NODE_ID,
+        	                                  T1.OUTPUT_KEY,
+        	                                  T1.LOCATION_ID,
+        	                                  T1.LOCATION_NAME,
+        	                                  T1.EQUIP_TYPE_ID,
+        	                                  T1.EQUIP_TYPE_NAME AS EQUIP_NAME,
+        	                                  T1.OUTPUT_VALUE,
+        	                                  --The start time, end time, sequence ,interval should be the reference execution's
+        	                                  T3.START_TIME,
+        	                                  T3.END_TIME,
+        	                                  T3.SEQUENCE,
+        	                                  T3.TIME_INTERVAL,
+        	                                  CASE 
+        	                                       WHEN T8.NODE_ID IS NULL THEN 0 
+        	                                       ELSE 1 
+        	                                  END AS HAS_DRILLDOWN_FLAG,
+        		                              T1.VALUE as drilldown_node_nav_type
+        	                  FROM (
+        	      --The execution results list for the VP (exclude the break down result):
+        	      SELECT A.*,E.value FROM :lt_output_dataset_equi_loc A
+        	      INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" D ON (A.NODE_ID = D.ID)
+        	       LEFT OUTER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node_misc_info" E
+                    ON (D.ID = E.NODE_ID AND LOWER(E.KEY) = 'navigationtype')
+        	      WHERE D.METADATA_NODE_ID = :IN_METADATA_NODE_ID --this criteria is used to exclude other node of the execution, also, it will exclude the breakdown of the input node
+        	   ) T1
+        	INNER JOIN (
+        	       --The reference execution: (T1.END_TIME = T3.END_TIME means the execution have intersection with the reference execution.)
+        	      SELECT  DISTINCT B.START_TIME,B.END_TIME,B.SEQUENCE,B.TIME_INTERVAL
+        	            FROM :lt_t_pipeline_output_dataset B
+				        INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" D ON (B.NODE_ID = D.ID)
+				        WHERE B.PLAN_EXECUTION_ID = :VAR_MAX_NEWEST_EXECUTION_ID
+				        AND D.METADATA_NODE_ID = :IN_METADATA_NODE_ID
+        	)T3 ON (T1.START_TIME = T3.START_TIME)      	
+            LEFT OUTER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node_logical_hierarchy" T8 ON (T1.NODE_ID = T8.NODE_ID AND T1.OUTPUT_KEY= T8.OUTPUT_KEY);
+
+
+        	HEAD_EXECUTION_NEWEST_TMP = SELECT T0.LOCATION_ID,
+        	                                   T0.EQUIP_TYPE_ID,
+        	                                   T0.OUTPUT_KEY,
+        	                                   T0.END_TIME,
+        	                                   MAX(T0.PLAN_EXECUTION_ID) AS MAX_EXECUTION_ID
+        	                           FROM :HEAD_EXECUTION T0
+        	                           GROUP BY T0.LOCATION_ID,
+        	                                    T0.EQUIP_TYPE_ID,
+        	                                    T0.OUTPUT_KEY,
+        	                                    T0.END_TIME;
+        	
+        	HEAD_EXECUTION_NEWEST  = SELECT T1.PLAN_EXECUTION_ID,
+        	                                T1.NODE_ID,
+        	                                T1.OUTPUT_KEY,
+        	                                T1.LOCATION_ID,
+        	                                T1.LOCATION_NAME,
+        	                                T1.EQUIP_TYPE_ID,
+        	                                T1.EQUIP_NAME,        	                                
+        	                                T1.OUTPUT_VALUE,
+        	                                T1.START_TIME,
+        	                                T1.END_TIME,
+        	                                T1.SEQUENCE,
+        	                                T1.TIME_INTERVAL,
+        	                                T1.HAS_DRILLDOWN_FLAG,
+        	                                T1.DRILLDOWN_NODE_NAV_TYPE
+        	                      FROM :HEAD_EXECUTION T1
+        	                      INNER JOIN  :HEAD_EXECUTION_NEWEST_TMP T2                
+                                ON (T1.LOCATION_ID = T2.LOCATION_ID AND 
+                                    T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID AND
+                                    T1.OUTPUT_KEY = T2.OUTPUT_KEY AND 
+                                    T1.END_TIME = T2.END_TIME AND 
+                                    T1.PLAN_EXECUTION_ID = T2.MAX_EXECUTION_ID);
+
+   ELSE
+            HEAD_EXECUTION_NEWEST = SELECT NULL AS PLAN_EXECUTION_ID,
+                                           NULL AS NODE_ID,
+                                           NULL AS OUTPUT_KEY,
+        	                               NULL AS LOCATION_ID,
+        	                               NULL AS LOCATION_NAME,
+        	                               NULL AS EQUIP_TYPE_ID,
+        	                               NULL AS EQUIP_NAME,        	                               
+							        	   NULL AS OUTPUT_VALUE,
+							        	   NULL AS START_TIME,
+							        	   NULL AS END_TIME,
+							        	   NULL AS SEQUENCE,
+							        	   NULL AS TIME_INTERVAL,
+							        	   NULL AS HAS_DRILLDOWN_FLAG,
+							        	   NULL AS DRILLDOWN_NODE_NAV_TYPE
+							        FROM DUMMY WHERE 1=0; 	   
+	END IF;
+
+	SQL1 =
+            SELECT 
+                LOCATION_ID,
+                LOCATION_NAME,
+                EQUIP_TYPE_ID,
+                EQUIP_NAME,
+                START_TIME,
+                END_TIME,
+                SEQUENCE,
+                OUTPUT_KEY,
+                OUTPUT_VALUE,                              
+                HAS_DRILLDOWN_FLAG,
+                TIME_INTERVAL               
+            FROM :HEAD_EXECUTION_NEWEST
+            ORDER BY 
+                LOCATION_ID,
+                EQUIP_TYPE_ID,
+                START_TIME,
+                SEQUENCE;
+        
+    SQL2 = 
+            SELECT
+                LOCATION_ID,
+                LOCATION_NAME,
+                EQUIP_TYPE_ID,
+                EQUIP_NAME,
+                START_TIME,
+                END_TIME,
+                SEQUENCE,
+                CASE  WHEN OUTPUT_KEY = 'DEMAND' 
+            	      THEN 'SUPPLY' 
+	            ELSE 'DEMAND' 
+    	        END  AS OUTPUT_KEY,
+    	        0 AS OUTPUT_VALUE,                             
+                HAS_DRILLDOWN_FLAG,
+                TIME_INTERVAL                
+            FROM :SQL1
+            UNION ALL
+            SELECT
+                LOCATION_ID,
+                LOCATION_NAME,
+                EQUIP_TYPE_ID,
+                EQUIP_NAME,
+                START_TIME,
+                END_TIME,
+                SEQUENCE,
+                OUTPUT_KEY,
+                OUTPUT_VALUE,                               
+                HAS_DRILLDOWN_FLAG,
+                TIME_INTERVAL                
+            FROM :SQL1;
+            
+ RESULT_OUTPUT = SELECT LOCATION_NAME,
+                        EQUIP_TYPE_ID,                        
+                        START_TIME,
+                        END_TIME,
+                        SEQUENCE,
+                        OUTPUT_KEY,
+                        SUM(OUTPUT_VALUE) AS OUTPUT_VALUE,                        
+                        HAS_DRILLDOWN_FLAG                        
+                    FROM :SQL2
+                    GROUP BY                        
+                        LOCATION_NAME,
+                        EQUIP_TYPE_ID,
+                        EQUIP_NAME,
+                        START_TIME,
+                        END_TIME,
+                        SEQUENCE,
+                        OUTPUT_KEY,                       
+                        HAS_DRILLDOWN_FLAG;                   
+                        
+END

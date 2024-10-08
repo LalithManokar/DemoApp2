@@ -1,0 +1,180 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_status_check_simulation_plan"(
+    IN SIMULATION_PLAN_ID BIGINT,
+    OUT MESSAGE VARCHAR(100)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+    DECLARE SD_PLAN_ID BIGINT;
+    DECLARE SP_SD_EXECUTION_ID INTEGER;
+    DECLARE SD_NEWEST_EXECUTION_ID INTEGER;
+    DECLARE PIPELINE_MODEL_COUNT INTEGER;
+    DECLARE CALCULATOIN_CHANGE_AFTER_THAN_SM_EXECUTION_ON_NUM INTEGER;
+    DECLARE COUNT_SD_EXECUTION INTEGER;
+    DECLARE EXECUTE_ON TIMESTAMP;
+    DECLARE VAR_NOT_EXPIRED_EXECUTION_NUM INTEGER :=0;
+    DECLARE VAR_NOT_EXPIRED_SIMULATION_EXCUTE_NUM INTEGER :=0;
+    DECLARE VAR_NOT_EXPIRED_NEWEST_EXECUTION_NUM INTEGER := 0;
+    DECLARE MAX_EXECUTION_ID BIGINT := -1;
+    DECLARE EXECUTE_ID_OF_THE_SMULATION_PLAN BIGINT := -2;
+    DECLARE EXECUTION_ID_COUNT INTEGER := 0;
+    DECLARE SP_SD_COUNT INTEGER;
+    DECLARE EXECUTE_ON_COUNT INTEGER;
+    DECLARE SD_COUNT INTEGER;
+
+    SELECT  SD_PLAN_ID  INTO  SD_PLAN_ID
+    FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan"
+    WHERE ID = :SIMULATION_PLAN_ID;
+
+    SELECT COUNT(1) INTO EXECUTION_ID_COUNT
+    FROM "sap.tm.trp.db.pipeline::t_plan_execution"
+    WHERE PLAN_MODEL_ID = :SD_PLAN_ID;
+
+    --newest execution sd ID
+    SELECT MAX(ID) INTO SD_NEWEST_EXECUTION_ID
+    FROM "sap.tm.trp.db.pipeline::t_plan_execution"
+    WHERE PLAN_MODEL_ID = :SD_PLAN_ID;
+    --all ids
+    SELECT  count(*) into SD_COUNT
+    FROM "sap.tm.trp.db.pipeline::t_plan_model" where ID = :SD_PLAN_ID ;
+
+    IF :SD_COUNT = 0 then
+         MESSAGE := 'MSG_SD_PLAN_DOES_NOT_EXIST';
+         RETURN;
+    end if;
+
+     select count(T1.ID) into SP_SD_COUNT FROM "sap.tm.trp.db.pipeline::t_plan_execution" T1
+    INNER JOIN "sap.tm.trp.db.planningcockpit::t_simulation_plan" T2 ON (T1.ID = T2.EXCUTE_ID)
+    WHERE T2.ID = :SIMULATION_PLAN_ID AND T2.SD_PLAN_ID = :SD_PLAN_ID;
+
+    if(:SP_SD_COUNT > 0)
+    then (SELECT T1.ID INTO SP_SD_EXECUTION_ID
+    FROM "sap.tm.trp.db.pipeline::t_plan_execution" T1
+    INNER JOIN "sap.tm.trp.db.planningcockpit::t_simulation_plan" T2 ON (T1.ID = T2.EXCUTE_ID)
+    WHERE T2.ID = :SIMULATION_PLAN_ID AND T2.SD_PLAN_ID = :SD_PLAN_ID);
+    end if;
+
+    --Check if all the execution ID of the SD plan of the SM plan is exist or not:
+    -- (if yes, should run the SD plan and use the runing result as the execution id of the SM)
+    IF :EXECUTION_ID_COUNT =0 THEN
+       MESSAGE := 'MSG_SD_EXCUTE_ID_OF_THE_SM_IS_NOT_EXISTS';
+       RETURN;
+    END IF;
+
+	--Check if the pipeline model of the plan is supply demand plan:
+	SELECT COUNT(*) INTO PIPELINE_MODEL_COUNT
+	FROM "sap.tm.trp.db.pipeline::t_plan_model" AS A
+	INNER JOIN "sap.tm.trp.db.pipeline::v_pipeline_has_supply_demand" AS B
+	ON A.PIPELINE_MODEL_ID = B.PIPELINE_MODEL_ID
+	WHERE B.HAS_SUPPLY_DEMAND = 0 AND A.ID = :SD_PLAN_ID;
+
+
+    SELECT COUNT(1) INTO CALCULATOIN_CHANGE_AFTER_THAN_SM_EXECUTION_ON_NUM
+    FROM
+    (
+	   SELECT T1.ID AS PLAN_MODEL_ID,
+	          CASE WHEN T1.CALMODEL_MODIFIED_ON > IFNULL(T2.LAST_MODIFIED_ON, T2.CREATE_ON)
+	            THEN T1.CALMODEL_MODIFIED_ON
+	            ELSE IFNULL(T2.LAST_MODIFIED_ON, T2.CREATE_ON)
+	          END AS MAX_MODIFY_TIME
+	   FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+	   INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_model" T2 ON (T1.PIPELINE_MODEL_ID = T2.ID)
+	   WHERE T1.ID = :SD_PLAN_ID
+    )T3
+    INNER JOIN
+    (
+
+       SELECT T2.SD_PLAN_ID,T1.EXECUTE_ON
+       FROM "sap.tm.trp.db.pipeline::t_plan_execution" T1
+       INNER JOIN "sap.tm.trp.db.planningcockpit::t_simulation_plan" T2 ON (T1.ID = T2.EXCUTE_ID)
+       WHERE T2.ID = :SIMULATION_PLAN_ID AND T2.SD_PLAN_ID = :SD_PLAN_ID
+
+    )T4 ON (T3.PLAN_MODEL_ID = T4.SD_PLAN_ID)
+    WHERE T4.EXECUTE_ON <= T3.MAX_MODIFY_TIME;
+
+   --Check if the plan model's calculation model has been changed after the execution which execution_id = the excute_id:
+   IF :PIPELINE_MODEL_COUNT > 0 THEN
+      MESSAGE := 'MSG_CALC_PLAN_NOT_VALID';
+      --Critical error, need return.
+      RETURN;
+   ELSE
+     IF :CALCULATOIN_CHANGE_AFTER_THAN_SM_EXECUTION_ON_NUM > 0 AND :SP_SD_EXECUTION_ID >= :SD_NEWEST_EXECUTION_ID THEN
+       MESSAGE := 'MSG_CALC_PLAN_BEEN_CHANGED';
+
+     END IF;
+   END IF;
+
+   IF :MESSAGE IS NULL OR :MESSAGE = '' THEN
+            --Get the newest execution ID of the plan
+			CALL "sap.tm.trp.db.planningcockpit::p_get_newest_execution_id_for_simulation_plan"(:SIMULATION_PLAN_ID,MAX_EXECUTION_ID);
+
+			SELECT IFNULL(MAX(EXCUTE_ID),-2) INTO EXECUTE_ID_OF_THE_SMULATION_PLAN
+			FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan"
+		    WHERE ID = :SIMULATION_PLAN_ID;
+
+		      SELECT COUNT(1) INTO VAR_NOT_EXPIRED_SIMULATION_EXCUTE_NUM
+		        FROM
+		        (
+			        SELECT MAX(T1.END_TIME) AS MAX_END_TIME
+		            FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T1
+		            WHERE T1.PLAN_EXECUTION_ID = :EXECUTE_ID_OF_THE_SMULATION_PLAN
+	            )T2
+	            WHERE T2.MAX_END_TIME > CURRENT_UTCTIMESTAMP;
+	--add new code
+	--EXECUTE_ID_OF_THE_SMULATION_PLAN -- execution_id existing in the simulationplan
+	--MAX_EXECUTION_ID --- latest execution id
+		    IF :MAX_EXECUTION_ID = :EXECUTE_ID_OF_THE_SMULATION_PLAN  THEN
+	            --The execution of the simulation is the newest execution and it is not expired:
+	            IF :VAR_NOT_EXPIRED_SIMULATION_EXCUTE_NUM >0 THEN
+	            --SIMULATION_PLAN_VALID:
+	               MESSAGE := 'MSG_SM_EXCUTE_IS_NEWEST_AND_DO_NOT_NEED_ROLL_FORWARD';
+	            ELSE
+	              --The execution of the simulation is expired:
+	              MESSAGE := 'MSG_SM_EXCUTE_IS_NEWEST_AND_ONLY_DISPLAY_ALLOWED';
+	            END IF;
+		    ELSE
+		       --The simulation execution is not the newest execution:
+		        select count(EXECUTE_ON) into EXECUTE_ON_COUNT from "sap.tm.trp.db.pipeline::t_plan_execution" where id = :EXECUTE_ID_OF_THE_SMULATION_PLAN;
+		       IF :EXECUTE_ON_COUNT > 0 then
+		             select EXECUTE_ON into EXECUTE_ON from "sap.tm.trp.db.pipeline::t_plan_execution" where id = :EXECUTE_ID_OF_THE_SMULATION_PLAN;
+		       END IF;
+
+		       select count(*) into  COUNT_SD_EXECUTION  from "sap.tm.trp.db.pipeline::t_plan_execution" T1 where T1.EXECUTE_ON < :EXECUTE_ON;
+
+
+		       IF :VAR_NOT_EXPIRED_SIMULATION_EXCUTE_NUM >0 then
+		            IF :COUNT_SD_EXECUTION = 0 THEN
+		          --simulation execution is not expired:
+		                MESSAGE := 'MSG_SM_EXCUTE_IS_NOT_NEWEST_AND_NEED_USER_JUDGE_ROLL_FORWARD_PREV_NOT_EXIST';
+
+		            ELSE
+		                  MESSAGE := 'MSG_SM_EXCUTE_IS_NOT_NEWEST_AND_NEED_USER_JUDGE_ROLL_FORWARD_PREV_EXIST';
+
+		           END IF;
+
+		       ELSE
+			         --simulation execution is expired :
+			        SELECT COUNT(1) INTO VAR_NOT_EXPIRED_NEWEST_EXECUTION_NUM
+			        FROM
+			        (
+				        SELECT MAX(T1.END_TIME) AS MAX_END_TIME
+			            FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T1
+			            WHERE T1.PLAN_EXECUTION_ID = :MAX_EXECUTION_ID
+		            )T2
+		            WHERE T2.MAX_END_TIME > CURRENT_UTCTIMESTAMP;
+
+				    IF :VAR_NOT_EXPIRED_NEWEST_EXECUTION_NUM >0 THEN
+				       --newest execution is not expired:
+				       MESSAGE := 'MSG_SM_EXCUTE_IS_NOT_NEWEST_AND_NEED_FORCE_ROLL_FORWARD';
+				    ELSE
+				      --newest execution is expired:
+			         MESSAGE := 'MSG_SM_EXCUTE_IS_NOT_NEWEST_AND_NEED_DISPLAY_ONLY';
+			       END IF;
+		       END IF;
+
+		    END IF;
+  END IF ;
+END;

@@ -1,0 +1,41 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_get_division_for_crtedit_postalcode_zone_hull" (
+    IN IN_POLYGON CLOB,
+    IN SELECTED_IDS "sap.tm.trp.db.systemmanagement::tt_division_postal_codes",
+    --20150108 change dynamic sql to normal
+    OUT DIVISION_POINT "sap.tm.trp.db.systemmanagement::tt_division_point",
+    OUT OUT_LOCATIONS_XPOS_YPOS_INVALID  "sap.tm.trp.db.pipeline::tt_location_info_list" 
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+    DECLARE tmp_multipoints CLOB;
+    DECLARE loc_no INTEGER;
+    DECLARE has_output INTEGER;
+    
+    tmp1 = SELECT NULL AS ID FROM DUMMY;
+    tmp2 = SELECT NULL AS COUNTRY_CODE,NULL AS STATE_CODE FROM DUMMY;
+    tmp3 = SELECT NULL AS ZONEID FROM DUMMY; 
+    
+     OUT_LOCATIONS_XPOS_YPOS_INVALID =
+      SELECT T2.ID AS LOCATION_ID,T2.NAME AS LOCATION_NAME, T2.XPOS, T2.YPOS
+      FROM :SELECTED_IDS T1 
+	  INNER JOIN "sap.tm.trp.db.systemmanagement.location::v_location_ui" T2 ON (T1.COUNTRY_CODE = T2.COUNTRY_CODE AND T2.POSTAL_CODE BETWEEN T1.POSTAL_CODE_FROM  AND T1.POSTAL_CODE_TO)
+	  WHERE (T2.XPOS IS NULL OR T2.YPOS IS NULL) OR (ABS(T2.XPOS) + ABS(T2.YPOS) =0);
+	  
+	     
+    CALL "sap.tm.trp.db.systemmanagement::p_get_boundary_for_zone"(3,:tmp1,:tmp2,:SELECTED_IDS,:tmp3,tmp_multipoints_tab);      
+    
+    SELECT COUNT(1) INTO has_output FROM :tmp_multipoints_tab;
+    
+    IF has_output != 0 THEN
+    
+	    SELECT GEOTEXT,NUM INTO tmp_multipoints,loc_no FROM :tmp_multipoints_tab;   
+	   
+	    DIVISION_POINT = SELECT NEW ST_MultiPoint(TO_VARCHAR(:tmp_multipoints) ).ST_ConvexHull().ST_AsText() AS BOUNDARY,  TO_VARCHAR( :loc_no)  AS LOCATION_NO 
+	            FROM DUMMY WHERE NEW ST_MultiPoint(TO_VARCHAR( :tmp_multipoints) ).ST_INTERSECTS(ST_GeomFromText( :IN_POLYGON) ) = 1 ;
+	ELSE
+		DIVISION_POINT = SELECT NULL AS BOUNDARY, NULL AS LOCATION_NO FROM DUMMY;     
+    END IF;
+END;

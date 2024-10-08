@@ -1,0 +1,14 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "tracking SD output data without equip type";
+table.columns = [
+  {name = "GEO_ID"; sqlType = VARCHAR; length = 50;},
+  {name = "GEO_NAME"; sqlType = VARCHAR; length = 100;},
+  {name = "START_TIME"; sqlType = TIMESTAMP;},
+  {name = "END_TIME"; sqlType = TIMESTAMP;},  
+  {name = "SEQUENCE"; sqlType = INTEGER;}, 
+  {name = "TIME_INTERVAL_ID"; sqlType = BIGINT;},
+  {name = "OUTPUT_KEY"; sqlType = VARCHAR; length = 50;}, 
+  {name = "OUTPUT_VALUE"; sqlType = BIGINT;},   
+  {name = "UNIT"; sqlType = VARCHAR; length = 20;}
+];

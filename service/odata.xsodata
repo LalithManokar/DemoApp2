@@ -1,0 +1,2327 @@
+service {
+
+	// Application Privilege
+	// TODO: is it used?
+	"sap.tm.trp.db.systemmanagement.user::cv_effective_application_privileges" as "EffectiveApplicationPrivileges"
+		keys ("APPLICATION_PRIIVILEGE")
+		create forbidden update forbidden delete forbidden;
+
+	//Job Details
+    "sap.tm.trp.db.job::cv_job_log_detail" as "JobLogDetails"
+		keys ("SCHEDULE_ID")
+		create forbidden update forbidden delete forbidden;
+    
+   
+	//Inactive Jobs
+    "sap.tm.trp.db.job::cv_inactive_plans_jobs" as "InactiveJobs"
+        keys ("MODEL_ID","MODEL_NAME")
+		create forbidden update forbidden delete forbidden;
+
+	 //Application log Info
+    "sap.tm.trp.db.job::v_applog_info" as "ApplogInfo"
+     keys ("ID")
+	create forbidden update forbidden delete forbidden;
+	
+
+	// Where Used List
+	"sap.tm.trp.db.whereusedlist::cv_get_used_list" as "WhereUsedObjects"
+		keys generate local "ID"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+		
+    // =========================================================================
+	// Common
+	// =========================================================================
+    "sap.tm.trp.db.common::v_consolidated_fields" as "ConsolidatedFields" key generate local "FIELD_ID"
+        create forbidden update forbidden delete forbidden;
+
+    "sap.tm.trp.db.common::v_ext_fields" as "ExtendedFields" key("ID")
+        create forbidden update forbidden delete forbidden;
+        
+    "sap.tm.trp.db.common::v_configurable_fields_ext" as "ConfigurableFields" key generate local "FIELD_ID"
+        create forbidden update forbidden delete forbidden;
+	// =========================================================================
+	// Map Provider
+	// =========================================================================
+
+	// MapProviders
+	/*
+	"sap.tm.trp.db.systemmanagement::t_map_provider" as "MapProviders"
+		navigates (
+			"MapProvider_MapProviderURLs" as "MapProviderURLs"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// MapProvider ->  MapProviderURLs
+	association "MapProvider_MapProviderURLs"
+		principal "MapProviders"("ID") multiplicity "1"
+		dependent "MapProviderURLs"("PROVIDER_ID") multiplicity "*";
+
+	// Map Provider URL
+	"sap.tm.trp.db.systemmanagement::t_map_provider_url" as "MapProviderURLs";
+*/
+
+	// =========================================================================
+	// Location
+	// =========================================================================
+
+	// Locations
+	"sap.tm.trp.db.systemmanagement.location::cv_role_check_location_ui" as "Locations" key ("ID")
+		create forbidden update forbidden delete forbidden;
+		
+		
+	// Locations With Stock Setting Info
+	"sap.tm.trp.db.systemmanagement.location::cv_get_locations_with_stocksettings" as "LocationsWithStockSetting" key ("ID")
+		navigates (
+			"LocationsWithStockSetting_StockSettings" as "StockSettings",
+			"LocationsWithStockSetting_ResourceStockThresholds" as "ResourceStockThresholds"
+		)
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+	// LocationsWithStockSetting -> StockSettings
+	association "LocationsWithStockSetting_StockSettings"
+		principal "LocationsWithStockSetting"("ID","RESOURCE_CATEGORY") multiplicity "1"
+		dependent "StockSettingsLocation"("ID","RESOURCE_CATEGORY") multiplicity "*";
+
+	// LocationsWithStockSetting -> ResourceStockThresholds
+	association "LocationsWithStockSetting_ResourceStockThresholds"
+		principal "LocationsWithStockSetting"("ID","RESOURCE_CATEGORY") multiplicity "1"
+		dependent "ResourceStockThresholdsLocation"("ID","RESOURCE_CATEGORY") multiplicity "*";
+
+	// =========================================================================
+	// Zone
+	// =========================================================================
+
+	// ------------------------ All Zones --------------------------------------
+
+	// All Zones
+	"sap.tm.trp.db.systemmanagement.location::cv_role_check_all_zone_ui" as "Zones" key ("ID")
+	//"sap.tm.trp.db.systemmanagement.location::v_all_zone_ui" as "Zones" key ("ID")
+		navigates (
+			"Zone_Locations" as "Locations",
+			"Zone_AdminDivisions" as "AdminDivisions",
+			"Zone_PostalCodes" as "PostalCodes",
+			"Zone_PrimaryLocation" as "PrimaryLocation",
+			"Zone_AllLocation" as "AllLocationOfZone",
+			"Zone_Coordinate" as "Coordinate"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// Zone -> Locations
+	association "Zone_Locations"
+		principal "Zones"("ID") multiplicity "1"
+		dependent "Locations"("ID") multiplicity "*"
+		over "sap.tm.trp.db.semantic.location::v_zone_location" principal ("ZONE_ID") dependent ("LOCATION_ID");
+
+	// Zone -> AdminDivisions
+	association "Zone_AdminDivisions"
+		principal "Zones"("ID") multiplicity "1"
+		dependent "AdminDivisions"("COUNTRY_CODE", "REGION_CODE") multiplicity "*"
+		over "sap.tm.trp.db.semantic.location::v_zone_admin_gis" principal ("ZONE_ID") dependent ("COUNTRY_CODE", "STATE_CODE");
+
+	"sap.tm.trp.db.systemmanagement.location::v_admin_division" as "AdminDivisions" key ("COUNTRY_CODE", "REGION_CODE")
+		create forbidden update forbidden delete forbidden;
+
+	// Zone -> PostalCodes
+	association "Zone_PostalCodes"
+		principal "Zones"("ID") multiplicity "1"
+		dependent "PostalCodes"("ZONE_ID") multiplicity "*";
+
+	"sap.tm.trp.db.systemmanagement.location::v_postal_code" as "PostalCodes" key ("ZONE_ID", "COUNTER")
+		create forbidden update forbidden delete forbidden;
+
+	// Zone -> PrimaryLocation
+	association "Zone_PrimaryLocation"
+		principal "Zones"("NAME") multiplicity "1"
+		dependent "ZonePrimaryLocations"("ZONE_NAME") multiplicity "1";
+
+	"sap.tm.trp.db.systemmanagement.location::v_zone_primary_location" as "ZonePrimaryLocations" key ("ZONE_NAME")
+		create forbidden update forbidden delete forbidden;
+		
+	// Zone -> AllLocationOfZone
+	association "Zone_AllLocation"
+		principal "Zones"("ID") multiplicity "1"
+		dependent "ZoneAllLocationBoundary"("ZONE_ID") multiplicity "*";
+		
+		"sap.tm.trp.db.systemmanagement.location::v_zone_location_for_boundary" as "ZoneAllLocationBoundary" key ("ZONE_ID","LOCATION_ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Zone -> Coordinate
+	association "Zone_Coordinate"
+		principal "Zones"("ID") multiplicity "1"
+		dependent "ZoneCoordinates"("ZONE_ID") multiplicity "1";
+   /*
+	"sap.tm.trp.db.systemmanagement.location::v_zone_coordinate" as "ZoneCoordinates" key ("ZONE_ID")
+		create forbidden update forbidden delete forbidden;
+		*/
+	"sap.tm.trp.db.systemmanagement.location::cv_role_check_zone_coordinate" as "ZoneCoordinates" key ("ZONE_ID")
+		create forbidden update forbidden delete forbidden;
+
+
+	// ----------------------- User Regions ------------------------------------
+
+	// Locations of Regions, used in primary location suggestion list
+	/*
+	"sap.tm.trp.db.systemmanagement.location::cv_role_check_region_location_ui" as "RegionLocationUI" key ("ROOT_ID", "LOCATION_ID")
+		create forbidden update forbidden delete forbidden;
+		*/
+
+
+	// User Regions
+	"sap.tm.trp.db.systemmanagement.location::cv_role_check_region_ui" as "ActiveRegions" key ("ID")
+		create forbidden update forbidden delete forbidden;
+	
+		
+	// Region with stock setting info
+	"sap.tm.trp.db.systemmanagement.location::cv_get_regions_with_stocksettings" as "ActiveRegionsWithStockSettings" key ("ID")
+		navigates (
+			"ActiveRegionsWithStockSettings_StockSettings" as "StockSettings",
+			"ActiveRegionsWithStockSettings_ResourceStockThresholds" as "ResourceStockThresholds"
+		)
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+	// ActiveRegionsWithStockSettings -> StockSettings
+	association "ActiveRegionsWithStockSettings_StockSettings"
+		principal "ActiveRegionsWithStockSettings"("ID","RESOURCE_CATEGORY") multiplicity "1"
+		dependent "StockSettingsRegion"("ID","RESOURCE_CATEGORY") multiplicity "*";
+
+	// ActiveRegionsWithStockSettings -> ResourceStockThresholds
+	association "ActiveRegionsWithStockSettings_ResourceStockThresholds"
+		principal "ActiveRegionsWithStockSettings"("ID","RESOURCE_CATEGORY") multiplicity "1"
+		dependent "ResourceStockThresholdsRegion"("ID","RESOURCE_CATEGORY") multiplicity "*";
+
+	
+
+	// ----------------------- User Zones --------------------------------------
+
+	// User Zones
+	//"sap.tm.trp.db.systemmanagement.location::v_zone_ui" as "ActiveZones" key ("ID")
+	"sap.tm.trp.db.systemmanagement.location::cv_role_check_zone_ui" as "ActiveZones" key ("ID")
+		navigates (
+			"ActiveZone_Locations" as "Locations",
+			"ActiveZone_AdminDivisions" as "AdminDivisions",
+			"ActiveZone_PostalCodes" as "PostalCodes",
+			"ActiveZone_PrimaryLocation" as "PrimaryLocation",
+			"ActiveZone_Coordinate" as "Coordinate"
+		)
+		create forbidden update forbidden delete forbidden;
+
+
+
+	// ActiveZone -> Locations
+	association "ActiveZone_Locations"
+		principal "ActiveZones"("ID") multiplicity "1"
+		dependent "Locations"("ID") multiplicity "*"
+		over "sap.tm.trp.db.semantic.location::v_zone_location" principal ("ZONE_ID") dependent ("LOCATION_ID");
+
+	// ActiveZone -> AdminDivisions
+	association "ActiveZone_AdminDivisions"
+		principal "ActiveZones"("ID") multiplicity "1"
+		dependent "AdminDivisions"("COUNTRY_CODE", "REGION_CODE") multiplicity "*"
+		over "sap.tm.trp.db.semantic.location::v_zone_admin_gis" principal ("ZONE_ID") dependent ("COUNTRY_CODE", "STATE_CODE");
+
+	// ActiveZone -> PostalCodes
+	association "ActiveZone_PostalCodes"
+		principal "ActiveZones"("ID") multiplicity "1"
+		dependent "PostalCodes"("ZONE_ID") multiplicity "*";
+
+	// ActiveZone -> PrimaryLocation
+	association "ActiveZone_PrimaryLocation"
+		principal "ActiveZones"("NAME") multiplicity "1"
+		dependent "ZonePrimaryLocations"("ZONE_NAME") multiplicity "1";
+
+	// ActiveZone -> Coordinate
+	association "ActiveZone_Coordinate"
+		principal "ActiveZones"("ID") multiplicity "1"
+		dependent "ZoneCoordinates"("ZONE_ID") multiplicity "1";
+
+
+	// =========================================================================
+	// Hierarchy
+	// =========================================================================
+
+	// Hierarchies
+	"sap.tm.trp.db.semantic.location::v_zone_hierarchy" as "Hierarchies" key ("ID")
+		navigates (
+			"Hierarchy_Zones" as "Zones",
+			"Hierarchy_HierarchyZones" as "HierarchyZones",
+			"Hierarchy_TopHierarchyZones" as "TopHierarchyZones"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// Hierarchy -> Zones
+	association "Hierarchy_Zones"
+		principal "Hierarchies"("ID") multiplicity "1"
+		dependent "Zones"("ID") multiplicity "*"
+		over "sap.tm.trp.db.semantic.location::v_hierarchy_item" principal ("ZONE_HIERARCHY_ID") dependent ("ZONE_ID");
+
+	// Hierarchy -> HierarchyZones
+	association "Hierarchy_HierarchyZones"
+		principal "Hierarchies"("ID") multiplicity "1"
+		dependent "HierarchyZones"("HIERARCHY_ID") multiplicity "*";
+
+	// Hierarchy -> TopHierarchyZones
+	association "Hierarchy_TopHierarchyZones"
+		principal "Hierarchies"("ID") multiplicity "1"
+		dependent "HierarchyZones"("HIERARCHY_ID", "ZONE_ID") multiplicity "*"
+		over "sap.tm.trp.db.systemmanagement.location::v_region_top_hierarchy_zone" principal ("ZONE_HIERARCHY_ID") dependent ("ZONE_HIERARCHY_ID", "ZONE_ID");
+
+
+	// HierarchyZones
+	"sap.tm.trp.db.systemmanagement.location::v_hierarchy_zone_ui" as "HierarchyZones" key ("ZONE_ID", "PARENT_ZONE_ID")
+		navigates (
+			"HierarchyZone_Children" as "Children" from principal,
+			"HierarchyZone_Parent" as "Parent" from principal,
+			"HierarchyZone_Zone" as "Zone",
+			"HierarchyZone_ParentZone" as "ParentZone"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// HierarchyZone -> Children
+	association "HierarchyZone_Children"
+		principal "HierarchyZones"("ZONE_ID") multiplicity "1"
+		dependent "HierarchyZones"("PARENT_ZONE_ID") multiplicity "*";
+
+	// HierarchyZone -> Parent
+	association "HierarchyZone_Parent"
+		principal "HierarchyZones"("PARENT_ZONE_ID") multiplicity "1"
+		dependent "HierarchyZones"("ZONE_ID") multiplicity "1";
+
+	// HierarchyZone -> Zone
+	association "HierarchyZone_Zone"
+		principal "HierarchyZones"("ZONE_ID") multiplicity "1"
+		dependent "Zones"("ID") multiplicity "1";
+
+	// HierarchyZone -> ParentZone
+	association "HierarchyZone_ParentZone"
+		principal "HierarchyZones"("PARENT_ZONE_ID") multiplicity "1"
+		dependent "Zones"("ID") multiplicity "1";
+
+
+	//-------------------------------- Country -----------------------------
+
+	// Countries
+	"sap.tm.trp.db.systemmanagement.location::v_country_ui" as "Countries" key ("CODE")
+		navigates (
+			"Country_States" as "States",
+			"Country_Cities" as "Cities",
+			"Country_AdminDivisions" as "AdminDivisions",
+			"Country_Locations" as "Locations"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// Country -> States
+	association "Country_States"
+		principal "Countries"("CODE") multiplicity "1"
+		dependent "States"("COUNTRY_CODE") multiplicity "*";
+
+	// Country -> Cities
+	association "Country_Cities"
+		principal "Countries"("CODE") multiplicity "1"
+		dependent "Cities"("COUNTRY_CODE") multiplicity "*";
+
+	// Country -> AdminDivisions
+	association "Country_AdminDivisions"
+		principal "Countries"("CODE") multiplicity "1"
+		dependent "AdminDivisions"("COUNTRY_CODE") multiplicity "*";
+
+	// Country -> Locations
+	association "Country_Locations"
+		principal "Countries"("CODE") multiplicity "1"
+		dependent "Locations"("COUNTRY_CODE") multiplicity "*";
+
+
+	//-------------------------------- State -----------------------------
+
+	// States
+	"sap.tm.trp.db.systemmanagement.location::v_state_ui" as "States" key ("COUNTRY_CODE", "CODE")
+		navigates (
+			"State_Country" as "Country",
+			"State_Cities" as "Cities",
+			"State_Locations" as "Locations"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// State -> Country
+	association "State_Country"
+		principal "States"("COUNTRY_CODE") multiplicity "1"
+		dependent "Countries"("CODE") multiplicity "1";
+
+	// State -> Cities
+	association "State_Cities"
+		principal "States"("CODE") multiplicity "1"
+		dependent "Cities"("STATE_CODE") multiplicity "*";
+
+	// State -> Locations
+	association "State_Locations"
+		principal "States"("CODE", "COUNTRY_CODE") multiplicity "1"
+		dependent "Locations"("REGION_CODE", "COUNTRY_CODE") multiplicity "*";
+
+
+	//-------------------------------- City -----------------------------
+
+	// Cities
+	"sap.tm.trp.db.systemmanagement.location::v_city_ui" as "Cities" key ("COUNTRY_CODE", "CODE")
+		navigates (
+			"City_Country" as "Country",
+			"City_State" as "State",
+			"City_Locations" as "Locations"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// City -> Country
+	association "City_Country"
+		principal "Cities"("COUNTRY_CODE") multiplicity "1"
+		dependent "Countries"("CODE") multiplicity "1";
+
+	// City -> State
+	association "City_State"
+		principal "Cities"("STATE_CODE") multiplicity "1"
+		dependent "States"("CODE") multiplicity "*";
+
+	// City -> Locations
+	association "City_Locations"
+		principal "Cities"("CODE", "COUNTRY_CODE") multiplicity "1"
+		dependent "Locations"("CITY_ID", "COUNTRY_CODE") multiplicity "*";
+
+
+	// =========================================================================
+	// Roles
+	// =========================================================================
+
+	// Roles
+	"sap.tm.trp.db.systemmanagement.user::v_role" as "Roles" key ("ID")
+		navigates (
+			"Roles_Locations" as "Locations",
+			//"Roles_Zones" as "Zones",
+			"Roles_Regions" as "Regions",
+			"Roles_TopHierarchyZones" as "TopHierarchyZones",
+			"Roles_ResourcesTypeCategory" as "ResourcesTypeCategory"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// Role -> Locations
+	association "Roles_Locations"
+		principal "Roles"("ID") multiplicity "1"
+		dependent "Locations"("ID") multiplicity "*"
+		over "sap.tm.trp.db.systemmanagement.user::t_role_location" principal ("ROLE_ID") dependent ("LOCATION_ID");
+
+	// Role -> Zones
+	/*association "Roles_Zones"
+		principal "Roles"("ID") multiplicity "1"
+		dependent "Zones"("ID") multiplicity "*"
+		over "sap.tm.trp.db.systemmanagement.user::t_role_zone" principal ("ROLE_ID") dependent ("ZONE_ID");
+    */
+    // Role -> Regions
+	association "Roles_Regions"
+		principal "Roles"("ID") multiplicity "1"
+		dependent "ActiveRegions"("ID") multiplicity "*"
+		over "sap.tm.trp.db.systemmanagement.user::t_role_region" principal ("ROLE_ID") dependent ("ROOT_ID");
+    
+    
+	// Role -> TopHierarchyZones (for Regions)
+	association "Roles_TopHierarchyZones"
+		principal "Roles"("ID") multiplicity "1"
+		dependent "HierarchyZones"("ZONE_ID") multiplicity "*"
+		over "sap.tm.trp.db.systemmanagement.user::t_role_region" principal ("ROLE_ID") dependent ("ROOT_ID");
+
+    //ResourcesTypeCategory
+    "sap.tm.trp.db.systemmanagement.user::cv_resource_type_category" as "ResourcesTypeCategory" key ("ID", "RES_CATEGORY")
+    create forbidden update forbidden delete forbidden;
+
+    // Role -> ResourcesWithCategory
+	association "Roles_ResourcesTypeCategory"
+		principal "Roles"("ID") multiplicity "1"
+		dependent "ResourcesTypeCategory"("ID", "RES_CATEGORY") multiplicity "*"
+		over "sap.tm.trp.db.systemmanagement.user::t_role_resource" principal ("ROLE_ID") dependent ("RES_TYPE", "RES_CATEGORY");
+
+	// =========================================================================
+	// Users
+	// =========================================================================
+
+	// Users
+	"sap.tm.trp.db.systemmanagement.user::v_user" as "Users" key ("ID")
+		navigates (
+			"User_Roles" as "Roles",
+			"User_Hierarchy" as "Hierarchy"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// User -> Roles
+	association "User_Roles"
+		principal "Users"("ID") multiplicity "1"
+		dependent "Roles"("ID") multiplicity "*"
+		over "sap.tm.trp.db.systemmanagement.user::v_role_user" principal ("USER_ID") dependent ("ID");
+
+	// User -> Hierarchy
+	association "User_Hierarchy"
+		principal "Users"("ID") multiplicity "1"
+		dependent "Hierarchies"("ID") multiplicity "1"
+		over "sap.tm.trp.db.systemmanagement::v_user_hierarchy" principal ("USER_ID") dependent ("HIERARCHY_ID");
+
+	// Languages
+	"sap.tm.trp.db.semantic.common::v_language" as "Languages" key ("CODE");
+
+
+	//----------- User Settings ------------------------------------------------
+
+	/*
+	"sap.tm.trp.db.systemmanagement.user::at_time_format" as "TimeFormats" key ("DOMVALUE_L")
+		create forbidden update forbidden delete forbidden;
+
+	"sap.tm.trp.db.systemmanagement.user::at_decimal_notation" as "DecimalNotations" key ("DOMVALUE_L")
+		create forbidden update forbidden delete forbidden;
+
+	"sap.tm.trp.db.systemmanagement.user::at_date_format" as "DateFormats" key ("DOMVALUE_L")
+		create forbidden update forbidden delete forbidden;
+
+	"sap.tm.trp.db.systemmanagement.user::at_temperature_unit" as "TemperatureUnits" key ("MSEHI")
+		create forbidden update forbidden delete forbidden;
+
+	"sap.tm.trp.db.systemmanagement.user::at_weight_unit" as "WeightUnits" key ("MSEHI")
+		create forbidden update forbidden delete forbidden;
+
+	"sap.tm.trp.db.systemmanagement.user::at_distance_unit" as "LengthUnits" key ("MSEHI")
+		create forbidden update forbidden delete forbidden;
+
+	"sap.tm.trp.db.systemmanagement.user::at_volume_unit" as "VolumeUnits" key ("MSEHI")
+		create forbidden update forbidden delete forbidden;
+	*/
+
+	"sap.tm.trp.db.systemmanagement.user::v_time_format" as "TimeFormats" key ("ID")
+		create forbidden update forbidden delete forbidden;
+
+	"sap.tm.trp.db.systemmanagement.user::v_decimal_notation" as "DecimalNotations" key ("ID")
+		create forbidden update forbidden delete forbidden;
+
+	"sap.tm.trp.db.systemmanagement.user::v_date_format" as "DateFormats" key ("ID")
+		create forbidden update forbidden delete forbidden;
+
+	"sap.tm.trp.db.systemmanagement.user::v_temperature_unit" as "TemperatureUnits" key ("CODE")
+		create forbidden update forbidden delete forbidden;
+
+	"sap.tm.trp.db.systemmanagement.user::v_weight_unit" as "WeightUnits" key ("CODE")
+		create forbidden update forbidden delete forbidden;
+
+	"sap.tm.trp.db.systemmanagement.user::v_distance_unit" as "LengthUnits" key ("CODE")
+		create forbidden update forbidden delete forbidden;
+
+	"sap.tm.trp.db.systemmanagement.user::v_volume_unit" as "VolumeUnits" key ("CODE")
+		create forbidden update forbidden delete forbidden;
+
+	"sap.tm.trp.db.systemmanagement.user::v_time_zone" as "TimeZones" keys ("CODE")
+		create forbidden update forbidden delete forbidden;
+
+	/*
+	// Timezones with Daylight Saving on fixed and variable dates
+	"sap.tm.trp.db.systemmanagement::cv_timezone" as "TimeZones" keys ("ID")
+		navigates (
+			"Timezone_Daylight_Fixed" as "DaylightSavingFixed",
+			"Timezone_Daylight_Variable" as "DaylightSavingVariable"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	"sap.tm.trp.db.systemmanagement::cv_timezone_dst_fixed" as "TimezoneDaylightSavingFixedDate" keys ("DSTRULE")
+		create forbidden update forbidden delete forbidden;
+
+	"sap.tm.trp.db.systemmanagement::cv_timezone_dst_variable" as "TimezoneDaylightSavingVariableDate" keys ("DSTRULE")
+		create forbidden update forbidden delete forbidden;
+
+	association "Timezone_Daylight_Fixed"
+		principal "TimeZones" ("DSTRULE") multiplicity "1"
+		dependent "TimezoneDaylightSavingFixedDate" ("DSTRULE") multiplicity "*";
+
+	association "Timezone_Daylight_Variable"
+		principal "TimeZones" ("DSTRULE") multiplicity "1"
+		dependent "TimezoneDaylightSavingVariableDate" ("DSTRULE") multiplicity "*";
+	*/
+
+
+	 //  add a parameter for CV of resource group  --TRP 2.0
+      //-------------------------------------------------------------------------------------------------------------------------------
+
+
+    // ResourceGroups
+    //"sap.tm.trp.db.systemmanagement::v_equipment_group" as "ResourceGroups" keys ("ID")
+
+       "sap.tm.trp.db.systemmanagement::cv_equipment_group" as "ResourceGroups" keys  ("ID","RESOURCE_CATEGORY")
+            navigates (
+                  "ResourceGroup_ResourceTypes" as "ResourceTypes",
+                "ResourceGroup_Items" as "Items"
+            )
+       create forbidden update forbidden delete forbidden;
+
+    // ResourceTypes
+         "sap.tm.trp.db.systemmanagement::cv_resource_type" as "ResourceTypes" keys  ("ID","RESOURCE_CATEGORY")
+       create forbidden update forbidden delete forbidden;
+      // ResourceGroup -> ResourceTypes
+         association "ResourceGroup_ResourceTypes"
+         principal "ResourceGroups"("ID","RESOURCE_CATEGORY") multiplicity "1"
+         dependent "ResourceTypes"("ID","RESOURCE_CATEGORY") multiplicity "*"
+         over "sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth" principal ("EQUIPMENT_GROUP_ID","RESOURCE_CATEGORY") dependent ("EQUI_CODE","RESOURCE_CATEGORY");
+
+      // ResourceGroup -> Items    -- what is different with "ResourceGroup -> ResourceTypes" ?
+       association "ResourceGroup_Items"
+         principal "ResourceGroups"("ID","RESOURCE_CATEGORY") multiplicity "1"
+         dependent "ResourceTypes"("ID","RESOURCE_CATEGORY") multiplicity "*"
+         over "sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth" principal ("EQUIPMENT_GROUP_ID","RESOURCE_CATEGORY") dependent ("EQUI_CODE","RESOURCE_CATEGORY");
+
+      //-------------------------------------------------------------------------------------------------------------------------------
+      //  add a parameter for CV of resource group  --TRP 2.0
+      //-------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+	   // ResourceFilters
+      //"sap.tm.trp.db.filter::v_equipment_filter" as "ResourceFilters" keys ("ID")
+         "sap.tm.trp.db.filter::cv_equipment_filter" as "ResourceFilters" keys ("ID","RESOURCE_CATEGORY")
+         navigates (
+                  "ResourceFilter_ResourceTypes" as "ResourceTypes",
+                  "ResourceFilter_ResourceGroups" as "ResourceGroups",
+                  "ResourceFilter_Items" as "Items"
+            )
+    // parameters via entity "ResourceFilters_With_Para" results property "Query"
+         create forbidden update forbidden delete forbidden;
+
+
+      // ResourceFilter -> ResourceTypes
+         association "ResourceFilter_ResourceTypes"
+         principal "ResourceFilters"("ID","RESOURCE_CATEGORY") multiplicity "1"
+         dependent "ResourceTypes"("ID","RESOURCE_CATEGORY") multiplicity "*"
+         over "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" principal ("EQUIPMENT_FILTER_ID","RESOURCE_CATEGORY") dependent ("EQUI_CODE","RESOURCE_CATEGORY");
+
+      // ResourceFilter -> ResourceGroups
+         association "ResourceFilter_ResourceGroups"
+         principal "ResourceFilters"("ID","RESOURCE_CATEGORY") multiplicity "1"
+         dependent "ResourceGroups"("ID","RESOURCE_CATEGORY") multiplicity "*"
+         over "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" principal ("EQUIPMENT_FILTER_ID","RESOURCE_CATEGORY") dependent ("EQUIPMENT_GROUP_ID","RESOURCE_CATEGORY");
+
+      // ResourceFilter -> Items
+         association "ResourceFilter_Items"
+         principal "ResourceFilters"("ID","RESOURCE_CATEGORY") multiplicity "1"
+         dependent "ResourceFilterItems"("EQUIPMENT_FILTER_ID","RESOURCE_CATEGORY") multiplicity "*";
+
+      // ResourceFilterItems
+      "sap.tm.trp.db.filter::v_equipment_filter_info_sdui" as "ResourceFilterItems" keys ("EQUIPMENT_FILTER_ID", "ID")
+            navigates (
+                  "ResourceFilterItem_Items" as "Items"
+            )
+            create forbidden update forbidden delete forbidden;
+
+      // ResourceFilterItem -> Items
+      association "ResourceFilterItem_Items"
+            principal "ResourceFilterItems"("ID", "FILTER_TYPE") multiplicity "1"
+            dependent "ResourceFilterGroupItems"("GROUP_ID", "EQUIPMENT_FILTER_TYPE") multiplicity "*";
+
+      // Resource Group Items for Resource Filter
+      "sap.tm.trp.db.systemmanagement::v_equipment_filter_group_item" as "ResourceFilterGroupItems"
+            keys ("GROUP_ID", "EQUI_CODE", "EQUIPMENT_FILTER_TYPE")
+            create forbidden update forbidden delete forbidden;
+
+    //-------------------------------------------------------------------------------------------------------------------------------
+      //  add a parameter for CV of resource group  --TRP 2.0
+      //-------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+	// =========================================================================
+	// Location Group
+	// =========================================================================
+
+	// UserGeoGroups
+	//"sap.tm.trp.db.systemmanagement::v_geo_group_header" as "UserGeoGroups" keys ("ID", "TYPE")
+	"sap.tm.trp.db.systemmanagement::cv_role_check_geo_group_header" as "UserGeoGroups" keys ("ID","TYPE")
+		navigates (
+			"UserGeoGroup_Locations" as "Locations",
+			"UserGeoGroup_Zones" as "Zones",
+			"UserGeoGroup_RootZones" as "Regions"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// UserGeoGroup -> Locations
+	association "UserGeoGroup_Locations"
+		principal "UserGeoGroups"("ID") multiplicity "1"
+		dependent "Locations"("ID") multiplicity "*"
+		over "sap.tm.trp.db.systemmanagement::t_location_group_item" principal ("LOCATION_GROUP_ID") dependent ("LOCATION_ID");
+
+	// UserGeoGroup -> Zones
+	association "UserGeoGroup_Zones"
+		principal "UserGeoGroups"("ID") multiplicity "1"
+		dependent "Zones"("ID") multiplicity "*"
+		over "sap.tm.trp.db.systemmanagement::t_zone_group_item" principal ("ZONE_GROUP_ID") dependent ("ZONE_ID");
+
+	// UserGeoGroup -> HierarchyZones
+	association "UserGeoGroup_RootZones"
+		principal "UserGeoGroups"("ID") multiplicity "1"
+		dependent "ActiveRegions"("ID") multiplicity "*"
+		over "sap.tm.trp.db.systemmanagement::t_region_group_item" principal ("REGION_GROUP_ID") dependent ("ZONE_ID");
+    
+    // UserGeoGroups with stock setting info
+    "sap.tm.trp.db.systemmanagement.location::cv_get_geogroups_with_stocksettings" as "UserGeoGroupsWithStockSetting" keys ("ID","TYPE")
+		navigates (
+			"UserGeoGroupsWithStockSetting_StockSettings" as "StockSettings",
+			"UserGeoGroupsWithStockSetting_ResourceStockThresholds" as "ResourceStockThresholds"
+		)
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+		
+	// UserGeoGroupsWithStockSetting -> StockSettings
+	association "UserGeoGroupsWithStockSetting_StockSettings"
+		principal "UserGeoGroupsWithStockSetting"("ID","TYPE","RESOURCE_CATEGORY") multiplicity "1"
+		dependent "StockSettingsGeoGroup"("ID","TYPE","RESOURCE_CATEGORY") multiplicity "*";
+
+	// UserGeoGroupsWithStockSetting -> ResourceStockThresholds
+	association "UserGeoGroupsWithStockSetting_ResourceStockThresholds"
+        principal "UserGeoGroupsWithStockSetting"("ID","RESOURCE_CATEGORY") multiplicity "1"
+        dependent "ResourceStockThresholdsGeoGroup"("ID","RESOURCE_CATEGORY") multiplicity "*";
+
+
+	// ----- Location Group ----------------------------------------------------
+
+	// UserLocationGroups
+	//"sap.tm.trp.db.systemmanagement::v_user_location_group" as "UserLocationGroups" keys ("ID")
+	"sap.tm.trp.db.systemmanagement::cv_role_check_location_group" as "UserLocationGroups" keys ("ID")
+		navigates (
+			"UserLocationGroup_Locations" as "Locations"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// UserLocationGroup -> Locations
+	association "UserLocationGroup_Locations"
+		principal "UserLocationGroups"("ID") multiplicity "1"
+		dependent "Locations"("ID") multiplicity "*"
+		over "sap.tm.trp.db.systemmanagement::t_location_group_item" principal ("LOCATION_GROUP_ID") dependent ("LOCATION_ID");
+
+
+	// ----- Zone Group --------------------------------------------------------
+
+	// User Zone Groups
+	//"sap.tm.trp.db.systemmanagement::v_user_zone_group" as "UserZoneGroups" keys ("ID")
+	"sap.tm.trp.db.systemmanagement::cv_role_check_zone_group" as "UserZoneGroups" keys ("ID")
+		navigates (
+			"UserZoneGroup_Zones" as "Zones",
+			"UserZoneGroup_Coordinate" as "Coordinate"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// UserZoneGroup -> Zones
+	association "UserZoneGroup_Zones"
+		principal "UserZoneGroups"("ID") multiplicity "1"
+		dependent "Zones"("ID") multiplicity "*"
+		over "sap.tm.trp.db.systemmanagement::t_zone_group_item" principal ("ZONE_GROUP_ID") dependent ("ZONE_ID");
+
+	// UserZoneGroup -> ZoneGroupCoordinate
+	association "UserZoneGroup_Coordinate"
+		principal "UserZoneGroups"("ID") multiplicity "1"
+		dependent "ZoneGroupCoordinates"("GROUP_ID") multiplicity "1";
+
+	// User Zone Groups Coordinate
+	"sap.tm.trp.db.systemmanagement::v_zone_group_coordinate" as "ZoneGroupCoordinates" keys ("GROUP_ID")
+		create forbidden update forbidden delete forbidden;
+
+
+	// ----- Region Group ------------------------------------------------------
+
+	// User Region Groups Coordinate
+	"sap.tm.trp.db.systemmanagement::v_region_group_coordinate" as "RegionGroupCoordinates" keys ("GROUP_ID")
+		create forbidden update forbidden delete forbidden;
+
+	// User Region Groups
+	//"sap.tm.trp.db.systemmanagement::v_user_region_group" as "UserRegionGroups" keys ("ID")
+	"sap.tm.trp.db.systemmanagement::cv_role_check_region_group" as "UserRegionGroups" keys ("ID")
+		navigates (
+			"UserRegionGroup_RootZones" as "RootZones",
+			"UserRegionGroup_Coordinate" as "Coordinate"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// UserRegionGroup -> HierarchyZones
+	association "UserRegionGroup_RootZones"
+		principal "UserRegionGroups"("ID") multiplicity "1"
+		dependent "Zones"("ID") multiplicity "*"
+		over "sap.tm.trp.db.systemmanagement::t_region_group_item" principal ("REGION_GROUP_ID") dependent ("ZONE_ID");
+
+	// UserRegionGroup -> RegionGroupCoordinate
+	association "UserRegionGroup_Coordinate"
+		principal "UserRegionGroups"("ID") multiplicity "1"
+		dependent "RegionGroupCoordinates"("GROUP_ID") multiplicity "1";
+
+
+	// =========================================================================
+	// Location Filter
+	// =========================================================================
+
+	// LocationFilters
+	//"sap.tm.trp.db.filter::v_location_filter" as "LocationFilters" keys ("ID")
+	
+	"sap.tm.trp.db.filter::cv_location_filter_performance" as "LocationTree" keys ("LOCATION_FILTER_ID")
+	parameters via key and entity
+	create forbidden update forbidden delete forbidden;
+	
+	"sap.tm.trp.db.filter::cv_role_check_location_filter" as "LocationFilters" keys ("ID")
+	//"sap.tm.trp.db.test::cv_location_filter" as "LocationFilters" keys ("ID")
+		navigates (
+			"LocationFilter_Locations" as "Locations",
+			"LocationFilter_LocationGroups" as "LocationGroups",
+			"LocationFilter_Zones" as "Zones",
+			"LocationFilter_ZoneGroups" as "ZoneGroups",
+			"LocationFilter_RootZones" as "Regions",
+			"LocationFilter_RegionGroups" as "RegionGroups",
+			"LocationFilter_Items" as "Items"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// Location Filter -> Locations
+	association "LocationFilter_Locations"
+		principal "LocationFilters"("ID") multiplicity "1"
+		dependent "Locations"("ID") multiplicity "*"
+		over "sap.tm.trp.db.filter::t_location_filter_location" principal ("LOCATION_FILTER_ID") dependent ("LOCATION_ID");
+
+	// Location Filter -> Location Groups
+	association "LocationFilter_LocationGroups"
+		principal "LocationFilters"("ID") multiplicity "1"
+		dependent "UserLocationGroups"("ID") multiplicity "*"
+		over "sap.tm.trp.db.filter::t_location_filter_location" principal ("LOCATION_FILTER_ID") dependent ("LOCATION_GROUP_ID");
+
+	// Location Filter -> Zones
+	association "LocationFilter_Zones"
+		principal "LocationFilters"("ID") multiplicity "1"
+		dependent "Zones"("ID") multiplicity "*"
+		over "sap.tm.trp.db.filter::t_location_filter_zone" principal ("LOCATION_FILTER_ID") dependent ("ZONE_ID");
+
+	// Location Filter -> Zone Groups
+	association "LocationFilter_ZoneGroups"
+		principal "LocationFilters"("ID") multiplicity "1"
+		dependent "UserZoneGroups"("ID") multiplicity "*"
+		over "sap.tm.trp.db.filter::t_location_filter_zone" principal ("LOCATION_FILTER_ID") dependent ("ZONE_GROUP_ID");
+
+	// Location Filter -> RootZones
+	association "LocationFilter_RootZones"
+		principal "LocationFilters"("ID") multiplicity "1"
+		dependent "ActiveRegions"("ID") multiplicity "*"
+		over "sap.tm.trp.db.filter::t_location_filter_region" principal ("LOCATION_FILTER_ID") dependent ("ZONE_ID");
+
+	// Location Filter -> Region Groups
+	association "LocationFilter_RegionGroups"
+		principal "LocationFilters"("ID") multiplicity "1"
+		dependent "UserRegionGroups"("ID") multiplicity "*"
+		over "sap.tm.trp.db.filter::t_location_filter_region" principal ("LOCATION_FILTER_ID") dependent ("REGION_GROUP_ID");
+
+	// Location Filter -> Items
+	association "LocationFilter_Items"
+		principal "LocationFilters"("ID") multiplicity "1"
+		dependent "LocationFilterInfos"("LOCATION_FILTER_ID") multiplicity "*";
+
+	"sap.tm.trp.db.filter::v_location_filter_info_sdui" as "LocationFilterInfos" keys ("LOCATION_FILTER_ID", "GEO_ID")
+		navigates (
+			"LocationFilterInfo_Items" as "Items"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// LocationFilterInfo -> Items
+	association "LocationFilterInfo_Items"
+		principal "LocationFilterInfos"("GEO_ID", "USER_TYPE") multiplicity "1"
+		dependent "LocationFilterGroupItems"("GROUP_ID", "LOCATION_FILTER_TYPE") multiplicity "*";
+
+	"sap.tm.trp.db.systemmanagement::v_location_filter_group_item" as "LocationFilterGroupItems"
+		keys ("GROUP_ID", "LOCATION_ID", "LOCATION_FILTER_TYPE")
+		create forbidden update forbidden delete forbidden;
+
+
+	// =========================================================================
+	// Attribute Filter
+	// =========================================================================
+
+	// AttributeFilters
+	"sap.tm.trp.db.filter::v_attribute_group" as "AttributeFilters" keys ("ID")
+		navigates (
+			"AttributeFilter_Items" as "Items"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// AttributeFilter -> AttributeFilterItems
+	association "AttributeFilter_Items"
+		principal "AttributeFilters"("ID") multiplicity "1"
+		dependent "AttributeFilterItems"("ID") multiplicity "*";
+
+	"sap.tm.trp.db.filter::v_attribute_group_item" as "AttributeFilterItems"
+		keys ("ID", "NODE_ID")
+		navigates (
+			"AttributeFilterItem_Values" as "Values"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// AttributeFilterItem -> AttributeFilterItemValues
+	association "AttributeFilterItem_Values"
+		principal "AttributeFilterItems"("NODE_ID") multiplicity "1"
+		dependent "AttributeFilterItemValues"("NODE_ID") multiplicity "*";
+
+	"sap.tm.trp.db.filter::v_attribute_group_item_values" as "AttributeFilterItemValues"
+		with ("NODE_ID", "VALUE")
+		key generate local "ID"
+		create forbidden update forbidden delete forbidden;
+
+	// ResourceAttributeCategories
+	"sap.tm.trp.db.filter::v_attribute_group_attribute_category" as "ResourceAttributeCategories" keys ("ID")
+		navigates (
+			"AttributeCategory_Attributes" as "Attributes"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// ResourceAttributeCategory -> ResourceAttributes
+	association "AttributeCategory_Attributes"
+		principal "ResourceAttributeCategories"("ID") multiplicity "1"
+		dependent "ResourceAttributes"("CATEGORY_ID") multiplicity "*";
+
+	"sap.tm.trp.db.filter::v_attribute_group_attribute" as "ResourceAttributes" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+		
+	"sap.tm.trp.db.filter::v_attribute_group_sd_attribute" as "SDFilterAttributes" keys ("ID")
+		create forbidden update forbidden delete forbidden;	
+		
+	// =========================================================================
+	// Plans with plan execution result
+	// =========================================================================
+   
+	// Plans Detail with Schedule data
+	"sap.tm.trp.db.pipeline::cv_get_plan_list_with_schedule_wrapper" as "PlansMasterDetails" keys ("ID")
+		navigates(
+			"Plan_Master_Schedule" as "Schedule",
+			"Plan_Master_PlanScheduleLogs" as "ScheduleLogs",
+			"Plan_Master_PlanExecutions" as "Executions",
+			"Plan_Master_SubPlans" as "SubPlans" from principal,
+			"Plan_Master_SubPlanExecutions" as "SubPlanExecutions"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// Plan -> Schedule
+	association "Plan_Master_Schedule"
+		principal "PlansMasterDetails"("ID") multiplicity "1"
+		dependent "PlanMasterScheduleDetails"("ID") multiplicity "1";
+
+	"sap.tm.trp.db.pipeline::v_schedule_details" as "PlanMasterScheduleDetails" keys ("PLAN_SCHEDULE_ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Plan -> PlanScheduleLogs, all executions
+	association "Plan_Master_PlanScheduleLogs"
+		principal "PlansMasterDetails"("ID") multiplicity "1"
+		dependent "PlanMasterPlanScheduleLogs"("PLAN_MODEL_ID") multiplicity "*";
+
+	"sap.tm.trp.db.pipeline::v_schedule_logs" as "PlanMasterPlanScheduleLogs" keys("ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Plan -> PlanExecutions, only success executions
+	association "Plan_Master_PlanExecutions"
+		principal "PlansMasterDetails"("ID") multiplicity "1"
+		dependent "PlanMasterPlanExecutions"("PLAN_MODEL_ID") multiplicity "*";
+
+	"sap.tm.trp.db.pipeline::v_plan_execution_info" as "PlanMasterPlanExecutions" keys ("EXECUTION_ID")
+		create forbidden update forbidden delete forbidden;
+
+    // PlanExecutionID
+    "sap.tm.trp.db.pipeline::cv_get_executions_for_plan" as "PlanMasterPlanExecutionID" keys ("PLAN_MODEL_ID","EXECUTION_ID")
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+	// Plan -> SubPlans
+	association "Plan_Master_SubPlans"
+		principal "PlansMasterDetails"("ID") multiplicity "1"
+		dependent "PlansMasterDetails"("ID") multiplicity "*"
+		over "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" principal("VIRTUAL_PLAN_MODEL_ID") dependent("PERSISTED_PLAN_MODEL_ID");
+
+	// Plan -> SubPlanExecutions, sub plan executions for a virtual plan
+	association "Plan_Master_SubPlanExecutions"
+		principal "PlansMasterDetails"("ID") multiplicity "1"
+		dependent "PlanMasterSubPlanExecutions"("VIRTUAL_PLAN_MODEL_ID") multiplicity "*";
+
+	"sap.tm.trp.db.pipeline::v_virtual_plan_result" as "PlanMasterSubPlanExecutions"
+		keys ("VIRTUAL_PLAN_MODEL_ID", "PERSISTED_PLAN_MODEL_ID", "EXECUTION_ON")
+		create forbidden update forbidden delete forbidden;
+
+	// Plan Configuration Info
+	"sap.tm.trp.db.pipeline::cv_plan_config_info" as "PlanMasterPlanConfigInfo"
+		key generate local "ID"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+		
+	// =========================================================================
+	// Plans without plan execution result
+	// =========================================================================
+	
+	// Plans Detail without Schedule data
+	"sap.tm.trp.db.pipeline::cv_get_plan_list_wrapper" as "PlansMasterDetails2" keys ("ID")
+		navigates(
+			"Plan_Master_2_Schedule" as "Schedule",
+			"Plan_Master_2_PlanScheduleLogs" as "ScheduleLogs",
+			"Plan_Master_2_PlanExecutions" as "Executions",
+			"Plan_Master_2_SubPlans" as "SubPlans" from principal,
+			"Plan_Master_2_SubPlanExecutions" as "SubPlanExecutions"
+		)
+		create forbidden update forbidden delete forbidden;
+		
+	// Plan -> Schedule
+	association "Plan_Master_2_Schedule"
+		principal "PlansMasterDetails2"("ID") multiplicity "1"
+		dependent "PlanMasterScheduleDetails"("ID") multiplicity "1";
+
+	// Plan -> PlanScheduleLogs, all executions 
+	association "Plan_Master_2_PlanScheduleLogs"
+		principal "PlansMasterDetails2"("ID") multiplicity "1"
+		dependent "PlanMasterPlanScheduleLogs"("PLAN_MODEL_ID") multiplicity "*";
+
+	// Plan -> PlanExecutions, only success executions
+	association "Plan_Master_2_PlanExecutions"
+		principal "PlansMasterDetails2"("ID") multiplicity "1"
+		dependent "PlanMasterPlanExecutions"("PLAN_MODEL_ID") multiplicity "*";
+
+	// Plan -> SubPlans
+	association "Plan_Master_2_SubPlans"
+		principal "PlansMasterDetails2"("ID") multiplicity "1"
+		dependent "PlansMasterDetails"("ID") multiplicity "*"
+		over "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" principal("VIRTUAL_PLAN_MODEL_ID") dependent("PERSISTED_PLAN_MODEL_ID");
+
+	// Plan -> SubPlanExecutions, sub plan executions for a virtual plan
+	association "Plan_Master_2_SubPlanExecutions"
+		principal "PlansMasterDetails2"("ID") multiplicity "1"
+		dependent "PlanMasterSubPlanExecutions"("VIRTUAL_PLAN_MODEL_ID") multiplicity "*";
+		
+	// =========================================================================
+	// Plans detail by the given plan id
+	// =========================================================================
+	"sap.tm.trp.db.pipeline::cv_get_plan_detail" as "PlanDetail" keys ("ID","EXECUTION_ID") 
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+	
+		
+	// =========================================================================
+	// Plan
+	// =========================================================================
+   
+
+	// Plans
+	"sap.tm.trp.db.pipeline::cv_plan_list_wrapper" as "Plans" keys ("ID")
+		navigates(
+			"Plan_Schedule" as "Schedule",
+			"Plan_PlanScheduleLogs" as "ScheduleLogs",
+			"Plan_PlanExecutions" as "Executions",
+			//"Plan_SubPlans" as "ScheduledPlans" from principal,
+			"Plan_SubPlans" as "SubPlans" from principal,
+			"Plan_SubPlanExecutions" as "SubPlanExecutions"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// Plan -> Schedule
+	association "Plan_Schedule"
+		principal "Plans"("ID") multiplicity "1"
+		dependent "ScheduleDetails"("ID") multiplicity "1";
+
+	"sap.tm.trp.db.pipeline::v_schedule_details" as "ScheduleDetails" keys ("PLAN_SCHEDULE_ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Plan -> PlanScheduleLogs, all executions
+	association "Plan_PlanScheduleLogs"
+		principal "Plans"("ID") multiplicity "1"
+		dependent "PlanScheduleLogs"("PLAN_MODEL_ID") multiplicity "*";
+
+	"sap.tm.trp.db.pipeline::v_schedule_logs" as "PlanScheduleLogs" keys("ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Plan -> PlanExecutions, only success executions
+	association "Plan_PlanExecutions"
+		principal "Plans"("ID") multiplicity "1"
+		dependent "PlanExecutions"("PLAN_MODEL_ID") multiplicity "*";
+
+	"sap.tm.trp.db.pipeline::v_plan_execution_info" as "PlanExecutions" keys ("EXECUTION_ID")
+		create forbidden update forbidden delete forbidden;
+
+    // PlanExecutionID
+    "sap.tm.trp.db.pipeline::cv_get_executions_for_plan" as "PlanExecutionID" keys ("PLAN_MODEL_ID","EXECUTION_ID")
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+	// Plan -> SubPlans
+	association "Plan_SubPlans"
+		principal "Plans"("ID") multiplicity "1"
+		dependent "Plans"("ID") multiplicity "*"
+		over "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" principal("VIRTUAL_PLAN_MODEL_ID") dependent("PERSISTED_PLAN_MODEL_ID");
+
+	// Plan -> SubPlanExecutions, sub plan executions for a virtual plan
+	association "Plan_SubPlanExecutions"
+		principal "Plans"("ID") multiplicity "1"
+		dependent "SubPlanExecutions"("VIRTUAL_PLAN_MODEL_ID") multiplicity "*";
+
+	"sap.tm.trp.db.pipeline::v_virtual_plan_result" as "SubPlanExecutions"
+		keys ("VIRTUAL_PLAN_MODEL_ID", "PERSISTED_PLAN_MODEL_ID", "EXECUTION_ON")
+		create forbidden update forbidden delete forbidden;
+
+	// Plan Configuration Info
+	"sap.tm.trp.db.pipeline::cv_plan_config_info" as "PlanConfigInfo"
+		key generate local "ID"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+
+
+	// =========================================================================
+	// Calculation Model
+	// =========================================================================
+
+
+
+
+// CalculationModels
+	"sap.tm.trp.db.pipeline::v_calculation_model" as "CalculationModels" keys ("ID","RESOURCE_CATEGORY")
+		navigates (
+			"CalculationModel_Nodes" as "Nodes"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// CalculationModel -> PipelineNodes
+	association "CalculationModel_Nodes"
+		principal "CalculationModels"("ID") multiplicity "1"
+		dependent "PipelineNodes"("PIPELINE_MODEL_ID") multiplicity "*";
+
+	// PipelineNodes
+	"sap.tm.trp.db.pipeline::v_pipeline_node" as "PipelineNodes" keys ("ID")
+		navigates (
+			"PipelineNode_PipelineNodeLayouts" as "PipelineNodeLayouts",
+			"PipelineNode_PipelineNodeConnections" as "PipelineNodeConnections"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// PipelineNode -> PipelineNodeLayouts
+	association "PipelineNode_PipelineNodeLayouts"
+		principal "PipelineNodes"("ID") multiplicity "1"
+		dependent "PipelineNodeLayouts"("NODE_ID") multiplicity "*";
+
+	"sap.tm.trp.db.pipeline::t_pipeline_node_layout" as "PipelineNodeLayouts"
+		create forbidden update forbidden delete forbidden;
+
+	// PipelineNode -> PipelineNodeConnections
+	association "PipelineNode_PipelineNodeConnections"
+		principal "PipelineNodes"("ID") multiplicity "1"
+		dependent "PipelineNodeConnections"("NODE_ID") multiplicity "*";
+
+	"sap.tm.trp.db.pipeline::t_pipeline_node_connection" as "PipelineNodeConnections"
+		create forbidden update forbidden delete forbidden;
+
+
+
+        "sap.tm.trp.db.pipeline::cv_pipeline_node" as "PipelineNodesNew"
+         key generate local "KEY"
+         navigates (
+			"PipelineNode_PipelineNodeLayoutsNew" as "PipelineNodeLayouts",
+			"PipelineNode_PipelineNodeConnectionsNew" as "PipelineNodeConnections"
+		)
+         parameters via entity
+         create forbidden update forbidden delete forbidden;
+
+      association "PipelineNode_PipelineNodeLayoutsNew"
+		principal "PipelineNodesNew"("ID") multiplicity "1"
+		dependent "PipelineNodeLayouts"("NODE_ID") multiplicity "*";
+
+
+	  association "PipelineNode_PipelineNodeConnectionsNew"
+		principal "PipelineNodesNew"("ID") multiplicity "1"
+		dependent "PipelineNodeConnections"("NODE_ID") multiplicity "*";
+
+
+	// =========================================================================
+	// Time Filter
+	// =========================================================================
+
+	// TimeFilters
+	"sap.tm.trp.db.filter::cv_time_filter" as "TimeFilters" keys ("ID")
+		navigates (
+			"TimeFilter_Intervals" as "Intervals",
+			"TimeFilter_Items" as "Items"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// TimeFilter -> Intervals
+	association "TimeFilter_Intervals"
+		principal "TimeFilters"("ID") multiplicity "1"
+		dependent "TimeFilterIntervals"("ID") multiplicity "*";
+
+	"sap.tm.trp.db.filter::cv_time_filter_interval" as "TimeFilterIntervals" keys ("ID", "SEQUENCE")
+		create forbidden update forbidden delete forbidden;
+
+	// TimeFilter -> Items
+	association "TimeFilter_Items"
+		principal "TimeFilters"("ID") multiplicity "1"
+		dependent "TimeFilterItems"("TIME_FILTER_ID") multiplicity "*";
+
+	"sap.tm.trp.db.filter::v_time_filter_item" as "TimeFilterItems" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+
+
+	// =========================================================================
+	// Alert Rule Group
+	// =========================================================================
+
+	// ----- Alert Rule Group --------------------------------------------------
+
+	// AlertRuleGroups
+	"sap.tm.trp.db.alert.alert_rule_group::cv_alert_rule_group" as "AlertRuleGroups" keys ("ID")
+		navigates (
+			"AlertRuleGroup_AlertRules" as "AlertRules",
+			"AlertRuleGroup_UsedList" as "UsedList"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// AlertRuleGroup -> AlertRules
+	association "AlertRuleGroup_AlertRules"
+		principal "AlertRuleGroups"("ID") multiplicity "1"
+		dependent "AlertRules"("ID") multiplicity "*"
+		over "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule_group_items"
+			principal ("ALERT_RULE_GROUP_ID")
+			dependent ("RULE_ID");
+
+	// AlertRules
+	"sap.tm.trp.db.objectregistration::v_alert_rule_ui" as "AlertRules" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+
+	// AlertRuleGroup -> UsedList
+	association "AlertRuleGroup_UsedList"
+		principal "AlertRuleGroups"("ID") multiplicity "1"
+		dependent "AlertRuleGroupUsedList"("ID") multiplicity "*";
+
+	"sap.tm.trp.db.objectregistration::v_registered_rule_group_used_list" as "AlertRuleGroupUsedList" keys ("ID", "PLAN_MODEL_ID")
+		create forbidden update forbidden delete forbidden;
+
+	// AlertRuleGroupTypes
+	"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_category" as "AlertRuleGroupTypes"
+		navigates (
+			"AlertRuleGroupType_Categories" as "Categories"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// AlertRuleGroupType -> Categories
+	association "AlertRuleGroupType_Categories"
+		principal "AlertRuleGroupTypes"("CONTAINING_OBJECT_TYPE_ID") multiplicity "1"
+		dependent "AlertRuleGroupCategories"("OBJECT_TYPE_ID") multiplicity "*";
+
+	    // AlertRuleGroupCategories
+	"sap.tm.trp.db.hrf.ruleManage.ruleGroup::v_alert_rule_group_categories" as "AlertRuleGroupCategories" keys ("RULE_TYPE_ID")
+	create forbidden update forbidden delete forbidden;
+
+
+
+	// ----- Alerts ------------------------------------------------------------
+
+	// HRF_rule_alerts_retrieve SD alert for persistent plan or virtual plan
+	"sap.tm.trp.db.hrf::cv_get_SD_alerts_for_PersistentPlan_VirtualPlan" as "SupplyDemandAlerts"
+		keys generate local "ID"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+
+	// HRF_rule_alerts_retrieve KPI alert for persistent plan or virtual plan
+	"sap.tm.trp.db.hrf::cv_get_KPI_alerts_for_PersistentPlan_VirtualPlan" as "KPIAlerts"
+		keys generate local "ID"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+
+	// HRF_rule_alerts_retrieve SD, KPI　alert at dashboard, only support selection of PP
+	"sap.tm.trp.db.hrf::cv_get_SD_KPI_alerts_dashboard_PersistentPlan" as "DashboardAlerts"
+		keys generate local "ID"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+
+	// Stock Alerts
+	"sap.tm.trp.db.hrf::cv_get_stock_alerts" as "StockAlerts"
+		keys generate local "ID"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+		
+	// =========================================================================
+	// Schema and Procedure name for extended fields
+	// =========================================================================
+    
+     "sap.tm.trp.db.objectregistration::v_schema_list" as "ExtensionSchema" keys ("NAME")
+        navigates (
+			"Extension_Procedures" as "ExtensionProcedures"
+		)
+        create forbidden update forbidden delete forbidden;
+		
+    association "Extension_Procedures"
+        principal "ExtensionSchema"("NAME") multiplicity "1"
+        dependent "ExtensionProcedures"("SCHEMA_NAME") multiplicity "*";
+        
+    "sap.tm.trp.db.objectregistration::v_register_procedure_ui" as "ExtensionProcedures"  keys ("SCHEMA_NAME", "PROCEDURE_NAME")
+        navigates (
+			"Extension_Structure" as "ExtensionStructure"
+		)
+        create forbidden update forbidden delete forbidden;
+        
+    association "Extension_Structure"
+        principal "ExtensionProcedures"("PROCEDURE_NAME") multiplicity "1"
+        dependent "ExtensionStructure"("PROCEDURE_NAME") multiplicity "*";
+        
+    "sap.tm.trp.db.objectregistration::v_extension_structure_ui" as "ExtensionStructure" keys ("SCHEMA_NAME", "PROCEDURE_NAME", "TABLE_TYPE_NAME")
+        create forbidden update forbidden delete forbidden;
+       
+	// =========================================================================
+	// Object Registration
+	// =========================================================================
+
+	// Registered Objects
+	"sap.tm.trp.db.objectregistration::v_registered_object_ui" as "RegisteredObjects" keys ("ID", "TYPE_ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Object Types
+	"sap.tm.trp.db.objectregistration::v_object_type" as "ObjectTypes" keys ("ID")
+		navigates (
+			"ObjectType_Categories" as "Categories",
+			"ObjectType_Schemas" as "RegisteredSchemas"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// ObjectType -> Categories
+	association "ObjectType_Categories"
+		principal "ObjectTypes"("ID") multiplicity "1"
+		dependent "ObjectCategories"("TYPE_ID") multiplicity "*";
+
+	"sap.tm.trp.db.objectregistration::v_object_category_ui" as "ObjectCategories" keys ("ID", "TYPE_ID")
+		create forbidden update forbidden delete forbidden;
+
+	// ObjectType -> RegisteredSchemas
+	association "ObjectType_Schemas"
+		principal "ObjectTypes"("ID") multiplicity "1"
+		dependent "RegisteredSchemas"("ID") multiplicity "*"
+		over "sap.tm.trp.db.objectregistration::t_object_type_schema" principal ("OBJECT_TYPE_ID") dependent ("SCHEMA_ID");
+
+	// Schema List
+	//"sap.tm.trp.db.objectregistration::t_schema_name_list" as "RegisteredSchemas";
+	"sap.tm.trp.db.objectregistration::v_schema_name_list" as "RegisteredSchemas"
+		keys ("ID", "CODE", "NAME", "CATEGORY_ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Available Procedures
+	"sap.tm.trp.db.objectregistration::v_register_procedure_ui" as "RegisteredProcedures" keys ("SCHEMA_NAME", "PROCEDURE_NAME")
+		create forbidden update forbidden delete forbidden;
+
+	// Available Tables
+	"sap.tm.trp.db.objectregistration::v_register_table_ui" as "RegisteredTables" keys ("SCHEMA_NAME", "TABLE_NAME")
+		create forbidden update forbidden delete forbidden;		
+
+
+	// =========================================================================
+	// Stock Settings
+	// =========================================================================
+
+	// StockSettings
+	"sap.tm.trp.db.stock::cv_role_check_location_stock_header" as "StockSettings"
+		keys ("ID", "TYPE")
+		navigates(
+			"StockSetting_ResourceStockThresholds" as "ResourceStockThresholds"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// StockSetting -> ResourceStockThresholds
+	association "StockSetting_ResourceStockThresholds"
+		principal "StockSettings"("ID") multiplicity "1"
+		dependent "ResourceStockThresholds"("ID") multiplicity "*";
+
+	"sap.tm.trp.db.stock::cv_role_check_location_stock" as "ResourceStockThresholds"
+		keys ("ID", "TYPE", "RESOURCE_ID", "RESOURCE_TYPE")
+		create forbidden update forbidden delete forbidden;
+
+	// StockSettings Location
+	"sap.tm.trp.db.stock::cv_role_check_location_stock_header_location" as "StockSettingsLocation"
+		keys ("ID","RESOURCE_CATEGORY")
+		create forbidden update forbidden delete forbidden;
+
+	// StockSettings Region
+	"sap.tm.trp.db.stock::cv_role_check_location_stock_header_region" as "StockSettingsRegion" 
+		keys ("ID","RESOURCE_CATEGORY")
+		create forbidden update forbidden delete forbidden;
+
+	// StockSettings Geo Group
+	"sap.tm.trp.db.stock::cv_role_check_location_stock_header_geo_group" as "StockSettingsGeoGroup" 
+		keys ("ID","RESOURCE_CATEGORY")
+		create forbidden update forbidden delete forbidden;
+
+	// ResourceStockThresholds Location
+	"sap.tm.trp.db.stock::cv_role_check_location_stock_location" as "ResourceStockThresholdsLocation" 
+		keys ("ID", "TYPE", "RESOURCE_ID", "RESOURCE_TYPE","RESOURCE_CATEGORY")
+		create forbidden update forbidden delete forbidden;
+
+	// ResourceStockThresholds Region
+	"sap.tm.trp.db.stock::cv_role_check_location_stock_region" as "ResourceStockThresholdsRegion" 
+		keys ("ID", "TYPE", "RESOURCE_ID", "RESOURCE_TYPE","RESOURCE_CATEGORY")
+		create forbidden update forbidden delete forbidden;
+
+	// ResourceStockThresholds Geo Group
+	"sap.tm.trp.db.stock::cv_role_check_location_stock_geo_group" as "ResourceStockThresholdsGeoGroup" 
+		keys ("ID", "TYPE", "RESOURCE_ID", "RESOURCE_TYPE","RESOURCE_CATEGORY")
+		create forbidden update forbidden delete forbidden;
+
+
+	// =========================================================================
+	// Cost Model
+	// =========================================================================
+
+	// Cost Models
+	"sap.tm.trp.db.costmodel::v_cost_model" as "CostModels" keys ("ID")
+		navigates (
+			"CostModel_Datasets" as "CostDatasets",
+			"CostModel_ChangeHistory" as "ChangeHistory"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// CostModel -> Datasets
+	association "CostModel_Datasets"
+		principal "CostModels"("ID") multiplicity "1"
+		dependent "CostModelDatasets"("COST_MODEL_ID") multiplicity "*";
+
+	"sap.tm.trp.db.costmodel::v_costmodels_datasets" as "CostModelDatasets"
+		keys ("COST_MODEL_ID", "COST_DATASET_ID")
+		create forbidden update forbidden delete forbidden;
+
+	// CostModel -> ChangeHistory
+	association "CostModel_ChangeHistory"
+		principal "CostModels"("ID") multiplicity "1"
+		dependent "CostModelChangeHistory"("COST_MODEL_ID") multiplicity "*";
+
+	"sap.tm.trp.db.costmodel::v_cost_model_change_history" as "CostModelChangeHistory" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Carriers
+	//"sap.tm.trp.db.costmodel::v_carrier_ui" as "Carriers" keys ("ID")
+	//	create forbidden update forbidden delete forbidden;
+	"sap.tm.trp.db.costmodel::v_carrier" as "Carriers" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Transportation Mode
+	"sap.tm.trp.db.semantic.common::v_transportation_means" as "TransportationModes" keys ("CODE")
+		create forbidden update forbidden delete forbidden;
+
+	// Currencies
+	"sap.tm.trp.db.costmodel::t_currency" as "Currencies"
+		create forbidden update forbidden delete forbidden;
+
+
+	// =========================================================================
+	// Cost Dataset
+	// =========================================================================
+
+	// Cost Datasets
+	"sap.tm.trp.db.costmodel::v_cost_dataset" as "CostDatasets" keys ("ID")
+		navigates (
+			"CostDataset_Carriers" as "Carriers",
+			"CostDataset_ChangeHistory" as "ChangeHistory",
+			"CostDataset_OldestRecordTime" as "OldestRecordTime"
+		)
+		create forbidden update forbidden delete forbidden;
+
+		// CostDataset -> Carriers
+	association "CostDataset_Carriers"
+		principal "CostDatasets"("ID") multiplicity "1"
+		dependent "CostDatasetsCarriers"("COST_DATASET_ID") multiplicity "*";
+
+	"sap.tm.trp.db.costmodel::v_costdatasets_carriers" as "CostDatasetsCarriers" keys ("COST_DATASET_ID", "ID")
+		create forbidden update forbidden delete forbidden;
+		
+		"sap.tm.trp.db.costmodel::v_costmodel_dependon_costdatasets_carriers" as "CostModelFilterCarriers" keys ("COST_DATASET_ID", "ID")
+			create forbidden update forbidden delete forbidden;
+		
+
+	// CostDataset -> ChangeHistory
+	association "CostDataset_ChangeHistory"
+		principal "CostDatasets"("ID") multiplicity "1"
+		dependent "CostDatasetChangeHistory"("COST_DATASET_ID") multiplicity "*";
+
+	"sap.tm.trp.db.costmodel::v_cost_dataset_change_history" as "CostDatasetChangeHistory" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+
+	// CostDataset -> OldestRecordTime
+	association via parameters "CostDataset_OldestRecordTime"
+		principal "CostDatasets"("ID") multiplicity "1"
+		dependent "CostDatasetsOldestRecordTime"("IN_COST_DATASET_ID") multiplicity "1";
+
+	"sap.tm.trp.db.costmodel::cv_cost_dataset_oldest_record_time" as "CostDatasetsOldestRecordTime" keys ("COST_DATASET_ID")
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+
+	// Cost Types
+	"sap.tm.trp.db.costmodel::v_cost_type" as "CostTypes" keys ("CODE")
+		create forbidden update forbidden delete forbidden;
+
+	// Connection Types
+	"sap.tm.trp.db.costmodel::v_connection_type" as "ConnectionTypes" keys ("CODE")
+		create forbidden update forbidden delete forbidden;
+
+	// default UoM
+	"sap.tm.trp.db.costmodel::v_uom" as "Uoms" keys ("CODE")
+		create forbidden update forbidden delete forbidden;
+
+	// Purchase Organizations
+	"sap.tm.trp.db.semantic.costmodel::v_purchase_organization" as "PurchaseOrganizations" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Freight Agreement Documents
+	"sap.tm.trp.db.semantic.costmodel::v_freight_agreement_document" as "FreightAgreementDocuments" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Cost Profiles
+	"sap.tm.trp.db.semantic.costmodel::v_profile" as "CostProfiles" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Distance Based Costs (for download button to get distance info and for edit dataset to show distance info:)
+	"sap.tm.trp.db.costmodel::cv_distance_based_cost_get_info" as "DistanceBasedCosts"
+		keys ("TRANSPORTATION_MODE_CODE", "RESOURCE_TYPE")
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+	// Distance Based Cost Upload Results
+	"sap.tm.trp.db.costmodel::cv_distance_based_cost_upload_result" as "DistanceBasedUploadResults"
+		keys ("TRANSPORTATION_MODE_CODE", "RESOURCE_TYPE")
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+	// Handling Costs
+	"sap.tm.trp.db.costmodel::cv_handling_based_cost_get_info" as "HandlingCosts"
+		keys ("LOCATION_NAME", "RESOURCE_TYPE", "HANDLING_TYPE","FROM_MOT","TO_MOT")
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+	// Handling Cost Upload Results
+	"sap.tm.trp.db.costmodel::cv_handling_based_cost_upload_result" as "HandlingUploadResults"
+		keys ("LOCATION_NAME", "RESOURCE_TYPE", "HANDLING_TYPE","FROM_MOT","TO_MOT")
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+	// Location Based Costs
+	"sap.tm.trp.db.costmodel::cv_location_based_cost_get_info" as "LocationBasedCosts"
+		keys ("FROM_LOCATION_NAME", "TO_LOCATION_NAME", "RESOURCE_TYPE", "TRANSPORTATION_MODE_CODE")
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+	// Location Based Cost Upload Results
+	"sap.tm.trp.db.costmodel::cv_location_based_cost_upload_result" as "LocationBasedUploadResults"
+		keys ("FROM_LOCATION_NAME", "TO_LOCATION_NAME", "RESOURCE_TYPE", "TRANSPORTATION_MODE_CODE")
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+	// Quantity Based Costs
+	"sap.tm.trp.db.costmodel::cv_quantity_based_cost_get_info" as "QuantityBasedCosts"
+		keys ("LOCATION_NAME", "RESOURCE_TYPE", "FREE_POOL_TYPE", "START_AT", "START_TIME", "THRESHOLD_FROM")
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+	// Quantity Based Cost Upload Results
+	"sap.tm.trp.db.costmodel::cv_quantity_based_cost_upload_result" as "QuantityBasedUploadResults"
+		keys ("LOCATION_NAME", "RESOURCE_TYPE", "FREE_POOL_TYPE", "START_AT", "START_TIME", "THRESHOLD_FROM")
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+	// Time Based Costs
+	"sap.tm.trp.db.costmodel::cv_time_based_cost_get_info" as "TimeBasedCosts"
+		keys ("LOCATION_NAME", "RESOURCE_TYPE", "THRESHOLD_FROM")
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+	// Time Based Cost Upload Results
+	"sap.tm.trp.db.costmodel::cv_time_based_cost_upload_result" as "TimeBasedUploadResults"
+		keys ("LOCATION_NAME", "RESOURCE_TYPE", "THRESHOLD_FROM")
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+
+	// =========================================================================
+	// Resource
+	// =========================================================================
+	"sap.tm.trp.db.equipment::cv_equipment_visibility_equip_info" as "ResourceMasterTable"
+	     key generate local "EQUIPMENT_ID"
+         parameters via entity
+         create forbidden update forbidden delete forbidden;
+
+    // Resource
+    "sap.tm.trp.db.equipment::v_resource" as "Resources" key("RESID")
+         create forbidden update forbidden delete forbidden;
+
+    //Change history of this resource
+    "sap.tm.trp.db.eventprocessing::cv_tracking_history_by_resid" as "ResourceChangeHistory"
+         key generate local "KEY"
+         parameters via entity
+         create forbidden update forbidden delete forbidden;
+
+
+   //resources information
+   "sap.tm.trp.db.equipment::v_resources_info" as "ResourceInfos" keys ("RESOURCE")
+		create forbidden update forbidden delete forbidden;
+
+	// =========================================================================
+	// Change History
+	// =========================================================================
+
+	// Resource Change History Table
+	"sap.tm.trp.db.eventprocessing::cv_tracking_history" as "ResourceChangeHistoryTable"
+		key generate local "KEY"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+
+
+	// =========================================================================
+	// Lease Contracts
+	// =========================================================================
+
+	// Lease Contract Table
+	"sap.tm.trp.db.leasecontract::cv_lease_contract_visibility" as "LeaseContractMasterTable"
+		key generate local "KEY"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+
+	// Lease Contracts
+	"sap.tm.trp.db.leasecontract::v_lease_contract_ui" as "LeaseContracts" key("ID", "RESOURCE_CATEGORY") 
+		create forbidden update forbidden delete forbidden;
+
+	// Lease Contract Details
+	"sap.tm.trp.db.leasecontract::cv_lease_contract_overview" as "LeaseContractOverview"
+		key generate local "KEY"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+
+	// Lease Contract Per Diem Cost Table
+	"sap.tm.trp.db.leasecontract::cv_lease_contract_equipment_overview" as "LeaseContractPerDiemCostTable"
+		key generate local "KEY"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+
+	// Lease Contract Terms Table
+	"sap.tm.trp.db.leasecontract::cv_lease_contract_term_details" as "LeaseContractTermsTable"
+		key generate local "KEY"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+
+	// Lease Contract History Table
+	"sap.tm.trp.db.leasecontract::cv_lease_contract_history_summary" as "LeaseContractHistoryTable"
+		key generate local "KEY"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+
+	// Lease Contract Resource History Table
+	"sap.tm.trp.db.leasecontract::cv_lease_contract_history_details_by_equip" as "LeaseContractResourceHistoryTable"
+		key generate local "KEY"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+
+   //Resource balancing lease availability details
+   "sap.tm.trp.db.leasecontract::cv_lease_contract_availability" as "LeaseContractAvailability"
+       key generate local "KEY"
+       parameters via entity
+       create forbidden update forbidden delete forbidden;
+
+   //Resource balancing lease availability details
+   "sap.tm.trp.db.leasecontract::cv_lease_contract_leased_resources" as "LeaseContractLeasedResources"
+       key generate local "EQUIP_ID"
+       parameters via entity
+       create forbidden update forbidden delete forbidden;
+
+	// =========================================================================
+	// Moving Stock
+	// =========================================================================
+
+
+
+	// Moving Stock Freight Order Table	  -add for trp 2.0
+
+		"sap.tm.trp.db.movingstock::cv_freight_booking_moving_stock" as "MovingStockFreightOrderTable"
+		keys ("DOCUMENT")
+		navigates (
+			"MovingStockMaster_MovingStockFreightOrderStops" as "Stops"
+			)
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+	// Moving Stock Freight Order Stops -add for trp 2.0
+	   "sap.tm.trp.db.movingstock::cv_moving_stock_active_resource_stop_information_freight_order" as "MovingStockFreightOrderStops"
+		keys ("FREIGHTBOOKINGID","SEQUENCE_NUMBER")
+		navigates (
+			"MovingStockFreightOrderStops_MovingStockFreightOrderStopResourceTypes" as "MovingStockResTypes"
+
+		)
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+	// Moving Stock Voyage Stop Resource Types	 -add for trp 2.0
+	    "sap.tm.trp.db.movingstock::cv_moving_stock_active_resource_equipment_information_freight_order" as "MovingStockFreightOrderStopResourceTypes"
+		keys ("FREIGHTBOOKINGID","SEQUENCE_NUMBER","STOP_RESOURCE_TYPE")
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+	// MovingStockVoyage -> MovingStockVoyageStops -add for trp 2.0
+	association via parameters "MovingStockMaster_MovingStockFreightOrderStops"
+		principal "MovingStockFreightOrderTable"("DOCUMENT", "EQUIP_FILTER_ID","RESOURCE_CATEGORY") multiplicity "1"
+		dependent "MovingStockFreightOrderStops"("IN_Document_ID", "IN_EQUIP_FILTER_ID","IN_RESOURCE_CATEGORY") multiplicity "*";
+
+	// MovingStockVoyageStop -> MovingStockVoyageStopResourceTypes -add for trp 2.0
+	association via parameters "MovingStockFreightOrderStops_MovingStockFreightOrderStopResourceTypes"
+		principal "MovingStockFreightOrderStops"("FREIGHTBOOKINGID", "IN_EQUIP_FILTER_ID","IN_RESOURCE_CATEGORY","SEQUENCE_NUMBER") multiplicity "1"
+		dependent "MovingStockFreightOrderStopResourceTypes"( "IN_Document_ID", "IN_EQUIP_FILTER_ID","IN_RESOURCE_CATEGORY","SEQUENCE_NUMBER") multiplicity "*";
+
+	// Moving Stock Load Discharge Table -add for trp 2.0
+	"sap.tm.trp.db.movingstock::cv_load_discharge_freight_order" as "MovingStockLoadDischargeFreightOrderTable"
+		key generate local "KEY"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+
+	 // Moving Stock assigned resources  -add for trp 2.0
+	"sap.tm.trp.db.movingstock::cv_moving_stock_assigned_resources_freight_order" as "MovingStockAssignedResourcesFreightOrder"
+		key generate local "KEY"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+
+
+	// =========================================================================
+	// Booking
+	// =========================================================================
+
+	// Empty Booking Table
+	"sap.tm.trp.db.booking::cv_booking" as "EmptyBookingMasterTable"
+		key generate local "BOOKING_ID"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+
+	// Booking Assigned Resources
+	"sap.tm.trp.db.booking::cv_assigned_items" as "BookingAssignedResources"
+		key generate local "EQUIP_ID"
+		parameters via entity
+		create forbidden update forbidden delete forbidden;
+
+
+	// =========================================================================
+	// Pickup Return
+	// =========================================================================
+
+	// Special Instructions
+	"sap.tm.trp.db.semantic.resource::v_special_instruction_t" as "SpecialInstructions" keys ("CODE")
+		create forbidden update forbidden delete forbidden;
+
+	// Exclusive Rules
+	"sap.tm.trp.db.pickupreturn::v_exclusive_rule_ui" as "ExclusiveRules" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+		
+	// Selection Date fields
+    "sap.tm.trp.db.pickupreturn::v_pickupret_selection_date_list" as "selectionDates" keys ("ID","TYPE")
+	create forbidden update forbidden delete forbidden;
+		
+
+	// Location Determination Rules
+	"sap.tm.trp.db.pickupreturn::v_location_determination_rule_ui" as "LocationDeterminationRules" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Location Rules
+	"sap.tm.trp.db.pickupreturn::v_role_check_location_rule" as "LocationRules" keys ("ID")
+		navigates (
+			"LocationRule_LocationRuleExecutionLogs" as "LocationRuleExecutionLogs"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// Location Rules -> F4 help list
+	"sap.tm.trp.db.pickupreturn::v_role_check_location_rule_optimized" as "LocationRulesList" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+
+	// LocationRule -> LocationRuleExecutionLogs
+	association "LocationRule_LocationRuleExecutionLogs"
+		principal "LocationRules"("ID") multiplicity "1"
+		dependent "LocationRuleExecutionLogs"("RULE_ID") multiplicity "*";
+
+	"sap.tm.trp.db.pickupreturn::v_execution_log_for_location_rule_ui" as "LocationRuleExecutionLogs" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Location Assignment Finalize Results
+	"sap.tm.trp.db.pickupreturn::v_location_rule_assignment_finalize_info" as "LocationAssignmentFinalizeResults" keys ("RULE_ID", "TU_ID")
+		create forbidden update forbidden delete forbidden;
+
+	// User Locations
+	/*"sap.tm.trp.db.systemmanagement.user::v_user_location_all_ui" as "UserValidLocations" keys ("LOCATION_ID")
+		create forbidden update forbidden delete forbidden;
+		*/
+		
+	// User Locations
+	"sap.tm.trp.db.systemmanagement.user::cv_user_location_all_ui" as "UserValidLocations" keys ("LOCATION_ID")
+		create forbidden update forbidden delete forbidden;
+		
+		"sap.tm.trp.db.systemmanagement.user::v_user_location_all_ui" as "UserValidLocations2" keys ("LOCATION_ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Schedule Traces
+	"sap.tm.trp.db.pickupreturn::v_location_rule_assignment_log" as "ScheduleTraces"
+		keys ("RULE_ID", "TU_ID", "RUN_ID")
+		create forbidden update forbidden delete forbidden;
+
+    //Ruleset groups
+    "sap.tm.trp.db.pickupreturn.rulesetgroup::v_ruleset_group" as "RulesetGroup" keys ("ID")
+    	navigates (
+			"RulesetGroup_RulesetList" as "RulesetList",
+			"RulesetGroup_Schedule" as "Schedule",
+			"RulesetGroup_ExecutionLogs" as "ExecutionLogs"
+		)
+		create forbidden update forbidden delete forbidden;
+    association "RulesetGroup_RulesetList"
+        principal "RulesetGroup"("ID") multiplicity "1"
+        dependent "RulesetGroupRulesetList"("GROUP_ID") multiplicity "*";
+    association "RulesetGroup_Schedule"
+        principal "RulesetGroup"("ID") multiplicity "1"
+        dependent "RulesetGroupSchedule"("GROUP_ID") multiplicity "1";
+	association "RulesetGroup_ExecutionLogs"
+		principal "RulesetGroup"("ID") multiplicity "1"
+		dependent "RulesetGroupExecutionLogs"("GROUP_ID") multiplicity "*";
+        
+		
+    //Ruleset group job process
+    "sap.tm.trp.db.pickupreturn.rulesetgroup::t_job_process" as "RulesetGroupJobProcess"
+		create forbidden update forbidden delete forbidden;
+	
+	//Ruleset group rule list
+	"sap.tm.trp.db.pickupreturn.rulesetgroup::v_ruleset_group_rules_list" as "RulesetGroupRulesetList" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+
+	//Ruleset group schedule
+	"sap.tm.trp.db.pickupreturn.rulesetgroup::v_ruleset_group_schedule" as "RulesetGroupSchedule" keys ("GROUP_ID")
+		create forbidden update forbidden delete forbidden;
+		
+	//Ruleset group ruleset valuehelp
+	"sap.tm.trp.db.pickupreturn.rulesetgroup::v_ruleset_valuehelp_for_group" as "RulesetGroupRulesetValueHelp" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+		
+		
+	"sap.tm.trp.db.pickupreturn.rulesetgroup::v_execution_log" as "RulesetGroupExecutionLogs" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+		
+	// =========================================================================
+	// Resource Balancing
+	// =========================================================================
+	//----------------------------------- Simulation Plan basic ----------------------------------
+	// Activities
+    "sap.tm.trp.db.planningcockpit::v_activity_ui" as "Activities" keys ("ID")
+        create forbidden update forbidden delete forbidden;
+
+    // Balancing Moves
+    "sap.tm.trp.db.planningcockpit::v_balancing_list_ui" as "BanlancingMoves" keys ("ID")
+        create forbidden update forbidden delete forbidden;
+
+    // Scenarios
+    "sap.tm.trp.db.planningcockpit::v_scenario_ui" as "Scenarios" keys ("ID")
+        navigates (
+            "Scenario_Activities" as "Activities",
+            "Scenario_BanlancingMoves" as "BanlancingMoves"
+        )
+        create forbidden update forbidden delete forbidden;
+
+    // Scenarios -> Activities
+    association "Scenario_Activities"
+        principal "Scenarios"("ID") multiplicity "1"
+        dependent "Activities"("REL_SCENARIO_ID") multiplicity "*";
+
+    // Scenarios -> BalancingMoves
+    association "Scenario_BanlancingMoves"
+        principal "Scenarios"("ID") multiplicity "1"
+        dependent "BanlancingMoves"("REL_SCENARIO_ID") multiplicity "*";
+
+    // Simulation Plan Coordinates
+    "sap.tm.trp.db.planningcockpit::v_simulation_plan_coordinate" as "SimulationPlanCoordinates" keys ("SM_PLAN_ID")
+        create forbidden update forbidden delete forbidden;
+
+	// Simulation Plans
+    "sap.tm.trp.db.planningcockpit::cv_role_check_simulation_plan" as "SimulationPlans" keys ("ID")
+        navigates (
+            "SimulationPlan_Scenarios" as "Scenarios",
+            "SimulationPlan_NetworkSettingGrp" as "NetworkSettingGrp",
+            "SimulationPlan_SDPlan" as "SDPlans",
+            "SimulationPlan_TimeRange" as "TimeRanges",
+            "SimulationPlan_Coordinate" as "Coordinates"
+        )
+        create forbidden update forbidden delete forbidden;
+
+    // SimulationPlans -> Scenarios
+    association "SimulationPlan_Scenarios"
+        principal "SimulationPlans"("ID") multiplicity "1"
+        dependent "Scenarios"("REL_SM_PLAN_ID") multiplicity "*";
+
+    // SimulationPlans -> Network Setting Group
+    association "SimulationPlan_NetworkSettingGrp"
+        principal "SimulationPlans"("NETWORK_SETTING_GROUP_ID") multiplicity "1"
+        dependent "NetworkSettingGroup"("ID") multiplicity "1";
+
+    // SimulationPlans -> SupplyPlan
+    association "SimulationPlan_SDPlan"
+        principal "SimulationPlans"("SUPPLY_DEMAND_PLAN_ID") multiplicity "1"
+        dependent "SDPlans"("ID") multiplicity "1";
+
+    // SimulationPlans -> TimeRange
+    association "SimulationPlan_TimeRange"
+        principal "SimulationPlans"("ID") multiplicity "1"
+        dependent "TimeRanges"("SM_PLAN_ID") multiplicity "1";
+
+    // SimulationPlans -> Coordinate
+    association "SimulationPlan_Coordinate"
+        principal "SimulationPlans"("ID") multiplicity "1"
+        dependent "SimulationPlanCoordinates"("SM_PLAN_ID") multiplicity "1";
+
+    // ------------------------ Resource balancing used SD Plan ----------------------------------------------------
+    "sap.tm.trp.db.planningcockpit::cv_candidate_plan_list" as "SDPlans" keys ("ID")
+        navigates (
+            "SDPlan_SupplyFilter" as "SupplyFilters",
+            "SupplyResourceFiltersLink" as "PlanModelResourceFilters"
+        )
+        create forbidden update forbidden delete forbidden;
+
+    // SDPlans -> SupplyFilter
+    association "SDPlan_SupplyFilter"
+        principal "SDPlans"("FILTER_GROUP_ID") multiplicity "1"
+        dependent "SupplyFilters"("ID") multiplicity "1";
+        
+            // SDPlans -> SupplyFilterResource
+    association "SupplyResourceFiltersLink"
+        principal "SDPlans"("EQUIPMENT_FILTER_ID") multiplicity "1"
+        dependent "SupplyResourceFilters"("ID") multiplicity "1";
+
+    //----------------------------------- Supply Filters ----------------------------------
+    // SupplyFilters
+    "sap.tm.trp.db.filter::v_filter_group" as "SupplyFilters" keys ("ID")
+        navigates (
+            "SupplyFilter_EquipmentFilter" as "SupplyResourceFilters"
+        )
+        create forbidden update forbidden delete forbidden;
+
+    // Filter Group -> EquipmentFilter
+    association "SupplyFilter_EquipmentFilter"
+        principal "SupplyFilters"("ID") multiplicity "1"
+        dependent "SupplyResourceFilters"("ID") multiplicity "1"
+        over "sap.tm.trp.db.filter::t_filter_equipment_filter" principal ("FILTER_GROUP_ID") dependent ("EQUIPMENT_FILTER_ID");
+
+    // Equipment Filters Equipment Codes
+    "sap.tm.trp.db.planningcockpit::v_equi_type_by_filter" as "ResourceFilterInfos" keys ("EQUIPMENT_FILTER_ID", "EQUI_CODE")
+        create forbidden update forbidden delete forbidden;
+
+    //----------------------------------- Equipment Filter ---------------------------------
+    // Equipment Filter
+    "sap.tm.trp.db.filter::v_equipment_filter" as "SupplyResourceFilters" keys ("ID")
+        navigates (
+            "SupplyResourceFilter_Items" as "Items"
+        )
+        create forbidden update forbidden delete forbidden;
+
+    // Equipment Filter -> Items
+    association "SupplyResourceFilter_Items"
+        principal "SupplyResourceFilters"("ID") multiplicity "1"
+        dependent "ResourceFilterInfos"("EQUIPMENT_FILTER_ID") multiplicity "*";
+
+     //----------------------------------- Time Filter ----------------------------------
+    // Simulation Plan Time Filters
+    "sap.tm.trp.db.planningcockpit::v_time_filter_by_plan" as "TimeRanges" keys ("SM_PLAN_ID")
+        create forbidden update forbidden delete forbidden;
+
+    //----------------------------------- Alerts on map ----------------------------------
+     "sap.tm.trp.db.planningcockpit::cv_get_alerts_for_scenario" as "ScenarioAlerts"
+     	key generate local "ALERTID"
+     	parameters via entity
+     	create forbidden update forbidden delete forbidden;
+
+    //----------------------------------- Connection ----------------------------------
+     "sap.tm.trp.db.planningcockpit::cv_query_basic_connection" as "BasicConnections" keys ("CONNECTION_ID")
+     	parameters via key and entity
+     	create forbidden update forbidden delete forbidden;
+
+	//----------------------------------- Network Setting Group ----------------------------------
+     //Metadata
+     "sap.tm.trp.db.planningcockpit::v_network_setting_group" as "NetworkSettingGroup" keys ("ID")
+	     navigates (
+	     		"NetworkSettingGroup_Parameters" as "NetworkSettingGroupHeadDetails"
+	     	)
+        create forbidden update forbidden delete forbidden;
+
+     //Parameter
+     "sap.tm.trp.db.planningcockpit::v_network_setting_group_parameter" as "NetworkSettingGroupParameter" keys ("ID","RESOURCE_CATEGORY")
+        create forbidden update forbidden delete forbidden;
+
+     //Parameter group
+     "sap.tm.trp.db.planningcockpit::v_network_setting_group_parameter_group" as "NetworkSettingGroupParameterGroup" keys ("NETWORK_SETTING_GROUP_ID")
+        create forbidden update forbidden delete forbidden;
+
+     //Network Setting Group Metadata -> Parameter Group
+     association via parameters "NetworkSettingGroup_Parameters"
+        principal "NetworkSettingGroup"("ID") multiplicity "1"
+        dependent "NetworkSettingGroupParameterGroup"("NETWORK_SETTING_GROUP_ID") multiplicity "*";
+
+     //Network Setting Group Change history
+     "sap.tm.trp.db.planningcockpit::v_network_setting_change_history" as "NetworkSettingChangeHistory" keys ("ID")
+        create forbidden update forbidden delete forbidden;
+
+     //Base Equip Type Status
+     "sap.tm.trp.db.planningcockpit::cv_get_base_equip_type_status" as "BaseEquipTypeStatus"
+     	key generate local "ID"
+     	parameters via entity
+     	create forbidden update forbidden delete forbidden;
+
+
+     //----------------------------------- Path ----------------------------------
+     //Basic Path Head
+     "sap.tm.trp.db.planningcockpit::cv_get_basic_path_by_simulationid_scenarioid" as "BasicPathHead" key ("ID")
+	     navigates (
+	     		"BasicPathHead_Details" as "BasicPathHeadDetails"
+	        )
+     	parameters via key and entity
+     	create forbidden update forbidden delete forbidden;
+
+     //Basic Path Details
+     "sap.tm.trp.db.planningcockpit::v_path_details" as "BasicPathDetails" key ("PATH_ID")
+        create forbidden update forbidden delete forbidden;
+
+     //Basic Path Head -> Details
+     association via parameters "BasicPathHead_Details"
+        principal "BasicPathHead"("ID") multiplicity "1"
+        dependent "BasicPathDetails"("PATH_ID") multiplicity "*";
+
+     //Basic Path Departure Rule
+     "sap.tm.trp.db.planningcockpit::cv_get_departure_rule" as "BasicPathDepartureRule" key ("RULE_NUMBER")
+     	parameters via key and entity
+     	create forbidden update forbidden delete forbidden;
+
+     //Basic Path/Connection List
+     "sap.tm.trp.db.planningcockpit::cv_get_basic_connection_path_by_location" as "BasicPathConnection"
+     	key generate local "ID"
+     	parameters via entity
+     	create forbidden update forbidden delete forbidden;
+
+     //Composite Path Head
+     "sap.tm.trp.db.planningcockpit::cv_get_composite_path_list_head" as "CompositePathListHead" key ("PATH_ID")
+	     navigates (
+	     		"CompositePathHead_Details" as "CompositePathHeadDetails"
+	        )
+     	parameters via key and entity
+     	create forbidden update forbidden delete forbidden;
+
+     //Composite Path Details
+     "sap.tm.trp.db.planningcockpit::cv_get_composite_path_list_details" as "CompositePathListDetails" key ("PATH_ID")
+     	parameters via key and entity
+     	create forbidden update forbidden delete forbidden;
+
+     //Composite Path Head -> Details
+     association via parameters "CompositePathHead_Details"
+        principal "CompositePathListHead"("PATH_ID") multiplicity "1"
+        dependent "CompositePathListDetails"("PATH_ID") multiplicity "*";
+
+     //----------------------------------- Route ----------------------------------
+     //Route Head
+     "sap.tm.trp.db.planningcockpit::cv_get_route_head" as "RouteHead" key ("ID")
+	     navigates (
+	     		"RouteHead_Details" as "RouteHeadDetails"
+	     	)
+     parameters via key and entity
+     create forbidden update forbidden delete forbidden;
+
+     //Route Details
+     "sap.tm.trp.db.planningcockpit::cv_get_route_details" as "RouteDetails"
+     	keys generate local "ID"
+     	parameters via entity
+     	create forbidden update forbidden delete forbidden;
+
+     //Route Head -> Details
+     association "RouteHead_Details"
+        principal "RouteHead"("ID") multiplicity "1"
+        dependent "RouteDetails"("ROUTE_ID") multiplicity "*";
+
+     //Route Path/Connection Head
+     "sap.tm.trp.db.planningcockpit::cv_get_path_connection_head_by_id_type" as "RoutePathHead"
+     	keys generate local "GenID"
+	    navigates (
+	     		"RoutePathHead_Details" as "RoutePathHeadDetails"
+	     	)
+     	parameters via entity
+     	create forbidden update forbidden delete forbidden;
+
+    //Route Path/Connection Details
+     "sap.tm.trp.db.planningcockpit::cv_get_path_connection_details_by_id_type" as "RoutePathDetails"
+     	keys generate local "GenID"
+     	parameters via entity
+     	create forbidden update forbidden delete forbidden;
+
+     //Route Path/Connection Head -> Details
+     association "RoutePathHead_Details"
+        principal "RoutePathHead"("PATH_ID","PATH_TYPE") multiplicity "1"
+        dependent "RouteDetails"("PATH_ID","PATH_TYPE") multiplicity "*";
+
+     //Route Trip Head
+     "sap.tm.trp.db.planningcockpit::cv_get_trip_head_by_id" as "RouteTripHead" key ("ID")
+	     navigates (
+	     		"RouteTripHead_Details" as "RouteTripHeadDetails"
+	     	)
+     	parameters via key and entity
+     	create forbidden update forbidden delete forbidden;
+
+     //Route Trip Head -> Details
+     association "RouteTripHead_Details"
+        principal "RouteTripHead"("ID") multiplicity "1"
+        dependent "TripDetails"("ID") multiplicity "*";
+
+     //----------------------------------- Locations for repositioning ----------------------------------
+     "sap.tm.trp.db.planningcockpit::cv_get_locations_for_repositioning" as "Repositioninglocations"
+     	keys generate local "LOCATION_ID"
+     	parameters via entity
+     create forbidden update forbidden delete forbidden;
+
+      //----------------------------------- Locations for Network ----------------------------------
+     "sap.tm.trp.db.planningcockpit::cv_get_all_locations_and_within_flag" as "AllLocations" key ("ID")
+     	parameters via key and entity
+     create forbidden update forbidden delete forbidden;
+
+
+     //----------------------------------- Locations ----------------------------------
+     "sap.tm.trp.db.planningcockpit::cv_loc_or_primaryloc_by_simplanId" as "PlanLocations" key ("LOCATION_ID")
+     	parameters via key and entity
+     	create forbidden update forbidden delete forbidden;
+
+     //----------------------------------- Finalize TRQ ----------------------------------
+     //write back TRQs
+     "sap.tm.trp.db.planningcockpit::cv_get_writeback_trq_by_scenario" as "FinalizeTRQs" key("ID")
+     	parameters via key and entity
+     	create forbidden update forbidden delete forbidden;
+    //----------------------------------- Trip ----------------------------------
+     //Trip Head
+     "sap.tm.trp.db.planningcockpit::cv_get_trip_head" as "TripHead" key ("ID")
+	     navigates (
+	     		"TripHead_Details" as "TripHeadDetails"
+	     	)
+     	parameters via key and entity
+     	create forbidden update forbidden delete forbidden;
+
+     //Trip Details
+     "sap.tm.trp.db.planningcockpit::cv_get_trip_details" as "TripDetails" key ("ID")
+     parameters via key and entity
+     create forbidden update forbidden delete forbidden;
+
+     //Trip Head -> Details
+     association via parameters "TripHead_Details"
+        principal "TripHead"("ID") multiplicity "1"
+        dependent "TripDetails"("ID") multiplicity "*";
+
+      //----------------------------------- Transportation Means for Railcar ----------------------------------
+      "sap.tm.trp.db.planningcockpit.railcarmtr::v_transportation_means_railcar" as "TransportationMeansRailcar" keys ("CODE")
+		create forbidden update forbidden delete forbidden;
+
+      //----------------------------------- Load Discharge Activity ----------------------------------
+     // Voyages Load Discharge
+    "sap.tm.trp.db.planningcockpit::cv_get_load_discharge_by_voyage" as "LoadDischarge" keys ("SCHEDULE","VOYAGE","SEQUENCE")
+     parameters via key and entity
+     create forbidden update forbidden delete forbidden;
+            
+    // Candidate Voyages
+    "sap.tm.trp.db.planningcockpit::cv_get_voyages_by_location" as "CandidateVoyage" keys ("SCHEDULE","VOYAGE")
+  	parameters via key and entity
+   	create forbidden update forbidden delete forbidden;
+    
+                
+	// =========================================================================
+	// Archive
+	// =========================================================================
+
+	"sap.tm.trp.db.archive::cv_archive_rule_with_schedule_option" as "ArchiveRules"
+		key("ID")
+		navigates (
+			"ArchiveRule_Executions" as "Executions",
+			"Archive_Schedule" as "ArchiveSchedule"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// ArchiveRule -> Executions
+	association "ArchiveRule_Executions"
+		principal "ArchiveRules"("ID") multiplicity "1"
+		dependent "ArchiveRuleExecutions"("RULE_ID") multiplicity "*";
+
+	"sap.tm.trp.db.archive::cv_archive_history_with_sch_option" as "ArchiveRuleExecutions" key ("ID")
+		create forbidden update forbidden delete forbidden;
+		
+   // ArchiveRule -> Schedule
+   association "Archive_Schedule" 
+   		principal "ArchiveRules"("ID") multiplicity "1"
+   		dependent "ArchiveScheduleDetails" ("ID") multiplicity "1";
+   		
+	"sap.tm.trp.db.archive::cv_archive_schedule_next_execution_detail" as "ArchiveScheduleDetails" keys ("ARCHIVE_SCHEDULE_ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Archive Tables
+	"sap.tm.trp.db.archive::cv_archive_tables_list" as "ArchiveTables"
+		key ("ID")
+		parameters via key and entity
+		create forbidden update forbidden delete forbidden;
+
+	// =========================================================================
+	// Customization
+	// =========================================================================
+	// Logistic system config
+	"sap.tm.trp.db.systemmanagement.customization::v_config" as "LogisticConfig" keys ("NAME")
+		create forbidden update forbidden delete forbidden;
+
+	// Client hierarchies
+	"sap.tm.trp.db.semantic.location::v_zone_hierarchy_all" as "ClientHierarchies" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Client code
+	"sap.tm.trp.db.semantic.common::v_client_code_list" as "ClientCodes" keys ("CLIENT")
+		navigates (
+		 	"ClientCode_Hierarchy" as "ClientHierarchies"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// Hierarchy
+	association "ClientCode_Hierarchy"
+		principal "ClientCodes"("CLIENT") multiplicity "1"
+		dependent "ClientHierarchies"("ID") multiplicity "*";
+
+	// Map provider
+	"sap.tm.trp.db.systemmanagement.customization::v_map_provider" as "MapProviders" keys ("ID")
+		navigates (
+		 	"MapProvider_Url" as "MapProviderURLs"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// Map provider URL
+	"sap.tm.trp.db.systemmanagement.customization::v_map_provider_url" as "MapProviderURLs" keys ("ID","URL")
+		create forbidden update forbidden delete forbidden;
+
+	// Map provider URL
+	association "MapProvider_Url"
+		principal "MapProviders"("ID") multiplicity "1"
+		dependent "MapProviderURLs"("ID") multiplicity "*";
+
+	// Resource category
+	"sap.tm.trp.db.systemmanagement.customization::v_resource_category" as "ResourceCategory" keys ("ID")
+		navigates (
+		 	"ResourceCategory_GroupDetail" as "ResourceCategoryList",
+		 	"ResourceCategory_Repositioning" as "RepositioningColumns",
+		 	"ResourceCategory_registerObjects" as "RegisterObjects",
+		 	"ResourceCategory_extendColumns" as "ExtendColumns"
+		)
+		create forbidden update forbidden delete forbidden;
+
+	// Resource group detail
+	"sap.tm.trp.db.systemmanagement.customization::v_resource_category_mapping" as "ResourceCategoryList" keys ("CODE")
+		create forbidden update forbidden delete forbidden;
+
+	// Repositioning columns
+	"sap.tm.trp.db.systemmanagement.customization::v_repositioning_column_desc" as "RepositioningColumns" keys ("RESOURCE_CATEGORY_NAME","ID")
+		create forbidden update forbidden delete forbidden;
+		
+	// Registered objects
+	"sap.tm.trp.db.systemmanagement.customization::v_resource_category_registered_objects" as "RegisterObjects" 
+	keys ("RESOURCE_CATEGORY_ID","REGISTERED_OBJECT_ID","TYPE")
+		create forbidden update forbidden delete forbidden;
+		
+	// Registered alert rules
+	"sap.tm.trp.db.systemmanagement.customization::v_resource_category_alert_rules" as "RegisterAlertRules" 
+	keys ("RESOURCE_CATEGORY","ID","TYPE")
+		create forbidden update forbidden delete forbidden;
+
+	// Extended columns
+	"sap.tm.trp.db.systemmanagement.customization::v_resource_category_extended_columns" as "ExtendColumns" 
+	keys ("RESOURCE_CATEGORY_ID","COLUMN_ID")
+		create forbidden update forbidden delete forbidden;
+	
+	// Resource group detail
+	association "ResourceCategory_GroupDetail"
+		principal "ResourceCategory"("ID") multiplicity "1"
+		dependent "ResourceCategoryList"("CODE") multiplicity "*";
+
+	// Repositioning columns by resource category
+	association "ResourceCategory_Repositioning"
+		principal "ResourceCategory"("ID") multiplicity "1"
+		dependent "RepositioningColumns"("ID") multiplicity "*";
+		
+	// Registered objects
+	association "ResourceCategory_registerObjects"
+		principal "ResourceCategory"("ID") multiplicity "1"
+		dependent "RegisterObjects"("RESOURCE_CATEGORY_ID") multiplicity "*";
+
+	// Repositioning columns
+	association "ResourceCategory_extendColumns"
+		principal "ResourceCategory"("ID") multiplicity "1"
+		dependent "ExtendColumns"("RESOURCE_CATEGORY_ID") multiplicity "*";
+
+	// Resource group detail
+	"sap.tm.trp.db.semantic.resource::v_resource_groups" as "ResourceGroupDetail" keys ("RESOURCE_GROUP","RESOURCE_CLASS","RESOURCE_GROUP_TYPE")
+		create forbidden update forbidden delete forbidden;
+
+	// Repositioning parameters
+	"sap.tm.trp.db.systemmanagement.customization::v_repositioning_parameters" as "RepositioningParameters" keys ("ID")
+		create forbidden update forbidden delete forbidden;
+
+	// Repositioning parameter detail column values
+	"sap.tm.trp.db.systemmanagement.customization::v_repositioning_parameter_details" as "RepositioningParameterDetails" keys ("ID","RESOURCE_CATEGORY_TYPE","RESOURCE_GROUP_TYPE","PARAMETER_CODE")
+		create forbidden update forbidden delete forbidden;
+		
+    // Enhanced schedule
+	"sap.tm.trp.db.systemmanagement.customization::v_enhanced_schedule" as "EnhancedSchedule" keys ("TABLE_NAME_KEY")
+		create forbidden update forbidden delete forbidden;
+
+	// =========================================================================
+	// Data Protection and Privacy
+	// =========================================================================
+	// User Consent
+	"sap.tm.trp.db.dataprotectionprivacy::cv_user_consent" as "UserConsent" key generate local "USER_NAME"
+	    parameters via entity
+	    create forbidden update forbidden delete forbidden;
+    // User Main data
+	"sap.tm.trp.db.dataprotectionprivacy::cv_user_maindata" as "UserMaindata" key generate local "USER_NAME"
+	    parameters via entity
+	    create forbidden update forbidden delete forbidden;
+	// User roles
+	"sap.tm.trp.db.dataprotectionprivacy::cv_user_roles" as "UserRoles" key generate local "USER_NAME"
+	    parameters via entity
+	    create forbidden update forbidden delete forbidden;
+	    
+	// User where used
+	"sap.tm.trp.db.dataprotectionprivacy::cv_user_where_used" as "UserWhereUsed" key generate local "USER_NAME"
+	    parameters via entity
+	    create forbidden update forbidden delete forbidden;
+	    
+    // User privileges
+	"sap.tm.trp.db.dataprotectionprivacy::cv_user_privileges" as "UserPrivileges" key generate local "USER_NAME"
+	    parameters via entity
+	    create forbidden update forbidden delete forbidden;
+	    
+	//===============================================================
+	// Mass Data upload Configuration
+	//==================================================================
+
+		"sap.tm.trp.db.massupload::v_massupload_dataobjects" as "DatauplObjectConfig" keys ("DATA_OBJ")
+			create forbidden update forbidden delete forbidden;  
+			
+	   "sap.tm.trp.db.massupload::cv_massupload_execution_history" as "MassUploadExecutions" key ("ID")
+		 create forbidden update forbidden delete forbidden;
+	//===============================================================
+	// Plan Usage Configuration
+	//==================================================================
+	    
+	    "sap.tm.trp.db.pipeline::v_plan_usage" as "PlanUsages" key ("PLAN_MODEL_TYPE_ID") 
+		 create forbidden update forbidden delete forbidden; 
+		 
+	//===============================================================
+	// EAC Configuration
+	//==================================================================
+    "sap.tm.trp.db.hrf.ruleManage.ruleGroup::v_eac_rule_group" as "EACConfigurations" keys ("ID")
+    	navigates (
+			"EACConfiguration_Items" as "Items"
+		)
+		create forbidden update forbidden delete forbidden;
+    association "EACConfiguration_Items"
+        principal "EACConfigurations"("ID") multiplicity "1"
+        dependent "EACConfigurationItems"("LOCATION_RULE_ID") multiplicity "*";
+         
+	//Ruleset group rule list
+	"sap.tm.trp.db.hrf.ruleManage.ruleGroup::v_eac_rule_loc" as "EACConfigurationItems" key ("LOCATION_RULE_ID", "ID") 
+		create forbidden update forbidden delete forbidden;
+}
+
+settings {
+	support null;
+	content cache-control "no-store";
+	metadata cache-control "max-age=36000,must-revalidate";
+
+}

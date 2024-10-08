@@ -1,0 +1,143 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_register_pickup_extended_col_regenerate" (
+    IN ID BIGINT,
+    OUT STATUS SMALLINT,
+    OUT MSG NVARCHAR(256)
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+ 
+	DECLARE EXT_COUNT SMALLINT;
+	DECLARE ACTIVE SMALLINT := 1;
+	DECLARE PAGE_ID INTEGER := 103;
+	DECLARE SCHEMA_NAME VARCHAR(256);
+    DECLARE STRUCTURE_NAME VARCHAR(256); 
+    DECLARE USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE CREATE_TIME TIMESTAMP;
+    DECLARE TU_ID_FIELD VARCHAR(8) := 'TU_ID';
+    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        STATUS := 0;
+        SELECT ::SQL_ERROR_MESSAGE INTO MSG FROM DUMMY;
+    END;
+    
+    SELECT IFNULL(MAX(ID),-1) INTO USER_ID
+    FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    SELECT IFNULL(MAX(SPRAS),'') INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+
+    STATUS := 1;
+    MSG := 'EXT_COL_REGENERATED_SUCCESSFULLY';
+        
+    --Check if there is a extended col config active with the given id
+    SELECT COUNT(*) INTO EXT_COUNT FROM "sap.tm.trp.db.pickupreturn::t_extended_fields_for_pickup_config"
+    	WHERE ID = :ID AND ACTIVATION_STATUS = :ACTIVE;
+    
+    IF (:EXT_COUNT = 1) THEN
+    
+    	--Fetch the schema name and structure name
+    	SELECT SCHEMA_NAME, STRUCTURE_NAME INTO SCHEMA_NAME, STRUCTURE_NAME 
+    		FROM "sap.tm.trp.db.pickupreturn::t_extended_fields_for_pickup_config" WHERE ID = :ID ;
+    
+    	--Store the description of ext column fields
+    	LT_CURRENT_DESC = SELECT A.ID, A.NAME, B.SPRAS, B.DESC 
+    						FROM "sap.tm.trp.db.common::t_extended_fields" A
+    						LEFT JOIN "sap.tm.trp.db.common::t_extended_fields_t" B
+    						ON A.ID = B.ID
+    						WHERE PAGE_ID = :PAGE_ID;
+    	
+    	--Delete current extended column entries
+    	DELETE FROM "sap.tm.trp.db.common::t_extended_fields" 
+    		WHERE PAGE_ID = :PAGE_ID;
+    	
+    	--Delete current description of extended column entries	
+    	DELETE FROM "sap.tm.trp.db.common::t_extended_fields_t" 
+    		WHERE ID IN (SELECT ID FROM :LT_CURRENT_DESC);
+    		
+    	SELECT CURRENT_UTCTIMESTAMP INTO CREATE_TIME FROM DUMMY;
+    	
+    	--Enter the new entries in extended fields table
+    	LT_EXTENDED_COLUMNS = SELECT
+	                 "sap.tm.trp.db.common::s_extended_fields".NEXTVAL AS ID,
+	                 :PAGE_ID AS PAGE_ID,
+	                 A.COLUMN_NAME AS NAME,
+	                 A.COLUMN_NAME AS MAPPED_NAME,
+	                 A.COLUMN_NAME AS DISPLAY_NAME,
+	                 IFNULL(A.COMMENTS,A.COLUMN_NAME) AS DESCRIPTION,
+	                 A.DATA_TYPE_NAME AS DATA_TYPE,
+	                 A.LENGTH AS LENGTH,
+	                 A.SCALE AS SCALE,
+	                 NULL AS SEARCHABLE,
+	                 NULL AS FILTERABLE,
+	                 :USER_ID AS ADDED_BY,
+	                 :CREATE_TIME AS ADDED_ON,
+	                 :USER_ID AS EDITED_BY,
+	                 :CREATE_TIME AS EDITED_ON
+                 FROM TABLE_COLUMNS AS A
+                 WHERE SCHEMA_NAME = :SCHEMA_NAME
+                 AND TABLE_NAME = :STRUCTURE_NAME ;
+    	 
+    	INSERT INTO "sap.tm.trp.db.common::t_extended_fields" (
+           		ID,
+           		PAGE_ID,
+           		NAME,
+           		MAPPED_NAME,
+           		DISPLAY_NAME,
+           		DESCRIPTION,
+           		DATA_TYPE,
+           		LENGTH,
+           		SCALE,
+           		SEARCHABLE,
+           		FILTERABLE,
+           		ADDED_BY,
+           		ADDED_ON,
+           		EDITED_BY,
+           		EDITED_ON
+           )    
+           SELECT 
+           		ID,
+           		PAGE_ID,
+           		NAME,
+           		MAPPED_NAME,
+           		DISPLAY_NAME,
+           		DESCRIPTION,
+           		DATA_TYPE,
+           		LENGTH,
+           		SCALE,
+           		SEARCHABLE,
+           		FILTERABLE,
+           		ADDED_BY,
+           		ADDED_ON,
+           		EDITED_BY,
+           		EDITED_ON
+           	FROM :LT_EXTENDED_COLUMNS WHERE NAME <> TU_ID_FIELD;
+    	
+    	--Update existing description into text table
+    	LT_EXISTING_DESC = SELECT A.ID, B.SPRAS, B.DESC
+    						FROM :LT_EXTENDED_COLUMNS A
+    						INNER JOIN :LT_CURRENT_DESC B
+    						ON A.NAME = B.NAME;
+    	
+    	INSERT INTO "sap.tm.trp.db.common::t_extended_fields_t"(
+	    		ID,
+	    		SPRAS,
+	    		DESC
+    		)
+    		SELECT
+    			ID,
+    			:SPRAS,
+    			DESC
+    		FROM :LT_EXISTING_DESC;
+    	
+    ELSE
+    	STATUS := 0;
+    	MSG := 'NO_SINGLE_ACTIVE_CONFIG_FOUND';
+    END IF;
+
+END;
+

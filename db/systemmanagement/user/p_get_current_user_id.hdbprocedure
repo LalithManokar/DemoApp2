@@ -1,0 +1,14 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_get_current_user_id" (OUT currentUserId BIGINT) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    READS SQL DATA 
+    AS
+BEGIN
+
+    DECLARE USER_NAME VARCHAR(60);    
+    SELECT USERNAME INTO USER_NAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+
+    CALL "sap.tm.trp.db.systemmanagement.user::p_get_user_id_by_username"(:USER_NAME, currentUserId);
+
+END;

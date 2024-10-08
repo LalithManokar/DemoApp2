@@ -1,0 +1,8 @@
+schema="SAP_TM_TRP";
+query="SELECT A.ID AS USER_ID,
+              B.ZONE_HIERARCHY_ID AS HIERARCHY_ID
+         FROM \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS A,
+              \"sap.tm.trp.db.semantic.common::t_config\" AS B";
+              
+depends_on_table = ["sap.tm.trp.db.semantic.common::t_config"];
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

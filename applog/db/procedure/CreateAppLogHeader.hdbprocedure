@@ -1,0 +1,48 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.applog.db.procedure::CreateAppLogHeader" (
+	IN OriginatorObject NVARCHAR(20),
+	IN OriginatorSubObject NVARCHAR(20),  
+  	IN ExternalID NVARCHAR(1000),
+  	IN Description NVARCHAR(1000),
+  	IN LogHandleID INTEGER,
+  	IN LogHandleCreationDate DATE,
+  	IN Timestamp TIMESTAMP,
+  	IN User NVARCHAR(256)
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY DEFINER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+    AS 
+BEGIN
+
+    -- Insert application log header instance into consumer database table
+	INSERT INTO
+		"sap.tm.trp.applog.db::AppLogHeader"
+		(
+			"LogHandle.ID",
+			"LogHandle.CreationDate",
+			"OriginatorObject.Code",
+			"OriginatorSubObject.Code",		
+			"ExternalID",
+			"Description",
+			"ClosureStatus.Code",
+			"SystemAdministrativeData.CreationDateTime",
+			"SystemAdministrativeData.CreationUserName",
+			"SystemAdministrativeData.LastChangeDateTime",
+			"SystemAdministrativeData.LastChangeUserName"
+		) 
+	VALUES
+		(
+			:LogHandleID, 
+			:LogHandleCreationDate, 
+			:OriginatorObject,
+			:OriginatorSubObject,
+			:ExternalID,
+			:Description,
+			1, -- ClosureStatusCode 1 means "not closed"
+			:Timestamp,
+			:User,
+			:Timestamp,
+			:User
+		);
+
+END;

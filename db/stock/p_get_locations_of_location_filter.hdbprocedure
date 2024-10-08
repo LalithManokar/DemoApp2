@@ -1,0 +1,133 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.stock::p_get_locations_of_location_filter" (
+    IN LOCATION_FILTER_ID BIGINT,
+    IN GEO_FLAG SMALLINT,
+    IN HIERARCHY_LEVEL INT,
+    OUT TOTAL_GEO "sap.tm.trp.db.stock::tt_geo_info",
+    OUT TOTAL_GEO_ID_AND_LOCATION_IDS "sap.tm.trp.db.stock::tt_geo_location",
+    OUT GIS_TYPE VARCHAR(10)
+    ) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+
+BEGIN
+
+	 DECLARE LOCATION_TYPE_LOCATION SMALLINT := 1;
+	 DECLARE LOCATION_TYPE_LOCATIONGROUP SMALLINT :=2;
+	 DECLARE LOCATION_TYPE_REGION SMALLINT :=5;
+	 DECLARE LOCATION_TYPE_REGIONGROUP SMALLINT := 6;
+	 --DECLARE GEO_FLAG SMALLINT;
+	 --DECLARE GIS_TYPE VARCHAR(10);
+	 DECLARE GIS_TYPE_POINT VARCHAR(30) := 'POINT';
+	 DECLARE GIS_TYPE_POLYGON VARCHAR(30) := 'POLYGON';
+	 DECLARE MAX_LEVEL INTEGER := 0 ;
+	 
+	 /*
+	 SELECT IFNULL(MAX(LOCATION_TYPE),0) INTO GEO_FLAG
+	 FROM "sap.tm.trp.db.filter::t_location_filter" 
+	 WHERE ID = :LOCATION_FILTER_ID;
+	 */
+	 
+
+	 
+	 IF :GEO_FLAG = :LOCATION_TYPE_LOCATION THEN
+	 
+	 	GIS_TYPE := :GIS_TYPE_POINT;
+		
+		
+		TOTAL_GEO = SELECT T1.ID AS GEO_ID,T1.NAME AS GEO_NAME 
+	     FROM "sap.tm.trp.db.semantic.location::v_location" T1
+	     INNER JOIN "sap.tm.trp.db.filter::t_location_filter_location" T2 ON (T1.ID = T2.LOCATION_ID)
+	     WHERE T2.LOCATION_FILTER_ID = :LOCATION_FILTER_ID;
+			
+		TOTAL_GEO_ID_AND_LOCATION_IDS = SELECT T1.LOCATION_ID AS GEO_ID,T1.LOCATION_ID AS LOCATION_ID
+	     FROM "sap.tm.trp.db.filter::t_location_filter_location" T1
+	     WHERE T1.LOCATION_FILTER_ID = :LOCATION_FILTER_ID;
+	     
+	 ELSEIF :GEO_FLAG = :LOCATION_TYPE_LOCATIONGROUP THEN
+	 
+	 	 GIS_TYPE := :GIS_TYPE_POINT;
+	    
+	   
+	    TOTAL_GEO = SELECT T1.ID AS GEO_ID,T1.DESC AS GEO_NAME
+        FROM "sap.tm.trp.db.systemmanagement::t_location_group" T1
+        INNER JOIN  "sap.tm.trp.db.filter::t_location_filter_location" T2 ON (T1.ID = T2.LOCATION_GROUP_ID)	
+        WHERE T2.LOCATION_FILTER_ID = :LOCATION_FILTER_ID;
+	                    
+	    TOTAL_GEO_ID_AND_LOCATION_IDS = SELECT T1.ID AS GEO_ID,T3.LOCATION_ID
+        FROM "sap.tm.trp.db.systemmanagement::t_location_group" T1
+        INNER JOIN  "sap.tm.trp.db.filter::t_location_filter_location" T2 ON (T1.ID = T2.LOCATION_GROUP_ID)	
+        INNER JOIN "sap.tm.trp.db.systemmanagement::t_location_group_item" T3 ON (T2.LOCATION_GROUP_ID = T3.LOCATION_GROUP_ID)
+        WHERE T2.LOCATION_FILTER_ID = :LOCATION_FILTER_ID;
+        	
+	 ELSEIF :GEO_FLAG = :LOCATION_TYPE_REGION THEN
+	 	 --Get the level of the region:
+		 SELECT IFNULL(MAX(A2.LEVEL),0) AS MAX_LEVEL INTO MAX_LEVEL
+		 FROM "sap.tm.trp.db.filter::t_location_filter_region" A
+		 INNER JOIN "sap.tm.trp.db.systemmanagement.location::t_region_item" A2 ON (A.ZONE_ID = A2.ROOT_ID)
+		 WHERE LOCATION_FILTER_ID = :LOCATION_FILTER_ID AND A2.LEVEL = :HIERARCHY_LEVEL;
+		
+		IF(:HIERARCHY_LEVEL > :MAX_LEVEL) THEN --It should be the location if the input level > max level of the region
+		
+		    GIS_TYPE := :GIS_TYPE_POINT;
+			
+			
+	 --bug fix : filter-zone is a many-to-many mapping, so is zone-location. Thus JOIN produces duplicate rows.
+	 --GROUP BY is used as DISTINCT to handle this.
+	 --by Shawn		August 5, 2016
+			
+			TOTAL_GEO = SELECT T3.ID AS GEO_ID,T3.NAME AS GEO_NAME
+			FROM "sap.tm.trp.db.filter::t_location_filter_region" T1
+			INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T2 ON (T1.ZONE_ID = T2.ZONE_ID)
+			INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T3 ON (T2.LOCATION_ID = T3.ID)
+			WHERE T1.LOCATION_FILTER_ID = :LOCATION_FILTER_ID
+			GROUP BY T3.ID, T3.NAME;
+			
+			TOTAL_GEO_ID_AND_LOCATION_IDS = SELECT T3.ID AS GEO_ID,T3.ID AS LOCATION_ID
+			FROM "sap.tm.trp.db.filter::t_location_filter_region" T1
+			INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T2 ON (T1.ZONE_ID = T2.ZONE_ID)
+			INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T3 ON (T2.LOCATION_ID = T3.ID)
+			WHERE T1.LOCATION_FILTER_ID = :LOCATION_FILTER_ID
+			GROUP BY T3.ID;
+				
+		ELSE
+			   GIS_TYPE := :GIS_TYPE_POLYGON;
+			   TOTAL_GEO = SELECT T1.ID AS GEO_ID,T1.NAME AS GEO_NAME
+                FROM "sap.tm.trp.db.semantic.location::v_zone" T1
+                INNER JOIN "sap.tm.trp.db.filter::t_location_filter_region" T2 ON (T1.ID = T2.ZONE_ID)
+                WHERE T2.LOCATION_FILTER_ID = :LOCATION_FILTER_ID;
+			                    
+			   TOTAL_GEO_ID_AND_LOCATION_IDS =SELECT T1.ID AS GEO_ID,T3.LOCATION_ID
+                FROM "sap.tm.trp.db.semantic.location::v_zone" T1
+                INNER JOIN "sap.tm.trp.db.filter::t_location_filter_region" T2 ON (T1.ID = T2.ZONE_ID)
+                INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T3 ON (T1.ID = T3.ZONE_ID)
+                WHERE T2.LOCATION_FILTER_ID = :LOCATION_FILTER_ID;
+                
+		END IF;
+			
+	 ELSEIF :GEO_FLAG = :LOCATION_TYPE_REGIONGROUP THEN
+	    GIS_TYPE := :GIS_TYPE_POLYGON;
+		
+			   
+	 	TOTAL_GEO = SELECT T1.ID AS GEO_ID,T1.DESC AS GEO_NAME
+	                     FROM  "sap.tm.trp.db.systemmanagement::t_region_group" T1
+	                     INNER JOIN "sap.tm.trp.db.filter::t_location_filter_region" T2 ON (T1.ID = T2.REGION_GROUP_ID)
+	                     WHERE T2.LOCATION_FILTER_ID = :LOCATION_FILTER_ID;
+	                     
+	     TOTAL_GEO_ID_AND_LOCATION_IDS = SELECT T1.ID AS GEO_ID,T4.LOCATION_ID
+	                     FROM  "sap.tm.trp.db.systemmanagement::t_region_group" T1
+	                     INNER JOIN "sap.tm.trp.db.filter::t_location_filter_region" T2 ON (T1.ID = T2.REGION_GROUP_ID)
+	                     INNER JOIN "sap.tm.trp.db.systemmanagement::t_region_group_item" T3 ON (T2.REGION_GROUP_ID = T3.REGION_GROUP_ID)
+	                     INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T4 ON (T3.ZONE_ID = T4.ZONE_ID)
+	                     WHERE T2.LOCATION_FILTER_ID = :LOCATION_FILTER_ID;
+	                     
+	 ELSE
+	 	TOTAL_GEO = SELECT NULL AS GEO_ID,NULL AS GEO_NAME FROM DUMMY WHERE 1=2;
+	    TOTAL_GEO_ID_AND_LOCATION_IDS = SELECT NULL AS GEO_ID,NULL AS LOCATION_ID FROM DUMMY WHERE 1=2;
+	 END IF;  
+ 
+	
+END;
+
+

@@ -1,0 +1,9 @@
+schema="SAP_TM_TRP";
+query= "SELECT T1.ID,T1.CODE,T1.FORMAT,IFNULL(T2.DESC,T1.DESC) AS DESC
+    FROM \"sap.tm.trp.db.systemmanagement.user::t_date_format\" AS T1
+    LEFT OUTER JOIN  \"sap.tm.trp.db.systemmanagement.user::t_date_format_t\" AS T2
+    ON T1.ID = T2.DATE_FORMAT_ID
+    "; 
+
+depends_on = ["sap.tm.trp.db.systemmanagement.user::t_date_format",
+	"sap.tm.trp.db.systemmanagement.user::t_date_format_t"];

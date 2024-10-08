@@ -1,0 +1,30 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_equipment_filter_in_plan_check"(
+    IN FILTER_ID BIGINT,
+    OUT PLAN_FLAG VARCHAR(3)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE S_NUM INTEGER;
+    DECLARE T_NUM INTEGER;
+    
+    SELECT COUNT(A.ID) INTO S_NUM
+    FROM "sap.tm.trp.db.pipeline::t_plan_model" AS A
+    INNER JOIN "sap.tm.trp.db.filter::t_filter_equipment_filter" AS B ON A.FILTER_GROUP_ID = B.FILTER_GROUP_ID
+    WHERE B.EQUIPMENT_FILTER_ID = :FILTER_ID AND A.PLAN_MODEL_TYPE_ID = 1;
+    
+    SELECT COUNT(A.ID) INTO T_NUM
+    FROM "sap.tm.trp.db.pipeline::t_plan_model" AS A
+    INNER JOIN "sap.tm.trp.db.filter::t_filter_equipment_filter" AS B ON A.FILTER_GROUP_ID = B.FILTER_GROUP_ID
+    WHERE B.EQUIPMENT_FILTER_ID = :FILTER_ID AND A.PLAN_MODEL_TYPE_ID = 2;
+    
+    IF :S_NUM > 0 THEN
+        PLAN_FLAG := 'S';
+    ELSEIF :T_NUM > 0 THEN
+        PLAN_FLAG := 'T';
+    ELSE
+        PLAN_FLAG := 'N';
+    END IF;
+END;

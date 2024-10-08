@@ -1,0 +1,52 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_plan_execution_clean" (
+IN DAYS INTEGER ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	AS
+BEGIN
+
+--CLEAN TEMPLATE PLAN RELATED EXECUTION LOG
+    EXECUTIONS_IDS = SELECT A.ID FROM "sap.tm.trp.db.pipeline::t_plan_execution" A 
+        INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" B ON A.PLAN_MODEL_ID = B.ID 
+        INNER JOIN "sap.tm.trp.db.pipeline::v_plan_default_node_latest_execution" C ON B.ID = C.PLAN_MODEL_ID 
+        WHERE
+       -- DAYS_BETWEEN(EXECUTE_ON, CURRENT_TIMESTAMP) >= :DAYS AND (B.PLAN_MODEL_TYPE_ID = 1 AND A.ID <> C.EXECUTION_ID)
+        DAYS_BETWEEN(EXECUTE_ON, CURRENT_UTCTIMESTAMP) >= :DAYS AND (B.PLAN_MODEL_TYPE_ID = 1 AND A.ID <> C.EXECUTION_ID)
+        ;
+    --DELETE OUTPUT DATA
+    DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" WHERE PLAN_EXECUTION_ID IN (SELECT ID FROM :EXECUTIONS_IDS);
+    --DELETE EXECUTION LOG
+    DELETE FROM "sap.tm.trp.db.pipeline::t_plan_execution" WHERE ID IN (SELECT ID FROM :EXECUTIONS_IDS);
+    
+    --DELETE ALERT RESULT
+    DELETE FROM "sap.tm.trp.db.alert::t_alert_DT_output_timeInterval" WHERE PLAN_EXECUTION_ID IN (SELECT ID FROM :EXECUTIONS_IDS);
+    DELETE FROM "sap.tm.trp.db.alert::t_alert_DT_output_alertScore_timeInterval" WHERE PLAN_EXECUTION_ID IN (SELECT ID FROM :EXECUTIONS_IDS);
+    DELETE FROM "sap.tm.trp.db.alert::t_planModel_alert_forUI_timeInterval" WHERE PLAN_EXECUTION_ID IN (SELECT ID FROM :EXECUTIONS_IDS);
+
+    
+    --DELETE ADHOC PLAN MODEL
+    -- FILTER_IDS = SELECT DISTINCT FILTER_GROUP_ID AS ID FROM "sap.tm.trp.db.pipeline::t_plan_model" WHERE PLAN_MODEL_TYPE_ID = 3 AND DAYS_BETWEEN(CREATE_ON, CURRENT_TIMESTAMP) >= :DAYS;
+    FILTER_IDS = SELECT DISTINCT FILTER_GROUP_ID AS ID FROM "sap.tm.trp.db.pipeline::t_plan_model" WHERE PLAN_MODEL_TYPE_ID = 3 AND DAYS_BETWEEN(CREATE_ON, CURRENT_UTCTIMESTAMP) >= :DAYS;
+    DELETE FROM "sap.tm.trp.db.filter::t_filter_location_filter"
+    WHERE FILTER_GROUP_ID IN (SELECT ID FROM :FILTER_IDS);
+    
+    -- DELETE FILTER & EQUIPMENT FILTER RELATIONSHIP
+    DELETE FROM "sap.tm.trp.db.filter::t_filter_equipment_filter"
+    WHERE FILTER_GROUP_ID IN (SELECT ID FROM :FILTER_IDS);
+    
+    -- DELETE FILTER MAIN DATA
+    DELETE FROM "sap.tm.trp.db.filter::t_filter_group"
+    WHERE ID IN (SELECT ID FROM :FILTER_IDS);
+
+    -- PLAN_IDS = SELECT ID FROM "sap.tm.trp.db.pipeline::t_plan_model" WHERE PLAN_MODEL_TYPE_ID = 3 AND DAYS_BETWEEN(CREATE_ON, CURRENT_TIMESTAMP) >= :DAYS;
+    PLAN_IDS = SELECT ID FROM "sap.tm.trp.db.pipeline::t_plan_model" WHERE PLAN_MODEL_TYPE_ID = 3 AND DAYS_BETWEEN(CREATE_ON, CURRENT_UTCTIMESTAMP) >= :DAYS;
+    
+    DELETE FROM "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_assign_plan_model"
+    WHERE PLAN_MODEL_ID IN (SELECT ID FROM :PLAN_IDS);
+    
+    DELETE FROM "sap.tm.trp.db.pipeline::t_plan_model" WHERE ID IN (SELECT ID FROM :PLAN_IDS);
+    
+    
+    
+END;

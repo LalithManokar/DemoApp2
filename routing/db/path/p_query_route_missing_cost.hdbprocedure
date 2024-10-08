@@ -1,0 +1,136 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_query_route_missing_cost"(
+   IN network_code NVARCHAR(50),
+   IN route_only CHAR(1),
+   IN composite_path_id "sap.tm.trp.routing.db.common::tt_id",
+   OUT return_code TINYINT,
+   OUT dataset_connection_info  "sap.tm.trp.db.costmodel::tt_cost_dataset_connection_info_new",
+   OUT cost_info_out TABLE (from_location_name VARCHAR(200),  to_location_name VARCHAR(200),
+   transportation_mode_code NVARCHAR(20), resource_type NVARCHAR(20), resource_category NVARCHAR(20),
+   carrier_id NVARCHAR(20), cost_dataset_id VARCHAR(500)),
+   OUT cost_model_id BIGINT,
+   OUT message "sap.tm.trp.routing.db.common::tt_message"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_ROUTING"
+    READS SQL DATA 
+    AS
+BEGIN
+    DECLARE network_id BIGINT;
+    DECLARE optional_cost_model_id BIGINT;
+    DECLARE resource_type NVARCHAR(20);
+    DECLARE count INTEGER;
+    DECLARE USAGE_ROUTE VARCHAR(10) =  'ROUTE';
+    DECLARE COST_PARAM_NAME CONSTANT VARCHAR(50) = 'COST_MODEL_ID'; 
+    DECLARE OPTIONAL_COST_PARAM_NAME CONSTANT VARCHAR(50) = 'OPTIONAL_COST_MODEL_ID'; 
+    DECLARE EQUIP_TYPE_PARAM_NAME CONSTANT VARCHAR(50) = 'BASE_RESOURCE_TYPE';
+   
+    return_code = 0;
+   -- Check for the existence of network id
+	SELECT id INTO network_id FROM "sap.tm.trp.routing.db.path::t_network_model"
+	WHERE code = :network_code;
+    
+    CALL "sap.tm.trp.routing.db.path::p_get_network_config_info"(:network_id, :USAGE_ROUTE, setting_paras);
+   
+    -- No data exception is not handled since these two parameters are mandatory
+    SELECT TO_BIGINT(value) INTO cost_model_id
+    FROM :setting_paras
+    WHERE name = :COST_PARAM_NAME;
+    
+    SELECT COUNT(*) INTO count
+    FROM :setting_paras
+    WHERE name = :OPTIONAL_COST_PARAM_NAME;
+    
+    SELECT value INTO resource_type
+    FROM :setting_paras
+    WHERE name = :EQUIP_TYPE_PARAM_NAME;
+    
+    -- No need to check cost if route generation is triggered by network model building
+    -- and optional cost model id is not sets
+    IF :route_only = 'X' AND :count = 0 THEN
+        RETURN;
+    END IF;
+    
+    -- Just check those in composite path id in current layer
+    SELECT COUNT(*) INTO count FROM :composite_path_id;
+    
+    -- To-do: check validity of composite path id
+    IF :count > 0 THEN
+        connection_mtr = SELECT DISTINCT s.from_location, s.to_location, IFNULL(c.carrier, '') AS carrier, mtr
+        FROM "sap.tm.trp.routing.db.path::t_path_sequence" AS s
+        INNER JOIN "sap.tm.trp.routing.db.path::t_path" AS p
+        ON s.path_id = p.id
+        INNER JOIN :composite_path_id AS i
+        ON p.id = i.id
+        LEFT OUTER JOIN "sap.tm.trp.routing.db.dataset::t_connection_carrier" AS c
+        ON s.basic_path_id = c.connection_id 
+        WHERE p.network_model_id =:network_id AND s.path_type = 'C';
+        
+        path_connection_mtr = SELECT DISTINCT c.from_location, c.to_location, IFNULL(p1.carrier, '') AS carrier, p1.mtr
+        FROM "sap.tm.trp.routing.db.path::t_path_sequence" AS s
+        INNER JOIN "sap.tm.trp.routing.db.dataset::t_path" AS p1
+        ON s.basic_path_id = p1.id
+        INNER JOIN "sap.tm.trp.routing.db.dataset::t_path_connection" AS c
+        ON p1.id = c.path_id
+        AND c.sequence >= s.from_bp_sequence AND c.sequence <= s.to_bp_sequence -- Pay attension to the sequence
+        INNER JOIN "sap.tm.trp.routing.db.path::t_path" AS p2
+        ON s.path_id = p2.id
+        INNER JOIN :composite_path_id AS i
+        ON p2.id = i.id
+        WHERE p2.network_model_id = :network_id AND s.path_type = 'P';
+    
+    ELSE
+
+        connection_mtr = SELECT DISTINCT s.from_location, s.to_location, IFNULL(c.carrier, '') AS carrier, mtr
+        FROM "sap.tm.trp.routing.db.path::t_path_sequence" AS s
+        INNER JOIN "sap.tm.trp.routing.db.path::t_path" AS p
+        ON s.path_id = p.id
+        LEFT OUTER JOIN "sap.tm.trp.routing.db.dataset::t_connection_carrier" AS c
+        ON s.basic_path_id = c.connection_id 
+        WHERE p.network_model_id =:network_id AND s.path_type = 'C';
+        
+        path_connection_mtr = SELECT DISTINCT c.from_location, c.to_location, IFNULL(p1.carrier, '') AS carrier, p1.mtr
+        FROM "sap.tm.trp.routing.db.path::t_path_sequence" AS s
+        INNER JOIN "sap.tm.trp.routing.db.dataset::t_path" AS p1
+        ON s.basic_path_id = p1.id
+        INNER JOIN "sap.tm.trp.routing.db.dataset::t_path_connection" AS c
+        ON p1.id = c.path_id
+        AND c.sequence >= s.from_bp_sequence AND c.sequence <= s.to_bp_sequence -- Pay attension to the sequence
+        INNER JOIN "sap.tm.trp.routing.db.path::t_path" AS p2
+        ON s.path_id = p2.id
+        WHERE p2.network_model_id = :network_id AND s.path_type = 'P';
+    END IF;
+    
+    cost_list = SELECT from_location AS from_location_name, to_location AS to_location_name, 
+    mtr AS transportation_mode_code, :resource_type AS resource_type,
+    carrier AS carrier_id
+    FROM (
+    SELECT * FROM :connection_mtr
+    UNION
+    SELECT * FROM :path_connection_mtr);
+
+    CALL "sap.tm.trp.db.costmodel::sp_query_missing_cost"(
+        :cost_model_id, 
+        :cost_list, 
+        missing_filter,
+        dataset_connection_info,
+        cost_info_out
+    );
+        
+    SELECT COUNT(*) INTO count FROM :missing_filter;
+
+    IF :count > 0 THEN
+        return_code = 1;
+        
+        msg_params = SELECT transportation_mode_code || carrier_id AS group_id, 
+        0 AS placeholder, transportation_mode_code AS value
+        FROM :missing_filter
+        UNION ALL
+        SELECT transportation_mode_code || carrier_id AS group_id, 
+        1 AS placeholder, carrier_id AS value FROM :missing_filter;
+        
+	    call "sap.tm.trp.routing.db.common::p_get_text_batch"
+        ('MSG_COST_MODEL_FILTER_NOT_FOUND', :msg_params, 'E', message);
+
+    END IF;
+END;

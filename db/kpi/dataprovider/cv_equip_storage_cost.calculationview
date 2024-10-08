@@ -1,0 +1,554 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_equip_storage_cost" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_equip_storage_cost"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="NODE_ID" length="32"/>
+        <viewAttribute datatype="NVARCHAR" id="GEO_ID" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="GEO_NAME" length="100"/>
+        <viewAttribute datatype="INTEGER" id="GEO_FILTER_TYPE"/>
+        <viewAttribute datatype="NVARCHAR" id="EQUIP_TYPE" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="EQUIP_NAME" length="50"/>
+        <viewAttribute datatype="INTEGER" id="EQUIP_FILTER_TYPE"/>
+        <viewAttribute datatype="BIGINT" id="TIME_INTERVAL_ID"/>
+        <viewAttribute datatype="BIGINT" id="SEQUENCE"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_TIME"/>
+        <viewAttribute datatype="BIGINT" id="INTER_SECONDS"/>
+        <viewAttribute datatype="NVARCHAR" id="OUTPUT_KEY" length="20"/>
+        <viewAttribute datatype="DECIMAL" id="OUTPUT_VALUE" length="18" scale="4"/>
+        <viewAttribute datatype="NVARCHAR" id="UNIT" length="10"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> 
+ BEGIN 
+     DECLARE window_start TIMESTAMP;
+     DECLARE window_end TIMESTAMP;
+     DECLARE range_start TIMESTAMP;
+     DECLARE cost_model_id BIGINT; 
+     DECLARE filter_calflag INTEGER;
+     DECLARE unit VARCHAR(10);
+     DECLARE currency VARCHAR(10); 
+     DECLARE attribute_group_id INTEGER;
+     DECLARE FILTER_CALCULATED_OK INTEGER := 1;
+     DECLARE resource_category VARCHAR(20);
+            
+     -- Get all the needed information:filter info, unit etc 
+     CALL &quot;sap.tm.trp.db.pipeline::p_prepare_info_for_providers_generic&quot;(intervals,tmplocations, equips,
+                                                          filter_calflag, unit, attribute_group_id,resource_category); 
+     
+     RESOURCE_TYPES = SELECT DISTINCT T1.RESOURCE_TYPE_CODE, T1.RESOURCE_TYPE_DESC,T2.TEU_COUNT
+                FROM &quot;sap.tm.trp.db.semantic.resource::v_resource_type_with_category&quot; T1
+                INNER JOIN &quot;sap.tm.trp.db.semantic.resource::v_resource_type&quot; T2
+                ON (T1.RESOURCE_TYPE_CODE = T2.RESOURCE_TYPE_CODE)
+                WHERE T1.RESOURCE_CATEGORY = :RESOURCE_CATEGORY;
+                
+     -- Location name is used in cost model, so get it
+     locations = SELECT T1.*, T2.NAME AS LOCATION_NAME
+                 FROM :tmplocations T1
+                 INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; T2 ON (T1.LOCATION_ID = T2.ID);
+     
+     -- The location &amp; equip that interested in 
+     loc_equip = SELECT T1.LOCATION_NAME, T2.EQUIP_CODE AS RESOURCE_TYPE 
+                 FROM :locations T1, :equips T2;
+                 
+     -- Get cost model id from input param table
+     SELECT IFNULL(MAX(VALUE),-1) INTO cost_model_id 
+     FROM &quot;sap.tm.trp.db.pipeline::t_pipeline_datasrc_input_params&quot;
+     WHERE CONN_ID = CURRENT_CONNECTION AND PARAM = 'In_Cost_Model_ID';
+
+     -- If the filered information are not calculated correctly, or no cost model is assigned then return 
+     IF :filter_calflag &lt;> :FILTER_CALCULATED_OK OR :cost_model_id = -1 THEN 
+        RETURN;
+     END IF;   
+     
+     -- Get time boundaries   
+     SELECT MIN(START_TIMESTAMP), MAX(END_TIMESTAMP)
+     INTO window_start, window_end FROM :intervals;
+                 
+     -- We only calculate KPI for the past days
+     IF TO_DATE(:window_end) > CURRENT_UTCDATE THEN   
+        RETURN;
+     END IF;
+
+     -- Get currenty code for the cost model 
+     SELECT IFNULL(MAX(CURRENCY_CODE),'Euro') INTO currency 
+     FROM &quot;sap.tm.trp.db.costmodel::t_cost_model_new&quot;
+     WHERE ID = :cost_model_id;     
+
+     -- For performance issue, we only consider the tracking data eralier 6 months than the start time
+     range_start := ADD_MONTHS(:window_start, -6);
+     ------------------------------------------------------------------------------------------------------------------
+     -- GTI, GTO event tracking data for the given location and resource type
+     -- Still can't apply the time window as the events before the time window are also considered
+     -- for exmple the resource alreay stay at the location before the time window start and no gate out
+     tmp_trk = SELECT t3.EQUIP_CODE AS EQUIP_TYPE, t3.EQUIP_GROUP_ID, t2.GEO_GROUP_ID, t2.LOCATION_ID, t2.LOCATION_NAME, 
+               t1.RESOURCE_ID AS EQUIP_ID, t1.EVENT_TIME, t1.EVENT_CODE
+               FROM &quot;sap.tm.trp.db.semantic.event::v_gateinout_tracking_history&quot; t1
+               INNER JOIN :locations t2 ON (t1.LOCATION_ID = t2.LOCATION_ID)
+               INNER JOIN :equips t3 ON (t1.RESOURCE_TYPE = t3.EQUIP_CODE)
+               INNER JOIN  &quot;sap.tm.trp.db.semantic.resource::v_resource_category&quot; t6 
+               ON (t1.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :resource_category)
+               WHERE (t1.EVENT_TIME BETWEEN :range_start and :window_end);   
+     
+     -- these gate in before the window start without gate out should be considered when calculate cost
+     -- the whole quantity are considered as the initial stock at the window start
+     gatein_without_gateout_before_window = 
+            -- get the gate in before the time window and still has not gate out
+            SELECT T3.EQUIP_TYPE, T3.EQUIP_GROUP_ID, T3.GEO_GROUP_ID, T3.LOCATION_ID, T3.LOCATION_NAME,T3.EQUIP_ID, T3.EVENT_TIME
+            FROM :tmp_trk T3
+            INNER JOIN 
+            (
+              SELECT T1.EQUIP_ID, T1.LOCATION_ID, T1.LAST_GTI_TIME FROM
+              (
+                SELECT EQUIP_ID, LOCATION_ID, MAX(EVENT_TIME) AS LAST_GTI_TIME
+                FROM :tmp_trk          
+                WHERE EVENT_CODE = 'GTI' AND EVENT_TIME &lt; :window_start
+                GROUP BY EQUIP_ID, LOCATION_ID
+               ) T1
+               LEFT OUTER JOIN 
+               (
+                 SELECT EQUIP_ID, LOCATION_ID, MAX(EVENT_TIME) AS LAST_GTO_TIME
+                 FROM :tmp_trk 
+                 WHERE EVENT_CODE = 'GTO'  AND EVENT_TIME &lt; :window_start
+                 GROUP BY EQUIP_ID, LOCATION_ID 
+               ) T2 ON (T1.EQUIP_ID = T2.EQUIP_ID AND T1.LOCATION_ID = T2.LOCATION_ID AND T1.LAST_GTI_TIME &lt; T2.LAST_GTO_TIME) 
+               WHERE T2.EQUIP_ID IS NULL
+            ) T4 ON (T3.EQUIP_ID = T4.EQUIP_ID AND T3.LOCATION_ID = T4.LOCATION_ID AND T3.EVENT_TIME = T4.LAST_GTI_TIME);
+     
+     gatein_within_window = 
+            SELECT EQUIP_TYPE, EQUIP_GROUP_ID, GEO_GROUP_ID, LOCATION_ID, LOCATION_NAME, EQUIP_ID, EVENT_TIME
+            FROM :tmp_trk              
+            WHERE EVENT_CODE = 'GTI'  AND (EVENT_TIME BETWEEN :window_start AND :window_end);
+                                                 
+     -- get the gate in data from the tracking_history table
+     -- we need to get all the gate in events within the time window
+     -- and the gate in events without gate out before the time window      
+     gateins = SELECT *, ROW_NUMBER() OVER (PARTITION BY EQUIP_ID, LOCATION_ID ORDER BY EVENT_TIME ASC) AS EQUIP_SEQ
+               FROM 
+               (                
+                SELECT * FROM :gatein_within_window                  
+                UNION                
+                SELECT * FROM :gatein_without_gateout_before_window                
+               );
+               
+     -- get the gate out data from the tracking_history table
+     -- only consider the events within the time window, as if the container gateout before the window start it does not 
+     -- effect the effect, and if the container gates out after the window end, use the window end as the faked one no need 
+     -- to care about the actual gate out time      
+     gateouts = SELECT  EQUIP_TYPE, EQUIP_GROUP_ID, GEO_GROUP_ID, LOCATION_ID, LOCATION_NAME, EQUIP_ID, EVENT_TIME,
+                ROW_NUMBER() over (PARTITION BY EQUIP_ID, LOCATION_ID ORDER BY EVENT_TIME ASC) AS EQUIP_SEQ
+                FROM :tmp_trk
+                WHERE EVENT_CODE = 'GTO' AND EVENT_TIME BETWEEN :window_start AND :window_end;               
+                 
+     -- Get the [gate in time, gate out time] for each equipment id
+     -- The method is to join gate in and gate out data  with same sequence as one pair, as the event should be like 
+     -- gatein -- gateout -- gatein -- gateout, otherwise something wrong with the event data               
+     stay_days = SELECT t1.EQUIP_GROUP_ID, t1.EQUIP_ID, t1.EQUIP_TYPE, t1.GEO_GROUP_ID, t1.LOCATION_ID, t1.EQUIP_SEQ,
+                 t1.EVENT_TIME AS STAY_START, IFNULL(t2.EVENT_TIME,:window_end) AS STAY_END                 
+                 FROM :gateins t1
+                 LEFT OUTER JOIN :gateouts t2 ON (t1.EQUIP_ID = t2.EQUIP_ID AND t1.LOCATION_ID = t2.LOCATION_ID 
+                                 AND t1.EQUIP_SEQ = t2.EQUIP_SEQ AND t1.EVENT_TIME &lt; t2.EVENT_TIME);  
+
+    ------------------------------------------------------------------------------------------------------------------             
+     -- prepare time base and quantity base rating tables and config tables
+
+     --  base cost rating table, if the threshold is like: 
+     -- threshold_from,  threshold_to, per_diem_cost   
+     --      1               5              3
+     --      6               10             2
+     --      11              NULL           1.5
+     -- the cost rating table would be like:
+     --  SEQ  PER_DIEM_COST 
+     --   1            3
+     --   2            3
+     --   .            .
+     --   .            .
+     --   5            3
+     --   6            2
+     --   .            .
+     --   .            .
+     --   10           1.5
+     --   11           1.5 
+     --   .            .  
+     -- and the storage cost would the SUM over the front values, COST(6 day) = SUM(WHERE STAY_DAY &lt;=6)
+     -- we adpot the max day value as 365 * 20 for the infinite threshhold to 
+     -- similar for the quantity based storage cost, we use max teu days 999999999 for the infinite threshhold to 
+     CALL &quot;sap.tm.trp.db.costmodel::sp_query_storage_cost_info&quot;(:cost_model_id, :window_start, :window_end, :loc_equip, 
+                                                        timebase_cost_rating, quabase_cost_rating, refresh_dates_list);
+     
+     quabase_loc_equip = 
+          SELECT t2.ID AS LOCATION_ID, t1.LOCATION_NAME, t1.RESOURCE_TYPE FROM   
+          (
+           SELECT DISTINCT LOCATION_NAME, RESOURCE_TYPE
+           FROM :refresh_dates_list 
+          ) t1
+          INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; t2 ON (t1.LOCATION_NAME = t2.NAME);   
+ 
+     timebase_loc_equip =   
+          SELECT t2.ID AS LOCATION_ID, t1.LOCATION_NAME, t1.RESOURCE_TYPE  
+          FROM (SELECT DISTINCT LOCATION_NAME, RESOURCE_TYPE FROM :timebase_cost_rating) t1
+          INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; t2 ON (t1.LOCATION_NAME = t2.NAME);                                                                                                          
+     ------------------------------------------------------------------------------------------------------------------
+     -- Calculate time base storage cost (Progressive)
+
+     -- the cost of each equip id for one time interval woule be:
+     -- cost(agg days until interval end time)  - cost(agg days until interval start time)
+     -- so first compute the agg days for the time interval start and end time  
+     agg_intersected_days = 
+         SELECT t3.* FROM 
+         (
+            SELECT t1.*, t2.TIME_INTERVAL_ID, 
+            CASE WHEN t1.STAY_START >= t2.START_TIMESTAMP THEN 0 
+                 ELSE DAYS_BETWEEN(T1.STAY_START, T2.START_TIMESTAMP) 
+            END AS START_AGG_DAYS,
+            CASE WHEN t1.STAY_END &lt;= t2.END_TIMESTAMP THEN DAYS_BETWEEN(t1.STAY_START, t1.STAY_END) 
+                 ELSE DAYS_BETWEEN(t1.STAY_START, t2.END_TIMESTAMP)  
+            END AS END_AGG_DAYS FROM 
+            (
+             SELECT t5.*, t6.LOCATION_NAME 
+             FROM :stay_days t5
+             INNER JOIN :timebase_loc_equip t6 ON (t5.LOCATION_ID = t6.LOCATION_ID AND t5.EQUIP_TYPE = t6.RESOURCE_TYPE)
+            ) t1
+            CROSS JOIN :intervals t2 WHERE t1.STAY_START &lt;= t2.END_TIMESTAMP AND t1.STAY_END >= t2.START_TIMESTAMP
+         ) t3;
+      
+     -- then calculate the cost                            
+     timebased_storage_cost =
+         SELECT GEO_GROUP_ID, EQUIP_GROUP_ID, TIME_INTERVAL_ID, SUM(EQUIP_STORAGE_COST) AS COST FROM
+         (  
+          SELECT t3.GEO_GROUP_ID, t3.EQUIP_GROUP_ID, t3.TIME_INTERVAL_ID, 
+          EQUIP_STORAGE_COST_END - EQUIP_STORAGE_COST_START AS EQUIP_STORAGE_COST FROM      
+          (
+           SELECT t1.GEO_GROUP_ID, t1.EQUIP_GROUP_ID, t1.TIME_INTERVAL_ID, t1.EQUIP_ID,  
+           t1.LOCATION_NAME, t1.EQUIP_TYPE, SUM(t2.PER_DIEM_COST) AS EQUIP_STORAGE_COST_START
+           FROM :agg_intersected_days t1
+           INNER JOIN :timebase_cost_rating t2 ON (t1.LOCATION_NAME = t2.LOCATION_NAME 
+                      AND t1.EQUIP_TYPE = t2.RESOURCE_TYPE AND t1.START_AGG_DAYS >= t2.SEQ)
+           GROUP BY t1.GEO_GROUP_ID, t1.EQUIP_GROUP_ID, t1.TIME_INTERVAL_ID, t1.EQUIP_ID, t1.LOCATION_NAME, t1.EQUIP_TYPE          
+          ) t3           
+          INNER JOIN 
+          (           
+           SELECT t1.GEO_GROUP_ID, t1.EQUIP_GROUP_ID, t1.TIME_INTERVAL_ID, t1.EQUIP_ID,  
+           t1.LOCATION_NAME, t1.EQUIP_TYPE, SUM(t2.PER_DIEM_COST) AS EQUIP_STORAGE_COST_END
+           FROM :agg_intersected_days t1                    
+           INNER JOIN :timebase_cost_rating t2 ON (t1.LOCATION_NAME = t2.LOCATION_NAME 
+                      AND t1.EQUIP_TYPE = t2.RESOURCE_TYPE AND t1.END_AGG_DAYS >= t2.SEQ) 
+           GROUP BY t1.GEO_GROUP_ID, t1.EQUIP_GROUP_ID, t1.TIME_INTERVAL_ID, t1.EQUIP_ID, t1.LOCATION_NAME, t1.EQUIP_TYPE           
+          ) t4 ON (t3.LOCATION_NAME = t4.LOCATION_NAME AND t3.EQUIP_ID = t4.EQUIP_ID AND t3.EQUIP_TYPE = t4.EQUIP_TYPE
+                   AND t3.TIME_INTERVAL_ID = t4.TIME_INTERVAL_ID)  
+         )
+         GROUP BY GEO_GROUP_ID, EQUIP_GROUP_ID, TIME_INTERVAL_ID;                             
+
+------------------------------------------------------------------------------------------------------------------
+     -- Calculate quantity based storage cost 
+
+     -- The stock at the window start is all previous gateins without gateout
+     -- initial_stock = SELECT LOCATION_NAME, RESOURCE_TYPE, STOCK, :window_start AS DATE FROM
+     --               (
+     --                SELECT LOCATION_ID, LOCATION_NAME, EQUIP_TYPE AS RESOURCE_TYPE, COUNT(EQUIP_ID) AS STOCK 
+     --                FROM :gatein_without_gateout_before_window
+     --                GROUP BY LOCATION_ID, LOCATION_NAME, EQUIP_TYPE
+     --               ) ;   
+                    
+     -- The initial stock is the stock for the window end (the execution time) 
+     initial_stock =    
+         SELECT T1.LOCATION_NAME, T1.RESOURCE_TYPE, COUNT(1) AS STOCK, :window_end AS DATE         
+         FROM &quot;sap.tm.trp.db.semantic.resource::v_stock_resource_last_status&quot; T1 
+         INNER JOIN  &quot;sap.tm.trp.db.semantic.resource::v_resource_category&quot; t6
+         ON (t1.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :resource_category)
+         INNER JOIN :quabase_loc_equip T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+         INNER JOIN :quabase_loc_equip T3 ON (T1.RESOURCE_TYPE = T3.RESOURCE_TYPE)
+         GROUP BY T1.LOCATION_NAME, T1.RESOURCE_TYPE;
+                             
+     -- Get the gate in between the previous refresh data and window start 
+     -- note the gate in within the same day would be sum up, the time part is not considered             
+     gatein_bw_prefresh_winstart = 
+         SELECT t1.LOCATION_NAME, t1.EQUIP_TYPE, TO_DATE(t1.EVENT_TIME) AS DATE, COUNT(t1.EQUIP_ID) AS GATEIN
+         FROM :tmp_trk t1
+         INNER JOIN
+         ( SELECT LOCATION_NAME, RESOURCE_TYPE, MIN(REFRESH_DATE) AS PRE_REFRESH_DATE 
+           FROM :refresh_dates_list 
+           GROUP BY LOCATION_NAME, RESOURCE_TYPE
+         ) t2 
+         ON (t1.LOCATION_NAME = t2.LOCATION_NAME AND t1.EQUIP_TYPE = t2.RESOURCE_TYPE
+         AND t1.EVENT_CODE = 'GTI' AND t1.EVENT_TIME BETWEEN t2.PRE_REFRESH_DATE AND :window_start)
+         GROUP BY t1.LOCATION_NAME, t1.EQUIP_TYPE, TO_DATE(t1.EVENT_TIME); 
+   
+     -- Get the gate out between the previous refresh data and window start     
+     -- note the gate in within the same day would be sum up                            
+     gateout_bw_prefresh_winstart = 
+         SELECT t1.LOCATION_NAME, t1.EQUIP_TYPE, TO_DATE(t1.EVENT_TIME) AS DATE, COUNT(t1.EQUIP_ID) AS GATEOUT
+         FROM :tmp_trk t1
+         INNER JOIN
+         ( SELECT LOCATION_NAME, RESOURCE_TYPE, MIN(REFRESH_DATE) AS PRE_REFRESH_DATE 
+           FROM :refresh_dates_list 
+           GROUP BY LOCATION_NAME, RESOURCE_TYPE
+         ) t2 ON (t1.LOCATION_NAME = t2.LOCATION_NAME AND t1.EQUIP_TYPE = t2.RESOURCE_TYPE
+         AND t1.EVENT_CODE = 'GTO' AND t1.EVENT_TIME BETWEEN t2.PRE_REFRESH_DATE AND :window_start)
+         GROUP BY t1.LOCATION_NAME, t1.EQUIP_TYPE, TO_DATE(t1.EVENT_TIME); 
+                                        
+     -- Union the refresh date &amp; time interval &amp; gate in &amp; gate out into one time line
+     -- in the format LOCATION_NAME, RESOURCE_TYPE, STOCK, GATEIN, GATEOUT which is used to calculate teu days        
+     all_data_time_line =    
+          SELECT LOCATION_NAME, RESOURCE_TYPE, TO_DATE(DATE) AS DATE, SUM(STOCK) AS STOCK, SUM(GATEIN) AS GATEIN, SUM(GATEOUT) AS GATEOUT
+          FROM 
+          (
+            -- refresh date list
+            SELECT LOCATION_NAME, RESOURCE_TYPE, REFRESH_DATE AS DATE, 0 AS STOCK, 0 AS GATEIN, 0 AS GATEOUT
+            FROM :refresh_dates_list
+            UNION ALL
+            -- start times of time interval 
+            SELECT LOCATION_NAME, RESOURCE_TYPE, DATE, 0 AS STOCK, 0 AS GATEIN, 0 AS GATEOUT FROM                  
+            ( SELECT T1.LOCATION_NAME, T1.RESOURCE_TYPE, T2.START_TIMESTAMP AS DATE 
+              FROM :quabase_loc_equip T1, :intervals T2 
+            )
+            UNION ALL
+            -- window end(have intinal stock)
+            SELECT LOCATION_NAME, RESOURCE_TYPE, DATE, STOCK, 0 AS GATEIN, 0 AS GATEOUT FROM :initial_stock 
+            UNION ALL
+            -- end times of time interval without window end 
+            SELECT LOCATION_NAME, RESOURCE_TYPE, DATE, 0 AS STOCK, 0 AS GATEIN, 0 AS GATEOUT FROM                 
+            ( SELECT T1.LOCATION_NAME, T1.RESOURCE_TYPE ,T2.END_TIMESTAMP AS DATE 
+              FROM :quabase_loc_equip T1, :intervals T2
+              WHERE T2.END_TIMESTAMP &lt; :window_end
+            ) 
+            UNION ALL  
+            -- gate in events within the time window
+            SELECT LOCATION_NAME, EQUIP_TYPE AS RESOURCE_TYPE, TO_DATE(EVENT_TIME) AS DATE,
+            0 AS STOCK, COUNT(EQUIP_ID) AS GATEIN, 0 AS GATEOUT
+            FROM :gatein_within_window                              
+            GROUP BY LOCATION_NAME, EQUIP_TYPE, TO_DATE(EVENT_TIME)
+            UNION ALL
+            -- gate in events between pre refresh date and window start
+            SELECT LOCATION_NAME, EQUIP_TYPE AS RESOURCE_TYPE, DATE, 0 AS STOCK, GATEIN, 0 AS GATEOUT
+            FROM :gatein_bw_prefresh_winstart 
+            UNION ALL
+            -- gate out events within the time window 
+            SELECT LOCATION_NAME, EQUIP_TYPE AS RESOURCE_TYPE, TO_DATE(EVENT_TIME) AS DATE,
+            0 AS STOCK, 0 AS GATEIN, COUNT(EQUIP_ID) AS GATEOUT
+            FROM :gateouts
+            GROUP BY LOCATION_NAME, EQUIP_TYPE, TO_DATE(EVENT_TIME)
+            UNION ALL
+            -- gate out events between the pre refresh date and window start
+            SELECT LOCATION_NAME, EQUIP_TYPE AS RESOURCE_TYPE, DATE, 0 AS STOCK, 0 AS GATEIN, GATEOUT
+            FROM :gateout_bw_prefresh_winstart                  
+          ) 
+          GROUP BY LOCATION_NAME, RESOURCE_TYPE, TO_DATE(DATE);
+        
+         
+     -- We have initial stock at window end, and we can deduce the stocks for all the time points 
+     -- for example there are 5 time ranges
+     -- stock4 = stock5 + delta5  
+     -- stock3 = stock5 + delta5 + delta4
+     -- stock2 = stock5 + delta5 + delta4 + delta3
+     -- stock1 = stock5 + delta5 + delta4 + delta3  
+     -- so stocki = = stock5 + IFNULL(agg(previous delta) ,0 )
+     -- check procedure p_calc_provisional_stock for similar logic                    
+     stock_all_data =
+         SELECT t3.LOCATION_NAME, t3.RESOURCE_TYPE, t3.DATE, t4.STOCK + IFNULL(t3.AGG_DELTA,0) AS STOCK, 
+         ROW_NUMBER() OVER(PARTITION BY t3.LOCATION_NAME, t3.RESOURCE_TYPE ORDER BY t3.DATE ASC) AS SEQ FROM         
+         (
+           SELECT t1.LOCATION_NAME, t1.RESOURCE_TYPE, t1.DATE, 
+           SUM(t2.GATEOUT - t2.GATEIN) AS AGG_DELTA             
+           FROM :all_data_time_line t1
+           LEFT OUTER JOIN :all_data_time_line t2 ON (t1.LOCATION_NAME = t2.LOCATION_NAME 
+           AND t1.RESOURCE_TYPE = t2.RESOURCE_TYPE AND t1.DATE &lt; t2.DATE)
+           GROUP BY t1.LOCATION_NAME, t1.RESOURCE_TYPE, t1.DATE 
+         ) t3 
+         INNER JOIN :initial_stock t4 ON (t3.LOCATION_NAME = t4.LOCATION_NAME AND t3.RESOURCE_TYPE = t4.RESOURCE_TYPE); 
+     
+     ----------------------td2-------------td3---     
+     --------R0,X,D1-----R0,IN1,R1------R1,IN1,D2----R1,IN2,R2-------------------------------------------R6,IN4,D4----basedate,interval, maxdate----
+     --------------td2+td3+td4,R1-----td5+td6,D2- td7+td8,R2--R2----R3----R3---R3----R3----R4----R5----R6----R6-----------max date------- 
+     --------X-----1---1------1----1---------1-----2----2-------2------2----2----2-----2-----2-----2-----2-----2------------time interval
+     --------R0---R0---R0-----R0---R1--------R1----R1---R1------R2----R3----R3---R3----R3----R4----R5----R6----R6-----------base date(refresh date)------- 
+     --------td1--td2--td3---td4---td5------td6----td7--td8----td9----td10--td11-td12--td13--td14--td15--td16--td17-------teu days tdi=s(i-1)*(ti - t(i-1))---     
+     --s0-----s1---s2--s3-----s4---s5--------s6----s7---s8------s9----s10---s11--s12---s13---s14---s15---s16---s17-------point stock-----------  
+     --t0-----t1---t2--t3-----t4---t5--------t6----t7---t8------t9----t10---t11--t12---t13---t14---t15---t16---t17-------ordered time -----------
+     --R0-----D1---G1--G2-----R1---G3--------D2----G4---R2------R3----G5----D3---G6----R4-----R5---R6----G7----D4-------random time line-----------                  
+                      
+    -- stock table (location, resource, date, teu_days, base_date, time_interval_id)
+    -- get the latest refresh date earlier than DATE as the BASE_DATE
+    -- get time_interval_id
+    -- teu days is the previous stock * (current point date - previous date)     
+    -- Append one dummy interval in the front so that the previous stock of first interval can be calculated
+    append_intervals = SELECT START_TIMESTAMP,END_TIMESTAMP,TIME_INTERVAL_ID, INTER_SECONDS,SEQUENCE 
+                FROM :intervals
+                UNION ALL
+                SELECT ADD_MONTHS(:window_start, -1) AS START_TIMESTAMP, :window_start AS END_TIMESTAMP, 0 AS TIME_INTERVAL_ID, 
+                0 AS INTER_SECONDS, 0 AS SEQUENCE
+                FROM DUMMY;
+                                 
+    stock_data_time_line = 
+             SELECT t3.LOCATION_NAME, t3.RESOURCE_TYPE, t3.DATE, t3.TEU_DAYS, t3.BASE_DATE, t4.TIME_INTERVAL_ID FROM 
+             ( 
+               SELECT t1.LOCATION_NAME, t1.RESOURCE_TYPE, t1.DATE, t1.TEU_DAYS, MAX(t2.REFRESH_DATE) AS BASE_DATE FROM
+               (  
+                  SELECT t4.LOCATION_NAME, t4.RESOURCE_TYPE, t4.DATE, t3.STOCK * t5.TEU_COUNT * DAYS_BETWEEN(t3.DATE, t4.DATE) AS TEU_DAYS 
+                  FROM :stock_all_data t3
+                  LEFT OUTER JOIN :stock_all_data t4 ON (t3.LOCATION_NAME = t4.LOCATION_NAME AND t3.RESOURCE_TYPE = t4.RESOURCE_TYPE 
+                    AND t3.SEQ + 1 = t4.SEQ ) 
+                  INNER JOIN :RESOURCE_TYPES t5 ON (t4.RESOURCE_TYPE = t5.RESOURCE_TYPE_CODE) 
+               ) t1
+               LEFT OUTER JOIN (SELECT LOCATION_NAME, RESOURCE_TYPE, TO_DATE(REFRESH_DATE) AS REFRESH_DATE FROM :refresh_dates_list) t2 
+                ON (t1.LOCATION_NAME = t2.LOCATION_NAME AND t1.RESOURCE_TYPE = t2.RESOURCE_TYPE AND t1.DATE > t2.REFRESH_DATE )
+               GROUP BY t1.LOCATION_NAME, t1.RESOURCE_TYPE, t1.DATE, t1.TEU_DAYS
+             ) t3
+             CROSS JOIN :append_intervals t4
+             WHERE t3.DATE > t4.START_TIMESTAMP AND t3.DATE &lt;= t4.END_TIMESTAMP;   
+              
+    -- Group by base date, time interval
+    stock_basedate_interval = 
+             SELECT LOCATION_NAME, RESOURCE_TYPE,  BASE_DATE, TIME_INTERVAL_ID, MAX(DATE) AS MAX_DATE, SUM(TEU_DAYS) AS TEU_DAYS
+             FROM :stock_data_time_line 
+             GROUP BY LOCATION_NAME, RESOURCE_TYPE, BASE_DATE, TIME_INTERVAL_ID;         
+    
+    -- Get stock and previous agg stock 
+    agg_stock = 
+              SELECT t1.LOCATION_NAME, t1.RESOURCE_TYPE, t1.MAX_DATE, t1.TEU_DAYS + IFNULL(t2.PREVIOUS_AGG_TEUDAYS,0) AS AGG_TEUDAYS, t1.BASE_DATE, 
+              t1.TIME_INTERVAL_ID, IFNULL(t2.PREVIOUS_AGG_TEUDAYS,0) AS PREVIOUS_AGG_TEUDAYS, t1.TEU_DAYS
+              FROM :stock_basedate_interval t1                                
+              INNER JOIN 
+              (
+               SELECT t3.LOCATION_NAME, t3.RESOURCE_TYPE, t3.MAX_DATE, SUM(t4.TEU_DAYS) AS PREVIOUS_AGG_TEUDAYS, t3.BASE_DATE
+               FROM :stock_basedate_interval t3
+               LEFT OUTER JOIN :stock_basedate_interval t4 
+               ON (t3.LOCATION_NAME = t4.LOCATION_NAME AND t3.RESOURCE_TYPE = t4.RESOURCE_TYPE AND t3.BASE_DATE = t4.BASE_DATE AND t3.MAX_DATE > t4.MAX_DATE)
+               GROUP BY t3.LOCATION_NAME, t3.RESOURCE_TYPE, t3.BASE_DATE, t3.MAX_DATE
+              ) t2 ON (t1.LOCATION_NAME = t2.LOCATION_NAME AND t1.RESOURCE_TYPE = t2.RESOURCE_TYPE AND t1.BASE_DATE = t2.BASE_DATE
+                  AND t1.MAX_DATE = t2.MAX_DATE)
+              WHERE t1.TIME_INTERVAL_ID > 0; --Remove the appended dummy interval
+                  
+     -- Get quantity base cost         
+     quabased_storage_cost = 
+           SELECT t4.GEO_GROUP_ID, t5.EQUIP_GROUP_ID, t3.TIME_INTERVAL_ID, SUM(t3.COST) AS COST FROM
+           (
+              SELECT t7.LOCATION_NAME, t7.RESOURCE_TYPE, t7.TIME_INTERVAL_ID, t7.MAX_DATE, t7.AGG_COST - t8.PREVIOUS_COST AS COST FROM
+              (
+               SELECT t1.LOCATION_NAME, t1.RESOURCE_TYPE, t1.TIME_INTERVAL_ID, t1.MAX_DATE, SUM(t2.PER_DIEM_COST) AS AGG_COST
+               FROM :agg_stock t1
+               INNER JOIN :quabase_cost_rating t2 ON (t1.LOCATION_NAME = t2.LOCATION_NAME AND t1.RESOURCE_TYPE = t2.RESOURCE_TYPE AND t1.AGG_TEUDAYS >= t2.SEQ)
+               GROUP BY t1.LOCATION_NAME, t1.RESOURCE_TYPE, t1.TIME_INTERVAL_ID, t1.MAX_DATE
+              ) t7
+              INNER JOIN 
+              ( 
+               SELECT t1.LOCATION_NAME, t1.RESOURCE_TYPE, t1.TIME_INTERVAL_ID, t1.MAX_DATE, SUM(t3.PER_DIEM_COST) AS PREVIOUS_COST
+               FROM :agg_stock t1
+               INNER JOIN :quabase_cost_rating t3 ON (t1.LOCATION_NAME = t3.LOCATION_NAME AND t1.RESOURCE_TYPE = t3.RESOURCE_TYPE AND t1.PREVIOUS_AGG_TEUDAYS >= t3.SEQ)
+               GROUP BY t1.LOCATION_NAME, t1.RESOURCE_TYPE, t1.TIME_INTERVAL_ID, t1.MAX_DATE             
+              ) t8 ON (t7.LOCATION_NAME = t8.LOCATION_NAME AND t7.LOCATION_NAME = t8.LOCATION_NAME AND t7.RESOURCE_TYPE = t8.RESOURCE_TYPE
+              AND t7.TIME_INTERVAL_ID = t8.TIME_INTERVAL_ID AND t7.MAX_DATE = t8.MAX_DATE)
+           ) t3
+           INNER JOIN :locations t4 ON (t3.LOCATION_NAME = t4.LOCATION_NAME)
+           INNER JOIN :equips t5 ON (t3.RESOURCE_TYPE = t5.EQUIP_CODE)
+           GROUP BY t4.GEO_GROUP_ID, t5.EQUIP_GROUP_ID, t3.TIME_INTERVAL_ID;               
+             
+-------------------------------------------------------------------------------------------------------------------               
+     -- we append the cost as 0 when there is no data 
+     car_out =  SELECT DISTINCT a.GEO_GROUP_ID, a.GEO_NAME, a.GEO_FILTER_TYPE, b.EQUIP_GROUP_ID, b.EQUIP_NAME, b.EQUIP_FILTER_TYPE,
+                 c.TIME_INTERVAL_ID, c.SEQUENCE, c.START_TIMESTAMP AS START_TIME, c.END_TIMESTAMP AS END_TIME, c.INTER_SECONDS
+                 FROM :locations a , :equips b, :intervals c;   
+                                            
+     var_out  = SELECT 'EQUIP_STORAGE_COST' AS NODE_ID,a.GEO_GROUP_ID AS GEO_ID, a.GEO_NAME, a.GEO_FILTER_TYPE,
+                a.EQUIP_GROUP_ID AS EQUIP_TYPE, a.EQUIP_NAME, a.EQUIP_FILTER_TYPE, a.TIME_INTERVAL_ID, a.SEQUENCE,
+                a.START_TIME, a.END_TIME, a.INTER_SECONDS, 'QUANTITY' AS OUTPUT_KEY, 
+                TO_DECIMAL(IFNULL(b.COST,0),18,4) AS OUTPUT_VALUE, :currency AS UNIT
+                FROM :car_out a 
+                LEFT OUTER JOIN (SELECT * FROM :timebased_storage_cost UNION ALL SELECT * FROM :quabased_storage_cost) b 
+                ON (a.GEO_GROUP_ID = b.GEO_GROUP_ID AND a.EQUIP_GROUP_ID = b.EQUIP_GROUP_ID AND a.TIME_INTERVAL_ID = b.TIME_INTERVAL_ID);    
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="NODE_ID" order="1">
+        <descriptions defaultDescription="NODE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="NODE_ID"/>
+      </attribute>
+      <attribute id="GEO_ID" order="2">
+        <descriptions defaultDescription="GEO_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="GEO_ID"/>
+      </attribute>
+      <attribute id="GEO_NAME" order="3">
+        <descriptions defaultDescription="GEO_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="GEO_NAME"/>
+      </attribute>
+      <attribute id="GEO_FILTER_TYPE" order="4">
+        <descriptions defaultDescription="GEO_FILTER_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="GEO_FILTER_TYPE"/>
+      </attribute>
+      <attribute id="EQUIP_TYPE" order="5">
+        <descriptions defaultDescription="EQUIP_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_TYPE"/>
+      </attribute>
+      <attribute id="EQUIP_NAME" order="6">
+        <descriptions defaultDescription="EQUIP_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_NAME"/>
+      </attribute>
+      <attribute id="EQUIP_FILTER_TYPE" order="7">
+        <descriptions defaultDescription="EQUIP_FILTER_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_FILTER_TYPE"/>
+      </attribute>
+      <attribute id="TIME_INTERVAL_ID" order="8">
+        <descriptions defaultDescription="TIME_INTERVAL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_INTERVAL_ID"/>
+      </attribute>
+      <attribute id="SEQUENCE" order="9">
+        <descriptions defaultDescription="SEQUENCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SEQUENCE"/>
+      </attribute>
+      <attribute id="START_TIME" order="10">
+        <descriptions defaultDescription="START_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </attribute>
+      <attribute id="END_TIME" order="11">
+        <descriptions defaultDescription="END_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="END_TIME"/>
+      </attribute>
+      <attribute id="INTER_SECONDS" order="12">
+        <descriptions defaultDescription="INTER_SECONDS"/>
+        <keyMapping columnObjectName="Script_View" columnName="INTER_SECONDS"/>
+      </attribute>
+      <attribute id="OUTPUT_KEY" order="13">
+        <descriptions defaultDescription="COST"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUTPUT_KEY"/>
+      </attribute>
+      <attribute id="OUTPUT_VALUE" order="14">
+        <descriptions defaultDescription="OUTPUT_VALUE"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUTPUT_VALUE"/>
+      </attribute>
+      <attribute id="UNIT" order="15">
+        <descriptions defaultDescription="UNIT"/>
+        <keyMapping columnObjectName="Script_View" columnName="UNIT"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

@@ -1,0 +1,597 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_main_get_tu_for_return_opt" (
+	IN RULE_ID BIGINT,
+	IN IN_RESOURCE_CATEGORY VARCHAR(50),
+    IN IN_RESOURRCE_FILTER_ID BIGINT,
+    IN IN_TIMERANGE_ID BIGINT,
+    IN IN_LOCATION_FILTER_ID BIGINT,
+    IN IN_FILTER_EXECUTION SMALLINT,
+    IN IN_EXCLUSIVE_RULE_ID INTEGER,
+    OUT OPT_TU "sap.tm.trp.db.pickupreturn::tt_tu_return_opt"
+ )
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+
+BEGIN
+ 	 DECLARE RULE_SP VARCHAR(200);
+     DECLARE VAL_ITEM_CAT VARCHAR(200);
+     DECLARE VAL_MOT_CAT VARCHAR(200) := -1;
+     DECLARE LANGUAGE_CODE NVARCHAR(10);
+     DECLARE RESOURCE_CATEGORY_TYPE NVARCHAR(10);
+     DECLARE SCRIPT VARCHAR(2000);
+     DECLARE PROC VARCHAR(5000);
+     DECLARE SELECTION_TYPE VARCHAR(200);
+     DECLARE START_T NVARCHAR(200);
+     DECLARE END_T NVARCHAR(200);
+     DECLARE OBJECT_NAME VARCHAR(200);
+     DECLARE ACTIVE_COUNT BIGINT;
+
+     --Begin hotfix--OSS ticket 16961 P&R memory allocation failure
+     DECLARE IN_START_TIME TIMESTAMP;
+     DECLARE IN_END_TIME TIMESTAMP;
+     --End  hotfix--OSS ticket 16961
+
+     SELECT IFNULL(MAX(SPRAS),'E') INTO LANGUAGE_CODE
+     FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+
+     SELECT IFNULL(MAX(A.VALUE),'') INTO VAL_ITEM_CAT
+     FROM  "sap.tm.trp.db.systemmanagement::t_config_cust" A
+     WHERE A.code =:IN_RESOURCE_CATEGORY AND  A.KEY  = 'ITEM_CAT';
+
+     -- GET RESOURCE CATEGORY TYPE
+     SELECT IFNULL(MAX(RESOURCE_CATEGORY_TYPE),'') INTO RESOURCE_CATEGORY_TYPE
+     FROM "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings"
+     WHERE CODE = :IN_RESOURCE_CATEGORY;
+
+     --MOT_CAT BY RESOURCE CATEGORY TYPE
+     -- Only Container and Railcar need to cal POL/POD
+     IF :RESOURCE_CATEGORY_TYPE = 'CN' THEN
+        VAL_MOT_CAT := '3';
+     ELSEIF :RESOURCE_CATEGORY_TYPE = 'RC' THEN
+        VAL_MOT_CAT := '2';
+     END IF;
+
+     -- find locations by the location filter id
+     CALL "sap.tm.trp.db.pickupreturn::p_get_locations_by_location_filterid"(:IN_LOCATION_FILTER_ID, filtered_shipper);
+     CALL "sap.tm.trp.db.filter::p_get_locations_by_locfilterid"(:IN_LOCATION_FILTER_ID, filtered_locations);
+
+     --Begin hotfix--OSS ticket 16961 P&R memory allocation failure
+     --filtered_locs = SELECT IFNULL (A.LOCATION_ID,B.LOCATION_ID) AS LOCATION_ID
+     --                FROM :filtered_shipper  A FULL OUTER JOIN  :filtered_locations B
+     --                ON A.LOCATION_ID=B.LOCATION_ID;
+     filtered_locs = SELECT * FROM :filtered_shipper
+     				 UNION
+     				 SELECT * FROM :filtered_locations;
+     --End  hotfix--OSS ticket 16961
+
+
+  	 IF :IN_TIMERANGE_ID > 0 THEN
+	     TIME_RANGE = SELECT ADD_DAYS(CURRENT_UTCTIMESTAMP, IFNULL(MAX(DATE_OFFSET), 0)) AS START_TIME,
+	                       ADD_SECONDS (ADD_DAYS(CURRENT_UTCTIMESTAMP, IFNULL(MAX(DATE_OFFSET), 0)), :IN_TIMERANGE_ID) AS END_TIME
+	                FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+	                WHERE USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+	     SELECT ADD_DAYS(CURRENT_UTCTIMESTAMP, IFNULL(MAX(DATE_OFFSET), 0)) into start_t
+	                FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+	                WHERE USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+
+    SELECT ADD_SECONDS (ADD_DAYS(CURRENT_UTCTIMESTAMP, IFNULL(MAX(DATE_OFFSET), 0)), :IN_TIMERANGE_ID) into end_t
+	FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+	WHERE USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+	 ELSE
+	     TIME_RANGE = SELECT ADD_DAYS(CURRENT_UTCTIMESTAMP, IFNULL(MAX(DATE_OFFSET), 0)) AS START_TIME,
+	                  ADD_SECONDS (ADD_DAYS(CURRENT_UTCTIMESTAMP, IFNULL(MAX(DATE_OFFSET), 0)), 220752000000) AS END_TIME
+	                  FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+	                  WHERE USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+	     SELECT ADD_DAYS(CURRENT_UTCTIMESTAMP, IFNULL(MAX(DATE_OFFSET), 0)) into start_t
+	                FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+	                WHERE USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+	     SELECT ADD_SECONDS (ADD_DAYS(CURRENT_UTCTIMESTAMP, IFNULL(MAX(DATE_OFFSET), 0)), :IN_TIMERANGE_ID) into END_T
+	                FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+	                WHERE USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+     END IF ;
+
+
+     SELECT START_TIME, END_TIME INTO IN_START_TIME, IN_END_TIME FROM :TIME_RANGE;
+
+
+	 SELECT SELECTION_DATE into SELECTION_TYPE from "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" where id = :RULE_ID;
+
+	   IF :SELECTION_TYPE is null or :SELECTION_TYPE = '' then
+
+			ORD_FIL_BY_LOC_TIME = SELECT DISTINCT t1.DB_KEY AS TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT,
+						                    t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT,
+						                    t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+					                        t3.LOCATION_ID AS SOURCE_LOCATION_ID,
+					                        t3.LOCATION_NAME AS SOURCE_LOCATION_NAME,
+					                        t3.SEL_TIME AS PLANNED_DEPARTURE_TIME,
+					                        t4.LOCATION_ID AS DESTINATION_LOCATION_ID,
+					                        t4.LOCATION_NAME AS DESTINATION_LOCATION_NAME,
+					                        t4.SEL_TIME AS PLANNED_ARRIVAL_TIME,
+					                        t4.LOCATION_ID AS ORIGINAL_RETURN_LOCATION_ID,
+					                        t4.LOCATION_NAME AS ORIGINAL_RETURN_LOCATION,
+					                        t4.SEL_TIME AS ORIGINAL_RETURN_DATE,
+					                        TRQ.SHIPPER_ID AS SHIPPER_ID,
+					                        TRQ.SHIPPER AS SHIPPER_NAME,
+					                        TRQ.CONSIGNEE_ID AS CONSIGNEE_ID,
+				                            TRQ.CONSIGNEE AS CONSIGNEE_NAME,
+				                            TRQ.CUSTOMER_ID AS CUSTOMER_CODE,
+				                            TRQ.CUSTOMER_NAME AS CUSTOMER_NAME,
+				                            TRQ.ORDER_DATE AS BOOKING_DATE,
+				                            TRQ.TRQ_ID
+				                     --Begin hotfix--OSS ticket 16961 P&R memory allocation failure
+				                     /*
+					                 FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3
+					                 ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4
+					                 ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')
+					                 INNER JOIN :filtered_locs FL ON (t4.LOCATION_ID=FL.LOCATION_ID OR t4.LOCATION_ID IS NULL)
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T5 -- Maybe can remove this join
+					                 ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :VAL_ITEM_CAT )
+					                 LEFT JOIN "sap.tm.trp.db.semantic.order::v_customer_order" TRQ ON t5.TRQ_KEY = TRQ.DB_KEY
+					                  CROSS JOIN :TIME_RANGE TIME_RANGE
+				                       where t4.SEL_TIME BETWEEN TIME_RANGE.START_TIME AND TIME_RANGE.END_TIME
+					                and t1.TOR_CAT = 'TU'
+					                 AND t1.MOVEMENT_CAT = 'ER'
+					                 AND t4.UNLOADED = 0 AND t4.STOP_FIX = ''
+	 				                 AND t1.TOR_ID NOT IN (SELECT TU_ID FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result");
+	 				                 */
+	 				                 FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+					                 ON (t4.TU_KEY = t1.DB_KEY AND t1.TOR_CAT = 'TU' AND t1.MOVEMENT_CAT = 'ER'	)
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3
+					                 ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T5
+					                 ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :VAL_ITEM_CAT )
+					                 LEFT JOIN "sap.tm.trp.db.semantic.order::v_customer_order" TRQ ON t5.TRQ_KEY = TRQ.DB_KEY
+					                 WHERE t4.STOP_ROLE = 'TL'
+					                 AND   ( t4.LOCATION_ID IN (SELECT LOCATION_ID FROM :filtered_locs ) OR t4.LOCATION_ID IS NULL)
+					                 AND t4.UNLOADED = 0 AND t4.STOP_FIX = ''
+					                 AND t4.SEL_TIME BETWEEN :IN_START_TIME AND :IN_END_TIME
+					                 AND t1.TOR_ID NOT IN (SELECT DISTINCT TU_ID FROM "sap.tm.trp.db.pickupreturn::v_location_rule_assign_in_logistic_progress");
+									   --End  hotfix--OSS ticket 16961
+
+         IF :IN_FILTER_EXECUTION = 1 THEN
+
+	    	ORD_FIL_BY_LOC_TIME_FINAL = select * from :ORD_FIL_BY_LOC_TIME T1
+		                            where T1.TOR_ID NOT IN
+		                            (SELECT DISTINCT TU_ID FROM "sap.tm.trp.db.pickupreturn::v_location_rule_assign_result");
+
+
+    	 ELSE
+
+	        ORD_FIL_BY_LOC_TIME_FINAL = select * from :ORD_FIL_BY_LOC_TIME ;
+
+    	 END IF ;
+
+
+	 ELSE  --- if selection date is assigned
+
+	         ORDERS_FILTER_BY_LOC = SELECT DISTINCT t1.DB_KEY AS TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT,
+						                    t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT,
+						                    t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+					                        t3.LOCATION_ID AS SOURCE_LOCATION_ID,
+					                        t3.LOCATION_NAME AS SOURCE_LOCATION_NAME,
+					                        t3.SEL_TIME AS PLANNED_DEPARTURE_TIME,
+					                        t4.LOCATION_ID AS DESTINATION_LOCATION_ID,
+					                        t4.LOCATION_NAME AS DESTINATION_LOCATION_NAME,
+					                        t4.SEL_TIME AS PLANNED_ARRIVAL_TIME,
+					                        t4.LOCATION_ID AS ORIGINAL_RETURN_LOCATION_ID,
+					                        t4.LOCATION_NAME AS ORIGINAL_RETURN_LOCATION,
+					                        t4.SEL_TIME AS ORIGINAL_RETURN_DATE,
+					                        TRQ.SHIPPER_ID AS SHIPPER_ID,
+					                        TRQ.SHIPPER AS SHIPPER_NAME,
+					                        TRQ.CONSIGNEE_ID AS CONSIGNEE_ID,
+				                            TRQ.CONSIGNEE AS CONSIGNEE_NAME,
+				                            TRQ.CUSTOMER_ID AS CUSTOMER_CODE,
+				                            TRQ.CUSTOMER_NAME AS CUSTOMER_NAME,
+				                            TRQ.ORDER_DATE AS BOOKING_DATE,
+				                            TRQ.TRQ_ID
+				                     --Begin hotfix--OSS ticket 16961 P&R memory allocation failure
+				                     /*
+					                 FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3
+					                 ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4
+					                 ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')
+					                 INNER JOIN :filtered_locs FL ON (t4.LOCATION_ID=FL.LOCATION_ID OR t4.LOCATION_ID IS NULL)
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T5 -- Maybe can remove this join
+					                 ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :VAL_ITEM_CAT )
+					                 LEFT JOIN "sap.tm.trp.db.semantic.order::v_customer_order" TRQ ON t5.TRQ_KEY = TRQ.DB_KEY
+					                 WHERE t1.TOR_CAT = 'TU'
+					                 AND t1.MOVEMENT_CAT = 'ER'
+					                 AND t4.UNLOADED = 0 AND t4.STOP_FIX = ''
+	 				                 AND t1.TOR_ID NOT IN (SELECT TU_ID FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result");
+	 				                 */
+	 				                 FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+					                 ON (t4.TU_KEY = t1.DB_KEY AND t1.TOR_CAT = 'TU' AND t1.MOVEMENT_CAT = 'ER'	)
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3
+					                 ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T5
+					                 ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :VAL_ITEM_CAT )
+					                 LEFT JOIN "sap.tm.trp.db.semantic.order::v_customer_order" TRQ ON t5.TRQ_KEY = TRQ.DB_KEY
+					                 WHERE t4.STOP_ROLE = 'TL'
+					                 AND   ( t4.LOCATION_ID IN (SELECT LOCATION_ID FROM :filtered_locs ) OR t4.LOCATION_ID IS NULL)
+					                 AND t4.UNLOADED = 0 AND t4.STOP_FIX = ''
+					                 AND t1.TOR_ID NOT IN (SELECT DISTINCT TU_ID FROM "sap.tm.trp.db.pickupreturn::v_location_rule_assign_in_logistic_progress");
+	                             --End  hotfix--OSS ticket 16961
+
+	      -- insert into
+	      TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_ord_fil_by_loc_return_temp";
+          INSERT INTO "sap.tm.trp.db.pickupreturn::t_ord_fil_by_loc_return_temp"(
+                    TOR_ID,
+                    PLANNED_DEPARTURE_TIME,
+                    PLANNED_ARRIVAL_TIME)
+                    select TOR_ID,
+                            PLANNED_DEPARTURE_TIME,
+                           PLANNED_ARRIVAL_TIME
+                    from :ORDERS_FILTER_BY_LOC;
+
+	       		 select T1.procedure_name into PROC
+                 from "sap.tm.trp.db.pickupreturn::t_return_register_selection_date_criteria" T1
+                 where T1.NAME = :SELECTION_TYPE;
+
+
+            	  SCRIPT := 'call "'|| :PROC || '"('
+        	            || '''' || :VAL_MOT_CAT  || '''' ||
+        	        ','
+        	            || '''' || :START_T  || '''' ||
+        		    ','
+        	            || '''' || :END_T || '''' ||
+        	        ')';
+
+	            execute immediate(:SCRIPT);
+
+	            ORD_FIL_BY_LOC_TIME = select
+	                                DISTINCT t41.TU_KEY,t41.TOR_ID, t41.MOVEMENT_CAT,
+						                    t41.EXECUTION_STATUS,t41.EXECUTION_STATUS_TEXT,
+						                    t41.LIFECYCLE,t41.LIFECYCLE_TEXT,
+					                        t41.SOURCE_LOCATION_ID,
+					                        t41.SOURCE_LOCATION_NAME,
+					                        t41.PLANNED_DEPARTURE_TIME,
+					                        t41.DESTINATION_LOCATION_ID,
+					                        t41.DESTINATION_LOCATION_NAME,
+					                        t41.PLANNED_ARRIVAL_TIME,
+					                        t41.ORIGINAL_RETURN_LOCATION_ID,
+					                        t41.ORIGINAL_RETURN_LOCATION,
+					                        t41.ORIGINAL_RETURN_DATE,
+					                        t41.SHIPPER_ID,
+					                        t41.SHIPPER_NAME,
+					                        t41.CONSIGNEE_ID,
+				                            t41.CONSIGNEE_NAME,
+				                            t41.CUSTOMER_CODE,
+				                            t41.CUSTOMER_NAME,
+				                            t41.BOOKING_DATE,
+				                            t41.TRQ_ID
+	                                from "sap.tm.trp.db.pickupreturn::t_ord_fil_by_loc_return_temp" t40
+	                                inner join :ORDERS_FILTER_BY_LOC t41 on (t41.TOR_ID = t40.TOR_ID);
+
+	            TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_ord_fil_by_loc_return_temp";
+
+	         IF :IN_FILTER_EXECUTION = 1 THEN
+             -- CMA requirement: EP should look at Source Location
+                 ORD_FIL_BY_LOC_TIME_FINAL = SELECT * from :ORD_FIL_BY_LOC_TIME T1
+                                       where T1.TOR_ID NOT IN
+                                       (SELECT DISTINCT TU_ID FROM "sap.tm.trp.db.pickupreturn::v_location_rule_assign_result");
+
+        	 ELSE
+        	 -- CMA requirement: EP should look at Source Location
+            	 ORD_FIL_BY_LOC_TIME_FINAL = SELECT * from :ORD_FIL_BY_LOC_TIME ;
+
+        	 END IF ;
+
+	 END IF;
+
+	         SELECT count(*) into ACTIVE_COUNT FROM  "sap.tm.trp.db.pickupreturn::t_register_exclude_processed_tu" T1
+	        where T1.ACTIVATION_STATUS = 1;
+
+            IF (:ACTIVE_COUNT > 0) THEN
+                SELECT T1.NAME into OBJECT_NAME  FROM  "sap.tm.trp.db.pickupreturn::t_register_exclude_processed_tu" T1
+                where T1.ACTIVATION_STATUS = 1;
+
+                SELECT T1.procedure_name into PROC
+                FROM "sap.tm.trp.db.pickupreturn::t_register_exclude_processed_tu" T1
+                WHERE T1.NAME = :OBJECT_NAME;
+
+                TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_assign_result_temp";
+                INSERT INTO "sap.tm.trp.db.pickupreturn::t_assign_result_temp"
+                (TOR_ID)
+                SELECT DISTINCT TU_ID FROM "sap.tm.trp.db.pickupreturn::v_location_rule_assign_result";
+
+                TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_original_tu_temp";
+                INSERT INTO "sap.tm.trp.db.pickupreturn::t_original_tu_temp"
+                (TOR_ID)
+                SELECT DISTINCT TOR_ID FROM :ORD_FIL_BY_LOC_TIME;
+
+                SCRIPT := 'call "'|| :PROC || '"('
+    	            || '''' || :RULE_ID  || '''' ||
+                     ')';
+
+                execute immediate(:SCRIPT);
+
+
+        	    ORD_FIL_BY_LOC_TIME_FINAL = select * from :ORD_FIL_BY_LOC_TIME T1
+            	                                where T1.TOR_ID in
+        	                                (SELECT DISTINCT TOR_ID FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_original_tu_temp");
+
+        	    TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_assign_result_temp";
+        	    TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_original_tu_temp";
+
+            END IF;
+
+     IF :IN_RESOURRCE_FILTER_ID = 0 THEN
+       order_items_aggby_equtype = SELECT t1.TU_KEY ,MAX(t2.DB_KEY) AS ITE_KEY, t1.TOR_ID AS TU_ID, t1.MOVEMENT_CAT AS TU_TYPE,
+					                     t1.EXECUTION_STATUS AS EXECUTION_STATUS_CODE,t1.EXECUTION_STATUS_TEXT AS EXECUTION_STATUS,
+					                     t1.LIFECYCLE AS LIFECYCLE_CODE,t1.LIFECYCLE_TEXT AS LIFECYCLE_STATUS,
+					                     MAX(t2.RESOURCE_TYPE) AS RESOURCE_TYPE, SUM(t2.QUA_PCS_VAL) AS QUANTITY,
+					                     SUM(CASE WHEN t2.RESOURCE_NAME <> '' THEN 1 ELSE 0 END) AS ASSIGN_QUANTITY,
+					                     t3.PLANNING_RELEVANT,
+					                     MAX(t2.RESOURCE_NAME) AS RESOURCE_NAME,MAX(T2.PLATENUMBER) AS RESOURCE_NUMBER,
+					                     t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME,
+                                         t1.ORIGINAL_RETURN_LOCATION_ID, t1.ORIGINAL_RETURN_LOCATION,t1.ORIGINAL_RETURN_DATE,
+                                         t1.SHIPPER_ID,t1.SHIPPER_NAME,t1.CONSIGNEE_ID,t1.CONSIGNEE_NAME,t1.CUSTOMER_CODE,t1.CUSTOMER_NAME,
+				                         t1.BOOKING_DATE,t1.TRQ_ID
+					              FROM :ORD_FIL_BY_LOC_TIME_FINAL t1
+					              INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item_resource" t2
+					              ON (t2.TU_KEY = t1.TU_KEY AND t2.ITEM_CAT = :VAL_ITEM_CAT )
+					              INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t6
+					              ON (t2.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :IN_RESOURCE_CATEGORY)
+					              LEFT OUTER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_haulage_type" t3 ON(t1.TU_KEY = t3.TU_KEY)
+					              GROUP BY t1.TU_KEY, t1.TOR_ID, t1.MOVEMENT_CAT, t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT,t1.LIFECYCLE,
+					                       t1.LIFECYCLE_TEXT,T3.PLANNING_RELEVANT,t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,
+				                           t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME,t1.ORIGINAL_RETURN_LOCATION_ID,
+				                           t1.ORIGINAL_RETURN_LOCATION,t1.ORIGINAL_RETURN_DATE,t1.SHIPPER_ID,t1.SHIPPER_NAME,
+                                             t1.CONSIGNEE_ID,t1.CONSIGNEE_NAME,t1.CUSTOMER_CODE,t1.CUSTOMER_NAME,t1.BOOKING_DATE,t1.TRQ_ID;
+     ELSE
+       -- equip filter is set, do filtering on item table
+       equips = SELECT DISTINCT RESOURCE_TYPE
+                FROM (SELECT b.EQUI_CODE AS RESOURCE_TYPE
+                      FROM "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" b
+                      WHERE b.EQUIPMENT_FILTER_ID = :IN_RESOURRCE_FILTER_ID AND b.EQUI_CODE IS NOT NULL
+                      UNION
+                      SELECT c.EQUI_CODE AS RESOURCE_TYPE
+                      FROM "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" b
+                      INNER JOIN "sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth" c
+                      ON (b.EQUIPMENT_GROUP_ID = c.EQUIPMENT_GROUP_ID AND C.RESOURCE_CATEGORY = b.RESOURCE_CATEGORY)
+                      WHERE b.EQUIPMENT_FILTER_ID = :IN_RESOURRCE_FILTER_ID AND b.EQUIPMENT_GROUP_ID IS NOT NULL);
+
+       order_items_aggby_equtype = SELECT t1.TU_KEY ,MAX(t2.DB_KEY) AS ITE_KEY, t1.TOR_ID AS TU_ID, t1.MOVEMENT_CAT AS TU_TYPE,
+					                     t1.EXECUTION_STATUS AS EXECUTION_STATUS_CODE,t1.EXECUTION_STATUS_TEXT AS EXECUTION_STATUS,
+					                     t1.LIFECYCLE AS LIFECYCLE_CODE,t1.LIFECYCLE_TEXT AS LIFECYCLE_STATUS,
+					                     MAX(t2.RESOURCE_TYPE) AS RESOURCE_TYPE, SUM(t2.QUA_PCS_VAL) AS QUANTITY,
+					                     SUM(CASE WHEN t2.RESOURCE_NAME <> '' THEN 1 ELSE 0 END) AS ASSIGN_QUANTITY,
+					                     t3.PLANNING_RELEVANT,
+					                     MAX(t2.RESOURCE_NAME) AS RESOURCE_NAME,MAX(T2.PLATENUMBER) AS RESOURCE_NUMBER,
+					                     t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME,
+                                         t1.ORIGINAL_RETURN_LOCATION_ID, t1.ORIGINAL_RETURN_LOCATION,t1.ORIGINAL_RETURN_DATE,
+                                         t1.SHIPPER_ID,t1.SHIPPER_NAME,t1.CONSIGNEE_ID,t1.CONSIGNEE_NAME,t1.CUSTOMER_CODE,t1.CUSTOMER_NAME,
+				                         t1.BOOKING_DATE,t1.TRQ_ID
+					              FROM :ORD_FIL_BY_LOC_TIME_FINAL t1         
+					              INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item_resource" t2
+					              ON (t2.TU_KEY = t1.TU_KEY AND t2.ITEM_CAT = :VAL_ITEM_CAT )
+					              INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t6
+					              ON (t2.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :IN_RESOURCE_CATEGORY)
+					              --Begin hotfix--OSS ticket 16961 P&R memory allocation failure
+					              --INNER JOIN :equips FE ON t2.RESOURCE_TYPE=FE.RESOURCE_TYPE
+					              LEFT OUTER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_haulage_type" t3
+					              ON (t1.TU_KEY =t3.TU_KEY )
+					              WHERE t2.RESOURCE_TYPE IN (SELECT RESOURCE_TYPE FROM :equips)
+					              --End hotfix--OSS ticket 16961
+					              GROUP BY t1.TU_KEY, t1.TOR_ID, t1.MOVEMENT_CAT, t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT,t1.LIFECYCLE,
+					                       t1.LIFECYCLE_TEXT,T3.PLANNING_RELEVANT,t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,
+				                           t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME,t1.ORIGINAL_RETURN_LOCATION_ID,
+				                           t1.ORIGINAL_RETURN_LOCATION,t1.ORIGINAL_RETURN_DATE,t1.SHIPPER_ID,t1.SHIPPER_NAME,
+                                           t1.CONSIGNEE_ID,t1.CONSIGNEE_NAME,t1.CUSTOMER_CODE,t1.CUSTOMER_NAME,t1.BOOKING_DATE,t1.TRQ_ID;
+     END IF;
+
+     orders_item_with_extrainfo = SELECT DISTINCT T1.*,
+				                         T2.LEASE_CONTRACT_REF AS LEASE_AGREEMENT,
+				                         T2.OWNERSHIP_CODE AS LEASE_TYPE_CODE,
+				                         T5.DESC AS LEASE_TYPE,
+				                         LEASE_CONTRACT_TYPE.TYPE AS LEASE_CONTRACT_TYPE,
+				                         T2.SPECIAL_INSTRUCTION AS SPECIAL_INSTRUCTION_CODE,
+				                         T4.DESC AS SPECIAL_INSTRUCTION_NAME,
+				                         T3.CURRENT_LOCATION_ID AS LAST_LOCATION_ID,
+				                         T3.CURRENT_LOCATION AS LAST_LOCATION_NAME
+				                  FROM :order_items_aggby_equtype T1
+				                  LEFT JOIN "sap.tm.trp.db.semantic.resource::v_resource_master" T2 ON (T1.RESOURCE_NAME = T2.RESOURCE_NAME)
+				                  LEFT JOIN "sap.tm.trp.db.leasecontract::t_lease_contract" AS LEASE_CONTRACT ON (T2.LEASE_CONTRACT_REF = LEASE_CONTRACT.LEASE_CONTRACT_REFERENCE)
+							      LEFT JOIN "sap.tm.trp.db.leasecontract::t_lease_contract_type" AS LEASE_CONTRACT_TYPE ON (LEASE_CONTRACT.LEASE_TYPE = LEASE_CONTRACT_TYPE.ID)
+				                  LEFT JOIN "sap.tm.trp.db.semantic.resource::v_special_instruction_t" T4 ON(T2.SPECIAL_INSTRUCTION = T4.CODE)
+				                  LEFT JOIN "sap.tm.trp.db.semantic.resource::v_ownership_t" T5 ON (T2.OWNERSHIP_CODE = T5.CODE)
+				                  LEFT JOIN "sap.tm.trp.db.semantic.resource::v_resource_status" T3 ON (T1.RESOURCE_NAME = T3.RESOURCE_NAME)
+				                  WHERE T1.ASSIGN_QUANTITY = 1
+				                  UNION ALL
+				                  SELECT DISTINCT T1.*,
+				                         '' AS LEASE_AGREEMENT,
+				                         '' AS LEASE_TYPE_CODE,
+				                         '' AS LEASE_TYPE,
+				                         '' AS LEASE_CONTRACT_TYPE,
+				                         '' AS SPECIAL_INSTRUCTION_CODE,
+				                         '' AS SPECIAL_INSTRUCTION_NAME,
+				                         '' AS LAST_LOCATION_ID,
+				                         '' AS LAST_LOCATION_NAME
+				                  FROM :order_items_AGGby_EQUType T1
+				                  WHERE  T1.ASSIGN_QUANTITY <> 1;
+
+       mot = SELECT ITE_KEY, MOT, MEANS_OF_TRANSPORTATION FROM
+            (SELECT T1.ITE_KEY AS ITE_KEY, T2.MOT, T4.DESC AS MEANS_OF_TRANSPORTATION,
+                   RANK() OVER (PARTITION BY T1.ITE_KEY ORDER BY T2.MOT_CAT DESC) AS PRIORITY_SEQ
+            FROM :order_items_aggby_equtype T1
+            LEFT OUTER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stage" T2 ON (T1.TU_KEY = T2.TU_KEY)
+            LEFT OUTER JOIN "sap.tm.trp.db.semantic.common::v_mtr_map" T3 ON (T2.MOT = T3.MOT AND T2.MTR_TCO = T3.MTR)
+            LEFT OUTER JOIN "sap.tm.trp.db.semantic.common::v_transportation_means" T4 ON (T3.TRP_MTR = T4.CODE)
+            )
+            WHERE PRIORITY_SEQ = 1;
+
+
+      tu_list = SELECT TU_ID AS TOR_ID, TU_TYPE FROM :order_items_aggby_equtype;
+
+      CALL "sap.tm.trp.db.semantic.order::p_cal_pol_pod_voyage"(:tu_list,:VAL_MOT_CAT,tu_pol_pod_voyage);
+
+
+      -- combine all these interested columns together as output
+      pre_out_all = SELECT DISTINCT t1.TU_ID,
+                        t1.TU_TYPE AS TU_TYPE_CODE,
+                        t3.DESC AS TU_TYPE,
+                        t1.EXECUTION_STATUS_CODE,
+                        t1.EXECUTION_STATUS,
+                        t1.RESOURCE_TYPE,
+                        t1.QUANTITY,
+                        t1.ASSIGN_QUANTITY,
+                        CASE T1.ASSIGN_QUANTITY WHEN 1 THEN t1.RESOURCE_NUMBER
+	                      ELSE '' END AS RESOURCE_NUMBER,
+                        t1.SHIPPER_ID,
+                        t1.SHIPPER_NAME,
+                        t1.SOURCE_LOCATION_ID,
+                        t1.SOURCE_LOCATION_NAME,
+                        t1.CONSIGNEE_ID,
+                        t1.CONSIGNEE_NAME,
+                        t1.DESTINATION_LOCATION_ID,
+                        t1.DESTINATION_LOCATION_NAME,
+                        t1.ORIGINAL_RETURN_LOCATION_ID,
+                        t1.ORIGINAL_RETURN_LOCATION,
+                        CASE WHEN t1.ORIGINAL_RETURN_LOCATION_ID <> '' THEN t1.ORIGINAL_RETURN_LOCATION_ID
+                         ELSE t2.POD END AS LOCATION_ID_FOR_FILTER,
+                        t2.POL,
+                        t2.POL_NAME,
+                        t2.POD,
+                        t2.POD_NAME,
+                        t1.ORIGINAL_RETURN_DATE,
+                        t1.PLANNING_RELEVANT,
+                        TO_VARCHAR(t1.ITE_KEY) AS ITE_KEY,
+                        t1.LIFECYCLE_CODE,
+                        t1.LIFECYCLE_STATUS,
+                        t1.CUSTOMER_CODE,
+                        t1.CUSTOMER_NAME,
+                        t1.BOOKING_DATE,
+                        TO_VARCHAR(t1.TRQ_ID) AS BOOKING_REFERENCE,
+                        t4.MOT,
+                        t4.MEANS_OF_TRANSPORTATION,
+                        t2.CARRIER_POL,
+                        t2.CARRIER_POD,
+                        t2.VOYAGE_POD,
+                        t1.LAST_LOCATION_ID,
+                        t1.LAST_LOCATION_NAME,
+                        t1.SPECIAL_INSTRUCTION_CODE,
+                        t1.SPECIAL_INSTRUCTION_NAME,
+                        t1.LEASE_AGREEMENT,
+                        t1.LEASE_TYPE_CODE,
+                        t1.LEASE_TYPE,
+                        t1.LEASE_CONTRACT_TYPE,
+                        CASE T1.ASSIGN_QUANTITY WHEN 1 THEN t1.RESOURCE_NAME
+	                      ELSE '' END AS ASSIGNED_RESOURCE,
+                        TO_TIMESTAMP(t2.ARRIVAL_UTC) AS VESSEL_ARRIVAL_DATE,
+                        t2.VESSEL_POD
+                FROM :orders_item_with_extrainfo t1
+                LEFT OUTER JOIN :tu_pol_pod_voyage t2 ON (t1.TU_ID = t2.TOR_ID)
+                LEFT OUTER JOIN "sap.tm.trp.db.semantic.order::v_tor_movement_category_t" t3 ON (T1.TU_TYPE = t3.CODE)
+                LEFT JOIN :mot t4 ON (t1.ITE_KEY = t4.ITE_KEY);
+      -- CMA requirement: ER should look at Destination Location
+      pre_out = SELECT T1.* FROM :pre_out_all T1
+                INNER JOIN :filtered_locs FL
+                ON (T1.DESTINATION_LOCATION_ID=FL.LOCATION_ID)
+                OR (T1.DESTINATION_LOCATION_ID IS NULL AND T1.POD = FL.LOCATION_ID);
+
+
+      IF :IN_EXCLUSIVE_RULE_ID IS NULL OR :IN_EXCLUSIVE_RULE_ID = 0 THEN
+        opt_tu = SELECT * FROM :pre_out;
+      ELSE --Use exclusive rule to select TUs
+        SELECT IFNULL(MAX(T1.NAME), '') INTO RULE_SP
+        FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule" T1
+        WHERE T1.RULE_ID = :IN_EXCLUSIVE_RULE_ID;
+
+        TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_booking_exclusive_rule_GlobalTemp";
+        INSERT INTO "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_booking_exclusive_rule_GlobalTemp"(
+                    PR_RULE_ID,
+                    TU_ID,
+                    EQUIPMENT_ID,
+                    EQUIP_TYPE_NAME,
+                    QUANTITY,
+                    LOCATION_ID,
+                    LOCATION_NAME,
+                    PLANNED_DATE,
+                    TU_TYPE,
+                    ITE_KEY,
+                    SHIPPER_ID,
+                    SHIPPER_NAME,
+                    POL,
+                    POL_NAME,
+                    POD,
+                    POD_NAME,
+                    CONSIGNEE_ID,
+                    CONSIGNEE_NAME,
+                    CUSTOMER_NAME,
+                    PLANNING_RELEVANT,
+                    EXECUTION_STATUS,
+                    LIFECYCLE_STATUS,
+                    BOOKING_DATE,
+                    PLAN_EXECUTION_ID,
+                    PLAN_MODEL_ID,
+                    NODE_ID,
+                    DEPOT_ID,
+                    DEPOT_NAME,
+                    STOCK,
+                    SUPPLY,
+                    DEMAND,
+                    BALANCE_SUPPLY_DEMAND,
+                    BALANCE_STOCK_SUPPLY_DEMAND,
+                    MIN_SAFETY_STOCK,
+                    MAX_CAPACITY)
+             SELECT DISTINCT 0,
+                    T1.TU_ID,
+                    T1.RESOURCE_TYPE,
+                    T1.RESOURCE_TYPE,
+                    T1.QUANTITY ,
+                    T1.LOCATION_ID_FOR_FILTER AS LOCATION_ID,
+                    T2.NAME,
+                    T1.ORIGINAL_RETURN_DATE,
+                    T1.TU_TYPE_CODE,
+                    T1.ITE_KEY,
+                    T1.SHIPPER_ID,
+                    T1.SHIPPER_NAME,
+                    T1.POL,
+                    T1.POL_NAME,
+                    T1.POD,
+                    IFNULL (T1.POD_NAME,' '),
+                    T1.CONSIGNEE_ID,
+                    T1.CONSIGNEE_NAME,
+                    T1.CUSTOMER_NAME,
+                    T1.PLANNING_RELEVANT,
+                    T1.EXECUTION_STATUS,
+                    T1.LIFECYCLE_STATUS,
+                    T1.BOOKING_DATE,
+                    0,
+                    0,
+                    0,
+                    T1.LOCATION_ID_FOR_FILTER AS LOCATION_ID,
+                    T2.NAME,
+                    0 AS STOCK,
+                    0 AS SUPPLY,
+                    0 AS DEMAND,
+                    0,
+                    0,
+                    0,
+                    0
+              FROM :pre_out T1
+              LEFT JOIN "sap.tm.trp.db.semantic.location::v_all_location" T2
+              ON T1.LOCATION_ID_FOR_FILTER = T2.ID;
+
+            CALL "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::p_call_exclusive_rules"(
+              'ER',
+              :RULE_SP,
+              EXCLUSIVE_RESULT
+             );
+
+             opt_tu = SELECT DISTINCT * FROM :pre_out
+                         WHERE TU_ID NOT IN (SELECT TU_ID FROM :EXCLUSIVE_RESULT);
+    END IF ;
+
+END ;

@@ -1,0 +1,76 @@
+//To define the HDB view file use the following syntax:
+
+schema="SAP_TM_TRP";
+query="
+	SELECT 	T1.ID,			
+			CASE WHEN T1.CATEGORY IS NULL THEN 1
+				 ELSE T1.CATEGORY
+			END	AS CATEGORY,
+			T1.NAME,
+			T1.DESC,
+			T1.VISIBILITY,
+			T6.DESC AS VISIBILITY_DESC,
+			CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+			  WHEN (T1.CREATED_BY <> 0 AND T1.CREATED_BY IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+			  WHEN T1.CREATED_BY = 0 OR T1.CREATED_BY IS NULL THEN ''
+			  ELSE '***' END AS CREATED_BY,
+			T1.CREATED_TIME,
+			CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+			  WHEN (T1.MODIFIED_BY <> 0 AND T1.MODIFIED_BY IS NOT NULL) AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+			  WHEN T1.MODIFIED_BY = 0 OR T1.MODIFIED_BY IS NULL THEN ''
+			  ELSE '***' END AS MODIFIED_BY,
+			T1.MODIFIED_TIME,
+			T1.RESOURCE_CATEGORY
+	FROM \"sap.tm.trp.db.filter::t_attribute_group\" T1
+	INNER JOIN \"sap.tm.trp.db.systemmanagement::t_visibility_type\" T5 ON T5.CODE = T1.VISIBILITY
+	LEFT JOIN \"sap.tm.trp.db.systemmanagement::t_visibility_type_t\" T6 ON T6.ID = T5.ID AND T6.SPRAS = IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E')
+	LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T2 ON T2.ID = T1.CREATED_BY
+	LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T3 ON T3.ID = T1.MODIFIED_BY
+	LEFT JOIN \"sap.tm.trp.db.systemmanagement.user::cv_get_username\" T4 ON T4.USERNAME = T2.USERNAME
+	LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T9  ON T2.USERNAME = T9.USERNAME
+    LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T10 ON T3.USERNAME = T10.USERNAME
+	CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE
+	WHERE T1.VISIBILITY = 'G' OR T4.USERNAME IS NOT NULL
+	
+	UNION
+	
+	SELECT 	T1.ID,
+			CASE WHEN T1.CATEGORY IS NULL THEN 1
+				 ELSE T1.CATEGORY
+			END	AS CATEGORY,
+			T1.NAME,
+			T1.DESC,
+			T1.VISIBILITY,
+			T6.DESC AS VISIBILITY_DESC,
+			CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+			  WHEN (T1.CREATED_BY <> 0 AND T1.CREATED_BY IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+			  WHEN T1.CREATED_BY = 0 OR T1.CREATED_BY IS NULL THEN ''
+			  ELSE '***' END AS CREATED_BY,
+			T1.CREATED_TIME,
+			CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+			  WHEN (T1.MODIFIED_BY <> 0 AND T1.MODIFIED_BY IS NOT NULL) AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+			  WHEN T1.MODIFIED_BY = 0 OR T1.MODIFIED_BY IS NULL THEN ''
+			  ELSE '***' END AS MODIFIED_BY,
+			T1.MODIFIED_TIME,
+			T1.RESOURCE_CATEGORY
+	FROM \"sap.tm.trp.db.filter::t_attribute_group\" T1
+	INNER JOIN \"sap.tm.trp.db.systemmanagement::t_visibility_type\" T5 ON T5.CODE = T1.VISIBILITY
+	LEFT JOIN \"sap.tm.trp.db.systemmanagement::t_visibility_type_t\" T6 ON T6.ID = T5.ID AND T6.SPRAS = IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E')
+	LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T2 ON T2.ID = T1.CREATED_BY
+	LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T3 ON T3.ID = T1.MODIFIED_BY
+	LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T9  ON T2.USERNAME = T9.USERNAME
+    LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T10 ON T3.USERNAME = T10.USERNAME
+	CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE
+	WHERE
+	(SELECT USER_TYPE_ID FROM
+	    (\"sap.tm.trp.db.systemmanagement.user::cv_get_username\" T4 LEFT JOIN \"sap.tm.trp.db.systemmanagement.user::t_user\" T7 ON T7.USERNAME = T4.USERNAME)
+	) = 99
+";
+depends_on_table = ["sap.tm.trp.db.filter::t_attribute_group",
+                    "sap.tm.trp.db.systemmanagement::t_visibility_type",
+                    "sap.tm.trp.db.systemmanagement::t_visibility_type_t",
+                    "sap.tm.trp.db.systemmanagement.user::t_user"];
+depends_on_view=["sap.tm.trp.db.systemmanagement.user::cv_get_username",
+                 "sap.tm.trp.db.dataprotectionprivacy::v_unblock_users",
+                 "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege",
+                 "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

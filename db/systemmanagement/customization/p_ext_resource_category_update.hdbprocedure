@@ -1,0 +1,102 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.customization::p_ext_resource_category_update"(
+    IN ID BIGINT,
+    IN NAME VARCHAR(20),
+    IN DESC VARCHAR(500),
+    IN RESOURCE_CATEGORY_TYPE VARCHAR(3),
+    IN RESOURCE_GROUP_TYPE VARCHAR(2),
+    IN ENABLE_FLAG SMALLINT,
+    IN LEASE_CONTRACT_FLAG SMALLINT,
+    IN BASE_RESOURCE_TYPE VARCHAR(20),
+    IN RESOURCE_GROUPS "sap.tm.trp.db.systemmanagement.customization::tt_resource_category",
+    IN REPOSITIONING_PARAMETER "sap.tm.trp.db.systemmanagement.customization::tt_repositioning_parameters",
+    IN OBJECT_REGISTRATIONS "sap.tm.trp.db.systemmanagement.customization::tt_id_type_list",
+    IN EXTEND_COLUMNS "sap.tm.trp.db.systemmanagement.customization::tt_int_list",
+    OUT RESOURCE_CATEGORY_ID BIGINT,
+    OUT MESSAGE VARCHAR(500)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE CURRENT_USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE COUNT_RESOURCE_TYPE INTEGER;
+    
+    SELECT IFNULL(MAX(ID),-100) INTO CURRENT_USER_ID FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    SELECT IFNULL(MAX(SPRAS),'E') INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+    
+    SELECT COUNT (*) INTO COUNT_RESOURCE_TYPE
+    FROM "sap.tm.trp.db.semantic.resource::v_resource_type" T1
+    INNER JOIN :RESOURCE_GROUPS T2
+    ON (T1.EQUI_TYPE = T2.EQUI_TYPE)
+    WHERE T1.RESOURCE_TYPE_CODE = :BASE_RESOURCE_TYPE;
+    
+    IF :COUNT_RESOURCE_TYPE <=0 AND (:RESOURCE_CATEGORY_TYPE = 'CN' OR :RESOURCE_CATEGORY_TYPE = 'GE') THEN
+    	RESOURCE_CATEGORY_ID :=0;
+     	MESSAGE := 'MSG_BASE_RESOURCE_TYPE_NOT_IN_SELECTED_CATEGORY';         
+    ELSE
+    	UPDATE "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings"
+        SET RESOURCE_CATEGORY_TYPE = :RESOURCE_CATEGORY_TYPE,
+            RESOURCE_GROUP_TYPE = :RESOURCE_GROUP_TYPE,
+            ENABLE_FLAG = :ENABLE_FLAG,
+            LEASE_CONTRACT_FLAG = :LEASE_CONTRACT_FLAG,
+            BASE_RESOURCE_TYPE = :BASE_RESOURCE_TYPE,
+            RESOURCE_CLASS = '',
+            LAST_MODIFIED_BY = :CURRENT_USER_ID,
+            LAST_MODIFIED_AT = CURRENT_UTCTIMESTAMP
+        WHERE ID = :ID;
+    	    
+    	UPDATE "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings_t"
+    	SET SPRAS = :SPRAS,
+    	    DESC = :DESC
+    	WHERE ID = :ID;
+    	
+    	DELETE FROM "sap.tm.trp.db.semantic.resource::t_resource_category"
+    	WHERE CODE = :NAME;
+    	
+    	INSERT INTO "sap.tm.trp.db.semantic.resource::t_resource_category"
+    	SELECT :NAME AS CODE,
+    	       :NAME AS DESCRIPTION,
+    	       EQUI_TYPE AS MAPPING_CODE
+    	FROM :RESOURCE_GROUPS;
+    	
+    	DELETE FROM "sap.tm.trp.db.systemmanagement::t_config_cust"
+    	WHERE CODE = :NAME;
+    	IF :RESOURCE_GROUP_TYPE = '12' THEN
+    		INSERT INTO "sap.tm.trp.db.systemmanagement::t_config_cust"
+    		VALUES (:NAME,'ITEM_CAT','TUR','Container');
+    	ELSEIF :RESOURCE_GROUP_TYPE = '09' THEN
+    		INSERT INTO "sap.tm.trp.db.systemmanagement::t_config_cust"
+    		VALUES (:NAME,'ITEM_CAT','PVR','Passive Vehicle Resource');
+    		
+    	END IF ;
+    	
+    	DELETE FROM "sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters_value"
+    	WHERE RESOURCE_CATEGORY_NAME = :NAME;
+    	
+    	INSERT INTO "sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters_value"
+    	SELECT :NAME,ID,KEY,VALUE
+    	FROM :REPOSITIONING_PARAMETER;
+    	
+    	DELETE FROM "sap.tm.trp.db.systemmanagement.customization::t_resource_category_object_registration"
+    	WHERE RESOURCE_CATEGORY_ID = :ID;
+    	INSERT INTO "sap.tm.trp.db.systemmanagement.customization::t_resource_category_object_registration"
+    	SELECT :ID,ID,TYPE
+    	FROM :OBJECT_REGISTRATIONS;
+    	
+    	DELETE FROM "sap.tm.trp.db.systemmanagement.customization::t_resource_category_extended_columns"
+    	WHERE RESOURCE_CATEGORY_ID = :ID;
+    	INSERT INTO "sap.tm.trp.db.systemmanagement.customization::t_resource_category_extended_columns"
+    	SELECT :ID,INT AS ID
+    	FROM :EXTEND_COLUMNS;
+    	
+    	RESOURCE_CATEGORY_ID :=:ID;
+     	MESSAGE := '';
+
+    END IF ;
+    
+    
+END;

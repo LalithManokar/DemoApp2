@@ -1,0 +1,67 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage" ( IN SD_PLAN BIGINT,
+   IN SD_PLAN_NAME VARCHAR(50),
+   IN NODE_ID INTEGER,   
+   OUT check_result  "sap.tm.trp.db.availabilitycheck::tt_check_result") 
+	
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	--DEFAULT SCHEMA <default_schema_name>
+--	READS SQL DATA
+AS
+BEGIN  
+   
+  DATASET =  select LOCATION_ID,
+                    LOCATION_NAME,
+                    NODE_ID,
+                    EQUIP_TYPE_ID,
+                    OUTPUT_KEY,
+                    OUTPUT_VALUE,
+                    START_TIME,
+	                END_TIME                        
+             from "sap.tm.trp.db.availabilitycheck::cv_pipeline_procedure_wrapper_call"(PLACEHOLDER."$$PLAN_ID$$"=>:SD_PLAN); 
+             
+  SQL_FILTERED = SELECT * FROM :DATASET t1 
+                   		INNER JOIN 
+                   	    "sap.tm.trp.db.semantic.location::v_location" AS t3
+                        ON t1.location_name = t3.name
+                        where (T1.OUTPUT_KEY ='SUPPLY' OR T1.OUTPUT_KEY = 'DEMAND') AND T1.NODE_ID = :node_id;
+    
+    SQL2 =  SELECT  SD_PLAN,
+	            	LOCATION_ID,
+	            	LOCATION_NAME,
+	            	EQUIP_TYPE_ID,
+	            	CASE  WHEN OUTPUT_KEY = 'DEMAND'
+	                    THEN OUTPUT_VALUE  
+	                    ELSE 0 END AS DEMAND,
+	                CASE WHEN OUTPUT_KEY = 'SUPPLY'
+	                    THEN OUTPUT_VALUE 
+	                    ELSE 0 END AS SUPPLY,    
+	                START_TIME,
+	                END_TIME
+	        FROM :SQL_FILTERED;
+
+    convert_plan_data = SELECT SD_PLAN,
+                               LOCATION_NAME,
+                               EQUIP_TYPE_ID,
+                               SUM(SUPPLY) AS SUPPLY,
+                               SUM(DEMAND) AS DEMAND,
+                               START_TIME,
+                               END_TIME                              
+                        FROM :SQL2
+                        GROUP BY
+                              SD_PLAN,
+                              LOCATION_NAME,
+                              EQUIP_TYPE_ID,
+                              START_TIME,
+                              END_TIME;
+                              
+    check_result = SELECT DISTINCT :SD_PLAN_NAME as sd_plan,
+							        t1.location_name AS location_no,
+							        TO_VARCHAR(t1.equip_type_id) AS equip_type,
+							        t1.start_time,
+							        t1.end_time,
+							        t1.supply,
+							        t1.demand,
+							        0 AS level
+							        FROM :convert_plan_data t1; 
+END;

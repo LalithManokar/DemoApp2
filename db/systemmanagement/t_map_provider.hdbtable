@@ -1,0 +1,12 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "ID"; sqlType = INTEGER; nullable = false;},
+    {name = "NAME"; sqlType = VARCHAR; length = 50 ; nullable = false;unique = true;},
+    {name = "FLAG"; sqlType = INTEGER; nullable = false;},
+    {name = "CREATE_BY"; sqlType = BIGINT; comment="create user id";},
+    {name = "CREATE_AT"; sqlType = TIMESTAMP;},
+    {name = "LAST_MODIFIED_BY"; sqlType = BIGINT;},
+    {name = "LAST_MODIFIED_AT"; sqlType = TIMESTAMP;}
+    ];
+table.primaryKey.pkcolumns = ["ID"];

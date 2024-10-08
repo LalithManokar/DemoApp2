@@ -1,0 +1,127 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_update_register_pipeline_model"(
+    IN PIPELINE_MODEL_ID BIGINT,
+    IN SCHEMA_NAME VARCHAR(20),
+    IN PROCEDURE_NAME VARCHAR(200),
+    IN TABLE_NAME VARCHAR(200),
+    IN PROCEDURE_DESC VARCHAR(500),
+    IN PIPELINE_NAME VARCHAR(200),
+    IN PIPELINE_DESC VARCHAR(500),
+    IN PIPELINE_TYPE_ID INTEGER,
+    IN COST_MODEL_ID BIGINT,    
+    IN INSTANT_ENABLED CHAR(1),
+    OUT ENTRY_ID BIGINT
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+    DECLARE MODEL_COUNT INTEGER;
+    DECLARE ENTRY_POINT_COUNT INTEGER;
+    DECLARE UNREGI_FLAG_ALERT INTEGER;
+
+    DECLARE OBJ_NAME VARCHAR(300);
+    DECLARE USER_ID BIGINT;
+    DECLARE USER_NAME VARCHAR(60);
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE CODE VARCHAR(20);
+    DECLARE SQL_STRING NCLOB;
+    
+    SELECT IFNULL(MAX(ID),-1) INTO USER_ID
+    FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    SELECT IFNULL(MAX(SPRAS),'') INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+    
+    OBJ_NAME := '"' || :SCHEMA_NAME||'"."'||:TABLE_NAME||'"';
+    
+    SELECT COUNT(1) INTO MODEL_COUNT FROM "sap.tm.trp.db.pipeline::t_pipeline_model" WHERE ID = :PIPELINE_MODEL_ID;
+
+    IF(:MODEL_COUNT > 0 ) THEN
+
+        -- =============================== Clean Dirty Data =====================================
+
+        SELECT ENTRY_POINT_ID INTO ENTRY_ID FROM "sap.tm.trp.db.pipeline::t_pipeline_model" WHERE ID = :PIPELINE_MODEL_ID;
+        -- DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_entry_point" WHERE ID = :ENTRY_ID;
+        NODE_IDS = SELECT ID FROM "sap.tm.trp.db.pipeline::t_pipeline_node" WHERE PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;
+
+        --UNREGISTER ALERT RULE
+        CALL "sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_unregister_controller_for_pipeline_model"(:PIPELINE_MODEL_ID, UNREGI_FLAG_ALERT);
+
+        DELETE FROM "sap.tm.trp.db.pipeline::t_entry_point_param"
+        WHERE PIPELINE_ENTRY_POINT_ID = :ENTRY_ID;
+        DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_node_connection"  
+        WHERE NODE_ID IN (SELECT * FROM :NODE_IDS);  
+        DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_node_layout"  
+        WHERE NODE_ID IN (SELECT * FROM :NODE_IDS); 
+        DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_node_logical_hierarchy"  
+        WHERE NODE_ID IN (SELECT * FROM :NODE_IDS);
+        DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_node_misc_info"  
+        WHERE NODE_ID IN (SELECT * FROM :NODE_IDS); 
+        DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_node" WHERE PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;
+        DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_misc_info" WHERE PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;
+        DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_node_list" WHERE PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;
+        --DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_model" WHERE ID = :PIPELINE_MODEL_ID;
+
+        -- =============================== Create New Related Data of Calculation Model =====================================
+        -- Pipeline Entry Point
+        SELECT COUNT(1) INTO ENTRY_POINT_COUNT FROM "sap.tm.trp.db.pipeline::t_pipeline_entry_point" WHERE ID = :ENTRY_ID;
+        IF(:ENTRY_POINT_COUNT > 0 ) THEN
+	        -- Update the pipeline entry point
+	        UPDATE "sap.tm.trp.db.pipeline::t_pipeline_entry_point"
+	        SET DESC = :PROCEDURE_DESC,
+	        	SCHEMA_NAME = :SCHEMA_NAME,
+				OBJECT_NAME = :PROCEDURE_NAME,
+				META_TABLE_NAME = :TABLE_NAME,
+            	LAST_MODIFIED_BY = :USER_ID,
+            	LAST_MODIFIED_ON = CURRENT_UTCTIMESTAMP
+            WHERE ID = :ENTRY_ID;
+        ELSE
+	        --INSERT PIPELINE ENTRY POINT
+	        SELECT "sap.tm.trp.db.pipeline::s_pipeline_entry_point".NEXTVAL INTO ENTRY_ID FROM DUMMY;
+	        INSERT INTO "sap.tm.trp.db.pipeline::t_pipeline_entry_point"(ID, DESC, ENTRY_POINT_TYPE, SCHEMA_NAME, OBJECT_NAME, META_TABLE_NAME, CREATE_BY, CREATE_ON)
+	        SELECT :ENTRY_ID, :PROCEDURE_DESC, 'PROCEDURE', :SCHEMA_NAME, :PROCEDURE_NAME, :TABLE_NAME, :USER_ID, CURRENT_UTCTIMESTAMP FROM DUMMY;   
+       	END IF;
+        
+        -- Update Pipeline Model
+        UPDATE "sap.tm.trp.db.pipeline::t_pipeline_model"
+        SET NAME = :PIPELINE_NAME,
+            DESC = :PIPELINE_DESC,
+            ENTRY_POINT_ID = :ENTRY_ID,
+            PIPELINE_MODEL_TYPE_ID = :PIPELINE_TYPE_ID,
+            LAST_MODIFIED_BY = :USER_ID,
+            LAST_MODIFIED_ON = CURRENT_UTCTIMESTAMP,
+            INSTANT_ENABLED  = :INSTANT_ENABLED
+        WHERE ID = :PIPELINE_MODEL_ID;
+        
+        UPDATE "sap.tm.trp.db.pipeline::t_pipeline_model_t"
+        SET SPRAS = :SPRAS,
+            DESC = :PIPELINE_DESC
+        WHERE ID = :PIPELINE_MODEL_ID;
+        
+        --Insert Pipeline Node Information, Dynamic SQL
+        EXEC 'CALL "sap.tm.trp.db.pipeline::p_register_pipeline_nodes"(' || :PIPELINE_MODEL_ID || ', ' || escape_single_quotes(:OBJ_NAME) || ')';
+
+        --Build Metadata Information, Dynamic SQL
+        EXEC 'CALL "sap.tm.trp.db.pipeline::p_build_metadata"(' || :PIPELINE_MODEL_ID || ', ' || escape_single_quotes(:OBJ_NAME) || ')';
+        
+        SELECT IFNULL(MAX(CODE),'') INTO CODE FROM "sap.tm.trp.db.pipeline::t_pipeline_model"
+        WHERE ID = :PIPELINE_MODEL_ID;
+    
+        -- Set the status related with this calculation model
+        CALL "sap.tm.trp.db.pipeline::p_set_calc_model_status_need_check"(:CODE, 'OBJECT_REGISTRATION');
+
+        IF :COST_MODEL_ID IS NOT NULL THEN 
+    
+            UPSERT "sap.tm.trp.db.pipeline::t_pipeline_model_cost_model" VALUES (:PIPELINE_MODEL_ID, :COST_MODEL_ID)
+            WHERE PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;        
+        ELSEIF :COST_MODEL_ID IS NULL THEN
+            DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_model_cost_model" WHERE PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;
+            
+        END IF;     
+        
+        --alter the wrapper procedure once new CM has been updated
+   	    --CALL "sap.tm.trp.db.supplydemand.instant::p_pipeline_procedure_wrapper_generator"(SQL_STRING);       
+        
+    END IF;
+END;

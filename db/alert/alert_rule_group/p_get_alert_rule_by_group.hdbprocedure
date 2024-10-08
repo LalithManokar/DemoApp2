@@ -1,0 +1,13 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert.alert_rule_group::p_get_alert_rule_by_group" (
+    IN ALERT_RULE_GROUP_ID BIGINT,
+    OUT ALERT_RULE_ID_LIST "sap.tm.trp.db.alert.alert_rule_group::tt_alert_rule_id_list"
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+    ALERT_RULE_ID_LIST = SELECT RULE_ID as ALERT_RULE_ID
+        FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule_group_items" 
+        WHERE ALERT_RULE_GROUP_ID = :ALERT_RULE_GROUP_ID;
+END;

@@ -1,0 +1,113 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_location_group_upload"(
+    IN LOCATION_GROUPS "sap.tm.trp.db.massupload::tt_location_group_upload",
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),  
+    IN CONNECTION_ID VARCHAR(100)
+) 
+
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    
+AS
+BEGIN
+
+    --Declarations
+    DECLARE USER_ID BIGINT;    
+    DECLARE VAR_CURRENT_UTCTIMESTAMP TIMESTAMP := CURRENT_UTCTIMESTAMP;
+
+    --Get Source data
+    ITEMS = SELECT UPPER(LOCATION_GROUP_NAME) AS LOCATION_GROUP_NAME,DESC,UPPER(LOC_GROUP_TYPE) AS LOC_GROUP_TYPE,UPPER(VISIBILITY) AS VISIBILITY,UPPER(LOCATION_NAME) AS LOCATION_NAME,UPPER(PRIME_LOCATION_NAME) AS PRIME_LOCATION_NAME,ROW_INDEX
+             FROM :LOCATION_GROUPS; 
+             
+    --Get User
+    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(:USER_ID);
+    
+    
+    --Get Locations / Regions
+    LOC_REGION = 
+                    SELECT ID , NAME, 'LOCATION' as LOC_TYPE
+                    FROM "sap.tm.trp.db.semantic.location::v_location"
+                    UNION
+                    SELECT ID , NAME, 'REGION' as LOC_TYPE
+                    FROM "sap.tm.trp.db.semantic.location::v_zone";
+
+    --Get Location Groups /Region Groups
+    LOC_REGION_GROUP =
+                    SELECT ID, CODE, USER_ID, CREATE_AT
+                    FROM "sap.tm.trp.db.systemmanagement::t_location_group"
+                    WHERE RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID
+                    UNION
+                    SELECT ID, CODE ,USER_ID, CREATE_AT
+                    FROM "sap.tm.trp.db.systemmanagement::t_region_group"
+                    WHERE RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID;
+    
+    SOURCE =    SELECT DISTINCT LOCATION_GROUP_NAME,DESC,LOC_GROUP_TYPE,VISIBILITY,LOCATION_NAME,PRIME_LOCATION_NAME,
+                ROW_INDEX, LR_G.ID AS LG_ID,LR1.ID AS LOC_ID, LR2.ID AS PRIME_ID,
+                LR_G.USER_ID AS CREATE_BY, LR_G.CREATE_AT
+                FROM :ITEMS AS LG_STOCK
+                INNER JOIN :LOC_REGION AS LR1
+                ON LG_STOCK.LOCATION_NAME = LR1.NAME
+                left outer JOIN :LOC_REGION AS LR2
+                ON LG_STOCK.PRIME_LOCATION_NAME = LR2.NAME
+                LEFT OUTER JOIN :LOC_REGION_GROUP AS LR_G
+                ON LR_G.CODE = LG_STOCK.LOCATION_GROUP_NAME;
+    
+    --Delete the records in temporary table in case there're already some uploaded data with same db connection
+    DELETE FROM "sap.tm.trp.db.massupload::t_location_group_temporary" 
+    WHERE CONNECTION_ID = :CONNECTION_ID;
+
+    --Add records to temporary table
+    INSERT INTO "sap.tm.trp.db.massupload::t_location_group_temporary"
+    (ROW_NUM,LOCATION_GROUP_ID,LOCATION_GROUP_NAME,DESC,IND_UPD,LOCATION_TYPE,VISIBILITY,LOCATION_ID,LOCATION_NAME,
+    PRIME_LOCATION_ID,PRIME_LOCATION_NAME,RESOURCE_CATEGORY,USER_ID,CREATE_BY,CREATE_AT,ACTION_TIME,CONNECTION_ID)
+    SELECT 
+       --ROW_NUMBER () OVER () AS ROW_INDEX,
+       ROW_INDEX,
+       LG_ID,
+       LOCATION_GROUP_NAME, 
+       DESC,
+       
+       (CASE
+       WHEN LG_ID IS NULL
+       THEN '0'
+       ELSE '1'
+       END) AS IND_UPD,
+
+           
+       (CASE 
+       WHEN LOC_GROUP_TYPE = 'LOCATION'
+       THEN '2'
+       WHEN LOC_GROUP_TYPE = 'REGION'
+       THEN '6' 
+       END) AS LOCATION_TYPE,
+       
+       (CASE 
+       WHEN VISIBILITY = 'GLOBAL'
+       THEN 'G'
+       WHEN VISIBILITY = 'PERSONAL'
+       THEN 'P' 
+       END) AS VISIBILITY,
+       
+       LOC_ID,
+       LOCATION_NAME,
+       
+       PRIME_ID,
+       PRIME_LOCATION_NAME,
+       :RESOURCE_CATEGORY_ID,
+       :USER_ID,
+        (CASE
+       WHEN CREATE_BY IS NULL
+       THEN :USER_ID
+       ELSE CREATE_BY
+       END) AS CREATE_BY,
+       
+       (CASE
+       WHEN CREATE_AT IS NULL
+       THEN :VAR_CURRENT_UTCTIMESTAMP
+       ELSE CREATE_AT
+       END) AS CREATE_AT,
+       :VAR_CURRENT_UTCTIMESTAMP,
+       :CONNECTION_ID
+      FROM :SOURCE;
+          
+END;

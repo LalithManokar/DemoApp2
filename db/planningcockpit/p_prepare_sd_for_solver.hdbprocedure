@@ -1,0 +1,183 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_prepare_sd_for_solver"    
+    (IN SIMULATION_ID BIGINT,      
+     IN SCENARIO_ID  BIGINT, 
+     IN SD_PLAN_ID BIGINT,
+     OUT t_supply_demand "sap.tm.trp.db.planningcockpit::tt_supply_demand_for_solver" 
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"   
+	 AS
+BEGIN
+   
+  DECLARE TMP_EXECUTION_ID BIGINT;
+  DECLARE TMP_NODE_ID BIGINT;
+  DECLARE TMP_STOCK_NODE_FLAG INTEGER;
+  DECLARE MAX_INTERVAL_BEFORE_CUTOFF BIGINT;
+  DECLARE TMP_LD_ACTIVITY_CNT INTEGER;  
+
+  DECLARE ACT_REPO INTEGER := 1;
+  DECLARE ACT_REPO_PROPOSED INTEGER := 2;
+  DECLARE ACT_ON_HIRE INTEGER := 3;
+  DECLARE ACT_M_R INTEGER := 5;
+  DECLARE ACT_OFF_HIRE INTEGER  := 7;
+  DECLARE ACT_REPO_AVOID INTEGER := 9;
+  DECLARE ACT_LOAD_DISCHARGE INTEGER := 11;  
+  DECLARE ACT_STATUS_DRAFT INTEGER := 0;
+
+  -- check load discharge activity count
+  SELECT COUNT(1) INTO TMP_LD_ACTIVITY_CNT 
+  FROM "sap.tm.trp.db.planningcockpit::t_activity" 
+  WHERE REL_SCENARIO_ID = :SCENARIO_ID AND STATUS = :ACT_STATUS_DRAFT
+  AND ACTIVITY_TYPE_ID = :ACT_LOAD_DISCHARGE;  
+      
+  --get execution id 
+  SELECT IFNULL(MAX(EXCUTE_ID),0) INTO TMP_EXECUTION_ID
+  FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan"
+  WHERE ID = :SIMULATION_ID; 
+ 
+  --get default node
+  CALL  "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid"(:TMP_EXECUTION_ID, TMP_NODE_ID); 
+
+  -- get future independent sd (the first time interval contain previous stock) and initial stock
+  CALL "sap.tm.trp.db.planningcockpit::p_origin_sd_stock_cutoff"(:TMP_EXECUTION_ID, 
+                                           :SD_PLAN_ID, :TMP_NODE_ID, tmp_sd_origin,init_stock);
+              
+  -- SD plan is executed on aggregate location, while activity is created on primary locations
+  -- need to map the aggregate location SD result to primary location to merge with activies and feed to solver
+
+  -- get geo and location mapping 
+  CALL "sap.tm.trp.db.planningcockpit::p_get_loc_primaryloc_by_executionId"(:TMP_EXECUTION_ID, GEO_PRIMARY_LOCATION_MAPPING);  
+            
+  sd_origin = SELECT T3.TIME_INTERVAL_ID, T3.START_TIME, T3.END_TIME, T4.LOCATION_ID, T4.LOCATION_NAME, T3.EQUIP_TYPE_ID,
+                     T3.SUPPLY, T3.DEMAND 
+              FROM :tmp_sd_origin T3
+              INNER JOIN :GEO_PRIMARY_LOCATION_MAPPING T4 ON (T3.LOCATION_ID = T4.GEO_ID);  
+ 
+
+  intervals = SELECT DISTINCT TIME_INTERVAL_ID, START_TIME, END_TIME 
+              FROM :sd_origin;  
+
+  ac_interval = 
+             SELECT T1.*, 
+             T2.TIME_INTERVAL_ID AS FROM_TIME_INTERVAL_ID, T2.START_TIME AS FROM_START_TIME, T2.END_TIME AS FROM_END_TIME,
+             T3.TIME_INTERVAL_ID AS TO_TIME_INTERVAL_ID, T3.START_TIME AS TO_START_TIME, T3.END_TIME AS TO_END_TIME FROM 
+             ( SELECT ID, ACTIVITY_TYPE, EQUIP_TYPE, QUANTITY, FROM_LOC_NAME, TO_LOC_NAME, START_DATE,END_DATE, ACTIVITY_STATUS_CODE
+               FROM "sap.tm.trp.db.planningcockpit::v_activity_ui" 
+               WHERE REL_SCENARIO_ID  = :SCENARIO_ID  AND ACTIVITY_STATUS_CODE  = :ACT_STATUS_DRAFT  
+             ) T1        
+             LEFT OUTER JOIN :intervals T2 ON (T1.START_DATE >= T2.START_TIME AND T1.START_DATE < T2.END_TIME)
+             LEFT OUTER JOIN :intervals T3 ON (T1.END_DATE >= T3.START_TIME AND T1.END_DATE < T3.END_TIME);             
+
+  IF :TMP_LD_ACTIVITY_CNT > 0 THEN
+  
+  -- Get the voyage stop locations and geo(supply demand used location) mapping 
+  CALL "sap.tm.trp.db.planningcockpit::p_get_geo_for_loaddischarge_by_executionId"(:SCENARIO_ID, :TMP_EXECUTION_ID, GEO_LOCATION_MAPPING);
+    
+  load_discharge_ac = 
+             SELECT T0.ID, T0.ACTIVITY_TYPE_ID, T0.EQUIP_TYPE, T4.LOCATION_ID,
+             T1.ARRIVAL_TIME, T2.TIME_INTERVAL_ID AS ARRIVAL_TIME_INTERVAL_ID,
+             T1.DEPARTURE_TIME, T3.TIME_INTERVAL_ID AS DEPARTURE_TIME_INTERVAL_ID,
+             IFNULL(T1.UPDATED_LOAD,T1.ORIGINAL_LOAD) AS LOAD_QUANTITY,
+             IFNULL(T1.UPDATED_DISCHARGE, T1.ORIGINAL_DISCHARGE) AS DISCHARGE_QUANTITY
+             FROM "sap.tm.trp.db.planningcockpit::t_activity" T0
+             INNER JOIN "sap.tm.trp.db.planningcockpit::t_load_discharge_activity_detail" T1 on (T0.ID = T1.ACTIVITY_ID)
+             LEFT OUTER JOIN :intervals T2 ON (T1.ARRIVAL_TIME >= T2.START_TIME AND T1.ARRIVAL_TIME < T2.END_TIME)
+             LEFT OUTER JOIN :intervals T3 ON (T1.DEPARTURE_TIME >= T3.START_TIME AND T1.DEPARTURE_TIME < T3.END_TIME)
+             LEFT OUTER JOIN :GEO_LOCATION_MAPPING T4 ON (T1.STOP_ID = T4.LOCATION_ID)             
+             WHERE T0.REL_SCENARIO_ID  = :SCENARIO_ID  AND T0.STATUS = :ACT_STATUS_DRAFT
+             AND T0.ACTIVITY_TYPE_ID = :ACT_LOAD_DISCHARGE;
+  
+  ELSE
+  
+  load_discharge_ac = 
+             SELECT NULL AS ID, NULL AS ACTIVITY_TYPE_ID, NULL AS EQUIP_TYPE, NULL AS LOCATION_ID,
+             NULL AS ARRIVAL_TIME, NULL AS ARRIVAL_TIME_INTERVAL_ID, NULL AS DEPARTURE_TIME,
+             NULL AS DEPARTURE_TIME_INTERVAL_ID,NULL AS LOAD_QUANTITY,NULL AS DISCHARGE_QUANTITY
+             FROM "sap.tm.trp.db.planningcockpit::t_activity" WHERE 1 = 0;  
+  END IF;             
+                             
+  --supply and demand data
+
+  t_supply_demand =
+    SELECT DISTINCT T3.START_TIME, T3.END_TIME, T1.LOCATION_NAME AS LOCATION, T1.EQUIP_TYPE AS CONTAINER_TYPE, T1.SUPPLY, T1.DEMAND 
+    FROM 
+    (
+        SELECT TIME_INTERVAL_ID, LOCATION_NAME, EQUIP_TYPE, SUM(SUPPLY) AS SUPPLY, SUM(DEMAND) AS DEMAND 
+        FROM 
+        (
+            SELECT TIME_INTERVAL_ID, LOCATION_NAME, EQUIP_TYPE_ID AS EQUIP_TYPE, SUPPLY, DEMAND
+            FROM :sd_origin
+            -- merge reposition activity record
+            UNION ALL
+            (
+            SELECT FROM_TIME_INTERVAL_ID AS TIME_INTERVAL_ID, FROM_LOC_NAME, EQUIP_TYPE, 0 AS SUPPLY, QUANTITY AS DEMAND
+            FROM :ac_interval
+            WHERE ACTIVITY_TYPE = :ACT_REPO OR ACTIVITY_TYPE = :ACT_REPO_PROPOSED            
+            ) 
+            UNION ALL
+            (
+            SELECT TO_TIME_INTERVAL_ID AS TIME_INTERVAL_ID, TO_LOC_NAME , EQUIP_TYPE, QUANTITY AS SUPPLY, 0 AS DEMAND
+            FROM :ac_interval
+            WHERE ACTIVITY_TYPE = :ACT_REPO OR ACTIVITY_TYPE = :ACT_REPO_PROPOSED            
+            )  
+            -- merge reposition avoidance activity record   
+            UNION ALL
+            (
+            SELECT FROM_TIME_INTERVAL_ID AS TIME_INTERVAL_ID, FROM_LOC_NAME , EQUIP_TYPE, 0 AS SUPPLY, QUANTITY AS DEMAND
+            FROM :ac_interval
+            WHERE ACTIVITY_TYPE = :ACT_REPO_AVOID            
+            ) 
+            UNION ALL
+            (
+            SELECT TO_TIME_INTERVAL_ID AS TIME_INTERVAL_ID, TO_LOC_NAME, EQUIP_TYPE, QUANTITY AS SUPPLY, 0 AS DEMAND
+            FROM :ac_interval
+            WHERE ACTIVITY_TYPE = :ACT_REPO_AVOID
+            ) 
+            -- merge on-hire activity record     
+            UNION ALL
+            (
+            SELECT FROM_TIME_INTERVAL_ID AS TIME_INTERVAL_ID, FROM_LOC_NAME, EQUIP_TYPE, QUANTITY AS SUPPLY, 0 AS DEMAND
+            FROM :ac_interval
+            WHERE ACTIVITY_TYPE = :ACT_ON_HIRE
+            )     
+            -- merge off-hire activity record     
+            UNION ALL
+            (
+            SELECT FROM_TIME_INTERVAL_ID AS TIME_INTERVAL_ID, FROM_LOC_NAME , EQUIP_TYPE, 0 AS SUPPLY, QUANTITY  AS DEMAND
+            FROM :ac_interval
+            WHERE ACTIVITY_TYPE = :ACT_OFF_HIRE
+            )  
+            -- merge M&R activity record( this activity has time range, but only one location, so only from_location is used)
+            UNION ALL
+            (
+            SELECT FROM_TIME_INTERVAL_ID AS TIME_INTERVAL_ID, FROM_LOC_NAME , EQUIP_TYPE, 0 AS SUPPLY, QUANTITY AS DEMAND
+            FROM :ac_interval
+            WHERE ACTIVITY_TYPE = :ACT_M_R
+            ) 
+            UNION ALL
+            (
+            SELECT TO_TIME_INTERVAL_ID AS TIME_INTERVAL_ID, FROM_LOC_NAME, EQUIP_TYPE, QUANTITY AS SUPPLY, 0 AS DEMAND
+            FROM :ac_interval
+            WHERE ACTIVITY_TYPE = :ACT_M_R
+            )  
+            -- merge Load/Discharge activity record
+            -- all the stop locations of the voyage should be considered
+            -- Load quantity is considered as demand, while discharge quantity is considered as supply
+            UNION ALL
+            (
+            SELECT DEPARTURE_TIME_INTERVAL_ID, LOCATION_ID, EQUIP_TYPE, DISCHARGE_QUANTITY AS SUPPLY, 0 AS DEMAND
+            FROM :load_discharge_ac            
+            )
+            UNION ALL
+            (
+            SELECT ARRIVAL_TIME_INTERVAL_ID, LOCATION_ID, EQUIP_TYPE, 0 AS SUPPLY, LOAD_QUANTITY AS DEMAND
+            FROM :load_discharge_ac            
+            )               
+    	) 
+  	    GROUP BY TIME_INTERVAL_ID, LOCATION_NAME, EQUIP_TYPE
+    ) T1 
+    --  only the locations in the location filter are considered????
+    INNER JOIN :sd_origin T3 ON (T1.LOCATION_NAME = T3.LOCATION_NAME AND T1.TIME_INTERVAL_ID = T3.TIME_INTERVAL_ID AND T1.EQUIP_TYPE = T3.EQUIP_TYPE_ID );  
+
+END

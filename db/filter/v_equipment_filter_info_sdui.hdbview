@@ -1,0 +1,33 @@
+schema = "SAP_TM_TRP";
+query = "-- List All EquipType Infos Belonged to Filters (Select Type Mixed)
+         SELECT DISTINCT T1.EQUIPMENT_FILTER_ID,
+                T1.EQUI_CODE AS ID,
+                T2.RESOURCE_TYPE_CODE AS NAME,
+                1 AS FILTER_TYPE,
+                T1.EQUI_CODE || ' (' || T2.RESOURCE_TYPE_CODE || ')' AS DISPLAY_NAME,
+                T2.RESOURCE_TYPE_DESC AS DESC,
+                T1.RESOURCE_CATEGORY AS RESOURCE_CATEGORY
+           FROM \"sap.tm.trp.db.filter::v_equipment_filter_equipment_auth\" AS T1
+     INNER JOIN (
+       SELECT DISTINCT RESOURCE_TYPE_CODE, RESOURCE_TYPE_DESC, RESOURCE_CATEGORY
+       FROM \"sap.tm.trp.db.semantic.resource::v_resource_type_with_category\") AS T2
+     ON (T1.EQUI_CODE = T2.RESOURCE_TYPE_CODE AND T1.RESOURCE_CATEGORY = T2.RESOURCE_CATEGORY)
+
+          UNION
+
+         SELECT DISTINCT T1.EQUIPMENT_FILTER_ID,
+                T1.EQUIPMENT_GROUP_ID AS ID,
+                T3.DESC AS NAME,
+                2 AS FILTER_TYPE,
+                T3.DESC AS DISPLAY_NAME,
+                T4.DESC AS DESC,
+                T1.RESOURCE_CATEGORY AS RESOURCE_CATEGORY
+           FROM \"sap.tm.trp.db.filter::v_equipment_filter_equipment_auth\" AS T1
+     INNER JOIN \"sap.tm.trp.db.systemmanagement::t_equipment_group\" AS T3
+     ON T1.EQUIPMENT_GROUP_ID = T3.ID AND T1.RESOURCE_CATEGORY = T3.RESOURCE_CATEGORY
+             INNER JOIN \"sap.tm.trp.db.systemmanagement::t_equipment_group_t\" AS T4
+     ON T3.ID = T4.ID
+       ORDER BY EQUIPMENT_FILTER_ID";
+
+depends_on_table = ["sap.tm.trp.db.systemmanagement::t_equipment_group","sap.tm.trp.db.systemmanagement::t_equipment_group_t"];
+depends_on_view  = ["sap.tm.trp.db.semantic.resource::v_resource_type_with_category", "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth"];

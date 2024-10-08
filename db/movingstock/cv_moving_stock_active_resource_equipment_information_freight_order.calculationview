@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_moving_stock_active_resource_equipment_information_freight_order" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_lease_contract_visibility"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="IN_Document_ID" parameter="true">
+      <descriptions defaultDescription="IN_Document_ID"/>
+      <variableProperties datatype="NVARCHAR" length="100" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_EQUIP_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="IN_EQUIP_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_RESOURCE_CATEGORY" parameter="true">
+      <descriptions defaultDescription="IN_RESOURCE_CATEGORY"/>
+      <variableProperties datatype="VARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="FREIGHTBOOKINGID" length="20"/>
+        <viewAttribute datatype="SMALLINT" id="SEQUENCE_NUMBER"/>
+        <viewAttribute datatype="NVARCHAR" id="LOCATION" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="STOP_RESOURCE_TYPE" length="40"/>
+        <viewAttribute datatype="TIMESTAMP" id="ARRIVAL_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="DEPARTURE_TIME"/>
+        <viewAttribute datatype="BIGINT" id="STOCK_LADEN"/>
+        <viewAttribute datatype="BIGINT" id="STOCK_EMPTY"/>
+        <viewAttribute datatype="BIGINT" id="LADEN_DISCHARGE"/>
+        <viewAttribute datatype="BIGINT" id="EMPTY_DISCHARGE"/>
+        <viewAttribute datatype="BIGINT" id="LADEN_LOAD"/>
+        <viewAttribute datatype="BIGINT" id="EMPTY_LOAD"/>
+        <viewAttribute datatype="VARCHAR" id="VESSEL_ID" length="35"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_Document_ID</localVariable>
+      <localVariable>#IN_EQUIP_FILTER_ID</localVariable>
+      <localVariable>#IN_RESOURCE_CATEGORY</localVariable>
+      <definition> 
+ BEGIN 
+
+	      
+			 		      
+            call &quot;sap.tm.trp.db.filter::p_get_equiptypes_by_equip_filter_id&quot;
+             (:IN_EQUIP_FILTER_ID, EQUIP_TYPES);
+             			
+			call &quot;sap.tm.trp.db.movingstock::p_get_moving_stock_detail_freight_order&quot;(:IN_Document_ID,:EQUIP_TYPES,:IN_RESOURCE_CATEGORY,stop_detail_result);
+			             			
+			var_out = 	select t1.&quot;FreightBookingID&quot; as FREIGHTBOOKINGID, 
+						       t1.&quot;SequenceNumber&quot; as SEQUENCE_NUMBER,  
+						       t1.&quot;Location&quot; as LOCATION,
+						       t1.&quot;EquipmentSizetype&quot; AS STOP_RESOURCE_TYPE,
+						       null as ARRIVAL_TIME, 
+						       null as DEPARTURE_TIME,
+						       ifnull(sum(&quot;StockLaden&quot;),0) as STOCK_LADEN,
+						       ifnull(sum(&quot;StockEmpty&quot;),0) as STOCK_EMPTY,						
+						       ifnull(sum(&quot;LadenDischarge&quot;),0) as LADEN_DISCHARGE,
+						       ifnull(sum(&quot;EmptyDischarge&quot;),0) as EMPTY_DISCHARGE,
+						       ifnull(sum(&quot;LadenLoad&quot;),0) as LADEN_LOAD,
+						       ifnull(sum(&quot;EmptyLoad&quot;),0) as EMPTY_LOAD,
+				               t1.&quot;VESSEL_ID&quot;
+						from :stop_detail_result t1
+						group by   t1.&quot;FreightBookingID&quot; , 
+						           t1.&quot;SequenceNumber&quot; ,  
+						           t1.&quot;Location&quot; ,
+						           t1.&quot;EquipmentSizetype&quot;
+						           ,t1.&quot;VESSEL_ID&quot;
+						           ;
+
+
+END 
+
+</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="FREIGHTBOOKINGID" order="1">
+        <descriptions defaultDescription="FreightBookingID"/>
+        <keyMapping columnObjectName="Script_View" columnName="FREIGHTBOOKINGID"/>
+      </attribute>
+      <attribute id="SEQUENCE_NUMBER" order="2">
+        <descriptions defaultDescription="SEQUENCE_NUMBER"/>
+        <keyMapping columnObjectName="Script_View" columnName="SEQUENCE_NUMBER"/>
+      </attribute>
+      <attribute id="LOCATION" order="3">
+        <descriptions defaultDescription="LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION"/>
+      </attribute>
+      <attribute id="STOP_RESOURCE_TYPE" order="4">
+        <descriptions defaultDescription="STOP_RESOURCE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="STOP_RESOURCE_TYPE"/>
+      </attribute>
+      <attribute id="ARRIVAL_TIME" order="5">
+        <descriptions defaultDescription="ARRIVAL_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="ARRIVAL_TIME"/>
+      </attribute>
+      <attribute id="DEPARTURE_TIME" order="6">
+        <descriptions defaultDescription="DEPARTURE_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="DEPARTURE_TIME"/>
+      </attribute>
+      <attribute id="STOCK_LADEN" order="7">
+        <descriptions defaultDescription="EMPTY_LOAD_QUANTITY"/>
+        <keyMapping columnObjectName="Script_View" columnName="STOCK_LADEN"/>
+      </attribute>
+      <attribute id="STOCK_EMPTY" order="8">
+        <descriptions defaultDescription="EMPTY_DISCHARGE_QUANTITY"/>
+        <keyMapping columnObjectName="Script_View" columnName="STOCK_EMPTY"/>
+      </attribute>
+      <attribute id="LADEN_DISCHARGE" order="9">
+        <descriptions defaultDescription="EMPTY_STOCK"/>
+        <keyMapping columnObjectName="Script_View" columnName="LADEN_DISCHARGE"/>
+      </attribute>
+      <attribute id="EMPTY_DISCHARGE" order="10">
+        <descriptions defaultDescription="LADEN_LOAD_QUANTITY"/>
+        <keyMapping columnObjectName="Script_View" columnName="EMPTY_DISCHARGE"/>
+      </attribute>
+      <attribute id="LADEN_LOAD" order="11">
+        <descriptions defaultDescription="LADEN_DISCHARGE_QUANTITY"/>
+        <keyMapping columnObjectName="Script_View" columnName="LADEN_LOAD"/>
+      </attribute>
+      <attribute id="EMPTY_LOAD" order="12">
+        <descriptions defaultDescription="LADEN_STOCK"/>
+        <keyMapping columnObjectName="Script_View" columnName="EMPTY_LOAD"/>
+      </attribute>
+      <attribute id="VESSEL_ID" order="13">
+        <descriptions defaultDescription="VESSEL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="VESSEL_ID"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

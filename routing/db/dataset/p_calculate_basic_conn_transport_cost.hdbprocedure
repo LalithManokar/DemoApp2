@@ -1,0 +1,31 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_calculate_basic_conn_transport_cost" (
+    IN transport_cost_rate TABLE (
+        priority INTEGER, from_location_name NVARCHAR(200), to_location_name NVARCHAR(200), 
+        transportation_mode_code NVARCHAR(20), resource_type NVARCHAR(20), carrier_id NVARCHAR(20), 
+        uom_code NVARCHAR(20), cost DECIMAL(13, 3), wild_star_count INTEGER),
+    IN connection TABLE (id NVARCHAR(50), sequence INTEGER, from_location NVARCHAR(50), to_location NVARCHAR(50), 
+        mtr NVARCHAR(10), carrier NVARCHAR(50), resource_type NVARCHAR(20), distance DOUBLE, duration INTEGER), 
+    OUT cost TABLE(id NVARCHAR(50), cost DOUBLE)
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING
+   READS SQL DATA AS
+BEGIN
+   /*************************************
+       Each basic connection may have multiple carrier, in this case, current use the average value per connection id 
+   *************************************/
+   DECLARE segment_cost TABLE(id NVARCHAR(50), sequence INTEGER, carrier NVARCHAR(50), cost DOUBLE);
+   
+   segment_cost = 
+   SELECT 0 AS id, 0 AS sequence, '' AS carrier, 0.0 AS cost
+   FROM DUMMY
+   WHERE 1 != 1;
+   
+   CALL "sap.tm.trp.routing.db.cost::p_calculate_transport_cost"(:transport_cost_rate, :connection, segment_cost);
+   
+   cost = 
+   SELECT id, AVG(cost) AS cost
+   FROM :segment_cost
+   GROUP BY id;
+END

@@ -1,0 +1,9 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+   {name = "PRIVILEGE_CODE"; unique = true; sqlType = NVARCHAR; length = 256; nullable = false;comment = "Application Privilege";},
+   {name = "SPRAS"; sqlType = VARCHAR; length = 10; nullable = false;},
+   {name = "DESC"; sqlType = NVARCHAR; length = 500; nullable = false;}
+	
+];
+table.primaryKey.pkcolumns = ["PRIVILEGE_CODE","SPRAS"];  

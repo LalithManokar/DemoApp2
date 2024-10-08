@@ -1,0 +1,11 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "CODE"; sqlType = NVARCHAR; length = 20;nullable = false;},
+    {name = "DESC"; sqlType = VARCHAR; length = 200; nullable = true;},
+    {name = "COLOR_ALPHA"; sqlType = INTEGER;  nullable = true;},
+    {name = "COLOR_RED"; sqlType = INTEGER;  nullable = true;},
+    {name = "COLOR_GREEN"; sqlType = INTEGER;  nullable = true;},
+    {name = "COLOR_BLUE"; sqlType = INTEGER;  nullable = true;}
+];
+table.primaryKey.pkcolumns = ["CODE"];

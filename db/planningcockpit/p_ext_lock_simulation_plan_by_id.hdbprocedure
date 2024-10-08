@@ -1,0 +1,21 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_ext_lock_simulation_plan_by_id" (
+    IN SIMULATION_ID BIGINT,
+    OUT SESSION_ID VARCHAR(200),
+    OUT USER_ID BIGINT,
+    OUT LAST_MODIFYED_ON TIMESTAMP
+) LANGUAGE SQLSCRIPT
+  SQL SECURITY INVOKER 
+  DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+
+    SELECT A.SESSION_ID, A.USER_ID, A.LAST_MODIFYED_ON
+    INTO SESSION_ID, USER_ID, LAST_MODIFYED_ON 
+    FROM "sap.tm.trp.db.planningcockpit::t_lock" A
+    INNER JOIN "sap.tm.trp.db.planningcockpit::t_simulation_plan" B
+    ON A.SIMULATION_ID=B.ID
+    --AND B.ID=:SIMULATION_ID FOR UPDATE OF A.SIMULATION_ID NOWAIT; -- if fails to acquire locks, the statement returns the SQL error 146.
+    AND B.ID=:SIMULATION_ID;
+    -- FOR UPDATE OF A.SIMULATION_ID NOWAIT; -- if fails to acquire locks, the statement returns the SQL error 146.
+ 
+END;

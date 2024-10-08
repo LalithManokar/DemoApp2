@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_role_check_simulation_plan" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_role_check_simulation_plan"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="VARCHAR" id="CODE" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="SIMULATION_PLAN_NAME" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="SIMULATION_PLAN_DESC" length="200"/>
+        <viewAttribute datatype="BIGINT" id="SUPPLY_DEMAND_PLAN_ID"/>
+        <viewAttribute datatype="BIGINT" id="EXCUTE_ID"/>
+        <viewAttribute datatype="BIGINT" id="EXECUTION_ID"/>
+        <viewAttribute datatype="TIMESTAMP" id="EXECUTION_TIME"/>
+        <viewAttribute datatype="VARCHAR" id="SUPPLY_DEMAND_PLAN_NAME" length="200"/>
+        <viewAttribute datatype="INTEGER" id="STATUS_CODE"/>
+        <viewAttribute datatype="VARCHAR" id="STATUS" length="200"/>
+        <viewAttribute datatype="BIGINT" id="NETWORK_SETTING_GROUP_ID"/>
+        <viewAttribute datatype="VARCHAR" id="NETWORK_SETTING_GROUP_NAME" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="CURRENCY" length="10"/>
+        <viewAttribute datatype="VARCHAR" id="CREATED_BY" length="60"/>
+        <viewAttribute datatype="TIMESTAMP" id="CREATED_ON"/>
+        <viewAttribute datatype="VARCHAR" id="MODIFIED_BY" length="60"/>
+        <viewAttribute datatype="TIMESTAMP" id="MODIFIED_ON"/>
+        <viewAttribute datatype="TIMESTAMP" id="LAST_MODIFIED_TIME"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_CATEGORY" length="20"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition>
+ 
+ BEGIN
+
+
+     DECLARE USERID BIGINT;
+     DECLARE NAME VARCHAR(60);
+     DECLARE HAS_AUTHORIZATION_FLAG INTEGER := 0;
+
+     CALL &quot;sap.tm.trp.db.systemmanagement.user::p_get_current_user_id&quot;(USERID);
+     
+     CALL &quot;sap.tm.trp.db.systemmanagement::p_check_location_full_authorization&quot; (
+            HAVE_AUTHORIZATION_FLAG => HAS_AUTHORIZATION_FLAG
+         );
+                        
+     IF :HAS_AUTHORIZATION_FLAG = 1 THEN 
+
+
+     var_out = SELECT DISTINCT T1.ID,
+                      T1.CODE,
+                      T1.SIMULATION_PLAN_NAME,
+                      T1.SIMULATION_PLAN_DESC,
+                      T1.SUPPLY_DEMAND_PLAN_ID,
+                      T1.EXCUTE_ID,
+                      T1.EXCUTE_ID AS  EXECUTION_ID,
+                      T1.EXECUTION_TIME, 
+                      T1.SUPPLY_DEMAND_PLAN_NAME,
+                      T1.STATUS_CODE,
+                      T1.STATUS,
+                      T1.NETWORK_SETTING_GROUP_ID,
+                      T1.NETWORK_SETTING_GROUP_NAME,
+                      T1.CURRENCY,
+                      CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+                           WHEN (T1.CREATED_BY &lt;> '' AND T1.CREATED_BY IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+			               WHEN T1.CREATED_BY = '' OR T1.CREATED_BY IS NULL THEN ''
+			               ELSE '***' END AS CREATED_BY,
+                      T1.CREATED_ON,
+                      CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+                           WHEN (T1.MODIFIED_BY &lt;> '' AND T1.MODIFIED_BY IS NOT NULL) AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+			               WHEN T1.MODIFIED_BY = '' OR T1.MODIFIED_BY IS NULL THEN ''
+			               ELSE '***' END AS MODIFIED_BY,
+                      T1.MODIFIED_ON,
+                      T1.LAST_MODIFIED_TIME,
+                      T1.RESOURCE_CATEGORY
+               FROM &quot;sap.tm.trp.db.planningcockpit::v_simulation_plan_ui&quot; T1
+               LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T9  ON T1.CREATED_BY = T9.USERNAME
+               LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T10  ON T1.MODIFIED_BY = T10.USERNAME
+               CROSS JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege&quot; PRIVILEGE;
+                      --INNER join &quot;_SYS_BIC&quot;.&quot;sap.tm.trp.db.pipeline/cv_get_plan_list&quot; AS T2 ON T1.SUPPLY_DEMAND_PLAN_ID = T2.ID
+                      --WHERE T2.PLAN_TYPE_ID = 1;
+
+     ELSE
+
+     var_out = SELECT T1.ID, 
+                      T1.CODE,
+                      T1.SIMULATION_PLAN_NAME,
+                      T1.SIMULATION_PLAN_DESC,
+                      T1.SUPPLY_DEMAND_PLAN_ID,
+                      T1.EXCUTE_ID,
+                      T1.EXCUTE_ID AS EXECUTION_ID,
+                      T1.EXECUTION_TIME,
+                      T1.SUPPLY_DEMAND_PLAN_NAME,
+                      T1.STATUS_CODE,
+                      T1.STATUS,
+                      T1.NETWORK_SETTING_GROUP_ID,
+                      T1.NETWORK_SETTING_GROUP_NAME,
+                      T1.CURRENCY,
+                      CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+                           WHEN (T1.CREATED_BY &lt;> '' AND T1.CREATED_BY IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+			               WHEN T1.CREATED_BY = '' OR T1.CREATED_BY IS NULL THEN ''
+			               ELSE '***' END AS CREATED_BY,
+                      T1.CREATED_ON,
+                      CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+                           WHEN (T1.MODIFIED_BY &lt;> '' AND T1.MODIFIED_BY IS NOT NULL) AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+			               WHEN T1.MODIFIED_BY = '' OR T1.MODIFIED_BY IS NULL THEN ''
+			               ELSE '***' END AS MODIFIED_BY,
+                      T1.MODIFIED_ON,
+                      T1.LAST_MODIFIED_TIME,
+                      T1.RESOURCE_CATEGORY
+               FROM &quot;sap.tm.trp.db.planningcockpit::v_simulation_plan_ui&quot; T1
+               INNER JOIN &quot;sap.tm.trp.db.pipeline::cv_get_plan_list&quot; AS T2
+               ON (T1.SUPPLY_DEMAND_PLAN_ID = T2.ID)
+                      --inner join &quot;_SYS_BIC&quot;.&quot;sap.tm.trp.db.pipeline/cv_get_plan_list&quot; AS T3 ON T1.SUPPLY_DEMAND_PLAN_ID = T3.ID
+                     -- WHERE T3.PLAN_TYPE_ID = 1;
+                     --INNER JOIN &quot;sap.tm.trp.db.pipeline::t_plan_model&quot; T2 ON (T1.SUPPLY_DEMAND_PLAN_ID = T2.ID) 
+                     --INNER JOIN &quot;sap.tm.trp.db.filter::t_filter_location_filter&quot;  T3 
+                     --ON (T2.FILTER_GROUP_ID = T3.FILTER_GROUP_ID)
+                     --INNER JOIN &quot;sap.tm.trp.db.systemmanagement::cv_getlocationfilters_by_user&quot;(placeholder.&quot;$$IN_USER_NAME$$&quot;=>:NAME) T4 ON (T4.LOCATION_FILTER_ID = T3.LOCATION_FILTER_ID)
+               LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T9  ON T1.CREATED_BY = T9.USERNAME
+               LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T10  ON T1.MODIFIED_BY = T10.USERNAME
+               CROSS JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege&quot; PRIVILEGE
+               WHERE T1.SUPPLY_DEMAND_PLAN_VISIBILITY_FLAG = 1 OR (T1.SUPPLY_DEMAND_PLAN_VISIBILITY_FLAG = 0 AND T1.SUPPLY_DEMAND_PLAN_CREATE_BY =:USERID );
+
+      END IF;
+END 
+</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="CODE" order="2">
+        <descriptions defaultDescription="CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="CODE"/>
+      </attribute>
+      <attribute id="SIMULATION_PLAN_NAME" order="3">
+        <descriptions defaultDescription="SIMULATION_PLAN_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="SIMULATION_PLAN_NAME"/>
+      </attribute>
+      <attribute id="SIMULATION_PLAN_DESC" order="4">
+        <descriptions defaultDescription="SIMULATION_PLAN_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="SIMULATION_PLAN_DESC"/>
+      </attribute>
+      <attribute id="SUPPLY_DEMAND_PLAN_ID" order="5">
+        <descriptions defaultDescription="SUPPLY_DEMAND_PLAN_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="SUPPLY_DEMAND_PLAN_ID"/>
+      </attribute>
+      <attribute id="EXCUTE_ID" order="6">
+        <descriptions defaultDescription="EXCUTE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="EXCUTE_ID"/>
+      </attribute>
+      <attribute id="EXECUTION_ID" order="7">
+        <descriptions defaultDescription="EXECUTION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="EXECUTION_ID"/>
+      </attribute>
+      <attribute id="EXECUTION_TIME" order="8">
+        <descriptions defaultDescription="EXECUTION_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="EXECUTION_TIME"/>
+      </attribute>
+      <attribute id="SUPPLY_DEMAND_PLAN_NAME" order="9">
+        <descriptions defaultDescription="SUPPLY_DEMAND_PLAN_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="SUPPLY_DEMAND_PLAN_NAME"/>
+      </attribute>
+      <attribute id="STATUS_CODE" order="10">
+        <descriptions defaultDescription="STATUS_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="STATUS_CODE"/>
+      </attribute>
+      <attribute id="STATUS" order="11">
+        <descriptions defaultDescription="STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="STATUS"/>
+      </attribute>
+      <attribute id="NETWORK_SETTING_GROUP_NAME" order="13">
+        <descriptions defaultDescription="COST_MODEL_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NETWORK_SETTING_GROUP_NAME"/>
+      </attribute>
+      <attribute id="CURRENCY" order="14">
+        <descriptions defaultDescription="CURRENCY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CURRENCY"/>
+      </attribute>
+      <attribute id="CREATED_BY" order="15">
+        <descriptions defaultDescription="CREATED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATED_BY"/>
+      </attribute>
+      <attribute id="MODIFIED_BY" order="17">
+        <descriptions defaultDescription="MODIFIED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="MODIFIED_BY"/>
+      </attribute>
+      <attribute id="RESOURCE_CATEGORY" order="20">
+        <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_CATEGORY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="ID"/>
+      </measure>
+      <measure id="NETWORK_SETTING_GROUP_ID" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="COST_MODEL_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="NETWORK_SETTING_GROUP_ID"/>
+      </measure>
+      <measure id="CREATED_ON" order="16" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="CREATED_ON"/>
+        <measureMapping columnObjectName="Script_View" columnName="CREATED_ON"/>
+      </measure>
+      <measure id="MODIFIED_ON" order="18" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="MODIFIED_ON"/>
+        <measureMapping columnObjectName="Script_View" columnName="MODIFIED_ON"/>
+      </measure>
+      <measure id="LAST_MODIFIED_TIME" order="19" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="LAST_MODIFIED_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="LAST_MODIFIED_TIME"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

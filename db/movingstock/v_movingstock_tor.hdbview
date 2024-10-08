@@ -1,0 +1,115 @@
+schema = "SAP_TM_TRP";
+query = "
+SELECT   DISTINCT
+         T1.DB_KEY AS ROOT_DB_KEY, 
+         T1.TOR_ID AS DOCUMENT, 
+         T1.TOR_TYPE AS DOCUMENT_TYPE,
+         T6.TRMODCOD,
+         T1.MTR,
+         T1.CARRIER, 
+         T6.SHIPPER_KEY,
+         T6.SHIPPERID AS SHIPPER,
+         T6.CONSIGNEEID  AS CONSIGNEE,
+         T6.PURCH_ORG_ID AS PURCHASE_ORGANIZATION,
+         T6.PURCH_GRP_ID,
+         T6.RESP_PERSON AS RESPONSIBLE_PERSON,      
+         T10.LOCATION_NAME AS SOURCE_LOCATION, 
+         T10.STREET AS SOURCE_LOCATION_ADDR, 
+         T10.SEL_TIME AS DEPARTURE_TIME,
+         T11.LOCATION_NAME AS DESTINATION_LOCATION,
+         T11.STREET AS DESTINATION_LOCATION_ADDR,
+         T11.SEL_TIME AS ARRIVAL_TIME,
+         T13.LOCATION_NAME AS PREVIOUS_LOCATION, 
+         T14.LOCATION_NAME AS NEXT_LOCATION, 
+         T2.SCHED_KEY,  
+         T15.SCHEDULE AS SCHEDULE_ID,    
+         T2.VOYAGE_ID AS VOYAGE,         
+         T6.PARTNER_REF_ID,
+         T6.PARTNER_MBL_ID,
+         T6.MAX_UTIL,
+         T6.MAX_UTIL_MASS,
+         T6.FIRST_SHP_TRANSM,
+         T6.ERP_SHPM_BTDID,
+         T6.LAST_SHPM_TRANSM,
+         T6.ERP_SHPM_LOGSYS,
+         T6.ERP_SHPM_TYPE,   
+         T6.CUSTOMS,
+         T1.EXECUTION_STATUS AS EXECUTION_STATUS,
+         T1.EXECUTION_STATUS_TEXT AS EXECUTION_STATUS_TXT,
+         T1.LIFECYCLE AS LIFECYCLE_STATUS,
+         T1.LIFECYCLE_TEXT AS LIFECYCLE_STATUS_TXT,
+         T6.CREATION_TYPE AS CREATION_TYPE,
+         T6.CREATION_TYPE_TXT AS CREATION_TYPE_TXT,  
+         T6.DOC_CHECK_STATUS AS DOC_CHECK_STATUS,
+         T6.DOC_CHECK_STATUS_TXT AS DOC_CHECK_STATUS_TXT,
+         T6.CROSS_DOC_CHECK_STATUS AS CROSS_DOC_CHECK_STATUS,
+         T6.CROSS_DOC_CHECK_STATUS AS CROSS_DOC_CHECK_STATUS_TXT,
+         T6.COMPLIANCE_STATUS AS COMPLIANCE_STATUS,
+         T6.COMPLIANCE_STATUS_TXT AS COMPLIANCE_STATUS_TXT,
+         T2.VESSEL_ID           
+    from \"sap.tm.trp.db.semantic.order::v_freight_order\" T1
+    LEFT OUTER JOIN 
+    (
+     SELECT FREIGHT_ORDER_KEY, SCHED_KEY, VOYAGE_ID, VESSEL_ID
+     FROM \"sap.tm.trp.db.semantic.order::v_freight_order_item\" 
+     WHERE ITEM_PARENT_KEY = '00000000000000000000000000000000'
+     ) T2     
+     ON (T2.FREIGHT_ORDER_KEY = T1.DB_KEY)    
+    LEFT OUTER JOIN \"sap.tm.trp.db.semantic.schedule::v_schedule\"  T15 ON (T2.SCHED_KEY = T15.DB_KEY)
+      -- source location and address 
+      INNER JOIN 
+      (SELECT  STP.DB_KEY, STP.FREIGHT_ORDER_KEY, STP.STOP_SEQ_POS, STP.SEL_TIME, STP.LOCATION_NAME, LOCADR.ADDRESS_ID, LOCADR.STREET 
+       FROM \"sap.tm.trp.db.semantic.order::v_freight_order_stop\" STP
+       LEFT OUTER JOIN 
+        (
+          
+          SELECT   LOC.NAME AS LOCATION_NAME, LOC.ADDRESS_ID, ADRC.STREET
+         FROM \"sap.tm.trp.db.semantic.location::v_location\" LOC
+         LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_address\" ADRC ON (LOC.ADDRESS_ID = ADRC.ID )
+         ) LOCADR 
+       ON (STP.LOCATION_NAME = LOCADR.LOCATION_NAME)
+       ) T10
+       ON (T10.FREIGHT_ORDER_KEY = T1.DB_KEY AND T10.STOP_SEQ_POS = 'F')
+     
+      -- destination location and address
+      INNER JOIN 
+      (SELECT STP.DB_KEY, STP.FREIGHT_ORDER_KEY, STP.STOP_SEQ_POS, STP.SEL_TIME, STP.LOCATION_NAME, LOCADR.ADDRESS_ID, LOCADR.STREET 
+       FROM \"sap.tm.trp.db.semantic.order::v_freight_order_stop\"  STP
+       LEFT OUTER JOIN 
+        (
+         SELECT   LOC.NAME AS LOCATION_NAME, LOC.ADDRESS_ID, ADRC.STREET
+         FROM \"sap.tm.trp.db.semantic.location::v_location\" LOC
+         LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_address\" ADRC ON (LOC.ADDRESS_ID = ADRC.ID )
+         ) LOCADR 
+       ON (STP.LOCATION_NAME = LOCADR.LOCATION_NAME)
+       ) T11
+       ON (T11.FREIGHT_ORDER_KEY = T1.DB_KEY AND T11.STOP_SEQ_POS = 'L')
+
+      -- previous location
+      LEFT OUTER JOIN (SELECT FREIGHT_ORDER_KEY,LOCATION_NAME,SEL_TIME,SEL_TIME_MAX
+      FROM 
+           (SELECT DISTINCT FREIGHT_ORDER_KEY,LOCATION_NAME,MAX(SEL_TIME)OVER(PARTITION BY FREIGHT_ORDER_KEY) as SEL_TIME_MAX,SEL_TIME
+              FROM \"sap.tm.trp.db.semantic.order::v_freight_order_stop\" WHERE  STOP_CAT = 'O' AND TO_TIMESTAMP(SEL_TIME)< CURRENT_TIMESTAMP
+             )  
+       WHERE SEL_TIME=SEL_TIME_MAX) T13
+       ON (T13.FREIGHT_ORDER_KEY = T1.DB_KEY)
+       
+      -- next location
+      LEFT OUTER JOIN (SELECT FREIGHT_ORDER_KEY,LOCATION_NAME,SEL_TIME,SEL_TIME_MIN
+      FROM 
+           (SELECT DISTINCT FREIGHT_ORDER_KEY,LOCATION_NAME,MIN(SEL_TIME)OVER(PARTITION BY FREIGHT_ORDER_KEY) as SEL_TIME_MIN,SEL_TIME
+             FROM \"sap.tm.trp.db.semantic.order::v_freight_order_stop\"  WHERE  STOP_CAT = 'I' AND TO_TIMESTAMP(SEL_TIME)> CURRENT_TIMESTAMP
+             )  
+       WHERE SEL_TIME=SEL_TIME_MIN) T14
+       ON (T14.FREIGHT_ORDER_KEY = T1.DB_KEY)
+         
+         LEFT OUTER JOIN \"sap.tm.trp.db.semantic.order::v_freight_order_extend_field\" T6 ON (T1.DB_KEY = T6.DB_KEY)
+        
+         WHERE T1.TOR_CAT = 'TO' 
+         OR T1.TOR_CAT = 'BO' 
+         
+        ";
+    
+depends_on_view = ["sap.tm.trp.db.semantic.order::v_freight_order", "sap.tm.trp.db.semantic.order::v_freight_order_item", 
+"sap.tm.trp.db.semantic.schedule::v_schedule","sap.tm.trp.db.semantic.order::v_freight_order_stop","sap.tm.trp.db.semantic.location::v_location",
+"sap.tm.trp.db.semantic.location::v_address","sap.tm.trp.db.semantic.order::v_freight_order_extend_field"];  

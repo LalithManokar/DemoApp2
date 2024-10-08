@@ -1,0 +1,271 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_ext_determination_for_pickup_op_2_rulegroup" ( 
+	IN RULE_GROUP_ID BIGINT,
+    IN EXECUTION_ID VARCHAR(200),
+    IN HANDLING_CAPA INTEGER,
+    IN IN_START_TIME TIMESTAMP,
+    IN t_transportation_cost "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_transportation_cost_rulegroup",
+    IN t_handling_cost "sap.tm.trp.db.pickupreturn::tt_handling_cost",
+    IN TU_INFO "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_tu_info_rulegroup",
+    IN t_handling_capacity "sap.tm.trp.db.planningcockpit::tt_location_handling_capacity",
+    IN t_supply_demand_p "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_supply_demand_range_rulegroup",
+	IN t_stock_configuration_p "sap.tm.trp.db.pickupreturn.algorithm::tt_stock_configure",
+	IN RULE_PLAN_LOC "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_rule_plan_loc_rulegroup", 
+	IN T_PRO_LOC_RES "sap.tm.trp.db.pickupreturn.algorithm::tt_min_provision_stock"
+) 
+	LANGUAGE SQLSCRIPT
+     SQL SECURITY INVOKER
+     DEFAULT SCHEMA SAP_TM_TRP 
+	AS
+BEGIN
+
+    DECLARE LDR_ID INTEGER;
+    DECLARE i INTEGER := 0;
+    DECLARE OFFSET INTEGER;
+    DECLARE IN_END_TIME TIMESTAMP;
+    DECLARE USER_ID BIGINT;
+    DECLARE V_USERNAME VARCHAR(60);
+    DECLARE shift INTEGER;
+    DECLARE V_OP_SETTING_TYPE INTEGER;
+    DECLARE V_OPTIMIZATION_OPTION NVARCHAR(50); 
+    DECLARE V_SD_PLAN_ID BIGINT;
+    DECLARE PICKUPRETURN_MODE VARCHAR(2); 
+    DECLARE DATE_OFFSET INTEGER;
+    DECLARE MANDATORY_COST_MODEL_ID INTEGER; 
+    DECLARE V_NETWORK_SETTING_GROUP_ID BIGINT;
+    DECLARE IN_RUN_ID_STAMP VARCHAR(30); 
+    DECLARE RULE_SP VARCHAR(200);         
+    
+    SELECT IFNULL (MAX (USERNAME),'')
+    INTO V_USERNAME
+    FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+
+    SELECT IFNULL (MAX (SHIFT),0) INTO shift
+	FROM "sap.tm.trp.db.pickupreturn::t_shift2" WHERE NAME=:V_USERNAME;
+
+    SELECT T1.ID INTO USER_ID 
+    FROM "sap.tm.trp.db.systemmanagement.user::t_user" T1
+    INNER JOIN "sap.tm.trp.db.systemmanagement.user::cv_get_username" T2
+    ON (T1.USERNAME = T2.USERNAME);
+    
+    SELECT IFNULL(MAX (DATE_OFFSET), 0) INTO DATE_OFFSET
+    FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+    WHERE USER = :V_USERNAME;
+    
+    rule_details = 
+    SELECT IFNULL ((CASE OPTIMIZATION WHEN 1 THEN 'COST' ELSE 'BALANCE' END),'') AS OPTIMIZATION_OPTION 
+    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID in (SELECT TOP 1 RULE_ID from "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" where RULE_GROUP_ID = :RULE_GROUP_ID);
+   
+   
+    SELECT OPTIMIZATION_OPTION INTO V_OPTIMIZATION_OPTION from :rule_details;
+  
+    
+    PLAN_ID_FROM_RULE = SELECT DISTINCT RULE_ID, PLAN_ID FROM :RULE_PLAN_LOC; 
+    
+    TU_TBL  = SELECT DISTINCT 
+                     T1.RULE_ID,
+                     PLAN_ID,
+                     TU_ID,
+                     TU_TYPE_CODE AS TU_TYPE,
+                     RESOURCE_TYPE,
+                     ITE_KEY,
+                     SHIPPER_ID,
+                     SHIPPER,
+                     CONSIGNEE_ID,
+                     CONSIGNEE,
+                     IFNULL (ORIGINAL_PICKUP_LOCATION_ID,POL)
+                     AS CUR_LOCATION_ID,
+                     QUANTITY,
+                     IFNULL(ORIGINAL_PICKUP_DATE,NULL)
+                     AS CUR_DATE,
+                     IFNULL(ORIGINAL_PICKUP_DATE,NULL)
+                     PRE_DATE,
+                     CASE WHEN DESTINATION_LOCATION_ID  = '' THEN POL
+                          ELSE DESTINATION_LOCATION_ID 
+                     END AS SHIPPER_LOCATION_ID,
+                     CASE WHEN DESTINATION_LOCATION     = '' THEN POL_NAME
+                          ELSE DESTINATION_LOCATION 
+                     END AS SHIPPER_LOCATION,
+                     CASE WHEN SOURCE_LOCATION_ID       = '' THEN POD
+                          ELSE SOURCE_LOCATION_ID 
+                     END AS CONSIGNEE_LOCATION_ID,
+                     CASE WHEN SOURCE_LOCATION          = '' THEN POD_NAME
+                          ELSE SOURCE_LOCATION 
+                     END AS CONSIGNEE_LOCATION,
+                     CUSTOMER_NAME,
+                     BOOKING_DATE,
+                     FLAG,
+                     RELEVANT_PLANNING,
+                     POL,
+                     POL_NAME,
+                     POD,
+                     POD_NAME,
+                     EXECUTION_STATUS_CODE AS STATUS,
+                     LIFECYCLE_CODE AS LIFECYCLE_STATUS
+              FROM  :TU_INFO T1
+              INNER JOIN :PLAN_ID_FROM_RULE T2 ON (T1.RULE_ID = T2.RULE_ID)
+              WHERE (FLAG <> 2 OR FLAG IS NULL) ;
+              
+      t_transportation_cost_p = SELECT DISTINCT  T1.FROM_LOCATION,
+                                               T1.TO_LOCATION,
+                                               T1.MTR,
+                                               T1.DURATION,
+                                               T1.COST,
+                                               T1.RESOURCE_TYPE AS CONTAINER_TYPE
+                                FROM :t_transportation_cost T1;
+      
+      t_parameters = SELECT TOP 0 '' AS NAME,
+                                '' AS VALUE
+                     FROM :t_transportation_cost;
+                                
+      t_location_cost_p = SELECT DISTINCT  
+                                    LOCATION,
+                                    RESOURCE_TYPE AS CONTAINER_TYPE,
+                                    0             AS STORAGE_COSTUNIT,
+                                    COST          AS HANDLING_COSTUNIT
+                          FROM :t_handling_cost;
+                          
+                                                    
+       t_booking_depot = SELECT DISTINCT 
+                             RULE_ID,
+                             PLAN_ID,
+                             TU_ID AS BOOKING_ID,
+	                         SHIPPER_LOCATION AS CUSTOMER_LOCATION,
+	                         CURRENT_UTCTIMESTAMP AS START_TIME,
+	                         ADD_DAYS(TO_TIMESTAMP(PRE_DATE),IFNULL(:shift,0)) AS BOOKING_TIME,
+	                         RESOURCE_TYPE AS CONTAINER_TYPE,
+	                         QUANTITY,
+	                         'PICKUP'
+	                         AS MODE,
+	                         RELEVANT_PLANNING AS HAULAGE_TYPE
+	                  FROM :TU_TBL;	 
+	                       
+	    --Suggest location get
+	    IF :HANDLING_CAPA = 0 THEN
+          CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_pickup_optimize_rulegroup" (
+            :V_OPTIMIZATION_OPTION,
+            :HANDLING_CAPA,
+            :T_TRANSPORTATION_COST_P,
+            :T_PARAMETERS,
+            :T_SUPPLY_DEMAND_P,
+            :T_BOOKING_DEPOT,
+            :T_STOCK_CONFIGURATION_P,
+            :T_LOCATION_COST_P,
+            :T_PRO_LOC_RES,
+            :T_HANDLING_CAPACITY,
+            CUR_RESULT 
+           );
+        ELSE
+           CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_pickup_optimize_genios_rulegroup" (
+            :V_OPTIMIZATION_OPTION,
+            :HANDLING_CAPA,
+            :T_TRANSPORTATION_COST_P,
+            :T_PARAMETERS,
+            :T_SUPPLY_DEMAND_P,
+            :T_BOOKING_DEPOT,
+            :T_STOCK_CONFIGURATION_P,
+            :T_LOCATION_COST_P,
+            :T_PRO_LOC_RES,
+            :T_HANDLING_CAPACITY,
+            CUR_RESULT
+           );
+		END IF ;
+		
+	    --Location name to location id
+	    CURR_RESULT = SELECT T1.BOOKING_ID,
+	                        T1.FROM_LOCATION AS FROM_LOCATION_NAME,
+        					T1.TO_LOCATION AS TO_LOCATION_NAME,
+        					T2.ID AS FROM_LOCATION,
+        					'' AS TO_LOCATION,
+        					T1.FROM_TIME,
+        					T1.TO_TIME,
+        					T1.CONTAINER_TYPE,
+        					T1.QUANTITY,
+        					T1.STORAGE_COST,
+        					T1.HANDLING_COST,
+        					T1.TRANSPORTATION_COST,
+        					T1.TOTAL_COST,
+        					T1.MODE,
+        					T1.HAULAGE_TYPE
+		  FROM :CUR_RESULT T1
+		  INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T2 ON T2.NAME = T1.FROM_LOCATION;
+		  
+		  OPT_RESULT    =
+		         SELECT DISTINCT 
+				 T1.EXECUTION_ID,
+			     T1.RULE_ID,
+	             T1.TU_ID,
+	             T1.EXECUTION_STATUS_CODE,
+	             T1.SHIPPER_ID,
+	             T1.CONSIGNEE_ID,
+	             T1.RESOURCE_TYPE,
+	             T1.QUANTITY,
+	             T1.SOURCE_LOCATION_ID,
+	             T1.DESTINATION_LOCATION_ID,
+	             T1.STREETTURN_TU_ID,
+	             T1.POL,
+	             T1.POD,
+	             T1.VESSEL_CUTOFF_TIME AS DATE,
+	             IFNULL (T2.LOCATION_ID,T1.PICKUP_LOCATION_ID) AS PRE_LOCATION_ID,
+	             T1.ORIGINAL_PICKUP_LOCATION_ID AS CUR_LOCATION_ID,
+	             T1.PICKUP_DATE AS PRE_DATE,
+	             T1.ORIGINAL_PICKUP_DATE AS CUR_DATE,
+	             CASE WHEN T2.LOCATION_ID IS NULL THEN T1.FLAG
+	               ELSE 1 END AS FLAG,
+	             IFNULL (T2.LOCATION,T1.PICKUP_LOCATION)
+	             AS PRE_LOCATION,
+	             T1.ORIGINAL_PICKUP_LOCATION AS CUR_LOCATION,
+			    CASE WHEN T2.LOCATION_ID IS NULL THEN T1.ASSIGN_STATUS
+	               ELSE 1 END AS ASSIGN_STATUS
+	      FROM :TU_INFO T1
+	      LEFT JOIN (SELECT DISTINCT BOOKING_ID AS TU_ID,CONTAINER_TYPE,FROM_LOCATION AS LOCATION_ID,FROM_LOCATION_NAME AS LOCATION
+                     FROM :CURR_RESULT) T2
+          ON (T1.TU_ID = T2.TU_ID
+              AND T1.RESOURCE_TYPE = T2.CONTAINER_TYPE 
+              AND T1.FLAG <> 2);
+		  
+		  IN_END_TIME := current_UTCtimestamp;
+		  IN_RUN_ID_STAMP= :RULE_GROUP_ID || TO_VARCHAR(:IN_END_TIME, 'YYYYMMDDHH24MISS');
+	     
+	       
+        UPDATE "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result" A
+           SET
+	                  A.USER = :V_USERNAME,
+	                  A.EXECUTION_STATUS_CODE=T1.EXECUTION_STATUS_CODE,
+	                  A.SHIPPER_ID=T1.SHIPPER_ID,
+	                  A.CONSIGNEE_ID=T1.CONSIGNEE_ID,
+	                  A.RESOURCE_TYPE=T1.RESOURCE_TYPE,
+	                  A.QUANTITY=T1.QUANTITY,
+	                  A.SOURCE_LOCATION_ID=T1.SOURCE_LOCATION_ID,
+	                  A.DESTINATION_LOCATION_ID=T1.DESTINATION_LOCATION_ID,	
+	                  A.STREETTURN_TU_ID=T1.STREETTURN_TU_ID,
+	                  A.POL=T1.POL,
+	                  A.POD=T1.POD,
+	                  A.DATE=T1.DATE,
+	                  A.PRE_LOCATION_ID=T1.PRE_LOCATION_ID,
+	                  A.CUR_LOCATION_ID=T1.CUR_LOCATION_ID,
+	                  A.CUR_DATE=T1.CUR_DATE,
+	                  A.FLAG=T1.FLAG,
+	                  A.OP_SETTING_TYPE=2,
+	                  A.EXECUTION_TIME=:IN_END_TIME,
+                      A.EXECUTION_BY=:USER_ID,
+                      A.PRE_LOCATION=T1.PRE_LOCATION,
+                      A.CUR_LOCATION=T1.CUR_LOCATION,
+                      A.ASSIGN_STATUS=T1.ASSIGN_STATUS,
+                      A.STATUS = 'O',
+                      A.RULE_GROUP_ID2= :RULE_GROUP_ID,
+                      A.PROCESS_2_EXECUTION_ID=:EXECUTION_ID,
+              		  A.PROCESS_2_EXECUTION_START_TIME=:IN_START_TIME,
+              		  A.PROCESS_2_EXECUTION_END_TIME=:IN_END_TIME
+             
+             FROM :OPT_RESULT T1
+             INNER JOIN "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result" A
+             ON A.RULE_ID = T1.RULE_ID
+             AND A.TU_ID = T1.TU_ID
+             AND A.PROCESS_1_EXECUTION_ID = T1.EXECUTION_ID
+             WHERE A.STATUS = 'F';
+
+
+END;
+
+

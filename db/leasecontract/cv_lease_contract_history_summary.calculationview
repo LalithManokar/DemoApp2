@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_lease_contract_history_summary" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_lease_contract_history_summary"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="LEASE_CONTRACT_ID" parameter="true">
+      <descriptions defaultDescription="LEASE_CONTRACT_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="LEASE_CONTRACT_ID"/>
+        <viewAttribute datatype="NVARCHAR" id="EQUIPMENT_TYPE" length="22"/>
+        <viewAttribute datatype="INTEGER" id="EQUIPMENT_CODE_TYPE"/>
+        <viewAttribute datatype="VARCHAR" id="CURRENCY" length="50"/>
+        <viewAttribute datatype="DECIMAL" id="TOTAL_ON_HIRE_COST" length="13" scale="3"/>
+        <viewAttribute datatype="DECIMAL" id="TOTAL_OFF_HIRE_COST" length="13" scale="3"/>
+        <viewAttribute datatype="DECIMAL" id="TOTAL_PER_DIEM" length="13" scale="3"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#LEASE_CONTRACT_ID</localVariable>
+      <definition>BEGIN 
+	DECLARE CURRENCY NVARCHAR(3);
+	DECLARE CUSTOMCONDITION CONDITION FOR SQL_ERROR_CODE 10001;/* Custom Error Code = 10001*/
+    DECLARE AUTH SMALLINT;
+    DECLARE NAME VARCHAR(60);     
+	DECLARE PERDIEMAUTH INTEGER;
+	DECLARE EXIT HANDLER FOR CUSTOMCONDITION RESIGNAL ;
+	
+	CALL &quot;sap.tm.trp.db.leasecontract::p_check_lease_authorization&quot;(
+	  	:AUTH
+		);
+	IF AUTH = 0 THEN
+		/* Signaling Custom error and setting the Custom Error Message */
+		SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'USER IS NOT AUTHORIZED TO ACCESS LEASE ';
+	END IF;     
+    
+--Global Currency. 
+--TO DO: Need to discuss about logic with Jagan. 
+--Table is: &quot;sap.tm.trp.db.costmodel::t_currency&quot;
+--Conclusion: Do not look for Global Currency. Use the local currency only.
+
+--Check per diem authorizarion
+	SELECT IFNULL(USERNAME,'') INTO NAME FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+	
+	SELECT COUNT(1) INTO PERDIEMAUTH FROM &quot;SYS&quot;.&quot;EFFECTIVE_APPLICATION_PRIVILEGES&quot;  T1	
+	WHERE  T1.PRIVILEGE = 'sap.tm.trp.service::DisplayPerdiem' AND T1.USER_NAME=:NAME AND IS_VALID='TRUE';
+
+RESOURCE_TYPES = SELECT DISTINCT T1.RESOURCE_TYPE_CODE, T1.RESOURCE_CATEGORY
+                     FROM &quot;sap.tm.trp.db.semantic.resource::v_resource_type_with_category&quot; T1
+                     INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot; T2
+                     ON (T1.EQUI_TYPE = T2.RESOURCE_CATEGORY)
+                     WHERE T2.ID = :LEASE_CONTRACT_ID;
+
+--Local Currency
+SELECT IFNULL(CURRENCY_CODE,'EUR') INTO CURRENCY 
+FROM &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot;
+WHERE ID=:LEASE_CONTRACT_ID;
+
+HT_EXPANDED = 
+SELECT *
+FROM &quot;sap.tm.trp.db.leasecontract::t_lease_contract_hire_term_materialized&quot; 
+WHERE LEASE_CONTRACT_ID = :LEASE_CONTRACT_ID; 
+
+
+LH_WITH_EQUIP_CODE = 
+SELECT LH.EVENT_GUID, LH.RESOURCE_ID, LH.RESOURCE_TYPE AS EQUIPMENT_CODE,
+LH.EVENT_TIME, LH.LOCATION_ID,LH.LEASE_CONTRACT_REFERENCE, LH.HIRE_TYPE
+FROM &quot;sap.tm.trp.db.semantic.event::v_lease_resource_history&quot; LH
+INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot; LCT 
+		ON LH.LEASE_CONTRACT_REFERENCE = LCT.LEASE_CONTRACT_REFERENCE
+WHERE LCT.ID=:LEASE_CONTRACT_ID;
+
+ON_HIRE_HISTORY_EL  = 
+SELECT
+	  LH.EVENT_GUID,
+	  HT.ID,
+	  HT.EQUIPMENT_GROUP_NAME  AS EQUIPMENT_TYPE,
+	  LH.RESOURCE_ID,
+	  LH.EVENT_TIME AS ON_HIRE_DATE,
+	  HT.LOCATION_CODE AS ON_HIRE_LOCATION,
+	  HT.TERM_FEE    AS ON_HIRE_COST,  
+	  PER_DIEM,
+	  HT.EQUIPMENT_CODE_TYPE,
+	  ROW_NUMBER() over (partition by LH.RESOURCE_ID order by LH.EVENT_TIME) as ROW_NUM
+FROM :HT_EXPANDED HT
+	 INNER JOIN (SELECT * FROM :LH_WITH_EQUIP_CODE WHERE HIRE_TYPE = 1) LH 
+	 	ON HT.EQUIPMENT_CODE = LH.EQUIPMENT_CODE
+		AND HT.LOCATION_GUID = LH.LOCATION_ID
+		AND LH.EVENT_TIME BETWEEN HT.START_TIME AND HT.END_TIME
+WHERE HT.HIRE_TYPE=1;  
+
+ON_HIRE_HISTORY_E  = 
+SELECT
+	  LH.EVENT_GUID,
+	  HT.ID,
+	  HT.EQUIPMENT_GROUP_NAME  AS EQUIPMENT_TYPE,
+	  LH.RESOURCE_ID,
+	  LH.EVENT_TIME AS ON_HIRE_DATE,
+	  HT.LOCATION_CODE AS ON_HIRE_LOCATION,
+	  HT.TERM_FEE AS ON_HIRE_COST,  
+	  PER_DIEM,
+	  HT.EQUIPMENT_CODE_TYPE,
+	  ROW_NUMBER() over (partition by LH.RESOURCE_ID order by LH.EVENT_TIME) as ROW_NUM
+FROM :HT_EXPANDED HT
+	 INNER JOIN (SELECT * FROM :LH_WITH_EQUIP_CODE WHERE HIRE_TYPE = 1) LH 
+	 ON HT.EQUIPMENT_CODE = LH.EQUIPMENT_CODE
+	 AND LH.EVENT_TIME BETWEEN HT.START_TIME AND HT.END_TIME
+WHERE HT.HIRE_TYPE=1 
+AND HT.LOCATION_CODE IS NULL 
+AND LH.EVENT_GUID NOT IN (SELECT EVENT_GUID FROM :ON_HIRE_HISTORY_EL); 
+
+ON_HIRE_HISTORY_L  = 
+SELECT
+	  LH.EVENT_GUID,
+	  HT.ID,
+	  LH.EQUIPMENT_CODE  AS EQUIPMENT_TYPE,
+	  LH.RESOURCE_ID,
+	  LH.EVENT_TIME AS ON_HIRE_DATE,
+	  HT.LOCATION_CODE AS ON_HIRE_LOCATION,
+	  HT.TERM_FEE AS ON_HIRE_COST,  
+	  PER_DIEM,
+	  1 AS EQUIPMENT_CODE_TYPE,
+	  ROW_NUMBER() over (partition by LH.RESOURCE_ID order by LH.EVENT_TIME) as ROW_NUM
+FROM :HT_EXPANDED HT
+	 INNER JOIN (SELECT * FROM :LH_WITH_EQUIP_CODE WHERE HIRE_TYPE = 1) LH 
+	 ON HT.LOCATION_GUID = LH.LOCATION_ID
+	 AND LH.EVENT_TIME BETWEEN HT.START_TIME AND HT.END_TIME
+WHERE HT.HIRE_TYPE=1 
+AND HT.EQUIPMENT_CODE IS NULL 
+AND LH.EVENT_GUID NOT IN (SELECT EVENT_GUID FROM :ON_HIRE_HISTORY_EL UNION 
+						  SELECT EVENT_GUID FROM :ON_HIRE_HISTORY_E); 
+
+ON_HIRE_HISTORY = 
+SELECT * FROM :ON_HIRE_HISTORY_EL UNION 
+SELECT * FROM :ON_HIRE_HISTORY_E UNION
+SELECT * FROM :ON_HIRE_HISTORY_L;
+
+OFF_HIRE_HISTORY_EL  = 
+SELECT
+	  LH.EVENT_GUID,
+	  HT.ID,
+	  HT.EQUIPMENT_GROUP_NAME  AS EQUIPMENT_TYPE,
+	  LH.RESOURCE_ID,
+	  LH.EVENT_TIME AS OFF_HIRE_DATE,
+	  HT.LOCATION_CODE AS OFF_HIRE_LOCATION,
+	  HT.TERM_FEE    AS OFF_HIRE_COST,  
+	  PER_DIEM,
+	  HT.EQUIPMENT_CODE_TYPE,
+	  ROW_NUMBER() over (partition by LH.RESOURCE_ID order by EVENT_TIME) as ROW_NUM
+FROM  :HT_EXPANDED HT
+	  INNER JOIN (SELECT * FROM :LH_WITH_EQUIP_CODE WHERE HIRE_TYPE = 2) LH 
+	  	ON HT.EQUIPMENT_CODE = LH.EQUIPMENT_CODE
+	    AND HT.LOCATION_GUID = LH.LOCATION_ID
+	    AND LH.EVENT_TIME BETWEEN HT.START_TIME AND HT.END_TIME
+WHERE HT.HIRE_TYPE=2;  
+
+OFF_HIRE_HISTORY_E  = 
+SELECT
+	  LH.EVENT_GUID,
+	  HT.ID,
+	  HT.EQUIPMENT_GROUP_NAME  AS EQUIPMENT_TYPE,
+	  LH.RESOURCE_ID,
+	  LH.EVENT_TIME AS OFF_HIRE_DATE,
+	  HT.LOCATION_CODE AS OFF_HIRE_LOCATION,
+	  HT.TERM_FEE    AS OFF_HIRE_COST,  
+	  PER_DIEM,
+	  HT.EQUIPMENT_CODE_TYPE,
+	  ROW_NUMBER() over (partition by LH.RESOURCE_ID order by EVENT_TIME) as ROW_NUM
+FROM  :HT_EXPANDED HT
+	  INNER JOIN (SELECT * FROM :LH_WITH_EQUIP_CODE WHERE HIRE_TYPE = 2) LH 
+	  	ON HT.EQUIPMENT_CODE = LH.EQUIPMENT_CODE
+	    AND LH.EVENT_TIME BETWEEN HT.START_TIME AND HT.END_TIME
+WHERE HT.HIRE_TYPE=2 
+AND HT.LOCATION_CODE IS NULL 
+AND LH.EVENT_GUID NOT IN (SELECT EVENT_GUID FROM :OFF_HIRE_HISTORY_EL); 
+
+OFF_HIRE_HISTORY_L  = 
+SELECT
+	  LH.EVENT_GUID,
+	  HT.ID,
+	  LH.EQUIPMENT_CODE AS EQUIPMENT_TYPE,
+	  LH.RESOURCE_ID,
+	  LH.EVENT_TIME AS OFF_HIRE_DATE,
+	  HT.LOCATION_CODE AS OFF_HIRE_LOCATION,
+	  HT.TERM_FEE    AS OFF_HIRE_COST,  
+	  PER_DIEM,
+	  1 AS EQUIPMENT_CODE_TYPE,
+	  ROW_NUMBER() over (partition by LH.RESOURCE_ID order by EVENT_TIME) as ROW_NUM
+FROM  :HT_EXPANDED HT
+	  INNER JOIN (SELECT * FROM :LH_WITH_EQUIP_CODE WHERE HIRE_TYPE = 2) LH 
+	  	ON HT.LOCATION_GUID = LH.LOCATION_ID
+	    AND LH.EVENT_TIME BETWEEN HT.START_TIME AND HT.END_TIME
+WHERE HT.HIRE_TYPE=2 
+AND HT.EQUIPMENT_CODE IS NULL 
+AND LH.EVENT_GUID NOT IN (SELECT EVENT_GUID FROM :OFF_HIRE_HISTORY_EL UNION 
+						  SELECT EVENT_GUID FROM :OFF_HIRE_HISTORY_E); 
+
+OFF_HIRE_HISTORY = 
+SELECT * FROM :OFF_HIRE_HISTORY_EL UNION 
+SELECT * FROM :OFF_HIRE_HISTORY_E UNION 
+SELECT * FROM :OFF_HIRE_HISTORY_L;
+
+TMP = 
+SELECT LEASE_CONTRACT_ID, EQUIPMENT_TYPE, EQUIPMENT_CODE_TYPE, CURRENCY,
+SUM(TOTAL_ON_HIRE_COST) AS TOTAL_ON_HIRE_COST, SUM(TOTAL_OFF_HIRE_COST) AS TOTAL_OFF_HIRE_COST,
+SUM(TOTAL_PER_DIEM) AS TOTAL_PER_DIEM FROM
+(
+SELECT 
+	:LEASE_CONTRACT_ID AS LEASE_CONTRACT_ID, 
+	IFNULL(ONH.EQUIPMENT_TYPE,OFFH.EQUIPMENT_TYPE) AS EQUIPMENT_TYPE,
+	IFNULL(ONH.EQUIPMENT_CODE_TYPE,OFFH.EQUIPMENT_CODE_TYPE) AS EQUIPMENT_CODE_TYPE,
+	:CURRENCY AS CURRENCY,
+	(IFNULL(ONH.ON_HIRE_COST,0)) AS TOTAL_ON_HIRE_COST,
+	(IFNULL(OFFH.OFF_HIRE_COST,0)) AS TOTAL_OFF_HIRE_COST,
+	(IFNULL(ONH.PER_DIEM,0)*DAYS_BETWEEN(ONH.ON_HIRE_DATE,IFNULL(OFFH.OFF_HIRE_DATE,NOW()))) AS TOTAL_PER_DIEM
+FROM :ON_HIRE_HISTORY ONH
+	 INNER JOIN --resource authorization contorl
+	 &quot;sap.tm.trp.db.systemmanagement.user::v_resource_auth&quot; B
+	 ON ONH.EQUIPMENT_TYPE = B.res_type
+	 INNER JOIN :RESOURCE_TYPES ET
+     ON ET.RESOURCE_CATEGORY = B.RESOURCE_CATEGORY
+     AND ET.RESOURCE_TYPE_CODE = b.res_type
+	 FULL OUTER JOIN :OFF_HIRE_HISTORY OFFH
+	 ON ONH.RESOURCE_ID = OFFH.RESOURCE_ID AND ONH.ROW_NUM = OFFH.ROW_NUM 
+)	 
+GROUP BY 
+    LEASE_CONTRACT_ID, 
+	EQUIPMENT_TYPE,
+	EQUIPMENT_CODE_TYPE,
+	CURRENCY;
+	
+IF :PERDIEMAUTH > 0 THEN
+  var_out = SELECT * FROM :TMP;
+ELSE
+  var_out = SELECT * FROM :TMP WHERE 1=0;
+END IF;
+
+END;</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="LEASE_CONTRACT_ID" order="1">
+        <descriptions defaultDescription="LEASE_CONTRACT_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASE_CONTRACT_ID"/>
+      </attribute>
+      <attribute id="EQUIPMENT_TYPE" order="2">
+        <descriptions defaultDescription="EQUIPMENT_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_TYPE"/>
+      </attribute>
+      <attribute id="EQUIPMENT_CODE_TYPE" order="3">
+        <descriptions defaultDescription="EQUIPMENT_CODE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_CODE_TYPE"/>
+      </attribute>
+      <attribute id="CURRENCY" order="4">
+        <descriptions defaultDescription="CURRENCY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CURRENCY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="TOTAL_ON_HIRE_COST" order="5" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TOTAL_ON_HIRE_COST"/>
+        <measureMapping columnObjectName="Script_View" columnName="TOTAL_ON_HIRE_COST"/>
+      </measure>
+      <measure id="TOTAL_OFF_HIRE_COST" order="6" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TOTAL_OFF_HIRE_COST"/>
+        <measureMapping columnObjectName="Script_View" columnName="TOTAL_OFF_HIRE_COST"/>
+      </measure>
+      <measure id="TOTAL_PER_DIEM" order="7" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TOTAL_PER_DIEM"/>
+        <measureMapping columnObjectName="Script_View" columnName="TOTAL_PER_DIEM"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

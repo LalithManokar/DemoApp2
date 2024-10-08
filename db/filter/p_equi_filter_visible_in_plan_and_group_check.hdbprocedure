@@ -1,0 +1,58 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_equi_filter_visible_in_plan_and_group_check"(
+    IN FILTER_ID BIGINT,
+    OUT ERR_NUM INTEGER,
+    OUT ERR_FLAG VARCHAR(3),
+    OUT GROUP_NAME VARCHAR(50)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE VISIBLE_FLAG VARCHAR(3);
+    DECLARE FILTER_TYPE INTEGER;
+    
+    SELECT IFNULL(MAX(FILTER_TYPE), 0), IFNULL(MAX(VISIBLE_FLAG), '') INTO FILTER_TYPE, VISIBLE_FLAG
+    FROM "sap.tm.trp.db.filter::t_equipment_filter" T1
+    WHERE T1.ID = :FILTER_ID
+    ;
+    
+    ERR_NUM := 0;
+    IF :VISIBLE_FLAG = 'G' THEN
+        PLAN_ITEM = SELECT DISTINCT T1.ID
+                    FROM "sap.tm.trp.db.pipeline::t_plan_model" AS T1
+                    INNER JOIN "sap.tm.trp.db.filter::t_filter_equipment_filter" AS T2 ON T1.FILTER_GROUP_ID = T2.FILTER_GROUP_ID
+                    WHERE T1.PLAN_MODEL_TYPE_ID = 1 AND T2.EQUIPMENT_FILTER_ID = :FILTER_ID;
+        
+        SELECT COUNT(*) INTO ERR_NUM
+        FROM :PLAN_ITEM;
+        
+        IF :ERR_NUM > 0 THEN
+            SELECT TOP 1 NAME INTO GROUP_NAME
+            FROM :PLAN_ITEM AS T1
+            INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" AS T2
+            ON T1.ID = T2.ID;
+            
+            ERR_FLAG := 'S';
+        END IF;
+    ELSEIF :FILTER_TYPE = 2 AND :VISIBLE_FLAG = 'P' THEN
+        GROUP_ITEM = SELECT DISTINCT T1.ID
+                   	 FROM "sap.tm.trp.db.systemmanagement::t_equipment_group" AS T1
+                     INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" AS T2 ON T1.ID = T2.EQUIPMENT_GROUP_ID AND T2.RESOURCE_CATEGORY = T1.RESOURCE_CATEGORY
+                     INNER JOIN "sap.tm.trp.db.filter::t_equipment_filter" AS T3 ON T2.EQUIPMENT_FILTER_ID = T3.ID AND T3.RESOURCE_CATEGORY = T1.RESOURCE_CATEGORY
+                     WHERE T1.VISIBLE_FLAG = 'P' AND T3.ID = :FILTER_ID
+                      ;
+        
+        SELECT COUNT(*) INTO ERR_NUM
+        FROM :GROUP_ITEM;
+        
+        IF :ERR_NUM > 0 THEN
+            SELECT TOP 1 T2.DESC INTO GROUP_NAME
+            FROM :GROUP_ITEM AS T1
+            INNER JOIN "sap.tm.trp.db.systemmanagement::t_equipment_group" AS T2 ON T1.ID = T2.ID
+		    ;
+            
+            ERR_FLAG := 'G';
+        END IF;
+    END IF;
+END;

@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_lease_contract_visibility" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" runWithInvokerPrivileges="false" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_lease_contract_visibility"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="FILTER_LEASE_PERIOD_BY" parameter="true">
+      <descriptions defaultDescription="FILTER_LEASE_PERIOD_BY"/>
+      <variableProperties datatype="TINYINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="FROM_DATE" parameter="true">
+      <descriptions defaultDescription="FROM_DATE"/>
+      <variableProperties datatype="TIMESTAMP" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="TO_DATE" parameter="true">
+      <descriptions defaultDescription="TO_DATE"/>
+      <variableProperties datatype="TIMESTAMP" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="RESOURCE_CATEGORY" parameter="true">
+      <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+      <variableProperties datatype="VARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="LEASE_CONTRACT_REFERENCE" length="100"/>
+        <viewAttribute datatype="BIGINT" id="LEASE_CONTRACT_ID"/>
+        <viewAttribute datatype="NVARCHAR" id="LESSOR" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="LEASE_CONTRACT_TYPE" length="100"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_OF_LEASE"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_OF_LEASE"/>
+        <viewAttribute datatype="INTEGER" id="MAX_QUOTA"/>
+        <viewAttribute datatype="INTEGER" id="ONHIRED_VOLUMES_FROM_TRACKING"/>
+        <viewAttribute datatype="NVARCHAR" id="UNIT" length="3"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#FILTER_LEASE_PERIOD_BY</localVariable>
+      <localVariable>#FROM_DATE</localVariable>
+      <localVariable>#TO_DATE</localVariable>
+      <localVariable>#RESOURCE_CATEGORY</localVariable>
+      <definition>BEGIN 
+	DECLARE AUTH SMALLINT;
+ 	DECLARE CUSTOMCONDITION CONDITION FOR SQL_ERROR_CODE 10001;/* Custom Error Code = 10001*/
+	DECLARE V_COUNT INTEGER;	
+	/*User Defined exception handler */
+	
+	DECLARE EXIT HANDLER FOR CUSTOMCONDITION RESIGNAL ;	
+	CALL &quot;sap.tm.trp.db.leasecontract::p_check_lease_authorization&quot;(
+	  	:AUTH
+		);
+	IF AUTH = 0 THEN
+		/* Signaling Custom error and setting the Custom Error Message */
+		SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'USER IS NOT AUTHORIZED TO ACCESS LEASE';
+	END IF;
+
+--When no filter choosen in the UI.
+IF :FILTER_LEASE_PERIOD_BY = 3 THEN
+
+	pre_out = 
+	SELECT LC.LEASE_CONTRACT_REFERENCE AS LEASE_CONTRACT_REFERENCE, 
+		   LC.ID AS LEASE_CONTRACT_ID,
+	       L.NAME AS LESSOR, 
+	       LCT.TYPE AS LEASE_CONTRACT_TYPE,
+	       LC.START_TIME AS START_OF_LEASE, 
+	       LC.END_TIME AS END_OF_LEASE, 
+	       LC.MAX_HIRE_QUANTITY AS MAX_QUOTA, 
+	       COUNT(EH.EVENT_GUID) AS ONHIRED_VOLUMES_FROM_TRACKING,
+	       LC.UNIT,	       
+	       LC.UNIT_TYPE
+	FROM &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot; LC 
+    INNER JOIN &quot;sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings&quot; RCS 
+	    ON (LC.RESOURCE_CATEGORY = RCS.CODE AND RCS.CODE = :RESOURCE_CATEGORY)
+	INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lessor&quot; L ON L.ID = LC.LESSOR_ID 
+	INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lease_contract_type&quot; LCT ON LC.LEASE_TYPE = LCT.ID 
+	LEFT OUTER JOIN (SELECT EH.EVENT_GUID,EH.LEASE_CONTRACT_REFERENCE  
+	                 FROM &quot;sap.tm.trp.db.semantic.event::v_lease_resource_history&quot; EH
+	                 WHERE HIRE_TYPE=1 ) EH 
+	ON (LC.LEASE_CONTRACT_REFERENCE = EH.LEASE_CONTRACT_REFERENCE)
+	GROUP BY LC.LEASE_CONTRACT_REFERENCE, 
+			 LC.ID, 
+			 L.NAME, 
+			 LCT.TYPE, 
+			 LC.START_TIME, 
+			 LC.END_TIME, 
+			 LC.MAX_HIRE_QUANTITY,
+			 LC.CURRENCY_CODE,
+			 LC.UNIT,			
+	         LC.UNIT_TYPE;
+
+--When Start Of Lease filter choosen in the UI.
+ELSE IF :FILTER_LEASE_PERIOD_BY = 1 THEN 
+
+	pre_out = 
+	SELECT LC.LEASE_CONTRACT_REFERENCE AS LEASE_CONTRACT_REFERENCE, 
+		   LC.ID AS LEASE_CONTRACT_ID,
+	       L.NAME AS LESSOR, 
+	       LCT.TYPE AS LEASE_CONTRACT_TYPE,
+	       LC.START_TIME AS START_OF_LEASE, 
+	       LC.END_TIME AS END_OF_LEASE, 
+	       LC.MAX_HIRE_QUANTITY AS MAX_QUOTA, 
+	       COUNT(EH.EVENT_GUID) AS ONHIRED_VOLUMES_FROM_TRACKING,
+	       LC.UNIT,	     
+	       LC.UNIT_TYPE
+	FROM &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot; LC 
+    INNER JOIN &quot;sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings&quot; RCS 
+	    ON (LC.RESOURCE_CATEGORY = RCS.CODE AND RCS.CODE = :RESOURCE_CATEGORY)	
+	INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lessor&quot; L ON L.ID = LC.LESSOR_ID 
+	INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lease_contract_type&quot; LCT ON LC.LEASE_TYPE = LCT.ID 
+	LEFT OUTER JOIN (SELECT EH.EVENT_GUID,EH.LEASE_CONTRACT_REFERENCE  
+	                 FROM &quot;sap.tm.trp.db.semantic.event::v_lease_resource_history&quot; EH
+	                 WHERE HIRE_TYPE=1 ) EH 
+	ON (LC.LEASE_CONTRACT_REFERENCE = EH.LEASE_CONTRACT_REFERENCE)	
+	WHERE LC.START_TIME BETWEEN :FROM_DATE AND :TO_DATE
+	GROUP BY LC.LEASE_CONTRACT_REFERENCE, 
+			 LC.ID, 
+			 L.NAME, 
+			 LCT.TYPE, 
+			 LC.START_TIME, 
+			 LC.END_TIME, 
+			 LC.MAX_HIRE_QUANTITY,
+			 LC.CURRENCY_CODE,
+			 LC.UNIT,
+	         LC.UNIT_TYPE;
+
+--When End Of Lease filter choosen in the UI.
+ELSE IF :FILTER_LEASE_PERIOD_BY = 2 THEN
+
+	pre_out = SELECT LC.LEASE_CONTRACT_REFERENCE AS LEASE_CONTRACT_REFERENCE, 
+				   LC.ID AS LEASE_CONTRACT_ID,
+			       L.NAME AS LESSOR, 
+			       LCT.TYPE AS LEASE_CONTRACT_TYPE,
+			       LC.START_TIME AS START_OF_LEASE, 
+			       LC.END_TIME AS END_OF_LEASE, 
+			       LC.MAX_HIRE_QUANTITY AS MAX_QUOTA, 
+			       COUNT(EH.EVENT_GUID) AS ONHIRED_VOLUMES_FROM_TRACKING,
+			       LC.UNIT,			      
+	               LC.UNIT_TYPE
+			FROM &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot; LC 
+            INNER JOIN &quot;sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings&quot; RCS 
+	         ON (LC.RESOURCE_CATEGORY = RCS.CODE AND RCS.CODE = :RESOURCE_CATEGORY)			
+			INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lessor&quot; L ON L.ID = LC.LESSOR_ID 
+			INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lease_contract_type&quot; LCT ON LC.LEASE_TYPE = LCT.ID 
+			LEFT OUTER JOIN (SELECT EH.EVENT_GUID,EH.LEASE_CONTRACT_REFERENCE  
+			                 FROM &quot;sap.tm.trp.db.semantic.event::v_lease_resource_history&quot; EH
+			                 WHERE HIRE_TYPE=1 ) EH 
+			ON LC.LEASE_CONTRACT_REFERENCE = EH.LEASE_CONTRACT_REFERENCE
+			WHERE LC.END_TIME BETWEEN :FROM_DATE AND :TO_DATE
+			GROUP BY LC.LEASE_CONTRACT_REFERENCE, 
+					 LC.ID, 
+					 L.NAME, 
+					 LCT.TYPE, 
+					 LC.START_TIME, 
+					 LC.END_TIME, 
+					 LC.MAX_HIRE_QUANTITY,
+					 LC.CURRENCY_CODE,
+					 LC.UNIT,					
+	                 LC.UNIT_TYPE;
+
+END IF;
+END IF;
+END IF;
+
+    var_out = SELECT LC.LEASE_CONTRACT_REFERENCE, 
+		             LC.LEASE_CONTRACT_ID,
+	                 LC.LESSOR, 
+	                 LC.LEASE_CONTRACT_TYPE,
+	                 LC.START_OF_LEASE, 
+	                 LC.END_OF_LEASE, 
+	                 LC.MAX_QUOTA, 
+	                 LC.ONHIRED_VOLUMES_FROM_TRACKING,
+	                 IFNULL(LC.UNIT,C.UNIT_CODE) AS UNIT	                
+	          FROM :pre_out LC
+	          LEFT OUTER JOIN  &quot;sap.tm.trp.db.systemmanagement::v_unit&quot; C
+	          ON LC.UNIT_TYPE = C.UNIT_TYPE;
+
+END</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="LEASE_CONTRACT_REFERENCE" order="1">
+        <descriptions defaultDescription="LEASE_CONTRACT_REFERENCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASE_CONTRACT_REFERENCE"/>
+      </attribute>
+      <attribute id="LEASE_CONTRACT_ID" order="2">
+        <descriptions defaultDescription="LEASE_CONTRACT_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASE_CONTRACT_ID"/>
+      </attribute>
+      <attribute id="LESSOR" order="3">
+        <descriptions defaultDescription="LESSOR"/>
+        <keyMapping columnObjectName="Script_View" columnName="LESSOR"/>
+      </attribute>
+      <attribute id="LEASE_CONTRACT_TYPE" order="4">
+        <descriptions defaultDescription="LEASE_CONTRACT_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASE_CONTRACT_TYPE"/>
+      </attribute>
+      <attribute id="START_OF_LEASE" order="5">
+        <descriptions defaultDescription="START_OF_LEASE"/>
+        <keyMapping columnObjectName="Script_View" columnName="START_OF_LEASE"/>
+      </attribute>
+      <attribute id="END_OF_LEASE" order="6">
+        <descriptions defaultDescription="END_OF_LEASE"/>
+        <keyMapping columnObjectName="Script_View" columnName="END_OF_LEASE"/>
+      </attribute>
+      <attribute id="MAX_QUOTA" order="7">
+        <descriptions defaultDescription="MAX_QUOTA"/>
+        <keyMapping columnObjectName="Script_View" columnName="MAX_QUOTA"/>
+      </attribute>
+      <attribute id="UNIT" order="9">
+        <descriptions defaultDescription="UNIT"/>
+        <keyMapping columnObjectName="Script_View" columnName="UNIT"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="ONHIRED_VOLUMES_FROM_TRACKING" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ONHIRED_VOLUMES_FROM_TRACKING"/>
+        <measureMapping columnObjectName="Script_View" columnName="ONHIRED_VOLUMES_FROM_TRACKING"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

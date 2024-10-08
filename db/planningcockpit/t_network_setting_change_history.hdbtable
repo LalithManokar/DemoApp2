@@ -1,0 +1,13 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "NETWORK_SETTING_GROUP_ID"; sqlType = BIGINT; nullable = true;},
+    {name = "ACTION"; sqlType = BIGINT; nullable = true;comment= " 1:Create,2:Change";},
+    {name = "CHANGED_PARAMETERS"; sqlType = BIGINT; nullable = true;}, 
+    {name = "BEFORE_VALUE"; sqlType = VARCHAR; length = 100; nullable = true;},
+    {name = "CURRENT_VALUE"; sqlType = VARCHAR; length = 100; nullable = true;},    
+    {name = "LOG_USER"; sqlType = BIGINT; nullable = true;},
+    {name = "LOG_TIME"; sqlType = TIMESTAMP; nullable = true;}
+];
+table.primaryKey.pkcolumns = ["ID"];

@@ -1,0 +1,18 @@
+table.schemaName = "SAP_TM_ROUTING";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "PATH_ID"; sqlType = BIGINT; },
+    // Starting from 1. UI can format the number by padding 0 with fixed width like 001
+    {name = "RULE_NUMBER"; sqlType = SMALLINT; nullable = false;},
+    // Cycle type D - Daily, W - Weekly, M - Monthly
+    {name = "CYCLE_TYPE"; sqlType = CHAR; nullable = false;},
+    // Pattern string like 0,2,4, comma separated string; For Daily, no use; For Week, 0(Mon), 1, ..., 6(Sun); For Month, 1, ..., 31
+    {name = "PATTERN"; sqlType = VARCHAR; length = 100; },
+    {name = "DEPARTURE_TIME"; sqlType = TIME; nullable = false;},
+    {name = "TIMEZONE"; sqlType = NVARCHAR; length = 100; nullable = false;},
+    {name = "CREATED_BY"; sqlType = NVARCHAR; length = 50;},
+    {name = "CREATED_ON"; sqlType = TIMESTAMP;},
+    {name = "CHANGED_BY"; sqlType = NVARCHAR; length = 50;},
+    {name = "CHANGED_ON"; sqlType = TIMESTAMP;}
+];
+table.primaryKey.pkcolumns = ["PATH_ID", "RULE_NUMBER"];

@@ -1,0 +1,363 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_location_group_validate"(
+    IN LOCATION_GROUPS "sap.tm.trp.db.massupload::tt_location_group_upload",
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),
+    IN ERROR_LIMIT INTEGER,
+    OUT INVALID_ITEMS "sap.tm.trp.db.massupload::tt_massupload_invalid_item"
+)
+
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+
+AS
+BEGIN
+
+    --Declarations
+     DECLARE LOCATION_TYPE_LOCATION INTEGER :=1;    
+     DECLARE LOCATION_TYPE_LOCATION_GROUP INTEGER :=2;
+     DECLARE LOCATION_TYPE_REGION INTEGER :=5; 
+     DECLARE LOCATION_TYPE_REGION_GROUP INTEGER :=6; 
+     DECLARE V_USER_ID BIGINT;
+     DECLARE CNT INT;
+     DECLARE IS_SUPERUSER INTEGER;
+     DECLARE USER varchar(50);
+     DECLARE HAS_AUTHORIZATION_FLAG TINYINT; 
+   
+    -- check whether current user is super user
+    SELECT USERNAME INTO USER FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+ 
+    CALL "sap.tm.trp.db.systemmanagement::p_check_location_full_authorization" (
+		 	HAVE_AUTHORIZATION_FLAG => HAS_AUTHORIZATION_FLAG
+		 ); 
+    SELECT COUNT(DISTINCT USER_NAME) INTO IS_SUPERUSER
+              FROM "SYS"."EFFECTIVE_APPLICATION_PRIVILEGES" T1
+              INNER JOIN "sap.tm.trp.db.systemmanagement.user::t_user" T2 ON T1.USER_NAME = T2.USERNAME
+              WHERE T1.PRIVILEGE = 'sap.tm.trp.service::UnrestrictedRead'
+              AND T1.USER_NAME = :USER
+              AND T1.IS_VALID ='TRUE'
+              OR (T1.USER_NAME = :USER
+              AND T2.USER_TYPE_ID = 99); 
+              
+    ---Getting user profile
+   CURRENT_USER_INFO =
+        SELECT T1.ID, T1.USER_TYPE_ID  
+        FROM "sap.tm.trp.db.systemmanagement.user::t_user" T1
+        INNER JOIN (SELECT USERNAME AS USER FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username") T2
+         ON T1.USERNAME = T2.USER;
+    SELECT ID INTO  V_USER_ID  FROM :CURRENT_USER_INFO;
+    
+    --Data from CSV file
+    ITEMS = 
+          SELECT UPPER(LOCATION_GROUP_NAME) AS LOCATION_GROUP_NAME,DESC,UPPER(LOC_GROUP_TYPE) AS LOC_GROUP_TYPE,UPPER(VISIBILITY) AS VISIBILITY,
+          UPPER(LOCATION_NAME) AS LOCATION_NAME,UPPER(PRIME_LOCATION_NAME) AS PRIME_LOCATION_NAME,
+          --ROW_NUMBER () OVER () AS ROW_INDEX
+          ROW_INDEX
+          FROM :LOCATION_GROUPS;
+
+    --Get Location Groups /Region Groups
+    LOC_REGION_GROUP =
+                        SELECT ID, CODE, 'LOCATION' AS TYPE,
+                        (CASE 
+                        WHEN VISIBLE_FLAG = 'G' 
+                        THEN 'GLOBAL'
+                        ELSE 'PERSONAL'
+                        END) AS VISIBILITY,
+                        RESOURCE_CATEGORY AS CATEGORY, USER_ID as created_by
+                        FROM "sap.tm.trp.db.systemmanagement::t_location_group" AS L
+                        INNER JOIN :ITEMS AS A
+                        ON A.LOCATION_GROUP_NAME = L.CODE
+                        --AND A.LOC_GROUP_TYPE = 'LOCATION'
+                        --WHERE RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID
+                        UNION
+                        SELECT ID, CODE, 'REGION' AS TYPE,
+                        (CASE 
+                        WHEN VISIBLE_FLAG = 'G' 
+                        THEN 'GLOBAL'
+                        ELSE 'PERSONAL'
+                        END) AS VISIBILITY,
+                        RESOURCE_CATEGORY AS CATEGORY, USER_ID as created_by
+                        FROM "sap.tm.trp.db.systemmanagement::t_region_group" AS R
+                        INNER JOIN :ITEMS AS A
+                        ON A.LOCATION_GROUP_NAME = R.CODE;
+                        --AND A.LOC_GROUP_TYPE = 'REGION';
+                        --WHERE RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID;
+    
+    --Get User Authorized Location Groups             
+    LOC_REGION_GROUP_AUTH =
+                          SELECT ID, CODE 
+                          FROM :LOC_REGION_GROUP AS LG      
+                          WHERE LG.ID IN ( 
+                          SELECT LOCATION_ID 
+                          FROM "sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype"(PLACEHOLDER."$$IN_LOCATION_TYPE$$"=>:LOCATION_TYPE_LOCATION_GROUP) 
+                          UNION
+                          SELECT LOCATION_ID 
+                          FROM "sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype"(PLACEHOLDER."$$IN_LOCATION_TYPE$$"=>:LOCATION_TYPE_REGION_GROUP) 
+                          )
+                          AND CATEGORY = :RESOURCE_CATEGORY_ID;
+    
+    --Validate Location Groups /Region Groups 
+    INVALID_ITEMS = 
+                        SELECT A.ROW_INDEX,
+                        1 AS COL_INDEX,
+                        'LOCATION_GROUP_LOCATION_TYPE_MISMATCH' AS REASON_CODE -- Location Group Name and Location Group Type combination not valid
+                        FROM :ITEMS AS A
+                        INNER JOIN :LOC_REGION_GROUP AS LG
+                        ON LG.CODE = A.LOCATION_GROUP_NAME
+                        LEFT OUTER JOIN :LOC_REGION_GROUP AS LR_G
+                        ON LR_G.CODE = A.LOCATION_GROUP_NAME
+                        AND LR_G.TYPE = A.LOC_GROUP_TYPE
+                        WHERE LR_G.CODE IS NULL
+                        UNION
+                        SELECT A.ROW_INDEX,
+                        1 AS COL_INDEX,
+                        'LOCATION_GROUP_CATEGORY_INVALID' AS REASON_CODE -- Location Group Name and Resource Category combination not valid
+                        FROM :ITEMS AS A
+                        INNER JOIN :LOC_REGION_GROUP AS LG
+                        ON LG.CODE = A.LOCATION_GROUP_NAME
+                        AND LG.TYPE = A.LOC_GROUP_TYPE
+                        LEFT OUTER JOIN :LOC_REGION_GROUP AS LR_G
+                        ON LR_G.CODE = A.LOCATION_GROUP_NAME
+                        AND LR_G.TYPE = A.LOC_GROUP_TYPE
+                        AND LR_G.CATEGORY = :RESOURCE_CATEGORY_ID
+                        WHERE LR_G.CODE IS NULL
+                        UNION
+                        SELECT A.ROW_INDEX,
+                        1 AS COL_INDEX,
+                        'LOCATION_GROUP_NO_AUTH' AS REASON_CODE --Location Group Authorization
+                        FROM :ITEMS AS A
+                        INNER JOIN :LOC_REGION_GROUP AS LG
+                        ON LG.CODE = A.LOCATION_GROUP_NAME
+                        LEFT OUTER JOIN :LOC_REGION_GROUP_AUTH AS LG_AUTH
+                        ON LG_AUTH.CODE = A.LOCATION_GROUP_NAME
+                        WHERE LG_AUTH.CODE IS NULL;    
+
+    --Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+         RETURN;
+	END IF;   
+
+    LOC_GRP_COUNT =  SELECT LOCATION_GROUP_NAME, COUNT(DISTINCT(LOC_GROUP_TYPE)) AS CNT, 
+                     COUNT(DISTINCT(VISIBILITY)) AS CNT1,
+                     COUNT(DISTINCT(PRIME_LOCATION_NAME)) AS CNT2
+                     FROM :ITEMS GROUP BY LOCATION_GROUP_NAME;
+    
+    --Validate Location Group Type
+    INVALID_ITEMS = 
+                SELECT * FROM :INVALID_ITEMS 
+                UNION
+                SELECT A.ROW_INDEX, 
+                3 AS COL_INDEX, 
+                'LOCATION_GROUP_TYPE_INVALID' AS REASON_CODE --Group Type Invalid
+                FROM :ITEMS AS A
+                WHERE LOC_GROUP_TYPE NOT IN ('LOCATION','REGION')
+                UNION
+                SELECT A.ROW_INDEX, 
+                3 AS COL_INDEX, 
+                'LOCATION_GROUP_TYPE_MIX_NOT_ALLOWED' AS REASON_CODE --Mixed types
+                FROM :ITEMS AS A
+                LEFT OUTER JOIN :LOC_GRP_COUNT AS LC
+                ON LC.LOCATION_GROUP_NAME = A.LOCATION_GROUP_NAME
+                WHERE LC.CNT > 1
+                UNION
+                SELECT A.ROW_INDEX, 
+                4 AS COL_INDEX, 
+                'VISIBILITY_MIX_NOT_ALLOWED' AS REASON_CODE --Location Group Type - Mixed types
+                FROM :ITEMS AS A
+                LEFT OUTER JOIN :LOC_GRP_COUNT AS LC
+                ON LC.LOCATION_GROUP_NAME = A.LOCATION_GROUP_NAME
+                WHERE LC.CNT1 > 1;
+                                                                 
+ 
+    --Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+         RETURN;
+	END IF;   
+
+    --Get Regions
+    REGIONS   = 
+                    SELECT ID , NAME, 'REGION' as LOC_TYPE
+                    FROM "sap.tm.trp.db.semantic.location::v_zone" AS Z
+                    INNER JOIN :ITEMS AS A
+                    ON A.LOCATION_NAME = Z.NAME;
+                                                                      
+    --Get Locations
+  /*  LOCATIONS =     
+                    SELECT ID , NAME, 'LOCATION' as LOC_TYPE
+                    FROM "sap.tm.trp.db.semantic.location::v_location" AS L
+                    INNER JOIN :ITEMS AS A
+                    ON L.NAME = A.LOCATION_NAME
+                    OR L.NAME = A.PRIME_LOCATION_NAME;	*/
+                    
+      LOCATIONS = SELECT ID , NAME, 'LOCATION' as LOC_TYPE
+                    FROM "sap.tm.trp.db.semantic.location::v_location" AS L
+                    INNER JOIN :ITEMS AS A
+                    ON L.NAME = A.LOCATION_NAME
+                    UNION ALL
+                  SELECT ID , NAME, 'LOCATION' as LOC_TYPE
+                    FROM "sap.tm.trp.db.semantic.location::v_location" AS L
+                    INNER JOIN :ITEMS AS A
+                    ON L.NAME = A.PRIME_LOCATION_NAME;
+
+     --Get Locations / Regions
+    LOC_REGION = 
+                    SELECT * FROM :LOCATIONS                            
+                    UNION
+                    SELECT * FROM :REGIONS;
+
+    --Get Locations for Regions
+    REGION_LOCATIONS =
+                        SELECT V.ROOT_ID, V.LOCATION_ID, L.NAME AS LOC_NAME, R.NAME AS REG_NAME
+                        FROM "sap.tm.trp.db.systemmanagement.location::v_region_location_all" AS V
+                        INNER JOIN :LOCATIONS AS L
+                        ON L.ID = V.LOCATION_ID
+                        INNER JOIN :REGIONS AS R
+                        ON R.ID = V.ROOT_ID
+                        WHERE ROOT_ID IN (SELECT ID 
+                        FROM "sap.tm.trp.db.semantic.location::v_zone" as Z
+                        inner join :items as A
+                        on Z.NAME = A.LOCATION_NAME
+                        WHERE NAME IS NOT NULL
+                        );
+    
+    --Get User Authorized Locations/Regions         
+    LOC_REGION_AUTH =
+                    SELECT ID, NAME 
+                    FROM :LOC_REGION AS LR
+                    WHERE LR.ID IN ( 
+                    SELECT LOCATION_ID 
+                    FROM "sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype"(PLACEHOLDER."$$IN_LOCATION_TYPE$$"=>:LOCATION_TYPE_LOCATION) 
+                    UNION
+                    SELECT LOCATION_ID 
+                    FROM "sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype"(PLACEHOLDER."$$IN_LOCATION_TYPE$$"=>:LOCATION_TYPE_REGION)
+                    );
+
+    
+    --Validate Location
+    INVALID_ITEMS = 
+                    SELECT * FROM :INVALID_ITEMS 
+                    UNION
+                    SELECT A.ROW_INDEX,
+                    5 AS COL_INDEX,
+                    'LOCATION_REGION_NAME_INVALID' AS REASON_CODE -- Invalid Location/Region
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :LOC_REGION AS LR
+                    ON LR.NAME = A.LOCATION_NAME
+                    WHERE LR.NAME IS NULL
+                    UNION
+                    SELECT A.ROW_INDEX,
+                    5 AS COL_INDEX,
+                    'LOCATION_REGION_NAME_NO_AUTH' AS REASON_CODE -- Location/Region Authorization
+                    FROM :ITEMS AS A
+                    INNER JOIN :LOC_REGION AS LR
+                    ON LR.NAME = A.LOCATION_NAME
+                    LEFT OUTER JOIN :LOC_REGION_AUTH AS LR_AUTH
+                    ON LR_AUTH.NAME = A.LOCATION_NAME
+                    WHERE LR_AUTH.NAME IS NULL AND :HAS_AUTHORIZATION_FLAG <> 1 
+                    UNION
+                    SELECT A.ROW_INDEX,
+                    5 AS COL_INDEX,
+                    'LOCATION_LOCATION_GROUP_TYPE_MISMATCH' AS REASON_CODE --Location/Region based on Location Group Type
+                    FROM :ITEMS AS A
+                    INNER JOIN :LOC_REGION AS L
+                    ON L.NAME = A.LOCATION_NAME
+                    LEFT OUTER JOIN :LOC_REGION AS LR
+                    ON LR.NAME = A.LOCATION_NAME
+                    AND LR.LOC_TYPE = A.LOC_GROUP_TYPE
+                    WHERE LR.NAME IS NULL;
+
+    --Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+         RETURN;
+	END IF;   
+
+
+    --Validate Primary Location
+    INVALID_ITEMS = 
+                    SELECT * FROM :INVALID_ITEMS 
+                    UNION
+                    SELECT A.ROW_INDEX,
+                    6 AS COL_INDEX,
+                    'PRIMARY_LOCATION_INVALID' AS REASON_CODE -- Primary Location Invalid
+                    FROM :ITEMS AS A
+                    WHERE A.LOC_GROUP_TYPE = 'LOCATION'
+                    AND LENGTH(A.PRIME_LOCATION_NAME) > 1
+                    AND A.PRIME_LOCATION_NAME 
+                    NOT IN 
+                    (SELECT B.LOCATION_NAME
+                    FROM :ITEMS AS B
+                    WHERE B.LOCATION_GROUP_NAME = A.LOCATION_GROUP_NAME
+                    )
+                    UNION
+                    SELECT A.ROW_INDEX,
+                    6 AS COL_INDEX,
+                    'PRIMARY_LOCATION_INVALID' AS REASON_CODE -- Primary Location Invalid
+                    FROM :ITEMS AS A
+                    WHERE A.LOC_GROUP_TYPE = 'REGION'
+                    AND LENGTH(A.PRIME_LOCATION_NAME) > 1
+                    AND A.PRIME_LOCATION_NAME
+                    NOT IN
+                    (SELECT RL.LOC_NAME 
+                    FROM :REGION_LOCATIONS AS RL
+                    WHERE RL.REG_NAME IN
+                    (SELECT C.LOCATION_NAME
+                    FROM :ITEMS AS C
+                    WHERE C.LOCATION_GROUP_NAME = A.LOCATION_GROUP_NAME
+                    )
+                    )
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                    6 AS COL_INDEX, 
+                    'PRIMARY_LOCATION_MIX_NOT_ALLOWED' AS REASON_CODE  --Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :LOC_GRP_COUNT AS LC
+                    ON LC.LOCATION_GROUP_NAME = A.LOCATION_GROUP_NAME
+                    WHERE LC.CNT2 > 1;
+                                                                 
+ 
+    --Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+         RETURN;
+	END IF;   
+
+
+  ---If current user is not super user,then objects with personal visibility 
+  --cannot contain objects that have personal visibility and not created by current user.
+    IF IS_SUPERUSER <> 1 THEN
+    
+    INVALID_ITEMS = 
+                        SELECT * FROM :INVALID_ITEMS
+                        UNION
+                        SELECT A.ROW_INDEX,
+                        1 AS COL_INDEX,
+                       'USE_OTHERS_PERSONAL_OBJECT' AS REASON_CODE
+                        FROM :ITEMS AS A
+                        INNER JOIN :LOC_REGION_GROUP AS LG
+                        ON LG.CODE = A.LOCATION_GROUP_NAME
+                        LEFT OUTER JOIN :LOC_REGION_GROUP AS B 
+                        ON A.LOCATION_GROUP_NAME = B.CODE 
+                        AND B.VISIBILITY = 'PERSONAL'
+                        AND B.CATEGORY=:RESOURCE_CATEGORY_ID AND B.CREATED_BY <> :V_USER_ID
+                        WHERE A.VISIBILITY = 'PERSONAL' AND B.CODE IS NOT NULL;
+
+    --Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+         RETURN;
+	END IF;   
+              
+    END IF;
+             
+    --Return Errors based on input limit
+    INVALID_ITEMS = 
+                    SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+                    
+END;

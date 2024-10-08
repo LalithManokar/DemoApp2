@@ -1,0 +1,9 @@
+schema = "SAP_TM_TRP";
+query = "SELECT T1.ID,
+                T2.URL
+           FROM \"sap.tm.trp.db.systemmanagement.customization::v_map_provider\" AS T1 
+           INNER JOIN \"sap.tm.trp.db.systemmanagement::t_map_provider_url\" AS T2 
+           ON (T1.ID = T2.PROVIDER_ID)";
+                
+depends_on_table = ["sap.tm.trp.db.systemmanagement::t_map_provider_url"];
+depends_on_view = ["sap.tm.trp.db.systemmanagement.customization::v_map_provider"];             

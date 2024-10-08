@@ -1,0 +1,129 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_delete_dataset" (  
+    IN  dataset_code NVARCHAR(50),
+    IN  force_delete CHAR,
+	OUT return_code TINYINT,
+	OUT message "sap.tm.trp.routing.db.common::tt_message",
+	OUT log "sap.tm.trp.routing.db.common::tt_message"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING"
+   AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+    DECLARE count INT;
+    DECLARE dataset_id BIGINT;
+	DECLARE path_id_tab TABLE(path_id BIGINT);
+	
+	-- Ignore data not found exception
+	DECLARE EXIT HANDLER FOR SQL_ERROR_CODE 1299
+    BEGIN
+        SELECT  0 INTO return_code FROM DUMMY;
+    END;
+    
+    return_code = 0;
+    
+    -- Lock the dataset
+    SELECT id INTO dataset_id FROM "sap.tm.trp.routing.db.dataset::t_dataset"
+    WHERE code = :dataset_code FOR UPDATE;
+    
+    -- Check whether the dataset is still used by any delta dataset
+    SELECT COUNT(*) INTO count FROM "sap.tm.trp.routing.db.dataset::t_dataset"
+	WHERE base_dataset_id = :dataset_id;
+	
+	IF count > 0 AND force_delete <> 'X' THEN
+	
+	    return_code = 1;
+	    
+	    delta_dataset_code = SELECT TOP 5 code AS code FROM "sap.tm.trp.routing.db.dataset::t_dataset"
+	    WHERE base_dataset_id = :dataset_id;
+	    
+	    msg_params = 
+	    SELECT code AS group_id, 0 AS placeholder, :dataset_code AS value FROM :delta_dataset_code
+	    UNION ALL
+	    SELECT code AS group_id, 1 AS placeholder, code AS value FROM :delta_dataset_code; 
+	    
+	    CALL "sap.tm.trp.routing.db.common::p_get_text_batch"
+        ('MSG_DATASET_STILL_USED_BY_DELTA', :msg_params, 'E', :message);
+        RETURN;
+	END IF;
+    
+	-- Check whether the dataset is still used by any network model
+	SELECT COUNT(*) INTO count FROM "sap.tm.trp.routing.db.path::t_network_model"
+	WHERE dataset_id = :dataset_id;
+	
+	IF count > 0 AND force_delete <> 'X' THEN
+	    return_code = 1;
+	    network_code_list = SELECT TOP 5 code AS code FROM "sap.tm.trp.routing.db.path::t_network_model"
+	    WHERE dataset_id = :dataset_id;
+	    
+	    msg_params = 
+	    SELECT code AS group_id, 0 AS placeholder, :dataset_code AS value FROM :network_code_list
+	    UNION ALL
+	    SELECT code AS group_id, 1 AS placeholder, code AS value FROM :network_code_list; 
+	    
+	    CALL "sap.tm.trp.routing.db.common::p_get_text_batch"
+        ('MSG_DATASET_STILL_USED_BY_NETWORK', :msg_params, 'E', :message);
+        RETURN;
+	END IF;
+	
+	-- Collect path
+	path_id_tab = SELECT id AS path_id FROM "sap.tm.trp.routing.db.dataset::t_path"
+	WHERE dataset_id = :dataset_id;
+	
+	-- Delete delta capacity
+	
+	DELETE FROM "sap.tm.trp.routing.db.dataset::t_trip_sequence_capacity"
+    WHERE dataset_id = :dataset_id;
+	
+	-- Delete trip
+	trip_id_tab = SELECT id AS trip_id FROM "sap.tm.trp.routing.db.dataset::t_trip"
+	WHERE path_id IN ( SELECT path_id FROM :path_id_tab);
+	
+	DELETE FROM "sap.tm.trp.routing.db.dataset::t_trip_sequence"
+	WHERE trip_id IN ( SELECT trip_id FROM :trip_id_tab);
+	
+	DELETE FROM "sap.tm.trp.routing.db.dataset::t_trip"
+	WHERE id IN ( SELECT trip_id FROM :trip_id_tab);
+	
+	-- Delete departure rule
+	DELETE FROM "sap.tm.trp.routing.db.dataset::t_path_departure_rule"
+	WHERE path_id IN ( SELECT path_id FROM :path_id_tab);
+	
+	-- Delete path connection
+	DELETE FROM "sap.tm.trp.routing.db.dataset::t_path_connection"
+	WHERE path_id IN ( SELECT path_id FROM :path_id_tab);
+	-- Delete path
+	DELETE FROM "sap.tm.trp.routing.db.dataset::t_path"
+	WHERE dataset_id = :dataset_id;
+	
+	-- Delete location scope
+	DELETE FROM "sap.tm.trp.routing.db.dataset::t_dataset_location"
+	WHERE dataset_id = :dataset_id;
+	
+	-- Delete connection and connection carrier
+	connection_id_tab = SELECT id AS connection_id
+	FROM "sap.tm.trp.routing.db.dataset::t_connection" 
+	WHERE dataset_id = :dataset_id;
+	
+	DELETE FROM "sap.tm.trp.routing.db.dataset::t_connection_carrier" AS C
+	WHERE connection_id IN (SELECT connection_id FROM :connection_id_tab);
+	
+	DELETE FROM "sap.tm.trp.routing.db.dataset::t_connection"
+	WHERE dataset_id = :dataset_id;
+	
+	-- Delete header entry in the end
+	DELETE FROM "sap.tm.trp.routing.db.dataset::t_dataset"
+	WHERE id = :dataset_id;
+	
+	msg_param = select 0 as PLACEHOLDER, :dataset_code as value from dummy;
+	    
+	call "sap.tm.trp.routing.db.common::p_get_text"
+        ('MSG_DATASET_DELETED_SUCCESS', :msg_param, 'I', :message);
+        
+    log = SELECT '' AS severity, '' AS message FROM DUMMY WHERE 1 <> 1;
+	
+END
+;

@@ -1,0 +1,32 @@
+schema = "SAP_TM_TRP";
+query = "-- Count Two Numbers
+         -- Numbers of Geos in Each Geo Group
+         -- Numbers of Geos Belonged to All Users
+         SELECT T1.USER_ID AS GROUP_USER_ID,
+                T4.USER_ID,
+                T1.GROUP_ID,
+                T1.TYPE,
+                IFNULL(T1.C, 0) AS GROUP_GEO_COUNT,
+                IFNULL(T4.C, 0) AS USER_GROUP_GEO_COUNT,
+                IFNULL(T1.C, 0) - IFNULL(T4.C, 0) AS FLAG
+           FROM (SELECT USER_ID,
+                        GROUP_ID,
+                        TYPE,
+                        COUNT(GEO_ID) AS C
+                   FROM \"sap.tm.trp.db.systemmanagement::v_geo_group\"
+               GROUP BY USER_ID, GROUP_ID, TYPE) AS T1
+                LEFT OUTER JOIN (
+                    SELECT T1.USER_ID AS GROUP_USER_ID,
+                           T3.USER_ID,
+                           GROUP_ID,
+                           TYPE,
+                           COUNT(T3.GEO_ID) AS C
+                      FROM \"sap.tm.trp.db.systemmanagement::v_geo_group\" AS T1
+                           INNER JOIN \"sap.tm.trp.db.systemmanagement::v_all_user_geo\" AS T3
+                           ON T3.GEO_ID = T1.GEO_ID
+                  GROUP BY T1.USER_ID, T1.GROUP_ID, TYPE, T3.USER_ID) AS T4
+                ON T1.USER_ID = T4.GROUP_USER_ID
+                   AND T1.GROUP_ID = T4.GROUP_ID
+                   AND T1.TYPE = T4.TYPE";
+                   
+depends_on_view = ["sap.tm.trp.db.systemmanagement::v_geo_group", "sap.tm.trp.db.systemmanagement::v_all_user_geo"];

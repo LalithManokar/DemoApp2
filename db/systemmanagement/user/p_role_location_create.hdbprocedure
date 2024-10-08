@@ -1,0 +1,13 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_role_location_create" (
+  IN ROLE_ID BIGINT,
+  IN LOCATION_IDS "sap.tm.trp.db.systemmanagement.location::tt_regional_id") 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+  
+    INSERT INTO "sap.tm.trp.db.systemmanagement.user::t_role_location" (ROLE_ID, LOCATION_ID) 
+    SELECT :ROLE_ID, ID FROM :LOCATION_IDS;
+    
+END;

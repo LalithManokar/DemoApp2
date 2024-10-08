@@ -1,0 +1,156 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage::p_assign_rule" ( 
+IN IN_COMPONENT_NAME VARCHAR(50),
+IN IN_RULE_ID BIGINT,
+OUT SUCCESS_FLAG INTEGER) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    DECLARE RESOURCE_STOCK_ALERT_VIEW VARCHAR(50) := 'RESOURCE_STOCK_ALERT_VIEW';
+    DECLARE RESOURCE_STOCK_BUBBLE_VIEW VARCHAR(50) := 'RESOURCE_STOCK_BUBBLE_VIEW';
+    DECLARE SUPPLY_DEMAND_KPI_PLAN_BUBBLE_VIEW VARCHAR(50) := 'SUPPLY_DEMAND_KPI_PLAN_BUBBLE_VIEW';
+    DECLARE AVAILABLE_CHECK_PLAN VARCHAR(50) := 'AVAILABLE_CHECK_PLAN';
+    DECLARE AVAILABLE_CHECK_LEVEL VARCHAR(50) := 'AVAILABLE_CHECK_LEVEL';
+    
+    DECLARE ALERT_VIEW_ID INTEGER := 0;
+    DECLARE BUBBLE_VIEW_ID INTEGER := 1;
+    DECLARE PLAN_BUBBLE_VIEW_ID INTEGER := 1;
+    DECLARE AVAILABLE_STEP_PLAN INTEGER := 1;
+    DECLARE AVAILABLE_STEP_LEVEL INTEGER := 2;
+    
+    DECLARE USER_ID BIGINT;
+    DECLARE EXIST_FLAG INTEGER := -1;
+    
+    select T1.ID into USER_ID
+    from "sap.tm.trp.db.systemmanagement.user::t_user" T1
+    where T1.USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    IF ( :IN_COMPONENT_NAME = :RESOURCE_STOCK_ALERT_VIEW )
+    THEN 
+        delete from "sap.tm.trp.db.hrf.ruleManage::t_alertView_assigned_rule";
+        insert into "sap.tm.trp.db.hrf.ruleManage::t_alertView_assigned_rule"
+        (
+         ALERT_VIEW_ID,
+         RULE_ID,
+         CREATE_BY,
+         CREATE_ON,
+         LAST_MODIFIED_BY,
+         LAST_MODIFIED_ON
+        )
+        values(
+              :ALERT_VIEW_ID,
+              :IN_RULE_ID,
+              :USER_ID,
+              CURRENT_UTCTIMESTAMP,
+              :USER_ID,
+              CURRENT_UTCTIMESTAMP
+        );
+        select count(*) into EXIST_FLAG
+	    from "sap.tm.trp.db.hrf.ruleManage::t_alertView_assigned_rule" T1
+	    where T1.RULE_ID = :IN_RULE_ID;
+    ELSEIF(:IN_COMPONENT_NAME = :RESOURCE_STOCK_BUBBLE_VIEW )
+    THEN
+        delete from "sap.tm.trp.db.hrf.ruleManage::t_bubbleView_assigned_rule";
+        insert into "sap.tm.trp.db.hrf.ruleManage::t_bubbleView_assigned_rule"
+        (
+         BUBBLE_VIEW_ID,
+         RULE_ID,
+         CREATE_BY,
+         CREATE_ON,
+         LAST_MODIFIED_BY,
+         LAST_MODIFIED_ON
+        )
+        values(
+              :BUBBLE_VIEW_ID,
+              :IN_RULE_ID,
+              :USER_ID,
+              CURRENT_UTCTIMESTAMP,
+              :USER_ID,
+              CURRENT_UTCTIMESTAMP
+        );
+        select count(*) into EXIST_FLAG
+	    from "sap.tm.trp.db.hrf.ruleManage::t_bubbleView_assigned_rule" T1
+	    where T1.RULE_ID = :IN_RULE_ID;
+   ELSEIF(:IN_COMPONENT_NAME = :SUPPLY_DEMAND_KPI_PLAN_BUBBLE_VIEW )
+    THEN
+        delete from "sap.tm.trp.db.hrf.ruleManage::t_planBubbleView_assigned_rule";
+        insert into "sap.tm.trp.db.hrf.ruleManage::t_planBubbleView_assigned_rule"
+        (
+         PLAN_BUBBLE_VIEW_ID,
+         RULE_ID,
+         CREATE_BY,
+         CREATE_ON,
+         LAST_MODIFIED_BY,
+         LAST_MODIFIED_ON
+        )
+        values(
+              :PLAN_BUBBLE_VIEW_ID,
+              :IN_RULE_ID,
+              :USER_ID,
+              CURRENT_UTCTIMESTAMP,
+              :USER_ID,
+              CURRENT_UTCTIMESTAMP
+        );
+        select count(*) into EXIST_FLAG
+	    from "sap.tm.trp.db.hrf.ruleManage::t_planBubbleView_assigned_rule" T1
+	    where T1.RULE_ID = :IN_RULE_ID;
+  ELSEIF(:IN_COMPONENT_NAME = :AVAILABLE_CHECK_PLAN )
+    THEN
+        delete from "sap.tm.trp.db.hrf.ruleManage::t_availableCheck_assigned_rule"
+        where AVAILABLE_STEP_ID = :AVAILABLE_STEP_PLAN;
+        insert into "sap.tm.trp.db.hrf.ruleManage::t_availableCheck_assigned_rule"
+        (
+         AVAILABLE_STEP_ID,
+         RULE_ID,
+         CREATE_BY,
+         CREATE_ON,
+         LAST_MODIFIED_BY,
+         LAST_MODIFIED_ON
+        )
+        values(
+              :AVAILABLE_STEP_PLAN,
+              :IN_RULE_ID,
+              :USER_ID,
+              CURRENT_UTCTIMESTAMP,
+              :USER_ID,
+              CURRENT_UTCTIMESTAMP
+        );
+        select count(*) into EXIST_FLAG
+	    from  "sap.tm.trp.db.hrf.ruleManage::t_availableCheck_assigned_rule" T1
+	    where T1.RULE_ID = :IN_RULE_ID;
+    ELSEIF(:IN_COMPONENT_NAME = :AVAILABLE_CHECK_LEVEL ) 
+    THEN
+        delete from "sap.tm.trp.db.hrf.ruleManage::t_availableCheck_assigned_rule"
+        where AVAILABLE_STEP_ID = :AVAILABLE_STEP_LEVEL;
+        insert into "sap.tm.trp.db.hrf.ruleManage::t_availableCheck_assigned_rule"
+        (
+         AVAILABLE_STEP_ID,
+         RULE_ID,
+         CREATE_BY,
+         CREATE_ON,
+         LAST_MODIFIED_BY,
+         LAST_MODIFIED_ON
+        )
+        values(
+              :AVAILABLE_STEP_LEVEL,
+              :IN_RULE_ID,
+              :USER_ID,
+              CURRENT_UTCTIMESTAMP,
+              :USER_ID,
+              CURRENT_UTCTIMESTAMP
+        );
+        select count(*) into EXIST_FLAG
+	    from  "sap.tm.trp.db.hrf.ruleManage::t_availableCheck_assigned_rule" T1
+	    where T1.RULE_ID = :IN_RULE_ID; 
+    END IF;
+
+    
+    IF ( :EXIST_FLAG > 0 )
+    THEN
+        SUCCESS_FLAG := 0;
+    ELSE
+        SUCCESS_FLAG := -1;
+    END IF;
+   
+END;

@@ -1,0 +1,37 @@
+schema = "SAP_TM_TRP";
+query = "
+
+SELECT DISTINCT ZONE_ID,LOCATION_ID,XPOS,YPOS,COUNTRY_CODE,STATE_CODE FROM
+(SELECT
+     ZONE_ID,
+     LOCATION_ID ,
+     T2.XPOS, T2.YPOS, T21.COUNTRY_CODE, T21.STATE_CODE
+    FROM \"sap.tm.trp.db.semantic.location::v_zone_location\" T1
+    INNER JOIN \"sap.tm.trp.db.semantic.location::v_location\" T2 ON T1.LOCATION_ID = T2.ID
+    LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_address\" T21 ON T21.ID = T2.ADDRESS_ID
+UNION ALL 
+     SELECT 
+     T1.ZONE_ID,
+     T2.ID AS LOCATION_ID,
+     T2.XPOS, T2.YPOS, T1.COUNTRY_CODE, T1.STATE_CODE
+    FROM \"sap.tm.trp.db.semantic.location::v_zone_admin_gis\" T1 
+    INNER JOIN \"sap.tm.trp.db.semantic.location::v_address\" T21 ON ( T1.COUNTRY_CODE = T21.COUNTRY_CODE AND T1.STATE_CODE = T21.STATE_CODE)
+    INNER JOIN \"sap.tm.trp.db.semantic.location::v_location\" T2 ON (T21.ID = T2.ADDRESS_ID)    
+UNION ALL   
+    SELECT  T1.ZONE_ID,
+    T2.ID AS LOCATION_ID,
+    T2.XPOS, T2.YPOS, T21.COUNTRY_CODE, T21.STATE_CODE
+    FROM \"sap.tm.trp.db.semantic.location::v_zone_admin_gis\" T1 
+    INNER JOIN \"sap.tm.trp.db.semantic.location::v_address\" T21 ON ( T1.COUNTRY_CODE = T21.COUNTRY_CODE)
+    INNER JOIN \"sap.tm.trp.db.semantic.location::v_location\" T2 ON (T21.ID = T2.ADDRESS_ID)
+    WHERE T1.STATE_CODE = ''
+UNION ALL SELECT 
+     T1.ZONE_ID,
+     T2.ID AS LOCATION_ID,
+     T2.XPOS, T2.YPOS, T21.COUNTRY_CODE, T21.STATE_CODE
+    FROM \"sap.tm.trp.db.semantic.location::v_zone_postal_gis\" T1
+     INNER JOIN \"sap.tm.trp.db.semantic.location::v_address\" T21 ON ( T1.COUNTRY_CODE = T21.COUNTRY_CODE AND T21.POSTAL_CODE BETWEEN T1.POSTAL_CODE_FROM  AND T1.POSTAL_CODE_TO)
+    INNER JOIN \"sap.tm.trp.db.semantic.location::v_location\" T2 ON (T21.ID = T2.ADDRESS_ID)
+    )";
+    
+depends_on_view = ["sap.tm.trp.db.semantic.location::v_zone_location", "sap.tm.trp.db.semantic.location::v_address","sap.tm.trp.db.semantic.location::v_location", "sap.tm.trp.db.semantic.location::v_zone_admin_gis", "sap.tm.trp.db.semantic.location::v_zone_postal_gis"];

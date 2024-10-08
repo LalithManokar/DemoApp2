@@ -1,0 +1,76 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert::p_get_planModels_alerts_withAlertRuleGroup_amount" ( 
+IN PLAN_MODEL_ID_LIST "sap.tm.trp.db.alert::tt_planModelList_UI_Dashboard",
+OUT ALERT_AMOUNT INTEGER
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+    DECLARE SQL1 VARCHAR(5000);
+    DECLARE ORDER_BY_FIELD VARCHAR(20);
+    DECLARE TMP VARCHAR(20);
+    DECLARE MESSAGE_ALERT VARCHAR(10) := 'Alert';
+    
+    DECLARE PLAN_EXECUTION_ID_EXIST INTEGER;
+ 	select count(T1.PLAN_EXECUTION_ID) into PLAN_EXECUTION_ID_EXIST
+	from 
+	(
+		select t1.PLAN_MODEL_ID,
+               t2.EXECUTION_ID as PLAN_EXECUTION_ID
+        from :PLAN_MODEL_ID_LIST t1
+        inner join "sap.tm.trp.db.pipeline::v_plan_default_node_latest_execution" t2
+        on t1.PLAN_MODEL_ID = t2.PLAN_MODEL_ID
+	) T1;
+	
+    IF (PLAN_EXECUTION_ID_EXIST > 0 )
+	THEN
+	    TEMP_TBL = 
+	    SELECT distinct
+	     ALERT_REASON,
+	     T1.ALERT_SCORE,
+	     T1.PLAN_EXECUTION_ID,
+	     FILTER_TYPE,
+	     T1.PLAN_MODEL_ID,
+	     T2.NAME as PLAN_MODEL_NAME,
+	     T4.ALERT_RULE_GROUP_ID,
+	     T4.NAME as ALERT_RULE_GROUP_NAME,
+	     T1.PIPELINE_MODEL_ID,
+	     NODE_ID,
+	     T1.NODE_NAME as NAME,
+	     T1.LOCATION_ID,
+	     LOCATION_NAME,
+	     EQUIP_TYPE_ID,
+	     START_TIME as TIME,
+	     STOCK,
+	     SUPPLY,
+	     DEMAND,
+	     MIN_SAFETY_STOCK,
+	     MAX_SAFETY_STOCK,
+	     MESSAGE,
+	     OWNER 
+	    FROM "sap.tm.trp.db.alert::t_planModel_alert_forUI_timeInterval_withoutGis" T1
+	    inner join 
+	    (
+	        select t1.PLAN_MODEL_ID,
+	               t2.EXECUTION_ID as PLAN_EXECUTION_ID
+	        from :PLAN_MODEL_ID_LIST t1
+	        inner join "sap.tm.trp.db.pipeline::v_plan_default_node_latest_execution" t2
+	        on t1.PLAN_MODEL_ID = t2.PLAN_MODEL_ID
+	    ) T11
+	   on ( T1.MESSAGE = :MESSAGE_ALERT and
+	        T1.PLAN_MODEL_ID = T11.PLAN_MODEL_ID and 
+	        T1.PLAN_EXECUTION_ID = T11.PLAN_EXECUTION_ID)
+	   inner join "sap.tm.trp.db.pipeline::t_plan_model" T2
+	   on T1.PLAN_MODEL_ID = T2.ID
+	   inner join "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_assign_plan_model" T3
+	   on T1.PLAN_MODEL_ID = T3.PLAN_MODEL_ID
+	   inner join "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group" T4
+	   on T3.ALERT_RULE_GROUP_ID = T4.ALERT_RULE_GROUP_ID;
+	   
+	    select count(*) into ALERT_AMOUNT 
+	    from :TEMP_TBL t;
+	/*ELSE
+	*/
+     END IF;       
+END;

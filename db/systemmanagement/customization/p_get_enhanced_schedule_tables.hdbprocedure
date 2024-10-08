@@ -1,0 +1,18 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.customization::p_get_enhanced_schedule_tables"(
+    OUT TABLE_NAMES "sap.tm.trp.db.systemmanagement.customization::v_enhanced_schedule",
+    OUT VIEW_NAMES "sap.tm.trp.db.systemmanagement.customization::t_enhanced_schedule_view_names"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    TABLE_NAMES = SELECT T1.TABLE_NAME_KEY, T1.TABLE_NAME
+                 FROM "sap.tm.trp.db.systemmanagement.customization::t_enhanced_schedule_tables" T1
+                 INNER JOIN SYS.M_TABLES T2
+                 ON (T1.TABLE_NAME = T2.TABLE_NAME);
+    VIEW_NAMES = SELECT T1.VIEW_NAME_KEY, T1.VIEW_NAME
+                 FROM "sap.tm.trp.db.systemmanagement.customization::t_enhanced_schedule_view_names" T1
+                 INNER JOIN VIEWS T2
+                 ON (T1.VIEW_NAME = T2.VIEW_NAME);
+  END

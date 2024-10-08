@@ -1,0 +1,421 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_location_filter_validate" (
+	IN LOCATION_FILTER_INPUT "sap.tm.trp.db.massupload::tt_location_filter_upload",
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),
+    IN ERROR_LIMIT INTEGER,
+    OUT INVALID_ITEMS "sap.tm.trp.db.massupload::tt_massupload_invalid_item"
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+
+	 --Declarations
+     DECLARE LOCATION_TYPE_LOCATION INTEGER :=1;    
+     DECLARE LOCATION_TYPE_LOCATION_GROUP INTEGER :=2;
+     DECLARE LOCATION_TYPE_REGION INTEGER :=5; 
+     DECLARE LOCATION_TYPE_REGION_GROUP INTEGER :=6; 
+     DECLARE CNT INT;
+     DECLARE HAS_AUTHORIZATION_FLAG TINYINT; 	
+     
+     CALL "sap.tm.trp.db.systemmanagement::p_check_location_full_authorization" (
+		 	HAVE_AUTHORIZATION_FLAG => HAS_AUTHORIZATION_FLAG
+		 ); 
+	 --Data from CSV file
+    ITEMS = 
+			        	SELECT TRIM(LOCATION_FILTER_NAME) AS LOCATION_FILTER_NAME ,DESCRIPTION,TRIM(LOCATION_FILTER_TYPE) AS LOCATION_FILTER_TYPE,TRIM(VISIBILITY) AS VISIBILITY,
+			        	TRIM(LOCATION_NAME) AS LOCATION_NAME,ROW_INDEX
+			        	FROM :LOCATION_FILTER_INPUT;
+	
+	--VALIDATE if INPUT does not have any other Location FILTER TYPE 
+	 	INVALID_ITEMS =  SELECT * FROM :INVALID_ITEMS 
+				              UNION
+	        			 SELECT A.ROW_INDEX,
+	               		 3 AS COL_INDEX,
+	               		 'LOCATION_FILTER_TYPE_INVALID'AS REASON_CODE
+	          			 FROM :ITEMS AS A
+	         	         WHERE TRIM(UPPER(A.LOCATION_FILTER_TYPE)) NOT IN ('LOCATION','REGION', 'LOCATION GROUP', 'REGION GROUP'); 
+	
+	--Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;	
+			        	
+	 --Get Location Filter 
+    LOC_FILTER_EXISTING	 	=
+        				SELECT ID, CODE, 
+        				(CASE
+        				WHEN LOCATION_TYPE = 1
+        				THEN 'LOCATION'
+        				WHEN LOCATION_TYPE = 2
+        				THEN 'LOCATION GROUP'
+        				WHEN LOCATION_TYPE = 5
+        				THEN 'REGION'
+        				WHEN LOCATION_TYPE = 6
+        				THEN 'REGION GROUP'
+        				END) AS LOCATION_TYPE ,
+        				(CASE 
+        				WHEN VISIBLE_FLAG = 'G' 
+        				THEN 'GLOBAL'
+        				ELSE 'PERSONAL'
+        				END) AS VISIBILITY,
+        				RESOURCE_CATEGORY AS CATEGORY
+						FROM "sap.tm.trp.db.filter::t_location_filter"
+						WHERE
+						LOCATION_TYPE IN ('1','2','5','6');			        	
+
+
+	-- VALIDATE WITH EXISTING LOCATION FILTER WITH TYPE
+		
+		INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS 
+				              UNION
+				        SELECT A.ROW_INDEX,
+				        3 AS COL_INDEX,
+				        'LOCATION_FILTER_LOCATION_TYPE_MISMATCH' AS REASON_CODE
+				        FROM :ITEMS AS A
+				        INNER JOIN :LOC_FILTER_EXISTING AS LF
+				        ON LF.CODE = UPPER(A.LOCATION_FILTER_NAME)
+				        WHERE TRIM(UPPER (A.LOCATION_FILTER_TYPE)) != TRIM(UPPER(LF.LOCATION_TYPE));
+				        
+	 
+	--Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;			        
+	 			        	
+	
+    LOC_FILTER_COUNT =  SELECT LOCATION_FILTER_NAME, COUNT(DISTINCT(UPPER(LOCATION_FILTER_TYPE))) AS CNT, 
+                         COUNT(DISTINCT(UPPER(VISIBILITY))) AS CNT1
+                         FROM :ITEMS GROUP BY LOCATION_FILTER_NAME;
+    
+    --Validate Location Group Type - Mixed types
+    INVALID_ITEMS = 
+						 SELECT * FROM :INVALID_ITEMS 
+				         UNION
+	        			 SELECT A.ROW_INDEX, 
+	 					 3 AS COL_INDEX, 
+						 'LOCATION_FILTER_TYPE_MIX_NOT_ALLOWED' AS REASON_CODE 
+				         FROM :ITEMS AS A
+				         LEFT OUTER JOIN :LOC_FILTER_COUNT AS LC
+				         ON LC.LOCATION_FILTER_NAME = UPPER(A.LOCATION_FILTER_NAME)
+				         WHERE LC.CNT > 1;
+				         		        	
+	 --Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;
+
+    
+    --Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;
+
+	--Validate Location Group Type - Mixed types
+    INVALID_ITEMS = 
+						 SELECT * FROM :INVALID_ITEMS 
+				         UNION
+	        			 SELECT A.ROW_INDEX, 
+	 					 4 AS COL_INDEX, 
+						 'VISIBILITY_MIX_NOT_ALLOWED' AS REASON_CODE 
+				         FROM :ITEMS AS A
+				         LEFT OUTER JOIN :LOC_FILTER_COUNT AS LC
+				         ON LC.LOCATION_FILTER_NAME = UPPER(A.LOCATION_FILTER_NAME)
+				         WHERE LC.CNT1 > 1;
+				         
+ 
+    --Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;
+	
+	--Validate Location Groups /Region Groups - Location Group Name and Resource Category combination not valid
+	INVALID_ITEMS =     
+	    			    SELECT * FROM :INVALID_ITEMS 
+				        UNION
+				        SELECT A.ROW_INDEX,
+				        1 AS COL_INDEX,
+				        'LOCATION_FILTER_CATEGORY_INVALID' AS REASON_CODE
+				        FROM :ITEMS AS A
+				        INNER JOIN :LOC_FILTER_EXISTING AS LG
+				        ON LG.CODE = UPPER(A.LOCATION_FILTER_NAME)
+				        AND LG.LOCATION_TYPE = UPPER(A.LOCATION_FILTER_TYPE)
+				        LEFT OUTER JOIN :LOC_FILTER_EXISTING AS LR_G
+				        ON LR_G.CODE = UPPER(A.LOCATION_FILTER_NAME) 
+				        AND LR_G.LOCATION_TYPE = UPPER(A.LOCATION_FILTER_TYPE)
+				        AND LR_G.CATEGORY = :RESOURCE_CATEGORY_ID
+				        WHERE LR_G.CODE IS NULL;
+				         				        				         
+
+    --Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;
+	
+			        	  --Get Locations / Regions
+    LOC_REGION = 
+						SELECT ID , NAME, 'LOCATION' as LOC_TYPE
+						FROM "sap.tm.trp.db.semantic.location::v_location"
+						UNION
+						SELECT ID , NAME, 'REGION' as LOC_TYPE
+						FROM "sap.tm.trp.db.semantic.location::v_zone";
+						
+	
+	--Validate Location and Region in database
+    INVALID_ITEMS = 
+	        			 SELECT * FROM :INVALID_ITEMS 
+				         UNION
+	        			 SELECT A.ROW_INDEX,
+	               		 5 AS COL_INDEX,
+	               		 (CASE 
+	               		 WHEN A.LOCATION_FILTER_TYPE = 'LOCATION'
+	               		 THEN 'LOCATION_NAME_INVALID'
+	               		 WHEN A.LOCATION_FILTER_TYPE = 'REGION'
+	               		 THEN 'REGION_NAME_INVALID'
+	               		 END) AS REASON_CODE
+	          			 FROM :ITEMS AS A
+	               		 LEFT OUTER JOIN :LOC_REGION AS LR
+	                     ON LR.NAME = TRIM(UPPER(A.LOCATION_NAME)) 
+	         	         WHERE LR.NAME IS NULL AND A.LOCATION_FILTER_TYPE IN ('LOCATION','REGION'); 
+	  
+	 		        	         	          					
+	 --Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;    
+	
+	--Validate Location and Region type mismatch
+    INVALID_ITEMS = 
+	        			 SELECT * FROM :INVALID_ITEMS 
+				         UNION
+	        			 SELECT A.ROW_INDEX,
+	               		 3 AS COL_INDEX,
+	               		 'LOCATION_TYPE_MISMATCH'  AS REASON_CODE
+	          			 FROM :ITEMS AS A
+	               		 LEFT OUTER JOIN :LOC_REGION AS LR
+	                     ON LR.NAME = TRIM(UPPER(A.LOCATION_NAME))
+	         	         WHERE LR.NAME IS NOT NULL AND A.LOCATION_FILTER_TYPE != LR.LOC_TYPE AND A.LOCATION_FILTER_TYPE IN ('LOCATION') ; 
+	         	         
+	 INVALID_ITEMS = 
+	        			 SELECT * FROM :INVALID_ITEMS 
+				         UNION
+	        			 SELECT A.ROW_INDEX,
+	               		 3 AS COL_INDEX,
+	               		 'REGION_TYPE_MISMATCH'  AS REASON_CODE
+	          			 FROM :ITEMS AS A
+	               		 LEFT OUTER JOIN :LOC_REGION AS LR
+	                     ON LR.NAME = TRIM(UPPER(A.LOCATION_NAME))
+	         	         WHERE LR.NAME IS NOT NULL AND A.LOCATION_FILTER_TYPE != LR.LOC_TYPE AND A.LOCATION_FILTER_TYPE IN ('REGION') ;          	         
+	
+	
+	--Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;   
+	
+	
+	
+	--Get User Authorized Locations/Regions	
+     LOC_REGION_AUTH =
+        				SELECT ID, NAME 
+						FROM :LOC_REGION AS LR
+    					WHERE LR.ID IN ( 
+    					SELECT LOCATION_ID 
+	      				FROM "sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype"(PLACEHOLDER."$$IN_LOCATION_TYPE$$"=>:LOCATION_TYPE_LOCATION) 
+	      				UNION
+	      				SELECT LOCATION_ID 
+	      				FROM "sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype"(PLACEHOLDER."$$IN_LOCATION_TYPE$$"=>:LOCATION_TYPE_REGION)
+	      				);
+
+
+	--Validate Location/Region Authorization
+	 INVALID_ITEMS =
+						SELECT * FROM :INVALID_ITEMS 
+				        UNION
+    					SELECT A.ROW_INDEX,
+    					5 AS COL_INDEX,
+    					(CASE 
+	               		 WHEN LR.LOC_TYPE = 'LOCATION'
+	               		 THEN 'LOCATION_NO_AUTH'
+	               		 WHEN LR.LOC_TYPE = 'REGION'
+	               		 THEN 'REGION_NO_AUTH'
+	               		 END) AS REASON_CODE
+    					FROM :ITEMS AS A
+    					INNER JOIN :LOC_REGION AS LR
+    					ON LR.NAME = UPPER(A.LOCATION_NAME)
+    					LEFT OUTER JOIN :LOC_REGION_AUTH AS LR_AUTH
+    					ON LR_AUTH.NAME = UPPER(A.LOCATION_NAME)
+    					WHERE LR_AUTH.NAME IS NULL AND :HAS_AUTHORIZATION_FLAG <> 1;    
+	
+	
+	--Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;   
+		
+	
+	--Get Location Location Groups / Region Region Groups
+    LOC_REGION_GROUP	 =
+        				SELECT ID, CODE, 'LOCATION GROUP' AS TYPE,
+        				(CASE 
+        				WHEN VISIBLE_FLAG = 'G' 
+        				THEN 'GLOBAL'
+        				ELSE 'PERSONAL'
+        				END) AS VISIBILITY,
+        				RESOURCE_CATEGORY AS CATEGORY
+						FROM "sap.tm.trp.db.systemmanagement::t_location_group"
+					    --WHERE RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID
+						UNION
+						SELECT ID, CODE, 'REGION GROUP' AS TYPE,
+						(CASE 
+        				WHEN VISIBLE_FLAG = 'G' 
+        				THEN 'GLOBAL'
+        				ELSE 'PERSONAL'
+        				END) AS VISIBILITY,
+        				RESOURCE_CATEGORY AS CATEGORY
+						FROM "sap.tm.trp.db.systemmanagement::t_region_group";
+    					--WHERE RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID;    	         
+	
+	--Validate Location and Region in database
+    INVALID_ITEMS = 
+	        			 SELECT * FROM :INVALID_ITEMS 
+				         UNION
+	        			 SELECT A.ROW_INDEX,
+	               		 5 AS COL_INDEX,
+	               		 (CASE 
+	               		 WHEN A.LOCATION_FILTER_TYPE = 'LOCATION GROUP'
+	               		 THEN 'LOCATION_GROUP_NAME_INVALID'
+	               		 WHEN A.LOCATION_FILTER_TYPE = 'REGION GROUP'
+	               		 THEN 'REGION_GROUP_NAME_INVALID'
+	               		 END) AS REASON_CODE
+	          			 FROM :ITEMS AS A
+	               		 LEFT OUTER JOIN :LOC_REGION_GROUP AS LGR
+	                     ON LGR.CODE = TRIM(UPPER(A.LOCATION_NAME))
+	         	         WHERE LGR.CODE IS NULL AND A.LOCATION_FILTER_TYPE IN ('LOCATION GROUP', 'REGION GROUP');  					
+			        	         	          					
+	  --Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;
+	
+	
+	--Validate Location and Region Type in database
+    INVALID_ITEMS = 
+	        			 SELECT * FROM :INVALID_ITEMS 
+				         UNION
+	        			 SELECT A.ROW_INDEX,
+	               		 3 AS COL_INDEX,
+	               		 'LOCATION_GROUP_TYPE_MISMATCH' AS REASON_CODE
+	          			 FROM :ITEMS AS A
+	               		 LEFT OUTER JOIN :LOC_REGION_GROUP AS LGR
+	                     ON LGR.CODE = TRIM(UPPER(A.LOCATION_NAME))
+	         	         WHERE LGR.CODE IS NOT NULL AND A.LOCATION_FILTER_TYPE!=LGR.TYPE AND A.LOCATION_FILTER_TYPE IN ('LOCATION GROUP');  					
+	
+	INVALID_ITEMS = 
+	        			 SELECT * FROM :INVALID_ITEMS 
+				         UNION
+	        			 SELECT A.ROW_INDEX,
+	               		 3 AS COL_INDEX,
+	               		 'REGION_GROUP_TYPE_MISMATCH' AS REASON_CODE
+	          			 FROM :ITEMS AS A
+	               		 LEFT OUTER JOIN :LOC_REGION_GROUP AS LGR
+	                     ON LGR.CODE = TRIM(UPPER(A.LOCATION_NAME))
+	         	         WHERE LGR.CODE IS NOT NULL AND A.LOCATION_FILTER_TYPE!=LGR.TYPE AND A.LOCATION_FILTER_TYPE IN ('REGION GROUP');
+	         	         		        	         	          					
+	  --Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;
+	
+	INVALID_ITEMS = 
+	        			 SELECT * FROM :INVALID_ITEMS 
+				         UNION
+	        			 SELECT A.ROW_INDEX,
+	               		 4 AS COL_INDEX,
+	               		 (CASE 
+	               		 WHEN LGR.TYPE = 'LOCATION GROUP'
+	               		 THEN 'LOCATION_GROUP_VISIBILTY_NOTEQUAL_FILTER_VISI'
+	               		 WHEN LGR.TYPE = 'REGION GROUP'
+	               		 THEN 'REGION_GROUP_VISIBILTY_NOTEQUAL_FILTER_VISI'
+	               		 END) AS REASON_CODE
+	          			 FROM :ITEMS AS A
+	               		 INNER JOIN :LOC_REGION_GROUP AS LGR
+	                     ON LGR.CODE = TRIM(UPPER(A.LOCATION_NAME))
+	         	         WHERE TRIM(UPPER(A.VISIBILITY))!=TRIM(UPPER(LGR.VISIBILITY))
+	         	         AND TRIM(UPPER(A.VISIBILITY)) = 'GLOBAL';			        	
+				        	
+	--Get User Authorized Location Groups 	
+    LOC_REGION_GROUP_AUTH =
+        				SELECT ID, CODE 
+						FROM :LOC_REGION_GROUP AS LG	
+    					WHERE LG.ID IN ( 
+    					SELECT LOCATION_ID 
+	      				FROM "sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype"(PLACEHOLDER."$$IN_LOCATION_TYPE$$"=>:LOCATION_TYPE_LOCATION_GROUP) 
+	      				UNION
+	      				SELECT LOCATION_ID 
+	      				FROM "sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype"(PLACEHOLDER."$$IN_LOCATION_TYPE$$"=>:LOCATION_TYPE_REGION_GROUP) 
+	      				)
+	      				AND CATEGORY = :RESOURCE_CATEGORY_ID;
+    
+    --Validate Location Group Authorization
+    INVALID_ITEMS =
+    					SELECT * FROM :INVALID_ITEMS 
+				        UNION
+    					SELECT A.ROW_INDEX,
+    					1 AS COL_INDEX,
+    					 (CASE 
+	               		 WHEN LG.TYPE = 'LOCATION GROUP'
+	               		 THEN 'LOCATION_GROUP_NO_AUTH'
+	               		 WHEN LG.TYPE = 'REGION GROUP'
+	               		 THEN 'REGION_GROUP_NO_AUTH'
+	               		 END) AS REASON_CODE
+    					FROM :ITEMS AS A
+    					INNER JOIN :LOC_REGION_GROUP AS LG
+    					ON LG.CODE = UPPER(A.LOCATION_NAME)
+    					LEFT OUTER JOIN :LOC_REGION_GROUP_AUTH AS LG_AUTH
+    					ON LG_AUTH.CODE = UPPER(A.LOCATION_NAME)
+    					WHERE LG_AUTH.CODE IS NULL;    
+    
+--Check if a location filter has different description
+--Every location filter should have same description for all of its occurrences in the input file
+  INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS 
+			      UNION 
+                  SELECT ROW_INDEX, 
+                  2 as COL_INDEX,
+                  'LOCATION_FILTER_DESC_DIFFERENT' AS REASON_CODE
+            	  FROM ( SELECT MIN(ROW_INDEX) AS ROW_INDEX
+                 		 FROM :ITEMS
+		                 GROUP BY LOCATION_FILTER_NAME
+                        HAVING COUNT(DISTINCT DESCRIPTION) > 1); 
+    	
+	--Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;   
+				        	
+				        	
+END;

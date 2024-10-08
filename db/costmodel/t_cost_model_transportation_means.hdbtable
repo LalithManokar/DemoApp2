@@ -1,0 +1,9 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "COST_MODEL_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "COST_DATASET_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "TRANSPORTATION_MODE_CODE"; sqlType = NVARCHAR; length = 20; nullable = false; }
+];
+
+table.primaryKey.pkcolumns = ["COST_MODEL_ID","COST_DATASET_ID","TRANSPORTATION_MODE_CODE"];

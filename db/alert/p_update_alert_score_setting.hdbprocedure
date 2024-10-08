@@ -1,0 +1,15 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert::p_update_alert_score_setting" ( 
+IN ALERT_SCORE_SETTING_KEY VARCHAR(50),
+IN ALERT_SCORE_SETTING_VALUE DOUBLE) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+
+    delete from "sap.tm.trp.db.alert.alert_rule_group::t_alert_score_setting" T1
+    where T1.ALERT_SCORE_SETTING_KEY = :ALERT_SCORE_SETTING_KEY;
+
+    insert into "sap.tm.trp.db.alert.alert_rule_group::t_alert_score_setting" 
+    values(:ALERT_SCORE_SETTING_KEY,:ALERT_SCORE_SETTING_VALUE);
+END;

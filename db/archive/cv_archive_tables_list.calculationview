@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_archive_tables_list" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_archive_tables_list"/>
+  <localVariables>
+    <variable id="TYPE" parameter="true">
+      <descriptions defaultDescription="TYPE"/>
+      <variableProperties datatype="TINYINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="NVARCHAR" id="TABLE_NAME" length="500"/>
+        <viewAttribute datatype="NVARCHAR" id="TABLE_CODE" length="500"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#TYPE</localVariable>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+ BEGIN 
+ DECLARE SIDE_CAR VARCHAR(100);
+ 
+DECLARE AUTH SMALLINT;
+DECLARE CUSTOMCONDITION CONDITION FOR SQL_ERROR_CODE 10001;/* Custom Error Code = 10001*/
+DECLARE V_COUNT BIGINT;
+
+/*User Defined exception handler */
+
+DECLARE EXIT HANDLER FOR CUSTOMCONDITION RESIGNAL ;
+
+CALL &quot;sap.tm.trp.db.archive::p_check_archive_authorization&quot;(
+    :AUTH
+  );
+  
+
+IF AUTH = 0 THEN
+  /* Signaling Custom error and setting the Custom Error Message */
+  SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'USER DOES NOT HAVE READ ACCESS';
+END IF;
+
+SELECT COUNT(1) INTO V_COUNT FROM &quot;sap.tm.trp.db.archive::t_archive_configuration&quot; WHERE KEY='SIDECAR';
+  IF :V_COUNT > 0 THEN 
+     SELECT VALUE INTO SIDE_CAR 
+     FROM &quot;sap.tm.trp.db.archive::t_archive_configuration&quot;
+     WHERE KEY='SIDECAR';
+  ELSE 
+  
+    SIDE_CAR:='FALSE';
+END IF;
+
+ 
+IF :TYPE=2 AND :SIDE_CAR='TRUE' THEN
+
+  VAR_OUT= SELECT T1.ID,T1.TABLE_NAME,T1.TABLE_CODE
+  FROM &quot;sap.tm.trp.db.archive::t_archive_metadata&quot; T1
+  WHERE IS_TM=0 AND T1.LEVEL=0; --NOT A TM TABLE
+
+ELSE
+  VAR_OUT=SELECT T1.ID,T1.TABLE_NAME,T1.TABLE_CODE
+  FROM &quot;sap.tm.trp.db.archive::t_archive_metadata&quot; T1
+  WHERE T1.IS_SELECTABLE=1;
+ 
+END IF;
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="TABLE_NAME" order="2">
+        <descriptions defaultDescription="TABLE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="TABLE_NAME"/>
+      </attribute>
+      <attribute id="TABLE_CODE" order="3">
+        <descriptions defaultDescription="TABLE_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="TABLE_CODE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="ID"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_plan_models_for_user" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_anna_privilege_check"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="PLAN_MODEL_ID"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> 
+  
+ BEGIN 
+
+  DECLARE VISIBILITY_FLAG_GLOBAL SMALLINT := 1;
+  DECLARE VISIBILITY_FLAG_PERSONAL  SMALLINT := 0;
+  DECLARE NAME VARCHAR(60); 
+  DECLARE USER_ID INTEGER;
+  DECLARE HAS_AUTHORIZATION_FLAG TINYINT; 
+  
+     
+  SELECT IFNULL(MAX(USERNAME),'') INTO NAME FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+
+  SELECT IFNULL(MAX(ID),-1) INTO USER_ID FROM &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot;
+  WHERE USERNAME = :NAME;
+
+  IF :HAS_AUTHORIZATION_FLAG = 1 THEN
+     var_out = SELECT ID AS PLAN_MODEL_ID FROM &quot;sap.tm.trp.db.pipeline::t_plan_model&quot; ;
+  ELSE
+     v = SELECT DISTINCT T1.ID AS PLAN_MODEL_ID
+     FROM &quot;sap.tm.trp.db.pipeline::t_plan_model&quot; T1
+     INNER JOIN &quot;sap.tm.trp.db.filter::t_filter_location_filter&quot; T2 ON (T2.FILTER_GROUP_ID = T1.FILTER_GROUP_ID)
+     INNER JOIN &quot;sap.tm.trp.db.filter::cv_role_check_location_filter&quot; T4 
+     ON (T4.ID = T2.LOCATION_FILTER_ID)
+     INNER JOIN &quot;sap.tm.trp.db.filter::t_filter_equipment_filter&quot; T3 ON (T3.FILTER_GROUP_ID = T1.FILTER_GROUP_ID)
+     INNER JOIN &quot;sap.tm.trp.db.filter::cv_equipment_filter&quot; T5 ON (T3.EQUIPMENT_FILTER_ID = T5.ID)
+     WHERE T1.VISIBILITY_FLAG = :VISIBILITY_FLAG_GLOBAL 
+     UNION ALL 
+     SELECT DISTINCT T1.ID AS PLAN_MODEL_ID
+     FROM &quot;sap.tm.trp.db.pipeline::t_plan_model&quot; T1
+     INNER JOIN &quot;sap.tm.trp.db.filter::t_filter_location_filter&quot; T2 ON (T2.FILTER_GROUP_ID = T1.FILTER_GROUP_ID)
+     INNER JOIN &quot;sap.tm.trp.db.filter::cv_role_check_location_filter&quot; T4 
+     ON (T4.ID = T2.LOCATION_FILTER_ID)
+     INNER JOIN &quot;sap.tm.trp.db.filter::t_filter_equipment_filter&quot; T3 ON (T3.FILTER_GROUP_ID = T1.FILTER_GROUP_ID)
+     INNER JOIN &quot;sap.tm.trp.db.filter::cv_equipment_filter&quot; T5 ON (T3.EQUIPMENT_FILTER_ID = T5.ID)
+     WHERE T1.VISIBILITY_FLAG = :VISIBILITY_FLAG_PERSONAL AND T1.CREATE_BY = :USER_ID ;
+
+  END IF;
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="PLAN_MODEL_ID" order="1">
+        <descriptions defaultDescription="PLAN_MODEL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_MODEL_ID"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

@@ -1,0 +1,14 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_lease_contract_type_temporary_data_clean" (
+IN CONNECTION_ID VARCHAR(100)
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+
+	--Clean up temporary table
+    DELETE FROM "sap.tm.trp.db.massupload::t_lease_contract_type_temporary" 
+    WHERE CONNECTION_ID = :CONNECTION_ID;
+    
+END;

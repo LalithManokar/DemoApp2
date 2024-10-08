@@ -1,0 +1,58 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_extended_column_check" (
+    IN COLUMN_FILTERS "sap.tm.trp.db.pickupreturn::tt_column_parameters",
+    OUT PARAMETER VARCHAR(5000)
+ ) 
+	LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+    
+BEGIN
+  DECLARE EXIST_FLAG INTEGER;
+  DECLARE COLUMN_COUNT INTEGER;
+  DECLARE PAGE_ID_PICKUP INTEGER := 103;
+  DECLARE PAGE_ID_RETURN INTEGER := 104;
+  
+  SELECT COUNT(*) INTO COLUMN_COUNT FROM :COLUMN_FILTERS;
+  
+  IF :COLUMN_COUNT > 0 THEN
+  
+    --check if field exists in extended column config
+/*    SELECT COUNT(*) INTO EXIST_FLAG
+    FROM "sap.tm.trp.db.common::t_extended_fields" T1
+    INNER JOIN :COLUMN_FILTERS T2
+    ON T1.NAME = T2.COLUMN_NAME
+    AND (T1.PAGE_ID = :PAGE_ID_PICKUP OR T1.PAGE_ID = :PAGE_ID_RETURN);
+*/
+  SELECT COUNT(*) INTO EXIST_FLAG
+		FROM ( SELECT * FROM "sap.tm.trp.db.common::t_extended_fields" WHERE PAGE_ID = :PAGE_ID_PICKUP OR PAGE_ID = :PAGE_ID_RETURN) T1
+		INNER JOIN :COLUMN_FILTERS T2
+		ON T1.NAME = T2.COLUMN_NAME;
+		    
+  END IF ;
+  
+  IF :EXIST_FLAG > 0 THEN
+  
+/*    EXTENDED_COLUMN_FILTERS = SELECT DISTINCT T1.COLUMN_NAME, T1.OPERATOR_CODE, T1.COLUMN_VALUE
+                                    FROM :COLUMN_FILTERS T1
+                                    INNER JOIN "sap.tm.trp.db.common::t_extended_fields" T2
+                                    ON T1.COLUMN_NAME = T2.NAME
+                                    AND (T2.PAGE_ID = :PAGE_ID_PICKUP OR T2.PAGE_ID = :PAGE_ID_RETURN);
+*/
+EXTENDED_COLUMN_FILTERS = SELECT DISTINCT T1.COLUMN_NAME, T1.OPERATOR_CODE, T1.COLUMN_VALUE
+                                    FROM :COLUMN_FILTERS T1
+                                    INNER JOIN ( SELECT * FROM "sap.tm.trp.db.common::t_extended_fields" WHERE PAGE_ID = :PAGE_ID_PICKUP OR PAGE_ID = :PAGE_ID_RETURN) T2
+                                    ON T1.COLUMN_NAME = T2.NAME;
+                                                                        
+    SELECT TO_CLOB(TRIM(TRAILING ' AND ' FROM STRING_AGG(FILTER||' AND '))) INTO PARAMETER
+    FROM (SELECT CASE WHEN OPERATOR_CODE = 'EQ' THEN COLUMN_NAME||' IN ('||TRIM(TRAILING ',' FROM STRING_AGG(COLUMN_VALUE||','))||')'
+	                  WHEN OPERATOR_CODE = 'NE' THEN COLUMN_NAME||' NOT IN ('||TRIM(TRAILING ',' FROM STRING_AGG(COLUMN_VALUE||','))||')'
+		              WHEN OPERATOR_CODE = 'BT' THEN COLUMN_NAME||' BETWEEN '||TRIM(TRAILING ' AND ' FROM STRING_AGG(COLUMN_VALUE||' AND '))
+		              WHEN OPERATOR_CODE = 'LIKE' THEN COLUMN_NAME||' LIKE ''%'||TRIM(LEADING '''' FROM TRIM(TRAILING '''' FROM STRING_AGG(COLUMN_VALUE)))||'%'''
+		              ELSE COLUMN_NAME||' '||OPERATOR_CODE||' '||STRING_AGG(COLUMN_VALUE)
+		              END AS FILTER
+          FROM :EXTENDED_COLUMN_FILTERS
+          GROUP BY OPERATOR_CODE,COLUMN_NAME);
+  END IF ;
+  
+END;

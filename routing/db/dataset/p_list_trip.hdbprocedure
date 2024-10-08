@@ -1,0 +1,54 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_list_trip" (
+    in from_time timestamp,
+    in to_time timestamp,
+    in basic_path_ids "sap.tm.trp.routing.db.common::tt_id", 
+    out trip "sap.tm.trp.routing.db.dataset::tt_trip",
+    out trip_location "sap.tm.trp.routing.db.dataset::tt_trip_location"
+   ) 
+    language sqlscript
+    sql security invoker
+    default schema "SAP_TM_ROUTING"
+    READS SQL DATA AS
+begin
+    
+    tmp = SELECT external_id, p.id, mtr
+    FROM :basic_path_ids AS i
+    INNER JOIN "sap.tm.trp.routing.db.dataset::t_path" AS p
+    ON i.id = p.id;
+    
+    basic_path_id_pair = SELECT external_id, id
+    FROM :tmp
+    WHERE external_id IS NOT NULL;
+
+    CALL "sap.tm.trp.routing.db.connector::p_list_trip"
+    (:from_time, :to_time, :basic_path_id_pair, system_trip, system_trip_location);
+    
+    manual_trip = SELECT TO_NVARCHAR(t.id) AS id, TO_NVARCHAR(t.id) AS external_id,
+    path_id AS basic_path_id, rule_number AS rule_id, mtr, from_location, to_location, departure_time, arrival_time
+    FROM 
+    (SELECT id, mtr
+    FROM :tmp
+    WHERE external_id IS NULL) AS i
+    INNER JOIN "sap.tm.trp.routing.db.dataset::t_trip" AS t
+    ON i.id = t.path_id
+    WHERE t.departure_time >= :from_time and t.arrival_time <= :to_time;
+    
+    manual_trip_location = SELECT TO_NVARCHAR(trip_id) AS trip_id, l.sequence, location, IFNULL(distance, 0), 
+    l.departure_time AS depart_time, l.arrival_time, '' AS vehicle_id, 
+    0 AS cutoff_offset, 0 AS availability_offset
+    FROM "sap.tm.trp.routing.db.dataset::t_trip_sequence" AS l
+    INNER JOIN :manual_trip AS t
+    ON l.trip_id = t.id
+    LEFT OUTER JOIN "sap.tm.trp.routing.db.dataset::t_path_connection" AS c
+    ON t.basic_path_id = c.path_id
+    AND l.sequence = c.sequence;
+    
+    trip = SELECT * FROM :system_trip
+    UNION ALL SELECT * FROM :manual_trip;
+    
+    trip_location = SELECT trip_id, sequence, location, distance, depart_time, 
+    arrival_time, vehicle_id, cutoff_offset, availability_offset
+    FROM :system_trip_location
+    UNION ALL SELECT * FROM :manual_trip_location;
+    
+END;

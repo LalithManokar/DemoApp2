@@ -1,0 +1,38 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline.operator.instant.lean::p_pos_supply" (
+	IN first "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+	IN input  "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+	OUT sum "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets") 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+
+ pos_stock = SELECT 'POS_STOCK' AS NODE_ID, t1.GEO_ID, t1.GEO_NAME, t1.GEO_FILTER_TYPE, t1.EQUIP_TYPE, t1.EQUIP_NAME, t1.EQUIP_FILTER_TYPE, 
+	         t1.TIME_INTERVAL_ID, t1.SEQUENCE, t1.START_TIME, t1.END_TIME, t1.INTER_SECONDS, 'SUPPLY' AS OUTPUT_KEY, 
+	      CASE WHEN t1.OUTPUT_VALUE < 0
+	    	THEN  0
+		  ELSE  t1.OUTPUT_VALUE
+	      END AS OUTPUT_VALUE,
+	      t1.UNIT 
+	      FROM :first as t1;
+ 
+ sum = SELECT 'SUPPLY_ADD_TWO' AS NODE_ID, 
+                COALESCE(t1.GEO_ID,t2.GEO_ID) AS GEO_ID,
+                COALESCE(t1.GEO_NAME,t2.GEO_NAME) AS GEO_NAME,
+                COALESCE(t1.GEO_FILTER_TYPE,t2.GEO_FILTER_TYPE) AS GEO_FILTER_TYPE,
+                COALESCE(t1.EQUIP_TYPE,t2.EQUIP_TYPE) AS EQUIP_TYPE,
+                COALESCE(t1.EQUIP_NAME, t2.EQUIP_NAME) AS EQUIP_NAME,
+                COALESCE(t1.EQUIP_FILTER_TYPE, t2.EQUIP_FILTER_TYPE) AS EQUIP_FILTER_TYPE,
+                COALESCE(t1.TIME_INTERVAL_ID, t2.TIME_INTERVAL_ID) AS TIME_INTERVAL_ID,
+                COALESCE(t1.SEQUENCE,t2.SEQUENCE) AS SEQUENCE,
+                COALESCE(t1.START_TIME, t2.START_TIME) AS START_TIME,
+                COALESCE(t1.END_TIME,t2.END_TIME) AS END_TIME,
+                COALESCE(t1.INTER_SECONDS,t2.INTER_SECONDS) AS INTER_SECONDS,
+                'SUPPLY' AS OUTPUT_KEY, 
+                COALESCE(t1.OUTPUT_VALUE + t2.OUTPUT_VALUE,t1.OUTPUT_VALUE,t2.OUTPUT_VALUE) AS OUTPUT_VALUE, 
+                COALESCE(t1.UNIT,t2.UNIT) AS UNIT
+            FROM :pos_stock as t1
+	        FULL OUTER JOIN :input as t2 
+	        ON ( t1.GEO_ID = t2.GEO_ID and t1.EQUIP_TYPE = t2.EQUIP_TYPE and t1.TIME_INTERVAL_ID = t2.TIME_INTERVAL_ID);
+END;

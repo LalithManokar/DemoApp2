@@ -1,0 +1,37 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert.alert_rule_group::p_unregister_pipeline_model_assignedRuleGroupFor_plan_model" (
+IN PIPELINE_MODEL_ID BIGINT,
+OUT SUCCESS_FLAG INTEGER 
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+DECLARE MAPPING_EXISTING INTEGER;
+
+    PLAN_MODEL_TBL =
+    select distinct T1.ID as PLAN_MODEL_ID
+    from "sap.tm.trp.db.pipeline::t_plan_model" T1
+    where T1.PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;
+    
+    
+    select count(*) into MAPPING_EXISTING
+    from "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_assign_plan_model" T1
+    where T1.PLAN_MODEL_ID 
+    in (select PLAN_MODEL_ID from :PLAN_MODEL_TBL );
+
+    IF ( :MAPPING_EXISTING > 0 )
+    THEN 
+        delete from "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_assign_plan_model" T1
+        where T1.PLAN_MODEL_ID 
+        in (select PLAN_MODEL_ID from :PLAN_MODEL_TBL );
+        
+        select count(*) into SUCCESS_FLAG
+        from "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_assign_plan_model" T1
+        where T1.PLAN_MODEL_ID 
+        in (select PLAN_MODEL_ID from :PLAN_MODEL_TBL );
+    ELSE
+        SUCCESS_FLAG := 1;
+    END IF;
+
+END;

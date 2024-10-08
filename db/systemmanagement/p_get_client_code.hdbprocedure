@@ -1,0 +1,12 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_get_client_code" (OUT MANDT VARCHAR (100) ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+	--DEFAULT SCHEMA <default_schema_name>
+	READS SQL DATA AS
+BEGIN
+
+	SELECT IFNULL(MAX(MANDT),'800') INTO MANDT 
+    FROM "sap.tm.trp.db.semantic.common::v_client_code";
+
+END;

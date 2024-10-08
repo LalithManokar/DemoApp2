@@ -1,0 +1,15 @@
+schema = "SAP_TM_TRP";
+query  = "
+	SELECT DISTINCT EQUIPMENT_FILTER_ID, T1.EQUI_CODE AS EQUI_CODE
+    FROM (
+    	SELECT EQUIPMENT_FILTER_ID, EQUI_CODE
+        FROM \"sap.tm.trp.db.filter::v_equipment_filter_equipment_auth\" T1
+        UNION
+        SELECT EQUIPMENT_FILTER_ID, T2.EQUI_CODE
+        FROM \"sap.tm.trp.db.filter::v_equipment_filter_equipment_auth\" AS T1
+        INNER JOIN \"sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth\" AS T2 ON T1.EQUIPMENT_GROUP_ID = T2.EQUIPMENT_GROUP_ID AND T2.RESOURCE_CATEGORY = T1.RESOURCE_CATEGORY
+        ) AS T1
+    WHERE T1.EQUI_CODE IS NOT NULL
+    ";
+
+depends_on_table = ["sap.tm.trp.db.filter::v_equipment_filter_equipment_auth","sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth"];

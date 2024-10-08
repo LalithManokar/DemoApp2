@@ -1,0 +1,40 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_ext_last_used_parameters_upsert" ( 
+IN PAGE_NAME VARCHAR(50),
+IN LAST_USED_PARAMETER "sap.tm.trp.db.systemmanagement.user::tt_last_used_parameters"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	AS
+  
+BEGIN
+ 
+
+
+  DECLARE CREATE_TIME TIMESTAMP;
+  DECLARE USER VARCHAR(60);
+  DECLARE USER_ID BIGINT;
+  DECLARE CREATE_USERID BIGINT;
+  
+-- GET USER
+  SELECT USERNAME 
+  INTO USER 
+  FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+  CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+ 
+--Get create user and time for update use
+  SELECT IFNULL(MAX(CREATED_BY),:USER_ID) 
+  INTO CREATE_USERID 
+  FROM "sap.tm.trp.db.systemmanagement.user::t_last_used_parameters"
+  WHERE USER = :USER AND PAGE_NAME = :PAGE_NAME AND PARAMETER_KEY IN (SELECT PARAMETER_KEY FROM :LAST_USED_PARAMETER);
+ 
+  SELECT IFNULL(MAX(CREATED_ON),CURRENT_UTCTIMESTAMP) 
+  INTO CREATE_TIME 
+  FROM "sap.tm.trp.db.systemmanagement.user::t_last_used_parameters"
+  WHERE USER = :USER AND PAGE_NAME = :PAGE_NAME AND PARAMETER_KEY IN (SELECT PARAMETER_KEY FROM :LAST_USED_PARAMETER);
+ 
+-- If equipment filter is not exist then insert, if exist then update
+  UPSERT "sap.tm.trp.db.systemmanagement.user::t_last_used_parameters" 
+  SELECT :USER, :PAGE_NAME,PARAMETER_KEY, PARAMETER_VALUE, :CREATE_USERID,:USER_ID,:CREATE_TIME,CURRENT_UTCTIMESTAMP
+  FROM :LAST_USED_PARAMETER;
+END;

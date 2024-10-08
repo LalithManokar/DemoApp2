@@ -1,0 +1,21 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_data_delete"
+(IN TABLE_ID BIGINT,
+ IN EXE_DETAIL_SEQ BIGINT,
+ IN DATE_FROM TIMESTAMP,
+ IN DATE_TO TIMESTAMP,
+ IN DATE_COLUMN_NAME NVARCHAR(250),
+ IN IS_TM TINYINT) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP" AS 
+	V_CHILD_COUNT BIGINT;
+BEGIN
+	SELECT COUNT(1) INTO V_CHILD_COUNT FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE ULTIMATE_PARENT_ID = :TABLE_ID; 
+	IF :V_CHILD_COUNT > 1 THEN 
+		--Parent child tables logic
+		CALL "sap.tm.trp.db.archive::sp_data_delete_parent_child"(:TABLE_ID,:EXE_DETAIL_SEQ,:DATE_FROM,:DATE_TO,:IS_TM,:DATE_COLUMN_NAME);
+	ELSE
+		--Call the procedure to delete the data from HOT and WARM
+		CALL "sap.tm.trp.db.archive::sp_data_delete_warm"(:TABLE_ID,:EXE_DETAIL_SEQ,:DATE_FROM,:DATE_TO,:DATE_COLUMN_NAME,1,:IS_TM);
+	END IF;
+END;

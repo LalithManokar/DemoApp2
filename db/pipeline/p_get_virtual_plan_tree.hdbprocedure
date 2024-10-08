@@ -1,0 +1,86 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_get_virtual_plan_tree"(
+    IN IN_PLAN_MODEL_ID BIGINT,
+    IN IN_NODE_NAME VARCHAR(200),
+    OUT out_vp_location_info "sap.tm.trp.db.pipeline::tt_virtual_tree_location_info",
+    OUT out_vp_hierarchy "sap.tm.trp.db.pipeline::tt_virtual_tree_hierarchy",
+    OUT out_virtual_plan_node_name "sap.tm.trp.db.pipeline::tt_virtual_plan_node_name_with_default",
+    OUT out_vp_equip_info "sap.tm.trp.db.pipeline::tt_filter_resource_no_expand"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+  DECLARE HAS_OUTPUT_DATASET_FLAG SMALLINT := 1;
+  DECLARE NO_OUTPUT_DATASET_FLAG SMALLINT := 0;
+
+out_vp_equip_info = select  DISTINCT  T5.EQUIP_CODE,T5.EQUIP_NAME, T4.FILTER_TYPE AS EQUIP_FILTER_TYPE from 
+(select PERSISTED_PLAN_MODEL_ID from "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" where VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_MODEL_ID) T1
+inner join "sap.tm.trp.db.pipeline::t_plan_model" T2 ON T2.ID = T1.PERSISTED_PLAN_MODEL_ID
+inner join "sap.tm.trp.db.filter::t_filter_equipment_filter" T3 ON T3.FILTER_GROUP_ID = T2.FILTER_GROUP_ID
+inner join "sap.tm.trp.db.filter::t_equipment_filter" T4 ON T4.ID = T3.EQUIPMENT_FILTER_ID
+inner join ( 
+select T5.EQUIPMENT_FILTER_ID, T5.EQUI_CODE AS EQUIP_CODE,T6.NAME AS EQUIP_NAME  from "sap.tm.trp.db.filter::t_equipment_filter_equipment" T5
+inner join "_SYS_BIC"."sap.tm.trp.db.systemmanagement/cv_resource_type"T6 on T6.ID = T5.EQUI_CODE
+UNION
+select T7.EQUIPMENT_FILTER_ID, T7.EQUIPMENT_GROUP_ID AS EQUIP_CODE,T8.NAME AS EQUIP_NAME  from "sap.tm.trp.db.filter::t_equipment_filter_equipment" T7
+inner join "_SYS_BIC"."sap.tm.trp.db.systemmanagement/cv_equipment_group" T8 on T8.ID = T7.EQUIPMENT_GROUP_ID
+) T5 ON T5.EQUIPMENT_FILTER_ID = T4.ID;
+
+  --Get latest execution id:
+  Last_execution_id_output = SELECT T1.ID AS PLAN_EXECUTION_ID,T1.PLAN_MODEL_ID
+               FROM "sap.tm.trp.db.pipeline::t_plan_execution" T1
+               INNER JOIN 
+              (
+                SELECT A.PLAN_MODEL_ID AS PERSISTED_PLAN_MODEL_ID ,MAX(EXECUTE_ON) AS MAX_EXEC_TIME
+                FROM "sap.tm.trp.db.pipeline::t_plan_execution" A
+                INNER JOIN "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" B ON (A.PLAN_MODEL_ID = B.PERSISTED_PLAN_MODEL_ID)
+                WHERE B.VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_MODEL_ID
+                GROUP BY PLAN_MODEL_ID
+              ) T2 ON (T1.PLAN_MODEL_ID = T2.PERSISTED_PLAN_MODEL_ID  AND T1.EXECUTE_ON = T2.MAX_EXEC_TIME);
+  
+  EQUIP_TYPE_IDS_OF_VP =  SELECT IFNULL(T3.EQUI_CODE,T3.EQUIPMENT_GROUP_ID) AS EQUIP_TYPE_ID
+                FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+                INNER JOIN  "sap.tm.trp.db.filter::t_filter_equipment_filter" T2 ON (T1.FILTER_GROUP_ID = T2.FILTER_GROUP_ID)
+                INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T3 ON (T2.EQUIPMENT_FILTER_ID = T3.EQUIPMENT_FILTER_ID)
+                WHERE T1.ID =:IN_PLAN_MODEL_ID;
+  
+  PPS_OUTPUT_DATASET = SELECT DISTINCT T1.LOCATION_ID,T7.LOCATION_TYPE
+	FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T1
+	INNER JOIN :Last_execution_id_output T4 ON (T1.PLAN_EXECUTION_ID = T4.PLAN_EXECUTION_ID)
+	 INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T5 ON (T4.PLAN_MODEL_ID = T5.ID)
+	 INNER JOIN "sap.tm.trp.db.filter::t_filter_location_filter" T6 ON (T5.FILTER_GROUP_ID = T6.FILTER_GROUP_ID)
+	 INNER JOIN "sap.tm.trp.db.filter::t_location_filter" T7 ON (T6.LOCATION_FILTER_ID = T7.ID)
+	 -- Inner Join EQUIP_TYPE_IDS_OF_VP table to make sure the output dataset matches the virtual plan's locations and resources.
+	 INNER JOIN :EQUIP_TYPE_IDS_OF_VP T8 ON (T1.EQUIP_TYPE_ID = T8.EQUIP_TYPE_ID );
+ 
+ 
+ out_vp_location_info = SELECT T1.LOCATION_ID, T1.LOCATION_NAME, T1.LOCATION_TYPE,CASE WHEN T2.LOCATION_ID IS NULL 
+ THEN :NO_OUTPUT_DATASET_FLAG  ELSE :HAS_OUTPUT_DATASET_FLAG END AS HAS_OUTPUT_DATASET_FLAG,T1.LEVEL
+ FROM "sap.tm.trp.db.pipeline::t_virtual_tree_location_info" T1
+ --LEFT OUTER JOIN :PPS_OUTPUT_DATASET T2 ON (T1.LOCATION_ID = T2.LOCATION_ID AND T1.LOCATION_TYPE = T2.LOCATION_TYPE)
+ INNER JOIN :PPS_OUTPUT_DATASET T2 ON (T1.LOCATION_ID = T2.LOCATION_ID AND T1.LOCATION_TYPE = T2.LOCATION_TYPE)  --Filter out 0 demand and supply locations
+ WHERE VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_MODEL_ID ;
+ 
+ out_vp_hierarchy = SELECT LOCATION_ID,LOCATION_TYPE,LOCATION_CHILD_ID, LOCATION_CHILD_TYPE
+                       FROM "sap.tm.trp.db.pipeline::t_virtual_tree_hierarchy" 
+                       WHERE VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_MODEL_ID;
+ 
+ out_virtual_plan_node_name = 
+ 	SELECT
+ 		T0.NAME,
+ 		T0.DEFAULT_NODE_FLAG,
+ 		CASE WHEN SUM(IFNULL(T2.NODE_ID,0)) = 0 THEN 0 ELSE 1 END AS HAS_DRILLDOWN_FLAG
+ 	FROM "sap.tm.trp.db.pipeline::t_virtual_tree_node_name" T0
+ 	LEFT JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T1
+ 	ON T1.METADATA_NODE_ID = T0.NAME
+ 	LEFT JOIN "sap.tm.trp.db.pipeline::t_pipeline_node_logical_hierarchy" T2
+ 	ON T2.NODE_ID = T1.ID
+ 	WHERE T0.VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_MODEL_ID
+ 	GROUP BY T0.NAME,T0.DEFAULT_NODE_FLAG;
+   
+            
+END;
+
+

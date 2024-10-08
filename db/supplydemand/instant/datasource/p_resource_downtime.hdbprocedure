@@ -1,0 +1,112 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant.datasource::p_resource_downtime" (
+  OUT OUTPUT "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::t_basic_node"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+
+ DECLARE V_DOWNTIME_IN VARCHAR(11) := 'DOWNTIME_IN';
+ DECLARE V_DOWNTIME_OUT VARCHAR(12) := 'DOWNTIME_OUT';
+ DECLARE MAX_UPDATE_TIME_DI TIMESTAMP;
+ DECLARE MAX_UPDATE_TIME_DO TIMESTAMP;
+ SELECT MAX(UPDATE_TIME) INTO MAX_UPDATE_TIME_DI FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" WHERE SOURCE_TYPE = :V_DOWNTIME_IN;
+ SELECT MAX(UPDATE_TIME) INTO MAX_UPDATE_TIME_DO FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" WHERE SOURCE_TYPE = :V_DOWNTIME_OUT;
+ 
+  MASTER_DATA_DOWN_IN=SELECT 
+			t1.DOWNID,		
+			t1.LOCATION_ID, 
+			t2.EQUITYPE,
+			t2.RESOURCE_TYPE_CODE,
+			TO_TIMESTAMP(t2.CHANGEDATE) AS CHANGEDATE, 
+			BEGIN_TIMESTAMP
+		FROM "sap.tm.trp.db.semantic.resource::v_resource_downtime" AS t1
+			INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_master" AS t2
+			ON t1.RESOURCE_ID = t2.RESOURCE_ID
+				AND t1.LOCATION_ID IS NOT NULL
+				AND LOCATION_ID <> '';
+
+ MASTER_DATA_DOWN_OUT=SELECT 
+			t1.DOWNID,		
+			t1.LOCATION_ID, 
+			t2.EQUITYPE,
+			t2.RESOURCE_TYPE_CODE,
+			TO_TIMESTAMP(t2.CHANGEDATE) AS CHANGEDATE, 
+			END_TIMESTAMP
+		FROM "sap.tm.trp.db.semantic.resource::v_resource_downtime" AS t1
+			INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_master" AS t2
+			ON t1.RESOURCE_ID = t2.RESOURCE_ID
+				AND t1.LOCATION_ID IS NOT NULL
+				AND LOCATION_ID <> '';
+
+OUTPUT=
+	SELECT '' AS CLIENT, 
+			'0000' AS COMPANY_CODE, 
+			DOWNID AS SOURCE_KEY, 
+			:V_DOWNTIME_IN AS SOURCE_TYPE, 
+			:V_DOWNTIME_IN AS NODE, 
+			LOCATION_ID, 
+			EQUITYPE AS RESOURCE_GROUP, 
+			RESOURCE_TYPE_CODE AS RESOURCE_TYPE, 
+			'DEMAND' AS OUTPUT_KEY, 
+			1 AS QUANTITY, 
+			CHANGEDATE AS UPDATE_TIME, 
+			BEGIN_TIMESTAMP AS OCCURRED_TIME,
+			'' AS DELETE_FLAG
+		FROM(
+		SELECT T1.* FROM :MASTER_DATA_DOWN_IN T1
+		WHERE :MAX_UPDATE_TIME_DI IS NULL OR T1.CHANGEDATE > :MAX_UPDATE_TIME_DI
+		UNION
+		--mismacthed records
+		SELECT T1.* FROM :MASTER_DATA_DOWN_IN T1
+		INNER JOIN "sap.tm.trp.db.supplydemand.instant::t_basic_node" AS harmize_tab
+				ON harmize_tab.SOURCE_KEY = T1.DOWNID
+				AND harmize_tab.UPDATE_TIME < T1.CHANGEDATE
+			WHERE harmize_tab.DELETE_FLAG <> 'X'
+			AND T1.CHANGEDATE < :MAX_UPDATE_TIME_DI AND harmize_tab.SOURCE_TYPE = 'DOWNTIME_IN'
+		UNION
+		--missed records
+		SELECT T1.* FROM :MASTER_DATA_DOWN_IN T1
+		WHERE T1.CHANGEDATE < :MAX_UPDATE_TIME_DI
+		AND NOT EXISTS (SELECT 1
+						FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" AS harmize_tab
+						WHERE harmize_tab.SOURCE_KEY = T1.DOWNID
+						AND harmize_tab.SOURCE_TYPE = 'DOWNTIME_IN')
+		)
+		UNION
+		SELECT '' AS CLIENT, 
+			'0000' AS COMPANY_CODE, 
+			DOWNID AS SOURCE_KEY, 
+			:V_DOWNTIME_OUT AS SOURCE_TYPE, 
+			:V_DOWNTIME_OUT AS NODE, 
+			LOCATION_ID, 
+			EQUITYPE AS RESOURCE_GROUP, 
+			RESOURCE_TYPE_CODE AS RESOURCE_TYPE, 
+			'SUPPLY' AS OUTPUT_KEY, 
+			1 AS QUANTITY, 
+			CHANGEDATE AS UPDATE_TIME, 
+			END_TIMESTAMP AS OCCURRED_TIME,
+			'' AS DELETE_FLAG
+		FROM (
+		SELECT T1.* FROM :MASTER_DATA_DOWN_OUT T1
+		WHERE :MAX_UPDATE_TIME_DO IS NULL OR T1.CHANGEDATE > :MAX_UPDATE_TIME_DO
+		UNION
+		--mismacthed records
+		SELECT T1.* FROM :MASTER_DATA_DOWN_OUT T1
+		INNER JOIN "sap.tm.trp.db.supplydemand.instant::t_basic_node" AS harmize_tab
+				ON harmize_tab.SOURCE_KEY = T1.DOWNID
+				AND harmize_tab.UPDATE_TIME < T1.CHANGEDATE
+			WHERE harmize_tab.DELETE_FLAG <> 'X'
+			AND T1.CHANGEDATE < :MAX_UPDATE_TIME_DO AND harmize_tab.SOURCE_TYPE = 'DOWNTIME_OUT'
+		UNION
+		--missed records
+		SELECT T1.* FROM :MASTER_DATA_DOWN_OUT T1
+		WHERE T1.CHANGEDATE < :MAX_UPDATE_TIME_DO
+		AND NOT EXISTS (SELECT 1
+						FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" AS harmize_tab
+						WHERE harmize_tab.SOURCE_KEY = T1.DOWNID
+						AND harmize_tab.SOURCE_TYPE = 'DOWNTIME_OUT')
+		);
+
+END;

@@ -1,0 +1,106 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_query_route_for_repo_activity"    
+(
+ IN ACTIVITY_ID BIGINT,  
+ OUT route_conn_list "sap.tm.trp.db.planningcockpit::tt_route_connection",
+ OUT MESSAGE VARCHAR(200)
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"   
+	 AS
+BEGIN
+
+    DECLARE BASE_EQUIP_CONST VARCHAR(20) := 'BASE_RESOURCE_TYPE';
+    DECLARE ROUTE_ID BIGINT;    
+    DECLARE NETWORK_SETTING_GRP BIGINT;   
+    DECLARE BASE_RESOURCE_TYPE VARCHAR(10);
+    DECLARE ACTIVITY_EQUIP_TYPE VARCHAR(10);
+    DECLARE ACTIVITY_EQUIP_QUA INTEGER;
+    DECLARE QUA_COEF INTEGER;
+    DECLARE RESOURCE_CATEGORY VARCHAR(20);
+    
+    SELECT IFNULL(MAX(EQUIP_TYPE),'NA'), IFNULL(MAX(QUANTITY),0), IFNULL(MAX(ROUTE_ID),-10) 
+           INTO ACTIVITY_EQUIP_TYPE, ACTIVITY_EQUIP_QUA, ROUTE_ID
+    FROM "sap.tm.trp.db.planningcockpit::t_activity"
+    WHERE ID = :ACTIVITY_ID;
+    
+    RESOURCE_TYPES = SELECT DISTINCT T1.RESOURCE_TYPE_CODE, T2.TEU_COUNT
+                FROM "sap.tm.trp.db.semantic.resource::v_resource_type_with_category" T1
+                INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_type" T2
+                ON (T1.RESOURCE_TYPE_CODE = T2.RESOURCE_TYPE_CODE)
+                INNER JOIN "sap.tm.trp.db.planningcockpit::t_simulation_plan" T3
+                ON (T1.RESOURCE_CATEGORY = T3.RESOURCE_CATEGORY)
+                INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" T4
+                ON (T3.ID = T4.REL_SM_PLAN_ID)
+                INNER JOIN "sap.tm.trp.db.planningcockpit::t_activity" T5
+                ON (T4.ID = T5.REL_SCENARIO_ID)
+                WHERE T5.ID = :ACTIVITY_ID;
+    
+    IF :ROUTE_ID = -10
+	THEN
+		route_conn_list =
+			SELECT
+				NULL AS ROUTE_ID
+				,NULL AS SEQUENCE
+				,NULL AS FROM_TIME
+				,NULL AS TO_TIME
+				,T1.NAME AS FROM_LOCATION
+				,T1.YPOS AS FROM_LONGITUDE
+				,T1.XPOS AS FROM_LATITUDE
+				,T2.NAME AS TO_LOCATION
+				,T2.YPOS AS TO_LONGITUDE
+				,T2.XPOS AS TO_LATITUDE
+				,NULL AS MTR
+				,NULL AS DISTANCE
+				,NULL AS DURATION
+				,NULL AS TRANSPORT_COST
+				,NULL AS CURRENCY
+			FROM "sap.tm.trp.db.planningcockpit::t_activity" T0
+            LEFT JOIN  "sap.tm.trp.db.semantic.location::v_all_location" T1 ON (T1.ID = T0.FROM_LOC_ID)
+            LEFT JOIN  "sap.tm.trp.db.semantic.location::v_all_location" T2 ON (T2.ID = T0.TO_LOC_ID)  
+            WHERE T0.ID = :ACTIVITY_ID
+            ;
+       MESSAGE:='MSG_SUCCESS_STATUS';
+       RETURN;
+    END IF;
+    -- get network setting group options 
+    SELECT IFNULL(MAX(T1.NETWORK_SETTING_GROUP_ID),-1) INTO NETWORK_SETTING_GRP
+    FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" T1
+    INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" T2 ON (T1.ID = T2.REL_SM_PLAN_ID)
+    INNER JOIN "sap.tm.trp.db.planningcockpit::t_activity" T3 ON (T2.ID = T3.REL_SCENARIO_ID)
+    WHERE T3.ID = :ACTIVITY_ID;
+
+    IF :NETWORK_SETTING_GRP = -1 OR :ACTIVITY_EQUIP_TYPE = 'NA' THEN 
+       MESSAGE:='MSG_ERROR_NODATA';
+       RETURN;
+    END IF;
+     
+    CALL "sap.tm.trp.db.planningcockpit::p_get_network_setting_group_parameter_value"(:NETWORK_SETTING_GRP,opts);
+    SELECT IFNULL(MAX(VALUE),'20ST') INTO BASE_RESOURCE_TYPE FROM :opts WHERE PARAMETER_CODE = :BASE_EQUIP_CONST;
+
+    -- get equip type and teu mapping 
+    equiptype_teu = SELECT DISTINCT T1.RESOURCE_TYPE_CODE AS EQUI_CODE, T1.TEU_COUNT 
+         FROM :RESOURCE_TYPES T1 
+         WHERE T1.RESOURCE_TYPE_CODE = :BASE_RESOURCE_TYPE OR T1.RESOURCE_TYPE_CODE = :ACTIVITY_EQUIP_TYPE;
+    
+    SELECT T2.ACT_EQUIP_TEU / T1.BASE_TYPE_TEU * :ACTIVITY_EQUIP_QUA INTO QUA_COEF
+    FROM (SELECT TEU_COUNT AS BASE_TYPE_TEU FROM :equiptype_teu WHERE EQUI_CODE = :BASE_RESOURCE_TYPE) T1
+    CROSS JOIN (SELECT TEU_COUNT AS ACT_EQUIP_TEU FROM :equiptype_teu WHERE EQUI_CODE = :ACTIVITY_EQUIP_TYPE) T2;
+    
+    -- exchange longitude and latitude due to frontend history code issue                   
+    route_conn_list = 
+                 SELECT T2.ROUTE_ID, T2.SEQUENCE, T2.DEPARTURE_TIME AS FROM_TIME, T3.ARRIVAL_TIME AS TO_TIME,
+                 T2.LOCATION AS FROM_LOCATION, T4.YPOS AS FROM_LONGITUDE, T4.XPOS AS FROM_LATITUDE,
+                 T3.LOCATION AS TO_LOCATION, T5.YPOS AS TO_LONGITUDE, T5.XPOS AS TO_LATITUDE,
+                 T3.MTR, T3.DISTANCE, SECONDS_BETWEEN(T2.DEPARTURE_TIME, T3.ARRIVAL_TIME) AS DURATION,
+                 T3.TRANSPORT_COST, T3.COST_CURRENCY AS CURRENCY 
+                 FROM "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::t_route_sequence" T2
+                 INNER JOIN "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::t_route_sequence" T3 
+                       ON (T2.ROUTE_ID = T3.ROUTE_ID AND T2.SEQUENCE + 1 = T3.SEQUENCE)
+                 LEFT OUTER JOIN  "sap.tm.trp.db.semantic.location::v_all_location" T4 ON (T2.LOCATION = T4.NAME)
+                 LEFT OUTER JOIN  "sap.tm.trp.db.semantic.location::v_all_location" T5 ON (T3.LOCATION = T5.NAME)  
+                 WHERE T2.ROUTE_ID = :ROUTE_ID;         
+
+                     
+      MESSAGE:='MSG_SUCCESS_STATUS';               
+END

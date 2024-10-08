@@ -1,0 +1,100 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_get_aggregate_sd_result_for_virtual_plan" ( 
+  IN IN_VIRTUAL_PLAN_MODEL_ID BIGINT,
+  IN LOCATION_ID_LIST "sap.tm.trp.db.pickupreturn::tt_location_id_list",
+  IN IN_RESOURCE_TYPE "sap.tm.trp.db.pickupreturn::tt_resource_type_list",
+  IN IN_METADATA_NODE_ID VARCHAR(50),
+  OUT VAR_MAX_NEWEST_EXECUTION_ID BIGINT,
+  OUT RESULT_OUTPUT "sap.tm.trp.db.pickupreturn::tt_output_dataset"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+/*****************************************
+  Get execution result(supply/demand/stock data) for virtual plan 
+ ****************************************/
+ DECLARE  ADDREGAT_METHOD_KEY VARCHAR(30) := 'AGGREGATIONMETHOD';
+ DECLARE  ADDREGAT_METHOD_SUM_VALUE VARCHAR(30) := 'SUM';
+ DECLARE  ADDREGAT_METHOD_MEAN_VALUE VARCHAR(30) := 'MEAN';
+ DECLARE V_STOCK_NODE_ID VARCHAR(50) := 'STOCK';
+ DECLARE CNT1 INTEGER := 0;
+ 
+ SQL_EXECUTION_IDS = 
+		        SELECT A.PLAN_MODEL_ID,MAX(A.ID) AS NEWEST_EXECUTION_ID FROM  "sap.tm.trp.db.pipeline::t_plan_execution" A
+		        INNER JOIN "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" B
+		        ON (A.PLAN_MODEL_ID = B.PERSISTED_PLAN_MODEL_ID)
+		        WHERE B.VIRTUAL_PLAN_MODEL_ID = :IN_VIRTUAL_PLAN_MODEL_ID
+		        GROUP BY A.PLAN_MODEL_ID;
+	  
+	  EQUIP_TYPE_IDS_OF_VP = SELECT EQUIP_TYPE_ID FROM :IN_RESOURCE_TYPE;
+  	  
+  	  lt_t_pipeline_output_dataset = select T1.*, T2.*
+			FROM :SQL_EXECUTION_IDS T1
+			INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T2
+			ON (T1.NEWEST_EXECUTION_ID = T2.PLAN_EXECUTION_ID)
+			INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" D ON (T2.NODE_ID = D.ID)
+		    WHERE (D.METADATA_NODE_ID = :IN_METADATA_NODE_ID OR D.METADATA_NODE_ID = :V_STOCK_NODE_ID);
+			
+	lt_output_dataset_equi_loc = select A.*
+				FROM :lt_t_pipeline_output_dataset A
+				INNER JOIN :LOCATION_ID_LIST C ON (A.LOCATION_ID = C.LOCATION_ID)
+				INNER JOIN :EQUIP_TYPE_IDS_OF_VP F ON (A.EQUIP_TYPE_ID = F.EQUIP_TYPE_ID );
+
+	SELECT IFNULL(MAX(PLAN_EXECUTION_ID),-1) INTO  VAR_MAX_NEWEST_EXECUTION_ID
+	FROM :lt_t_pipeline_output_dataset;
+	
+	HEAD_EXECUTION
+	= SELECT DISTINCT
+	T1.PLAN_EXECUTION_ID,
+	T1.NODE_ID,
+	T1.OUTPUT_KEY,
+	T1.LOCATION_ID,
+	T1.LOCATION_NAME,
+	T1.EQUIP_TYPE_ID,
+	T1.EQUIP_TYPE_NAME AS EQUIP_NAME,
+	T1.OUTPUT_VALUE, 
+	T3.START_TIME,
+	T3.END_TIME,
+	T3.SEQUENCE,
+	T3.TIME_INTERVAL, 
+	T3.TIME_INTERVAL_ID,
+	CASE WHEN T1.NODE_ID IS NULL THEN 0 ELSE 1 END AS HAS_DRILLDOWN_FLAG,
+	B.value as drilldown_node_nav_type
+	FROM 
+	:lt_output_dataset_equi_loc T1
+	INNER JOIN :lt_t_pipeline_output_dataset T3 ON T1.END_TIME = T3.END_TIME
+    LEFT OUTER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node_misc_info" B ON (T1.NODE_ID = B.NODE_ID AND B.KEY = 'navigationType')
+	WHERE T3.PLAN_EXECUTION_ID = :VAR_MAX_NEWEST_EXECUTION_ID;
+
+	
+	HEAD_EXECUTION_NEWEST
+        	= SELECT T1.*
+        	FROM :HEAD_EXECUTION T1
+        	INNER JOIN
+                (  
+        	        SELECT T0.LOCATION_ID,T0.EQUIP_TYPE_ID,T0.OUTPUT_KEY,T0.END_TIME,
+        	        MAX(T0.PLAN_EXECUTION_ID) AS MAX_EXECUTION_ID
+        	        FROM :HEAD_EXECUTION T0
+        	        GROUP BY T0.LOCATION_ID,T0.EQUIP_TYPE_ID,T0.OUTPUT_KEY,T0.END_TIME
+                )T2
+                ON (T1.LOCATION_ID = T2.LOCATION_ID AND T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID
+                   AND T1.OUTPUT_KEY = T2.OUTPUT_KEY AND T1.END_TIME = T2.END_TIME AND T1.PLAN_EXECUTION_ID = T2.MAX_EXECUTION_ID);
+
+           RESULT_OUTPUT = SELECT  
+           LOCATION_ID,
+           LOCATION_NAME,
+           EQUIP_TYPE_ID,
+           EQUIP_NAME AS EQUIP_TYPE_NAME,
+           OUTPUT_KEY,
+           OUTPUT_VALUE,
+           NODE_ID,
+           TIME_INTERVAL,
+           TIME_INTERVAL_ID,
+           START_TIME,
+           END_TIME,
+           SEQUENCE
+           FROM :HEAD_EXECUTION_NEWEST;
+  
+END;
+ 

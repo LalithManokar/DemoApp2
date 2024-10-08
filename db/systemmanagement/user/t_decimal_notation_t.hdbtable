@@ -1,0 +1,9 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "DECIMAL_NOTATION_ID"; sqlType = INTEGER; nullable = false;},
+    {name = "LANG_CODE"; sqlType = VARCHAR; length = 10; nullable = false;},
+    {name = "DESC"; sqlType = VARCHAR; length = 50; nullable = true;}
+];
+
+table.primaryKey.pkcolumns = ["DECIMAL_NOTATION_ID", "LANG_CODE"];

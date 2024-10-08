@@ -1,0 +1,65 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_persisted_plans_for_virtual_plan_schedule" (
+	IN in_persisted_plan_ids "sap.tm.trp.db.pipeline::tt_plan_id_list",
+	IN Persist "sap.tm.trp.db.pipeline::tt_persist_plans",
+	OUT plan_info_out "sap.tm.trp.db.pipeline::tt_persisted_plan_info_schedule"
+	--out message varchar(20)
+	)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN 
+  
+--//return out all the plans with same conbinations of all the following fields:
+--DATE OF START_TIME AND EXPIRY_TIME/RECURRENCE_TYPE/RECURRENCE_INTERVAL/RECURRENCE_DAT
+--USAGE/USAGE_CODE
+plan_info_out =	SELECT * FROM(
+								SELECT T1.ID, 
+								       T1.PLAN_TYPE_ID, 
+								       T1.PLAN_TYPE_NAME,
+								       T1.OUTPUT_NODE_NAME AS KPI_TYPE,
+									   T1.NAME,
+									   T1.DESC,
+									   RESOURCE_FILTER_ID ,
+									   RESOURCE_FILTER_NAME ,
+									   LOCATION_FILTER_ID,
+									   LOCATION_FILTER_NAME,
+									   TIME_FILTER_ID,
+									   TIME_FILTER_NAME,
+								       VISIBILITY,
+								       VISIBILITY_DESC ,
+								       CREATED_BY,
+								       MODIFIED_TIME as LAST_MODIFIED_TIME,
+								       T3.START_TIME,
+								       T1.EXPIRY_TIME,
+								       T3.RECURRENCE_TYPE,
+								       T3.RECURRENCE_INTERVAL,
+								       IFNULL(T3.RECURRENCE_DAY, 0)                      AS RECURRENCE_DAY,
+								       T1.LAST_EXECUTION_TIME, 
+								       T1.LAST_EXECUTION_STATUS, 
+								       T1.PLAN_STATUS, 
+								       T1.PLAN_STATUS_DESC,
+								       IFNULL(T1.USAGE, ' ')                             AS USAGE,
+								       T1.USAGE_CODE,
+								       T1.USAGE_DESC, 
+								       IFNULL(T3.EXECUTE_WORKING_HOUR, ' ')              AS EXECUTE_WORKING_HOUR,
+								       IFNULL(T3.START_WORKING_HOUR_TIME, T3.START_TIME) AS START_WORKING_HOUR_TIME,
+								       IFNULL(T3.END_WORKING_HOUR_TIME, T1.EXPIRY_TIME)  AS END_WORKING_HOUR_TIME
+								 FROM "sap.tm.trp.db.pipeline::cv_plan_list_wrapper" T1
+								 INNER JOIN :in_persisted_plan_ids T2 ON (T1.ID = T2.ID) 
+								 INNER JOIN  "sap.tm.trp.db.pipeline::t_pipeline_model" T4 ON (T1.CALCULATION_MODEL_ID = T4.ID AND ( INSTANT_ENABLED IS NULL OR INSTANT_ENABLED = ''))
+								 LEFT OUTER JOIN "sap.tm.trp.db.job::t_model_schedule_detail" T3 ON(T1.ID=T3.model_id)
+				              )
+				  WHERE TO_VARCHAR(START_TIME,'YYYY-MM-DD')
+				   in (select TO_VARCHAR(START_TIME,'YYYY-MM-DD') from "sap.tm.trp.db.job::t_model_schedule_detail" where model_id in (select ID from :Persist))   --Start time of plan schedule should be same as assigned one
+				   AND TO_VARCHAR(EXPIRY_TIME,'YYYY-MM-DD') in (select TO_VARCHAR(EXPIRY_TIME,'YYYY-MM-DD') from "sap.tm.trp.db.job::t_model_schedule_detail" where model_id in (select ID from :Persist))  --End time of plan schedule should be same as assigned one
+				   AND RECURRENCE_TYPE in(select RECURRENCE_TYPE from "sap.tm.trp.db.job::t_model_schedule_detail" where model_id in (select ID from :Persist))  --Recurrency of plan schedule should be same as assigned one
+				   AND RECURRENCE_INTERVAL in(select RECURRENCE_INTERVAL from "sap.tm.trp.db.job::t_model_schedule_detail" where model_id in (select ID from :Persist))  --Interval of plan schedule should be same as assigned one
+				   AND RECURRENCE_DAY in(SELECT IFNULL(RECURRENCE_DAY, 0) AS RECURRENCE_DAY FROM "sap.tm.trp.db.job::t_model_schedule_detail" where model_id in (select ID from :Persist)) --Executed On of sub-plans assigned to virtual plan should be same
+				  -- AND EXECUTE_WORKING_HOUR in(SELECT IFNULL(EXECUTE_WORKING_HOUR, ' ') AS EXECUTE_WORKING_HOUR FROM "sap.tm.trp.db.job::t_model_schedule_detail" where model_id in (select ID from :Persist))  
+				  -- AND START_WORKING_HOUR_TIME in(SELECT IFNULL(START_WORKING_HOUR_TIME, START_TIME) AS START_WORKING_HOUR_TIME from "sap.tm.trp.db.job::t_model_schedule_detail" where model_id in (select ID from :Persist))  
+				  -- AND END_WORKING_HOUR_TIME in(SELECT IFNULL(END_WORKING_HOUR_TIME, EXPIRY_TIME) AS END_WORKING_HOUR_TIME from "sap.tm.trp.db.job::t_model_schedule_detail" where model_id in (select ID from :Persist))  
+				   AND USAGE in(select IFNULL(USAGE, ' ') AS USAGE from "sap.tm.trp.db.pipeline::t_plan_model" where id in (select ID from :Persist))  --Usage of plan schedule should be same as assigned one
+				   AND USAGE_CODE in(select USAGE_CODE from "sap.tm.trp.db.pipeline::t_plan_model" where id in (select ID from :Persist));  --Usage Code of plan schedule should be same as assigned one
+				   
+END;

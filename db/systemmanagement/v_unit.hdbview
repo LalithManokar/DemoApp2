@@ -1,0 +1,7 @@
+schema = "SAP_TM_TRP"; 
+     
+query = "SELECT UNIT_CODE,UNIT_TYPE 
+         FROM \"sap.tm.trp.db.systemmanagement.user::t_unit_configuration\"
+         ";
+
+depends_on_table = ["sap.tm.trp.db.systemmanagement.user::t_unit_configuration"];

@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_time_filter" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_time_filter"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="VARCHAR" id="NAME" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="DESC" length="50"/>
+        <viewAttribute datatype="SMALLINT" id="DIRECTION_FLAG"/>
+        <viewAttribute datatype="VARCHAR" id="DIRECTION_DESC" length="500"/>
+        <viewAttribute datatype="INTEGER" id="ENABLE_OFFSET_MOMENT"/>
+        <viewAttribute datatype="VARCHAR" id="TIME_ZONE_ID" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="TIME_ZONE_ID_DESC" length="500"/>
+        <viewAttribute datatype="INTEGER" id="OFFSET_START_TIME_HOUR"/>
+        <viewAttribute datatype="INTEGER" id="OFFSET_START_TIME_MINUTE"/>
+        <viewAttribute datatype="INTEGER" id="OFFSET_START_TIME_WEEK_DAY"/>
+        <viewAttribute datatype="INTEGER" id="OFFSET_START_TIME_MONTH_DAY"/>
+        <viewAttribute datatype="VARCHAR" id="VISIBILITY" length="3"/>
+        <viewAttribute datatype="VARCHAR" id="VISIBILITY_DESC" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="CREATED_BY" length="60"/>
+        <viewAttribute datatype="TIMESTAMP" id="CREATED_TIME"/>
+        <viewAttribute datatype="VARCHAR" id="MODIFIED_BY" length="60"/>
+        <viewAttribute datatype="TIMESTAMP" id="MODIFIED_TIME"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition>
+
+BEGIN
+DECLARE NAME VARCHAR(60);
+DECLARE IS_SUPERUSER INTEGER;
+DECLARE LANGUAGE_CODE VARCHAR(1);
+SELECT USERNAME INTO NAME FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+SELECT COUNT(DISTINCT USER_NAME) INTO IS_SUPERUSER
+FROM &quot;SYS&quot;.&quot;EFFECTIVE_APPLICATION_PRIVILEGES&quot; T1
+INNER JOIN &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot; T2 ON T1.USER_NAME = T2.USERNAME
+WHERE T1.PRIVILEGE = 'sap.tm.trp.service::UnrestrictedRead'
+AND T1.USER_NAME = :NAME
+AND T1.IS_VALID ='TRUE'
+OR (T1.USER_NAME = :NAME AND T2.USER_TYPE_ID = 99);
+
+SELECT IFNULL(MAX(SPRAS),'E') INTO LANGUAGE_CODE FROM &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot;;
+
+IF :IS_SUPERUSER = 1 THEN
+    var_out =
+        SELECT
+            T1.ID
+            ,T1.CODE AS NAME
+            ,T1.DESC
+            ,T1.DIRECTION_FLAG
+            ,T6.DESC AS DIRECTION_DESC
+            ,T1.OFFSET_FLAG AS ENABLE_OFFSET_MOMENT
+            ,T1.TIMEZONE_ID AS TIME_ZONE_ID
+            ,T7.DESC AS TIME_ZONE_ID_DESC
+            ,T1.HOUR_START_FROM AS OFFSET_START_TIME_HOUR
+            ,T1.MINUTE_START_FROM AS OFFSET_START_TIME_MINUTE
+            ,T1.WEEK_START_FROM AS OFFSET_START_TIME_WEEK_DAY
+            ,T1.MONTH_START_FROM AS OFFSET_START_TIME_MONTH_DAY
+            ,T1.VISIBILITY
+            ,T5.DESC AS VISIBILITY_DESC
+            ,CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+                  WHEN T1.CREATED_BY &lt;> 0 AND T1.CREATED_BY IS NOT NULL AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+		          WHEN T1.CREATED_BY = 0 OR T1.CREATED_BY IS NULL THEN ''
+		          ELSE '***' END AS CREATED_BY
+            ,T1.CREATED_ON AS CREATED_TIME
+            ,CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+                  WHEN T1.MODIFIED_BY &lt;> 0 AND T1.MODIFIED_BY IS NOT NULL AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+		          WHEN T1.MODIFIED_BY = 0 OR T1.MODIFIED_BY IS NULL THEN ''
+		          ELSE '***' END AS MODIFIED_BY
+            ,T1.MODIFIED_ON AS MODIFIED_TIME
+        FROM &quot;sap.tm.trp.db.filter::t_time_filter&quot; T1
+        LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement.user::v_time_zone&quot; T7 ON T7.CODE = T1.TIMEZONE_ID
+        LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement::t_visibility_type&quot; T4 ON T4.CODE = T1.VISIBILITY
+        LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement::t_visibility_type_t&quot; T5 ON T5.ID = T4.ID AND T5.SPRAS = IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E')
+        LEFT OUTER JOIN &quot;sap.tm.trp.db.filter::t_time_filter_direction_t&quot; T6 ON T6.ID = T1.DIRECTION_FLAG AND T6.SPRAS = IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E')
+        LEFT JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; T2 ON T2.ID = T1.CREATED_BY
+        LEFT JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; T3 ON T3.ID = T1.MODIFIED_BY
+        LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T9  ON T2.USERNAME = T9.USERNAME
+        LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T10  ON T3.USERNAME = T10.USERNAME
+        CROSS JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege&quot; PRIVILEGE;
+ELSE
+    var_out =
+        SELECT
+            T1.ID
+            ,T1.CODE AS NAME
+            ,T1.DESC
+            ,T1.DIRECTION_FLAG
+            ,T6.DESC AS DIRECTION_DESC
+            ,T1.OFFSET_FLAG AS ENABLE_OFFSET_MOMENT
+            ,T1.TIMEZONE_ID AS TIME_ZONE_ID
+            ,T7.DESC AS TIME_ZONE_ID_DESC
+            ,T1.HOUR_START_FROM AS OFFSET_START_TIME_HOUR
+            ,T1.MINUTE_START_FROM AS OFFSET_START_TIME_MINUTE
+            ,T1.WEEK_START_FROM AS OFFSET_START_TIME_WEEK_DAY
+            ,T1.MONTH_START_FROM AS OFFSET_START_TIME_MONTH_DAY
+            ,T1.VISIBILITY
+            ,T5.DESC AS VISIBILITY_DESC
+            ,CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+                  WHEN T1.CREATED_BY &lt;> 0 AND T1.CREATED_BY IS NOT NULL AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+		          WHEN T1.CREATED_BY = 0 OR T1.CREATED_BY IS NULL THEN ''
+		          ELSE '***' END AS CREATED_BY
+            ,T1.CREATED_ON AS CREATED_TIME
+            ,CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+                  WHEN T1.MODIFIED_BY &lt;> 0 AND T1.MODIFIED_BY IS NOT NULL AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+		          WHEN T1.MODIFIED_BY = 0 OR T1.MODIFIED_BY IS NULL THEN ''
+		          ELSE '***' END AS MODIFIED_BY
+            ,T1.MODIFIED_ON AS MODIFIED_TIME
+        FROM &quot;sap.tm.trp.db.filter::t_time_filter&quot; T1
+        LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement.user::v_time_zone&quot; T7 ON T7.CODE = T1.TIMEZONE_ID
+        LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement::t_visibility_type&quot; T4 ON T4.CODE = T1.VISIBILITY
+        LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement::t_visibility_type_t&quot; T5 ON T5.ID = T4.ID AND T5.SPRAS = IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E')
+        LEFT OUTER JOIN &quot;sap.tm.trp.db.filter::t_time_filter_direction_t&quot; T6 ON T6.ID = T1.DIRECTION_FLAG AND T6.SPRAS = IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E')
+        LEFT JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; T2 ON T2.ID = T1.CREATED_BY
+        LEFT JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; T3 ON T3.ID = T1.MODIFIED_BY
+        LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T9  ON T2.USERNAME = T9.USERNAME
+        LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T10  ON T3.USERNAME = T10.USERNAME
+        CROSS JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege&quot; PRIVILEGE
+        WHERE T1.VISIBILITY = 'G' OR (T1.VISIBILITY = 'P' AND T2.USERNAME = :NAME)
+        ;
+END IF;
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="NAME" order="2">
+        <descriptions defaultDescription="NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="DESC" order="3">
+        <descriptions defaultDescription="DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+      <attribute id="DIRECTION_DESC" order="5">
+        <descriptions defaultDescription="DIRECTION_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DIRECTION_DESC"/>
+      </attribute>
+      <attribute id="TIME_ZONE_ID" order="7">
+        <descriptions defaultDescription="TIME_ZONE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_ZONE_ID"/>
+      </attribute>
+      <attribute id="TIME_ZONE_ID_DESC" order="8">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_ZONE_ID_DESC"/>
+      </attribute>
+      <attribute id="VISIBILITY" order="13">
+        <descriptions defaultDescription="VISIBLE_FLAG"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY"/>
+      </attribute>
+      <attribute id="VISIBILITY_DESC" order="14">
+        <descriptions defaultDescription="VISIBILITY_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY_DESC"/>
+      </attribute>
+      <attribute id="CREATED_BY" order="15">
+        <descriptions defaultDescription="CREATE_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATED_BY"/>
+      </attribute>
+      <attribute id="MODIFIED_BY" order="17">
+        <descriptions defaultDescription="MODIFIED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="MODIFIED_BY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="DIRECTION_FLAG" order="4" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DIRECTION_FLAG"/>
+        <measureMapping columnObjectName="Script_View" columnName="DIRECTION_FLAG"/>
+      </measure>
+      <measure id="ENABLE_OFFSET_MOMENT" order="6" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ENABLE_OFFSET_MOMENT"/>
+        <measureMapping columnObjectName="Script_View" columnName="ENABLE_OFFSET_MOMENT"/>
+      </measure>
+      <measure id="OFFSET_START_TIME_HOUR" order="9" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="OFFSET_START_TIME_HOUR"/>
+        <measureMapping columnObjectName="Script_View" columnName="OFFSET_START_TIME_HOUR"/>
+      </measure>
+      <measure id="OFFSET_START_TIME_MINUTE" order="10" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="OFFSET_START_TIME_MINUTE"/>
+        <measureMapping columnObjectName="Script_View" columnName="OFFSET_START_TIME_MINUTE"/>
+      </measure>
+      <measure id="OFFSET_START_TIME_WEEK_DAY" order="11" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="OFFSET_START_TIME_WEEK_DAY"/>
+        <measureMapping columnObjectName="Script_View" columnName="OFFSET_START_TIME_WEEK_DAY"/>
+      </measure>
+      <measure id="OFFSET_START_TIME_MONTH_DAY" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="OFFSET_START_TIME_MONTH_DAY"/>
+        <measureMapping columnObjectName="Script_View" columnName="OFFSET_START_TIME_MONTH_DAY"/>
+      </measure>
+      <measure id="CREATED_TIME" order="16" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="CREATE_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="CREATED_TIME"/>
+      </measure>
+      <measure id="MODIFIED_TIME" order="18" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="LAST_MODIFIED_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="MODIFIED_TIME"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

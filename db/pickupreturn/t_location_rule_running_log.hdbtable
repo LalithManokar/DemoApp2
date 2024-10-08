@@ -1,0 +1,13 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "RUN_ID"; sqlType = VARCHAR; length = 200;nullable = false;},
+    {name = "RULE_ID"; sqlType = BIGINT; },
+    {name = "LOCATION_FILTER_ID"; sqlType = BIGINT;nullable = false;},
+    {name = "EXECUTION_STATUS"; sqlType = INTEGER; comment="1:success  -1:error";},
+    {name = "ERROR_MSG";sqlType = VARCHAR; length = 2000;},
+    {name = "EXECUTION_START_TIME"; sqlType = TIMESTAMP;},
+    {name = "EXECUTION_END_TIME"; sqlType = TIMESTAMP;}
+    ];
+table.primaryKey.pkcolumns = ["ID"];

@@ -1,0 +1,18 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::p_archive_rule_delete" ( 
+IN RULE_ID BIGINT) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	AS
+BEGIN
+DECLARE USER_ID BIGINT;
+
+-- GET CURRENT USER_ID
+SELECT IFNULL(ID,0) INTO USER_ID
+FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+UPDATE "sap.tm.trp.db.archive::t_archive_rule" SET ACTIVE=0,MODIFIED_BY=:USER_ID,MODIFIED_ON=CURRENT_UTCTIMESTAMP 
+WHERE ID=:RULE_ID;
+
+END;

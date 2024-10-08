@@ -1,0 +1,14 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.dashboard::p_tile_item_create" (
+    IN TILE_ID BIGINT,
+    IN ITEM_LIST "sap.tm.trp.db.dashboard::tt_tile_item"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+    
+    INSERT INTO "sap.tm.trp.db.dashboard::t_tile_item"
+    SELECT "sap.tm.trp.db.dashboard::s_tile_item".NEXTVAL, :TILE_ID, KEY, VALUE FROM :ITEM_LIST;
+
+END

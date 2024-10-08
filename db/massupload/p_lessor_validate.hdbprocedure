@@ -1,0 +1,37 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_lessor_validate" (
+	IN LESSOR_INPUT "sap.tm.trp.db.massupload::tt_lessor_upload",
+    IN ERROR_LIMIT INTEGER,
+    OUT INVALID_ITEMS "sap.tm.trp.db.massupload::tt_massupload_invalid_item" 
+    ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+
+	--Declarations
+	DECLARE CNT INT;
+	
+	--Duplicate LESSOR_AGREMENT_REFERENCE from CSV file
+    ITEMS = 
+			SELECT CODE
+			FROM :LESSOR_INPUT GROUP BY CODE HAVING COUNT(CODE)>1;
+	
+	
+	--VALIDATE if INPUT have Duplicate LESSOR_AGREMENT_REFERENCE 
+	INVALID_ITEMS =  SELECT   LS.ROW_INDEX,
+	               		      1 AS COL_INDEX,
+		               		 'DUPLICATE_CODE' AS REASON_CODE
+		          			 FROM :ITEMS AS A
+		         	         JOIN :LESSOR_INPUT LS
+		         	         ON LS.CODE = A.CODE;
+	         	         
+	         	         
+	--Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;	
+
+END;

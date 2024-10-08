@@ -1,0 +1,44 @@
+schema = "SAP_TM_TRP";
+query = "SELECT TOP 1 NAME,CLIENT_CODE,CLIENT_CODE_DESC,ZONE_HIERARCHY_ID,ZONE_HIERARCHY_DESC,DESC,LAST_CHANGED_BY,LAST_CHANGED_ON
+           FROM (SELECT T1.CODE AS NAME, T1.CLIENT_CODE, T4.NAME AS CLIENT_CODE_DESC, 
+                        T2.ID AS ZONE_HIERARCHY_ID,T2.NAME AS ZONE_HIERARCHY_DESC,T3.DESC AS DESC,
+                        CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                             WHEN (T1.LAST_MODIFIED_BY <> 0 AND T1.LAST_MODIFIED_BY IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+			                 WHEN T1.LAST_MODIFIED_BY = 0 OR T1.LAST_MODIFIED_BY IS NULL THEN ''
+			                 ELSE '***' END AS LAST_CHANGED_BY,
+                        T1.LAST_MODIFIED_AT AS LAST_CHANGED_ON
+                 FROM (SELECT TOP 1 CODE,CONFIGCODE,CLIENT_CODE,ZONE_HIERARCHY_ID,
+                              NAME,LAST_MODIFIED_BY,LAST_MODIFIED_AT
+                       FROM (
+                       SELECT CODE,CODE AS CONFIGCODE,CLIENT_CODE,ZONE_HIERARCHY_ID,
+                              NAME,LAST_MODIFIED_BY,LAST_MODIFIED_AT
+                       FROM \"sap.tm.trp.db.semantic.common::t_config\"
+                       UNION
+                       SELECT CODE,CODE AS CONFIGCODE,NULL AS CLIENT_CODE,NULL AS ZONE_HIERARCHY_ID,
+                              NULL AS NAME,NULL AS LAST_MODIFIED_BY,NULL AS LAST_MODIFIED_AT
+                       FROM \"sap.tm.trp.db.semantic.common::t_config_pre\"  )
+                 ) T1
+                 LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_zone_hierarchy\" T2
+                 ON (T1.ZONE_HIERARCHY_ID = T2.ID)
+                 LEFT OUTER JOIN (SELECT A.* FROM \"sap.tm.trp.db.systemmanagement.customization::t_config_t\" A
+                            INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" B
+                            ON (A.SPRAS = B.SPRAS)) T3
+                 ON (T1.CODE = T3.CODE)
+                 LEFT OUTER JOIN \"sap.tm.trp.db.semantic.common::v_client_code_list\" T4
+                 ON (T1.CLIENT_CODE = T4.CLIENT)
+                 LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" C
+                 ON (T1.LAST_MODIFIED_BY = C.ID)
+                 LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T9  ON C.USERNAME = T9.USERNAME
+                 CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE
+                  )
+                ";
+       
+depends_on_view = ["sap.tm.trp.db.semantic.location::v_zone_hierarchy",
+                   "sap.tm.trp.db.semantic.common::v_lang_code",
+                   "sap.tm.trp.db.semantic.common::v_client_code_list",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_unblock_users",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];
+depends_on_table = ["sap.tm.trp.db.semantic.common::t_config",
+                    "sap.tm.trp.db.semantic.common::t_config_pre",
+                    "sap.tm.trp.db.systemmanagement.customization::t_config_t"];

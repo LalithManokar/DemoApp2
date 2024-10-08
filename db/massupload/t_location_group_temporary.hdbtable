@@ -1,0 +1,23 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+
+    {name = "ROW_NUM"; sqlType = INTEGER;  },
+    {name = "LOCATION_GROUP_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "LOCATION_GROUP_NAME"; sqlType = VARCHAR; length = 200;},
+    {name = "DESC"; sqlType = VARCHAR; length = 500;},
+    {name = "IND_UPD"; sqlType = INTEGER; },
+    {name = "LOCATION_TYPE"; sqlType = INTEGER; }, 
+    {name = "VISIBILITY"; sqlType = VARCHAR; length = 3;},
+    {name = "LOCATION_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "LOCATION_NAME"; sqlType = VARCHAR; length = 200;},
+    {name = "PRIME_LOCATION_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "PRIME_LOCATION_NAME"; sqlType = VARCHAR; length = 200;},      
+    {name = "RESOURCE_CATEGORY"; sqlType = VARCHAR; length = 50; },
+    {name = "USER_ID"; sqlType =  BIGINT;  nullable = false; },
+    {name = "CREATE_BY"; sqlType = BIGINT;},
+    {name = "CREATE_AT"; sqlType = TIMESTAMP;},
+    {name = "ACTION_TIME"; sqlType = TIMESTAMP; nullable = true; },
+    {name = "CONNECTION_ID"; sqlType = VARCHAR; length = 100; nullable = true; }  
+        
+];

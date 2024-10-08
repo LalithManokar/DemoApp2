@@ -1,0 +1,46 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_get_equips_by_filterid_name" (
+    IN EQUIPMENT_FILTER_ID BIGINT,
+	IN EQUIPMENT_TYPE VARCHAR(50),
+	OUT EQUIP_TYPES "sap.tm.trp.db.filter::tt_equip_types" 
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA 
+AS
+BEGIN
+
+  DECLARE EQUIP_FLAG INTEGER;
+  
+  SELECT IFNULL(MAX(FILTER_TYPE),1) INTO EQUIP_FLAG
+  FROM "sap.tm.trp.db.filter::t_equipment_filter" T1
+  WHERE ID = :EQUIPMENT_FILTER_ID;
+       
+  -- The EQUIPMENT_TYPE passed in depends on the filter type
+  -- if it's of type resource, the exact equip code is passed in 
+  -- if it's of type resource group, the resource group name is passed in 
+  IF :EQUIP_FLAG = 1  THEN     
+    IF LENGTH(:EQUIPMENT_TYPE) > 0 THEN
+      EQUIP_TYPES = SELECT :EQUIPMENT_TYPE AS EQUIPMENT_TYPE FROM DUMMY;
+    ELSE    
+      EQUIP_TYPES = SELECT DISTINCT EQUI_CODE AS EQUIPMENT_TYPE
+                     FROM "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T1
+                     WHERE EQUIPMENT_FILTER_ID = :EQUIPMENT_FILTER_ID; 
+    END IF;                
+  ELSEIF :EQUIP_FLAG = 2 THEN
+    IF LENGTH(:EQUIPMENT_TYPE) > 0 THEN
+      EQUIP_TYPES = SELECT DISTINCT t2.EQUI_CODE AS EQUIPMENT_TYPE
+                     FROM "sap.tm.trp.db.systemmanagement::t_equipment_group" T1
+                     INNER JOIN "sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth" T2
+                     ON (T1.ID = T2.EQUIPMENT_GROUP_ID)
+                     WHERE T1.DESC = :EQUIPMENT_TYPE;  
+    ELSE
+      EQUIP_TYPES = SELECT DISTINCT EG1.EQUI_CODE AS EQUIPMENT_TYPE 
+                     FROM "sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth"  EG1
+                     INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" EF1 
+                     ON (EF1.EQUIPMENT_GROUP_ID=EG1.EQUIPMENT_GROUP_ID AND EG1.RESOURCE_CATEGORY = EF1.RESOURCE_CATEGORY)
+                     WHERE EF1.EQUIPMENT_FILTER_ID = :EQUIPMENT_FILTER_ID;
+    END IF;
+  END IF;  
+
+END;

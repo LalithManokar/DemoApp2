@@ -1,0 +1,43 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_ext_location_assignment_finalize_rulegroup" (
+    IN RULE_GROUP_ID BIGINT,
+    IN EXECUTION_ID VARCHAR(200),
+    IN LOC_ASSIGNMENT_FINALIZE_TU_IDS "sap.tm.trp.db.pickupreturn::tt_tu_list",
+    IN START_TIME TIMESTAMP ) 
+	
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	--READS SQL DATA 
+	AS
+BEGIN
+
+       update "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result"  A 
+       set A.RULE_GROUP_ID3 = :RULE_GROUP_ID,A.EXECUTION_TIME = :START_TIME,A.PROCESS_3_EXECUTION_ID = :EXECUTION_ID,A.STATUS = 'U', 
+       PROCESS_3_EXECUTION_START_TIME = :START_TIME, PROCESS_3_EXECUTION_END_TIME = CURRENT_UTCTIMESTAMP, AYSNC_TM_UPD = 1
+       where A.RULE_ID in (select rule_id from "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" where rule_group_id = :rule_group_id)
+       and A.TU_ID in (SELECT TU_ID  from :LOC_ASSIGNMENT_FINALIZE_TU_IDS)
+       and A.STATUS = 'O';
+
+	   DELETE FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction"
+       WHERE RULE_ID in (select rule_id from "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" where rule_group_id = :rule_group_id);
+     
+     	
+       STREET_TURN_TU_LIST = SELECT  TU_ID  
+                           FROM  "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft" 
+                           WHERE  TU_ID IN (SELECT TU_ID FROM :LOC_ASSIGNMENT_FINALIZE_TU_IDS);  
+                             
+       MANU_RULE_LIST = SELECT  DISTINCT RULE_ID  
+                       FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft" A              
+                       WHERE A.SCHEDULE_TIME_TYPE=0
+                       AND A.RULE_ID NOT IN (select rule_id from "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" where rule_group_id = :rule_group_id);  
+                                          
+                              
+    -- update TU STATUS　in draft table for other rule ,when other user finalized related TU ,they will get warn message : the TU is updated                         
+    
+    	update "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft"  A 
+        set A.INVALID = 1
+     	where A.RULE_ID  in (SELECT RULE_ID FROM :MANU_RULE_LIST )
+        and (A.TU_ID in (SELECT TU_ID  from :STREET_TURN_TU_LIST));
+
+	
+END;

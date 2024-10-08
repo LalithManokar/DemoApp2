@@ -1,0 +1,160 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_query_path_missing_cost"(
+   IN dataset_id BIGINT,
+   IN setting_group_id BIGINT,
+   OUT return_code TINYINT,
+   OUT dataset_connection_info  "sap.tm.trp.db.costmodel::tt_cost_dataset_connection_info_new",
+   OUT cost_info_out TABLE (transportation_mode_code NVARCHAR(20), resource_type NVARCHAR(20), 
+   resource_category NVARCHAR(20), carrier_id NVARCHAR(20), cost_dataset_id VARCHAR(500)),
+   OUT cost_model_id BIGINT,
+   OUT message "sap.tm.trp.routing.db.common::tt_message"
+)
+    LANGUAGE SQLSCRIPT 
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_ROUTING"
+    READS SQL DATA 
+    AS
+BEGIN
+    DECLARE equip_type NVARCHAR(20);
+    DECLARE USAGE_PATH VARCHAR(10) =  'PATH';
+    DECLARE COST_PARAM_NAME CONSTANT VARCHAR(50) = 'COST_MODEL_ID'; 
+    DECLARE MTR_PARAM_NAME CONSTANT VARCHAR(50) = 'MTR'; 
+    DECLARE EQUIP_TYPE_PARAM_NAME CONSTANT VARCHAR(50) = 'BASE_RESOURCE_TYPE';
+    DECLARE count INTEGER;
+    
+    return_code = 0;
+
+    CALL "sap.tm.trp.routing.db.dataset::p_get_dataset_chain"(:dataset_id, dataset_chain);
+    
+    RESOURCE_TYPES = SELECT DISTINCT T1.RESOURCE_TYPE_CODE, FIRST_VALUE(T2.EQUI_TYPE ORDER BY T2.EQUI_TYPE) AS CATEGORY
+                     FROM "sap.tm.trp.db.semantic.resource::v_resource_type_with_category" T1
+                     INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_type" T2
+                     ON (T1.RESOURCE_TYPE_CODE = T2.RESOURCE_TYPE_CODE)
+                     INNER JOIN "sap.tm.trp.db.planningcockpit::t_network_setting_group" T3
+                     ON (T1.RESOURCE_CATEGORY = T3.RESOURCE_CATEGORY)
+                     WHERE T3.ID = :setting_group_id
+                     GROUP BY T1.RESOURCE_TYPE_CODE;
+    
+    -- Filter MTR if found
+    CALL "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_setting_group_parameter_value_for_usage"(:setting_group_id, :USAGE_PATH, options);
+    
+    mtr_filter = 
+    SELECT DISTINCT value AS mtr
+    FROM :options
+    WHERE name = :MTR_PARAM_NAME;
+    
+    SELECT COUNT(*) INTO count FROM :mtr_filter;
+    
+    IF count = 0 THEN
+        -- No merge will be performed to save time
+        carrier_mtr_pair = SELECT DISTINCT IFNULL(carrier, '') AS carrier, mtr
+        FROM "sap.tm.trp.routing.db.dataset::t_path" AS p
+        INNER JOIN :dataset_chain AS c
+        ON p.dataset_id = c.id
+        UNION ALL
+        SELECT DISTINCT IFNULL(carrier, '') AS carrier, mtr
+        FROM "sap.tm.trp.routing.db.dataset::t_connection" AS c1
+        LEFT OUTER JOIN "sap.tm.trp.routing.db.dataset::t_connection_carrier" c2
+        ON c1.id = c2.connection_id
+        INNER JOIN :dataset_chain AS c3
+        ON c1.dataset_id = c3.id;
+    ELSE
+        -- No merge will be performed to save time
+        carrier_mtr_pair = SELECT DISTINCT IFNULL(carrier, '') AS carrier, mtr
+        FROM "sap.tm.trp.routing.db.dataset::t_path" AS p
+        INNER JOIN :dataset_chain AS c
+        ON p.dataset_id = c.id
+        WHERE mtr IN (SELECT mtr FROM :mtr_filter)
+        UNION ALL
+        SELECT DISTINCT IFNULL(carrier, '') AS carrier, mtr
+        FROM "sap.tm.trp.routing.db.dataset::t_connection" AS c1
+        LEFT OUTER JOIN "sap.tm.trp.routing.db.dataset::t_connection_carrier" c2
+        ON c1.id = c2.connection_id
+        INNER JOIN :dataset_chain AS c3
+        ON c1.dataset_id = c3.id
+        WHERE mtr IN (SELECT mtr FROM :mtr_filter);
+    END IF;
+    
+    -- Retrieve the cost model id from setting group
+    CALL "sap.tm.trp.db.planningcockpit::p_get_setting_group_parameter_value_for_usage"(
+       :setting_group_id, :USAGE_PATH, setting_paras);
+   
+    -- No data exception is not handled since these two parameters are mandatory
+    SELECT TO_BIGINT(value) INTO cost_model_id
+    FROM :setting_paras
+    WHERE name = :COST_PARAM_NAME;
+    
+    SELECT value INTO equip_type
+    FROM :setting_paras
+    WHERE name = :EQUIP_TYPE_PARAM_NAME;
+    
+    cost_list = SELECT mtr AS transportation_mode_code, :equip_type AS resource_type,
+    carrier AS carrier_id
+    FROM :carrier_mtr_pair;
+
+    CALL "sap.tm.trp.db.costmodel::sp_query_distance_based_cost_info"(
+        :cost_model_id, 
+        :cost_list, 
+        dataset_connection_info,
+        cost_info_tmp, 
+        dataset_mtr,
+        dataset_carrier
+    );
+    
+    SELECT COUNT(*) INTO count FROM :cost_info_tmp;
+    
+    IF :count > 0 THEN
+        
+        -- Calculate product of MTR and carrier
+        dataset_mtr_carrier = SELECT m.cost_dataset_id, transportation_mode_code, carrier_id
+        FROM :dataset_mtr m
+        INNER JOIN :dataset_carrier c
+        ON m.cost_dataset_id = c.cost_dataset_id;
+        
+        cost_info_dataset = SELECT DISTINCT c.transportation_mode_code, resource_type,
+        c.carrier_id, d.cost_dataset_id
+        FROM :cost_info_tmp AS c
+        LEFT OUTER JOIN :dataset_mtr_carrier AS d
+        ON (d.transportation_mode_code= '*' 
+            OR c.transportation_mode_code = d.transportation_mode_code)
+        AND (d.carrier_id = '*' OR c.carrier_id = d.carrier_id);
+        
+        condition_not_found = SELECT transportation_mode_code, resource_type, carrier_id
+        FROM :cost_info_dataset AS c WHERE cost_dataset_id IS NULL;
+        
+        SELECT COUNT(*) INTO count FROM :condition_not_found;
+    
+        IF :count > 0 THEN
+            return_code = 1;
+            
+            msg_params = SELECT transportation_mode_code || carrier_id AS group_id, 
+            0 AS placeholder, transportation_mode_code AS value
+            FROM :condition_not_found
+            UNION ALL
+            SELECT transportation_mode_code || carrier_id AS group_id, 
+            1 AS placeholder, carrier_id AS value FROM :condition_not_found;
+            
+    	    call "sap.tm.trp.routing.db.common::p_get_text_batch"
+            ('MSG_COST_MODEL_FILTER_NOT_FOUND', :msg_params, 'E', message);
+            
+            RETURN;
+        END IF;
+        
+        cost_info_dataset_aggregated = SELECT transportation_mode_code, resource_type,
+        carrier_id, STRING_AGG(cost_dataset_id, ',') AS cost_dataset_id
+        FROM :cost_info_dataset
+        GROUP BY transportation_mode_code, resource_type, carrier_id;
+        
+        -- It is assumed that there is no duplicate resource type from the view
+        -- Otherwise some aggregation function like FIRST_VALUE should be used to just get one
+        cost_info_out = SELECT c1.transportation_mode_code, c1.resource_type, 
+        r.category AS resource_category, c1.carrier_id, c2.cost_dataset_id
+        FROM :cost_info_dataset c1
+        INNER JOIN :cost_info_dataset_aggregated c2
+        ON c1.transportation_mode_code = c2.transportation_mode_code
+        AND c1.resource_type = c2.resource_type
+        AND c1.carrier_id = c2.carrier_id
+        INNER JOIN :RESOURCE_TYPES r
+        ON c1.resource_type = r.resource_type_code;
+    
+    END IF;
+END;

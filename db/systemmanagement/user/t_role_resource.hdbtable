@@ -1,0 +1,8 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ROLE_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "RES_CATEGORY"; sqlType = VARCHAR; length = 50;},
+    {name = "RES_TYPE"; sqlType = VARCHAR; length = 50;}
+];
+table.primaryKey.pkcolumns = ["ROLE_ID","RES_CATEGORY","RES_TYPE"];

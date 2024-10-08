@@ -1,0 +1,22 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_batch_delete_virtual_tree"(
+    IN IN_VIRTUAL_PLAN_IDS "sap.tm.trp.db.massupload::tt_virtual_plan_id"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+  -- Fetch the virtual plan id list that need to be deleted
+  VSDP_ID_LIST = SELECT VSDP_ID FROM :IN_VIRTUAL_PLAN_IDS WHERE IND_UPD = 1;
+
+  DELETE FROM "sap.tm.trp.db.pipeline::t_virtual_tree_location_info" 
+  WHERE VIRTUAL_PLAN_MODEL_ID IN (SELECT VSDP_ID FROM :VSDP_ID_LIST);
+  
+  DELETE FROM "sap.tm.trp.db.pipeline::t_virtual_tree_hierarchy"  
+  WHERE VIRTUAL_PLAN_MODEL_ID IN (SELECT VSDP_ID FROM :VSDP_ID_LIST);
+ 
+  DELETE FROM "sap.tm.trp.db.pipeline::t_virtual_tree_node_name"
+  WHERE VIRTUAL_PLAN_MODEL_ID IN (SELECT VSDP_ID FROM :VSDP_ID_LIST);
+  
+END;

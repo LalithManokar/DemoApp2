@@ -1,0 +1,16 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "Equipment extension fields";
+table.columns = [
+
+	{name = "USER"; unique = true; sqlType = VARCHAR; length = 60; nullable = false;},
+	{name = "PAGE_NAME"; sqlType = VARCHAR; length = 50; nullable = false;},
+	{name = "PARAMETER_KEY"; sqlType = VARCHAR; length = 50; nullable = false; },
+	{name = "PARAMETER_VALUE"; sqlType = VARCHAR; length = 5000; nullable = true;},
+    {name = "CREATED_BY"; sqlType = BIGINT; nullable = true;},
+    {name = "MODIFIED_BY"; sqlType = BIGINT; nullable = true;},
+    {name = "CREATED_ON"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "MODIFIED_ON"; sqlType = TIMESTAMP; nullable = true;}
+];
+
+table.primaryKey.pkcolumns = ["USER","PAGE_NAME","PARAMETER_KEY"];

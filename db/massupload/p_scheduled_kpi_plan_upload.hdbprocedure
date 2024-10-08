@@ -1,0 +1,95 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_scheduled_kpi_plan_upload"(
+    IN SCHEDULE_KPI_PLAN "sap.tm.trp.db.massupload::tt_scheduled_kpi_plan_upload",
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),
+    IN CONNECTION_ID VARCHAR(100)
+)
+
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+
+AS
+BEGIN
+
+    --DECLARATIONS
+    DECLARE USER_ID BIGINT;
+    DECLARE VAR_CURRENT_UTCTIMESTAMP TIMESTAMP := CURRENT_UTCTIMESTAMP;
+
+    --GET SOURCE DATA
+    SOURCE=
+        SELECT
+           UPPER(SKP.NAME) AS NAME,SKP.DESCRIPTION,SKP.TYPE_NAME,
+           UPPER(SKP.LOCATION_FILTER_NAME) AS LOCATION_FILTER_NAME,
+           UPPER(SKP.RESOURCE_FILTER_NAME) AS RESOURCE_FILTER_NAME,
+           UPPER(SKP.TIME_FILTER_NAME) AS TIME_FILTER_NAME,
+           UPPER(SKP.CALCULATION_MODEL_NAME) AS CALCULATION_MODEL_NAME,
+           UPPER(SKP.ALERT_RULE_GROUP_NAME) AS ALERT_RULE_GROUP_NAME,
+           UPPER(SKP.ATTRIBUTE_GROUP_NAME) AS ATTRIBUTE_GROUP_NAME,
+           SKP.PLAN_USAGE,
+           SKP.RECURRENCE_TYPE,
+           SKP.RECURRENCE_INTERVAL,
+           SKP.RECURRENCE_DAY,
+           SKP.START_TIME,
+           SKP.EXPIRY_TIME,
+           SKP.VISIBILITY_FLAG,
+           SKP.ROW_INDEX,
+           SKP.TIMEZONES
+        FROM
+          :SCHEDULE_KPI_PLAN AS SKP;
+
+        --Get User
+    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(:USER_ID);
+
+    --Delete the records in temporary table in case there're already some uploaded data with same db connection
+    DELETE FROM "sap.tm.trp.db.massupload::t_scheduled_kpi_plan_temporary"
+    WHERE CONNECTION_ID = :CONNECTION_ID;
+
+    INSERT INTO "sap.tm.trp.db.massupload::t_scheduled_kpi_plan_temporary"
+        (NAME,
+        DESCRIPTION,
+        TYPE_NAME,
+        LOCATION_FILTER_NAME,
+        RESOURCE_FILTER_NAME,
+        TIME_FILTER_NAME,
+        CALCULATION_MODEL_NAME,
+        ALERT_RULE_GROUP_NAME,
+        ATTRIBUTE_GROUP_NAME,
+        RECURRENCE_TYPE,
+        RECURRENCE_INTERVAL,
+        RECURRENCE_DAY,
+        START_TIME,
+        EXPIRY_TIME,
+        VISIBILITY_FLAG,
+        USER_ID,
+        ACTION_TIME,
+        CONNECTION_ID,
+        RESOURCE_CATEGORY,
+        PLAN_USAGE,
+        TIMEZONES
+        )
+
+    SELECT
+        NAME,
+        DESCRIPTION,
+        TYPE_NAME,
+        LOCATION_FILTER_NAME,
+        RESOURCE_FILTER_NAME,
+        TIME_FILTER_NAME,
+        CALCULATION_MODEL_NAME,
+        ALERT_RULE_GROUP_NAME,
+        ATTRIBUTE_GROUP_NAME,
+        RECURRENCE_TYPE,
+        RECURRENCE_INTERVAL,
+        RECURRENCE_DAY,
+        START_TIME,EXPIRY_TIME,
+        VISIBILITY_FLAG,
+        :USER_ID,
+        :VAR_CURRENT_UTCTIMESTAMP,
+        :CONNECTION_ID,
+        :RESOURCE_CATEGORY_ID,
+        PLAN_USAGE,
+        TIMEZONES
+    FROM :SOURCE;
+
+
+END

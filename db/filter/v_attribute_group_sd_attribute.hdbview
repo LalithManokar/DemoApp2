@@ -1,0 +1,18 @@
+//To define the HDB view file use the following syntax: 
+
+schema="SAP_TM_TRP";
+query="
+	SELECT 
+		 T1.ID
+		,T1.NAME AS CODE
+		,T1.DISPLAY_NAME AS NAME
+		,T1.DESCRIPTION AS DESC
+		,9 AS CATEGORY_ID
+		,'EXT_FIELDS' AS CATEGORY_NAME
+		,T1.DATA_TYPE AS VALUE_TYPE
+		,'ALL' AS RESOURCE_CATEGORY
+	FROM \"sap.tm.trp.db.common::v_ext_fields\" T1
+	WHERE PAGE_ID = 3
+";
+
+depends_on_view=["sap.tm.trp.db.common::v_ext_fields"];

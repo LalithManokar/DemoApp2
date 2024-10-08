@@ -1,0 +1,417 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.railcarrepo::p_balancing_empty_railcar"(
+IN name_value_conf "sap.tm.trp.db.planningcockpit.railcarrepo::tt_name_value_conf",
+IN t_supply_demand "sap.tm.trp.db.planningcockpit.railcarrepo::tt_supply_demand_railcar",
+IN t_route "sap.tm.trp.db.planningcockpit.railcarrepo::tt_route_railcar",
+IN t_route_cap "sap.tm.trp.db.planningcockpit.railcarrepo::tt_route_cap",
+IN t_type_teu "sap.tm.trp.db.planningcockpit.railcarrepo::tt_type_teu",
+IN t_location_prio "sap.tm.trp.db.planningcockpit.railcarrepo::tt_location_prio",
+OUT t_route_res "sap.tm.trp.db.planningcockpit.railcarrepo::tt_route_res",
+OUT v_obj DOUBLE,
+OUT solver_runtime INT,
+OUT flag VARCHAR(20)
+)
+LANGUAGE SQLSCRIPT 
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN 
+
+DECLARE solverstart TIMESTAMP;
+DECLARE solverend TIMESTAMP;
+DECLARE counting1 INT;
+DECLARE counting2 INT;
+DECLARE storageID INT;
+DECLARE counting3 INT;
+DECLARE counting4 INT;
+DECLARE counting5 INT;
+DECLARE opt_option VARCHAR(50);
+DECLARE pt_mode INT;
+DECLARE temp_value INT;
+DECLARE var_pt_mode VARCHAR(20);
+DECLARE penalty DOUBLE;
+DECLARE delay INT;
+
+counting1 := 0;
+counting2 := 0;
+counting3 := 0;
+
+SELECT COUNT(*) INTO counting1 FROM :name_value_conf WHERE "NAME" = 'BALANCING_DELAY_HOURS';
+
+IF (:counting1>0) THEN
+
+SELECT "VALUE" INTO delay 
+FROM :name_value_conf 
+WHERE "NAME" = 'BALANCING_DELAY_HOURS';
+
+--for demo purpose, set delay = 5 days = 120 hours
+--back door for configuring delay, demo purpose
+/*
+SELECT COUNT(*) INTO counting1 FROM "sap.tm.trp.db.planningcockpit.reposition::t_delay_conf";
+
+IF (:counting1>0) THEN
+SELECT "DELAY" INTO delay FROM "sap.tm.trp.db.planningcockpit.reposition::t_delay_conf";
+END IF;
+*/
+				
+delay := delay*3600;
+
+ELSE
+
+delay := 7*24*3600;
+
+END IF;  
+  		
+t_type_teu = SELECT * 
+			 FROM :t_type_teu
+			 WHERE "RAILCAR_TYPE" IN (SELECT "RAILCAR_TYPE"
+			     						FROM :t_supply_demand);
+							
+t_route_cap = SELECT * 
+			  FROM :t_route_cap 
+			  WHERE "CAPACITY" IS NOT NULL;
+t_route_cap = SELECT * 
+			  FROM :t_route_cap 
+			  WHERE "ROUTE_ID" IN (SELECT "ROUTE_ID" 
+								   FROM :t_route);
+
+
+t_route_zero = SELECT "ROUTE_ID"
+			   FROM :t_route
+			   WHERE "ROUTE_ID" IN (SELECT "ROUTE_ID"
+			   						FROM :t_route_cap
+			   						WHERE "CAPACITY" <= 0);
+
+t_route_cap = SELECT *
+			  FROM :t_route_cap
+			  WHERE "CAPACITY">0;
+			  
+t_route = SELECT  "ROUTE_ID",
+				  "RAILCAR_TYPE",
+				  TO_INT(100*"TOTAL_COST") AS "TOTAL_COST",
+				  "FROM_LOCATION",
+				  "TO_LOCATION",
+				  "FROM_TIME",
+				  "TO_TIME",
+				  "SAFE_ROUTE"
+		  FROM :t_route
+		  WHERE "ROUTE_ID" NOT IN (SELECT "ROUTE_ID"
+		  						   FROM :t_route_zero);
+						   
+SELECT COUNT(*) INTO counting2 FROM :t_route;								   
+SELECT COUNT(*) INTO counting3 FROM :t_route_cap;
+
+IF (:counting3>0) THEN
+t_route = SELECT * 
+		  FROM :t_route
+		  WHERE "RAILCAR_TYPE" IN (SELECT "RAILCAR_TYPE"
+			     					 FROM :t_type_teu);		
+END IF;
+
+SELECT MAX("TOTAL_COST") INTO penalty FROM :t_route;
+
+SELECT COUNT(*) INTO counting4 FROM :name_value_conf WHERE "NAME" = 'OPTIMIZER TYPE';
+
+IF (counting4 > 0) THEN
+SELECT "VALUE" INTO opt_option FROM :name_value_conf WHERE "NAME" = 'OPTIMIZER TYPE';
+ELSE
+opt_option := 'LARGE SCALE';
+END IF;
+
+IF (:opt_option IS NULL) THEN
+opt_option := 'LARGE SCALE';
+END IF;
+
+--generate priority coefficients
+t_priority_coefficient = SELECT DISTINCT "PRIORITY" FROM :t_location_prio ORDER BY "PRIORITY";
+
+t_prio_coeff = SELECT "PRIORITY", TO_DOUBLE(ROW_NUMBER()OVER()/10)+1  AS "COEFF" FROM :t_priority_coefficient;
+
+t_location_coeff = SELECT A."LOCATION",
+						  B."COEFF"
+				   FROM :t_location_prio  A
+				   INNER JOIN :t_prio_coeff B
+				   ON A."PRIORITY"=B."PRIORITY";
+
+t_storage_pair = SELECT A."RAILCAR_TYPE",
+						1 AS "TOTAL_COST",
+						A."LOCATION" AS "FROM_LOCATION",
+						B."LOCATION" AS "TO_LOCATION",
+						A."START_TIME" AS "FROM_TIME",
+						B."START_TIME" AS "TO_TIME"
+				 FROM :t_supply_demand A
+				 INNER JOIN :t_supply_demand B
+				 ON A."RAILCAR_TYPE" = B."RAILCAR_TYPE"
+				 AND A."LOCATION" = B."LOCATION"
+				 AND SECONDS_BETWEEN(A."START_TIME",B."START_TIME")>0
+				 AND A."SUPPLY">A."DEMAND"
+				 AND B."SUPPLY"<B."DEMAND"
+				 UNION ALL
+				 SELECT A."RAILCAR_TYPE",
+						0 AS "TOTAL_COST",
+						A."LOCATION" AS "FROM_LOCATION",
+						B."LOCATION" AS "TO_LOCATION",
+						A."START_TIME" AS "FROM_TIME",
+						B."START_TIME" AS "TO_TIME"
+				 FROM :t_supply_demand A
+				 INNER JOIN :t_supply_demand B
+				 ON A."RAILCAR_TYPE" = B."RAILCAR_TYPE"
+				 AND A."LOCATION" = B."LOCATION"
+				 AND A."SUPPLY">A."DEMAND"
+				 AND B."SUPPLY"<B."DEMAND"
+				 AND SECONDS_BETWEEN(B."START_TIME",A."START_TIME")>=0
+				 AND SECONDS_BETWEEN(A."START_TIME",B."END_TIME")>=IFNULL(SECONDS_BETWEEN(B."START_TIME",B."END_TIME")-:delay,0);
+
+SELECT MAX("ROUTE_ID") INTO storageID FROM :t_route;
+
+t_storage_pair_temp = SELECT ROW_NUMBER() OVER() AS "ROUTE_ID",
+							 "RAILCAR_TYPE",
+							 "TOTAL_COST",
+							 "FROM_LOCATION",
+							 "TO_LOCATION",
+							 "FROM_TIME",
+							 "TO_TIME"
+					   FROM :t_storage_pair;
+
+t_virtual_storage = SELECT "ROUTE_ID"+:storageID AS "ROUTE_ID",
+						  "RAILCAR_TYPE",
+						  "TOTAL_COST",
+						  "FROM_LOCATION",
+						  "TO_LOCATION",
+						  "FROM_TIME",
+						  "TO_TIME",
+						  'N' AS "SAFE_ROUTE"
+			 		FROM :t_storage_pair_temp;
+ 
+t_route_all = SELECT * 
+			  FROM :t_route
+ 			  UNION ALL
+ 			  SELECT * 
+ 			  FROM :t_virtual_storage;					 
+
+ 			  
+solverstart := CURRENT_UTCTIMESTAMP;
+
+-- distinguish between safe railcar and normal railcar 
+						 
+						 
+		
+t_node_tbl = SELECT ROW_NUMBER() OVER() AS "NODE_ID", 
+					"START_TIME",
+					"END_TIME",
+					"LOCATION",
+					"RAILCAR_TYPE",
+					"SUPPLY"-"DEMAND" AS "SUPPLY_DEMAND",
+					"SAFE_RAILCAR"
+			 FROM :t_supply_demand;
+
+
+t_node = SELECT "NODE_ID",
+		   		"SUPPLY_DEMAND"
+		 FROM :t_node_tbl
+		 WHERE "SUPPLY_DEMAND"<>0;
+		 
+t_node_tbl_s_p = SELECT * FROM :t_node_tbl WHERE "SUPPLY_DEMAND">0 AND "SAFE_RAILCAR"='S';
+t_node_tbl_s_n = SELECT * FROM :t_node_tbl WHERE "SUPPLY_DEMAND"<0 AND "SAFE_RAILCAR"='S';
+t_node_tbl_n_p = SELECT * FROM :t_node_tbl WHERE "SUPPLY_DEMAND">0 AND "SAFE_RAILCAR"='N';
+t_node_tbl_n_n = SELECT * FROM :t_node_tbl WHERE "SUPPLY_DEMAND"<0 AND "SAFE_RAILCAR"='N';	
+
+t_safe_route = SELECT * 
+			   FROM :t_route_all
+			   WHERE "SAFE_ROUTE" = 'S';
+			  
+t_path_temp = SELECT A."ROUTE_ID",								
+					  A."RAILCAR_TYPE",
+					  A."FROM_LOCATION",
+					  A."TO_LOCATION",
+					  A."FROM_TIME",
+					  A."TO_TIME",
+					  B."NODE_ID" AS "SOURCE_NODE_ID",
+					  C."NODE_ID" AS "SINK_NODE_ID",
+					  0 AS "LOWER",
+					  1000000 AS "CAPACITY",
+					  (A."TOTAL_COST"+ TO_BIGINT((
+					  CASE WHEN A."TO_TIME" >=C."END_TIME" THEN SECONDS_BETWEEN(C."END_TIME",A."TO_TIME") ELSE 0 END
+					  +
+					  CASE WHEN A."FROM_TIME"<=B."START_TIME" THEN SECONDS_BETWEEN(A."FROM_TIME",B."START_TIME") ELSE 0 END
+					  )/3600*penalty/24))*"COEFF" AS "COST",
+					  A."TOTAL_COST" AS "OCOST"
+			  FROM :t_route_all A
+			  INNER JOIN :t_node_tbl_n_p B 
+			  ON A."RAILCAR_TYPE"=B."RAILCAR_TYPE" 
+			  AND A."FROM_LOCATION"=B."LOCATION"
+			  INNER JOIN :t_node_tbl_n_n C 
+			  ON A."RAILCAR_TYPE"=C."RAILCAR_TYPE" 
+			  AND A."TO_LOCATION"=C."LOCATION"
+			  AND B."NODE_ID"!=C."NODE_ID"
+			  INNER JOIN :t_location_coeff D
+			  ON A."TO_LOCATION"=D."LOCATION";
+			  
+t_path_temp_s = SELECT A."ROUTE_ID",								
+					  A."RAILCAR_TYPE",
+					  A."FROM_LOCATION",
+					  A."TO_LOCATION",
+					  A."FROM_TIME",
+					  A."TO_TIME",
+					  B."NODE_ID" AS "SOURCE_NODE_ID",
+					  C."NODE_ID" AS "SINK_NODE_ID",
+					  0 AS "LOWER",
+					  1000000 AS "CAPACITY",
+					  (A."TOTAL_COST"+ TO_BIGINT((
+					  CASE WHEN A."TO_TIME" >=C."END_TIME" THEN SECONDS_BETWEEN(C."END_TIME",A."TO_TIME") ELSE 0 END
+					  +
+					  CASE WHEN A."FROM_TIME"<=B."START_TIME" THEN SECONDS_BETWEEN(A."FROM_TIME",B."START_TIME") ELSE 0 END
+					  )/3600*penalty/24))*"COEFF" AS "COST",
+					  A."TOTAL_COST" AS "OCOST"
+			  FROM :t_safe_route A
+			  INNER JOIN :t_node_tbl_s_p B 
+			  ON A."RAILCAR_TYPE"=B."RAILCAR_TYPE" 
+			  AND A."FROM_LOCATION"=B."LOCATION"
+			  INNER JOIN :t_node_tbl_s_n C 
+			  ON A."RAILCAR_TYPE"=C."RAILCAR_TYPE" 
+			  AND A."TO_LOCATION"=C."LOCATION"
+			  AND B."NODE_ID"!=C."NODE_ID"
+			  INNER JOIN :t_location_coeff D
+			  ON A."TO_LOCATION"=D."LOCATION";
+
+t_path_temp = SELECT * FROM :t_path_temp 
+			  UNION ALL
+			  SELECT * FROM :t_path_temp_s;	
+			  
+-- add backwards repositioning arcs
+t_path_temp = SELECT "ROUTE_ID",
+					 "RAILCAR_TYPE",
+					 "FROM_LOCATION",
+					 "TO_LOCATION",
+					 "FROM_TIME",
+					 "TO_TIME",
+					 "SOURCE_NODE_ID",
+					 "SINK_NODE_ID",
+					 "LOWER",
+					 "CAPACITY",
+					 MIN("COST") AS "COST",
+					 MIN("OCOST") AS "OCOST"
+			  FROM :t_path_temp
+			  GROUP BY "ROUTE_ID",
+					 "RAILCAR_TYPE",
+					 "FROM_LOCATION",
+					 "TO_LOCATION",
+					 "FROM_TIME",
+					 "TO_TIME",
+					 "SOURCE_NODE_ID",
+					 "SINK_NODE_ID",
+					 "LOWER",
+					 "CAPACITY";
+
+t_flow_cost = SELECT ROW_NUMBER() OVER() AS "PATH_ID",
+					 *
+			  FROM :t_path_temp;
+
+t_path = SELECT "PATH_ID",
+				"SOURCE_NODE_ID",
+				"SINK_NODE_ID",
+				"LOWER",
+				"CAPACITY",
+				"COST"
+		  FROM :t_flow_cost;
+
+--LEMON/GENIOS Auto-switch
+IF (:counting3 > 0) THEN
+
+SELECT COUNT(*) INTO temp_value FROM :name_value_conf WHERE "NAME"='GENIOS_MAX_RUNTIME';
+
+IF (:temp_value > 0) THEN
+SELECT "VALUE" INTO var_pt_mode  FROM :name_value_conf WHERE "NAME"='GENIOS_MAX_RUNTIME'; 
+END IF;
+
+IF (:var_pt_mode IS NULL) THEN 
+   pt_mode := -1;
+ELSE
+   pt_mode := TO_INT (var_pt_mode);
+END IF;
+
+t_route_cap_aug = SELECT A."ROUTE_ID",A."RAILCAR_TYPE",A."GROUP_ID",A."CAPACITY",
+						 B."TEU"
+				  FROM :t_route_cap A
+				  INNER JOIN :t_type_teu B ON A."RAILCAR_TYPE"=B."RAILCAR_TYPE";					
+
+t_flow_cap = SELECT  A."PATH_ID",
+		             B."GROUP_ID" AS "CONSTRAINT_ID",
+		             B."CAPACITY",
+		             B."TEU"
+             FROM :t_flow_cost AS A
+             INNER JOIN :t_route_cap_aug AS B
+             ON A."ROUTE_ID" = B."ROUTE_ID" AND A."RAILCAR_TYPE" = B."RAILCAR_TYPE";
+
+t_initial = SELECT TOP 0 NULL AS "PATH_ID", NULL AS "FLOW" FROM dummy;
+
+CALL "sap.tm.trp.db.planningcockpit.reposition::p_genios_path_cap_types_solve"(
+:pt_mode,
+:t_initial,
+:t_node,
+:t_path,
+:t_flow_cap,
+t_path_res,
+v_obj,
+flag
+);
+                     
+ELSE
+flag := 'OPTIMAL SOLUTION';
+CALL "sap.tm.trp.db.planningcockpit.reposition::p_path_flow_solve2"(
+:opt_option,
+:t_node,
+:t_path,
+t_path_res
+);
+END IF;
+
+solverend := CURRENT_UTCTIMESTAMP;	 
+
+t_route_res = SELECT B."ROUTE_ID",
+					 B."RAILCAR_TYPE",
+					 A."FLOW" AS "QUANTITY",
+					 B."OCOST"*A."FLOW"/100 AS "TOTAL_COST",
+					 B."FROM_LOCATION",
+					 B."TO_LOCATION",
+					 B."FROM_TIME",
+					 B."TO_TIME"
+			  FROM :t_path_res A
+			  INNER JOIN :t_flow_cost B ON A."PATH_ID"=B."PATH_ID";
+
+t_route_res = SELECT * FROM :t_route_res WHERE "ROUTE_ID" NOT IN (SELECT "ROUTE_ID" FROM :t_virtual_storage);
+t_route_res = SELECT * FROM :t_route_res WHERE "QUANTITY"<>0;	
+
+t_route_res = SELECT "ROUTE_ID",
+					 "RAILCAR_TYPE",
+					 SUM("QUANTITY") AS "QUANTITY",
+					 SUM("TOTAL_COST") AS "TOTAL_COST",
+					 "FROM_LOCATION",
+					 "TO_LOCATION",
+					 "FROM_TIME",
+					 "TO_TIME"
+			  FROM :t_route_res
+			  GROUP BY "ROUTE_ID",
+					 "RAILCAR_TYPE",
+					 "FROM_LOCATION",
+					 "TO_LOCATION",
+					 "FROM_TIME",
+					 "TO_TIME";
+
+SELECT COUNT(*) INTO counting5 FROM :t_route_res;
+IF (:counting5 = 0 AND flag = 'OPTIMAL SOLUTION') THEN
+flag := 'ALREADY OPTIMAL';
+ELSE
+SELECT SUM("TOTAL_COST") INTO v_obj FROM :t_route_res;
+END IF;
+
+IF (:v_obj IS NULL) THEN
+v_obj :=0;
+END IF;	
+
+IF (:counting2 = 0) THEN
+flag := 'NO ROUTE AVAILABLE';
+END IF;
+
+solver_runtime := NANO100_BETWEEN (:solverstart, :solverend)/10000;
+
+END;

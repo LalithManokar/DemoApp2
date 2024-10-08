@@ -1,0 +1,85 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.location::p_zone_hierarchy_relation_check"(
+    IN ZONE_IDS "sap.tm.trp.db.systemmanagement.location::tt_regional_id",
+    OUT O_ZONE_IDS "sap.tm.trp.db.systemmanagement.location::tt_regional_id"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+    DECLARE COUNT_NUM INTEGER;
+    
+    SELECT COUNT(*) INTO COUNT_NUM FROM :ZONE_IDS;
+    
+    IF :COUNT_NUM > 1 THEN
+	    -- Cartesian on Zones Passed In
+	    ZONE_PAIRS = SELECT A.ID AS ROOT_ZONE, B.ID AS CHILD_ZONE FROM :ZONE_IDS AS A, :ZONE_IDS AS B
+	                  WHERE A.ID <> B.ID;
+	    
+	    -- Get All Related Pairs Compared in Hierarchy
+	    ZONE_CHECK = SELECT A.*
+	                   FROM :ZONE_PAIRS AS A
+	                        INNER JOIN "sap.tm.trp.db.systemmanagement.location::t_region_item" AS B
+	                        ON A.ROOT_ZONE = B.ROOT_ID AND A.CHILD_ZONE = B.ZONE_ID;
+	    
+	    -- Get All Non Related Pairs Compared in Hierarchy
+	    ZONE_EXCLUDE = SELECT A.*
+	                     FROM :ZONE_PAIRS AS A
+	                          LEFT OUTER JOIN :ZONE_CHECK AS B
+	                          ON A.ROOT_ZONE = B.ROOT_ZONE AND A.CHILD_ZONE = B.CHILD_ZONE
+	                    WHERE B.ROOT_ZONE IS NULL;
+	    
+	    -- Get All Root Zones in All Related Pairs
+	    CHECK_ROOTS = SELECT ROOT_ZONE
+	                    FROM :ZONE_CHECK;
+	    -- Get All Child Zones in All Related Pairs
+	    CHECK_CHILD = SELECT CHILD_ZONE
+	                    FROM :ZONE_CHECK;
+	    -- Get All Zones in All Non Related Pairs
+	    EXCLUDE_ZONES = SELECT ROOT_ZONE AS ZONE_ID
+	                      FROM :ZONE_EXCLUDE
+	                     UNION
+	                    SELECT CHILD_ZONE AS ZONE_ID
+	                      FROM :ZONE_EXCLUDE;
+	    
+	    /* Exclude the zones that are children zones in Related Pairs from Root Zones
+	     * For example:
+	     * Related Pairs:
+	     * 'ASIA, CN' and 'CN, SH'
+	     * 'CN' is child zone in first pair, while the root zone in second pair
+	     * 'CN' should be excluded.
+	     */
+	    FINAL_ROOTS = SELECT A.ROOT_ZONE
+	                    FROM :CHECK_ROOTS AS A
+	                         LEFT OUTER JOIN :CHECK_CHILD AS B
+	                         ON A.ROOT_ZONE = B.CHILD_ZONE
+	                   WHERE B.CHILD_ZONE IS NULL;
+	    
+	    /* Exclude the zones that are part of pairs in related pairs from exclude zones
+	     * For example:
+	     * Related Pairs: 'ASIA, CN'
+	     * Excluded Pairs: 'EUROPE, CN'
+	     * 'CN' is part of exclude pair in second pair, but also part of related pair in first pair.
+	     * 'EUROPE' is part of exclude pair, but not existed in related pair
+	     * 'CN' should be excluded, and 'EUROPE' should be included.
+	     */
+	    FINAL_EXCLUDE = SELECT A.ZONE_ID
+	                      FROM :EXCLUDE_ZONES AS A
+	                           LEFT OUTER JOIN (SELECT ROOT_ZONE AS ZONE_ID FROM :CHECK_ROOTS
+	                                             UNION
+	                                            SELECT CHILD_ZONE AS ZONE_ID FROM :CHECK_CHILD) AS B
+	                           ON A.ZONE_ID = B.ZONE_ID
+	                     WHERE B.ZONE_ID IS NULL;
+	    -- The result should be the union of final roots and final exclusion.
+	    O_ZONE_IDS = SELECT DISTINCT ROOT_ZONE AS ID
+	                   FROM :FINAL_ROOTS
+	                  UNION
+	                 SELECT ZONE_ID AS ID
+	                   FROM :FINAL_EXCLUDE;
+    ELSE
+        O_ZONE_IDS = SELECT DISTINCT *
+                       FROM :ZONE_IDS;
+    END IF;
+    
+
+END;

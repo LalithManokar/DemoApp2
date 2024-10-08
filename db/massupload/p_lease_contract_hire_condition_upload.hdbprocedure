@@ -1,0 +1,35 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_lease_contract_hire_condition_upload" (
+	IN HIRE_TERM_INPUT "sap.tm.trp.db.massupload::tt_lease_contract_hire_condition",  
+    IN CONNECTION_ID VARCHAR(100) 
+    ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+
+	--Declarations   
+    DECLARE VAR_CURRENT_UTCTIMESTAMP TIMESTAMP := CURRENT_UTCTIMESTAMP;
+    
+    ---Get Source data
+    SOURCE = 
+			 SELECT LEASE_CONTRACT_REFERENCE,HIRE_TYPE,LOCATION_TYPE,LOCATION,EQUIPMENT,MIN_HIRE_QUANTITY,
+			        MAX_HIRE_QUANTITY,ACTIVE,ROW_INDEX
+			 FROM :HIRE_TERM_INPUT;
+			 
+	--Delete the records in temporary table in case there're already some uploaded data with same db connection
+    DELETE FROM "sap.tm.trp.db.massupload::t_lease_contract_hire_condition_temporary" 
+    WHERE CONNECTION_ID = :CONNECTION_ID;
+    
+    --Add records to temporary table
+    INSERT INTO "sap.tm.trp.db.massupload::t_lease_contract_hire_condition_temporary"
+    (CONDITION_ID,LEASE_CONTRACT_REFERENCE,HIRE_TYPE,LOCATION_TYPE,LOCATION,EQUIPMENT,MIN_HIRE_QUANTITY,
+     MAX_HIRE_QUANTITY,ACTIVE,ACTION_TIME,CONNECTION_ID)
+    SELECT
+       HTI.ROW_INDEX,HTI.LEASE_CONTRACT_REFERENCE,HTI.HIRE_TYPE,HTI.LOCATION_TYPE,HTI.LOCATION,HTI.EQUIPMENT,
+       HTI.MIN_HIRE_QUANTITY,HTI.MAX_HIRE_QUANTITY,HTI.ACTIVE,
+       :VAR_CURRENT_UTCTIMESTAMP AS TIMESTAMPIN,
+       :CONNECTION_ID AS CONNECTION_ID  
+      FROM :SOURCE AS HTI;	
+
+END;

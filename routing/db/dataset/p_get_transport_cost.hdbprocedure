@@ -1,0 +1,102 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_get_transport_cost" (
+    IN cost_model_id BIGINT,
+    IN resource_type NVARCHAR(20),
+    IN path_id TABLE(id BIGINT),
+    IN conn_id TABLE(id BIGINT),
+    OUT path_cost TABLE(id BIGINT, sequence INTEGER, transport_cost DOUBLE),
+    OUT conn_cost TABLE(id BIGINT, transport_cost DOUBLE)
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING
+   READS SQL DATA AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+	CALL "sap.tm.trp.db.costmodel::sp_get_transportation_based_cost_info"(:cost_model_id, transport_cost_info);
+	
+	path_info = 
+	SELECT A.id, C.sequence, C.from_location, C.to_location, B.mtr, B.carrier, :resource_type AS resource_type, C.distance, C.duration
+	FROM :path_id AS A INNER JOIN "sap.tm.trp.routing.db.dataset::t_path" AS B ON A.id = B.id
+	INNER JOIN "sap.tm.trp.routing.db.dataset::t_path_connection" AS C 
+	ON A.id = C.path_id;
+
+    CALL "sap.tm.trp.routing.db.cost::p_calculate_transport_cost"(:transport_cost_info, :path_info, path_cost_tmp);
+    
+    path_cost = 
+    SELECT id, sequence, cost AS transport_cost
+    FROM :path_cost_tmp;
+    
+    /*
+	path_cost = 
+	SELECT A.id, C.sequence, 
+	FIRST_VALUE(
+		CASE 
+			WHEN D.from_location_name = '*' OR D.to_location_name = '*' THEN D.cost * C.distance
+			ELSE D.cost
+		END 
+		ORDER BY D.priority, D.wild_star_count, 
+		CASE 
+			WHEN D.from_location_name != '*' THEN 1
+			WHEN D.to_location_name != '*' THEN 2
+			WHEN D.transportation_mode_code != '*' THEN 3
+			WHEN D.carrier_id != '*' THEN 4
+			ELSE 5
+		END
+	) AS transport_cost
+	FROM :path_id AS A INNER JOIN "sap.tm.trp.routing.db.dataset::t_path" AS B ON A.id = B.id
+	INNER JOIN "sap.tm.trp.routing.db.dataset::t_path_connection" AS C 
+	ON A.id = C.path_id
+	LEFT OUTER JOIN :transport_cost_info AS D
+	ON (D.from_location_name = '*' OR C.from_location = D.from_location_name) AND
+	(D.to_location_name = '*' OR C.to_location = D.to_location_name) AND
+	(D.transportation_mode_code = '*' OR B.mtr = D.transportation_mode_code) AND
+	(D.carrier_id = '*' OR B.carrier = D.carrier_id)
+	GROUP BY A.id, C.sequence;
+	*/
+	
+	-- each basic connection may have several carrier, current requirement is to compute each carrier's transport cost and finally take the average cost
+	-- cost priority -- priority, wild_star_count, from_location_name, to_location_name, transportation_mode, carrier_id
+	conn_info = 
+	SELECT A.id, 1 AS sequence, B.from_location, B.to_location, B.mtr, IFNULL(C.carrier, '') AS carrier, :resource_type AS resource_type, B.distance, B.duration
+	FROM :conn_id AS A INNER JOIN "sap.tm.trp.routing.db.dataset::t_connection" AS B ON A.id = B.id
+	LEFT OUTER JOIN "sap.tm.trp.routing.db.dataset::t_connection_carrier" AS C ON A.id = C.connection_id;
+
+    CALL "sap.tm.trp.routing.db.dataset::p_calculate_basic_conn_transport_cost"(:transport_cost_info, :conn_info, conn_cost_tmp);
+    
+    conn_cost = 
+    SELECT id, cost AS transport_cost
+    FROM :conn_cost_tmp;
+
+    /*
+	conn_cost = 
+	SELECT id, AVG(transport_cost) AS transport_cost
+	FROM (
+    	SELECT A.id, IFNULL(C.carrier, '') AS carrier, 
+    	FIRST_VALUE(
+    		CASE 
+    			WHEN D.from_location_name = '*' OR D.to_location_name = '*' THEN D.cost * B.distance
+    			ELSE D.cost
+    		END 
+    		ORDER BY D.priority, D.wild_star_count, 
+    		CASE 
+    			WHEN D.from_location_name != '*' THEN 1
+    			WHEN D.to_location_name != '*' THEN 2
+    			WHEN D.transportation_mode_code != '*' THEN 3
+    			WHEN D.carrier_id != '*' THEN 4
+    			ELSE 5
+    		END
+    	) AS transport_cost
+    	FROM :conn_id AS A INNER JOIN "sap.tm.trp.routing.db.dataset::t_connection" AS B ON A.id = B.id
+    	LEFT OUTER JOIN "sap.tm.trp.routing.db.dataset::t_connection_carrier" AS C ON A.id = C.connection_id
+    	LEFT OUTER JOIN :transport_cost_info AS D
+    	ON (D.from_location_name = '*' OR B.from_location = D.from_location_name) AND
+    	(D.to_location_name = '*' OR B.to_location = D.to_location_name) AND
+    	(D.transportation_mode_code = '*' OR B.mtr = D.transportation_mode_code) AND
+    	(D.carrier_id = '*' OR C.carrier = D.carrier_id)
+    	GROUP BY A.id, C.carrier
+    )
+    GROUP BY id;
+    */
+END

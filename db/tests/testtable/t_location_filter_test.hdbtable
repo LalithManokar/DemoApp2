@@ -1,0 +1,17 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+  {name = "ID"; sqlType = BIGINT;},
+  {name = "DESC"; sqlType = VARCHAR; length = 50;},
+  {name = "VISIBLE_FLAG"; sqlType = VARCHAR; length = 3; comment = "'P' for Personal, 'G' for Global";},
+  {name = "LOCATION_TYPE"; sqlType = INTEGER; comment = "1 for Location, 2 for Location Group, 3 for Zone, 4 for Zone Group, 5 for Region, 6 for Region Group";},
+  {name = "CREATE_BY"; sqlType = BIGINT;},
+  {name = "CREATE_AT"; sqlType = TIMESTAMP;},
+  {name = "LAST_MODIFIED_BY"; sqlType = BIGINT;},
+  {name = "LAST_MODIFIED_AT"; sqlType = TIMESTAMP;},
+  {name = "CODE";sqlType = NVARCHAR; length = 20; nullable = true; unique = true;}
+];
+table.indexes = [
+  {name = "LOCATION_FILTER_DESC_INDEX_TESTS"; unique = true; indexColumns = ["DESC"];}
+];
+table.primaryKey.pkcolumns = ["ID"];

@@ -1,0 +1,37 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_data_delete_parent_child"
+(IN TABLE_ID BIGINT,
+ IN EXE_DETAIL_SEQ BIGINT,
+ IN DATE_FROM TIMESTAMP,
+ IN DATE_TO TIMESTAMP,
+ IN IS_TM TINYINT,
+ IN DATE_COLUMN_NAME NVARCHAR(250)) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP" AS 
+	V_MIN_LEVEL BIGINT;
+	V_MAX_LEVEL BIGINT;
+	V_LEVEL_COUNT_MIN BIGINT;
+	V_LEVEL_COUNT_MAX BIGINT;
+	V_TABLE_ID BIGINT;
+BEGIN
+	--Delete the data strting from leaf level child and end with parent.
+	--Delete from child using bottom to top approch.
+	V_MIN_LEVEL := 1;
+	SELECT IFNULL(MAX(LEVEL),0) INTO V_MAX_LEVEL FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE ULTIMATE_PARENT_ID = :TABLE_ID; 
+	WHILE :V_MAX_LEVEL >= :V_MIN_LEVEL DO 
+		V_LEVEL_COUNT_MIN := 1;
+		LEVEL_DATASET = SELECT *,ROW_NUMBER() over (partition by LEVEL order by LEVEL) as ROW_NUM FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE ULTIMATE_PARENT_ID = :TABLE_ID AND LEVEL = :V_MAX_LEVEL;  
+		SELECT COUNT(1) INTO V_LEVEL_COUNT_MAX FROM :LEVEL_DATASET;
+		WHILE :V_LEVEL_COUNT_MIN <= :V_LEVEL_COUNT_MAX DO 
+			SELECT ID INTO V_TABLE_ID FROM :LEVEL_DATASET WHERE ROW_NUM=:V_LEVEL_COUNT_MIN;
+				--Call the procedure to delete the data from HOT
+				CALL "sap.tm.trp.db.archive::sp_data_delete_warm"(:V_TABLE_ID,:EXE_DETAIL_SEQ,:DATE_FROM,:DATE_TO,:DATE_COLUMN_NAME,0,:IS_TM);
+			V_LEVEL_COUNT_MIN := :V_LEVEL_COUNT_MIN+1;
+		END WHILE;
+		V_MAX_LEVEL := :V_MAX_LEVEL-1;
+	END WHILE;
+	
+	--Deleting from parent
+	--Call the procedure to delete the data from HOT
+	CALL "sap.tm.trp.db.archive::sp_data_delete_warm"(:TABLE_ID,:EXE_DETAIL_SEQ,:DATE_FROM,:DATE_TO,:DATE_COLUMN_NAME,1,:IS_TM);
+END;

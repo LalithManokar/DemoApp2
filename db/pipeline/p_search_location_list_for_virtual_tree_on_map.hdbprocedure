@@ -1,0 +1,104 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_search_location_list_for_virtual_tree_on_map"(
+    IN IN_PLAN_MODEL_ID BIGINT,
+    IN IN_LOCATION_NAME VARCHAR(200),
+    IN IN_ZONE_LEVEL BIGINT,
+    OUT out_location_info "sap.tm.trp.db.pipeline::tt_location_info_list"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+ DECLARE VAR_LOCATION_TYPE INTEGER;
+ DECLARE TYPE_LOCATION INTEGER :=1;
+ DECLARE TYPE_LOCATION_GROUP INTEGER :=2;
+ DECLARE TYPE_ZONE INTEGER :=3;
+ DECLARE TYPE_ZONE_GROUP INTEGER :=4;
+ DECLARE TYPE_REGION INTEGER :=5;
+ DECLARE TYPE_REGION_GROUP INTEGER :=6;
+ DECLARE I_COUNT INTEGER :=0;
+ 
+ 
+ SQL1 = SELECT LOCATION_ID,LOCATION_NAME,LOCATION_TYPE
+ FROM "sap.tm.trp.db.pipeline::t_virtual_tree_location_info" 
+ WHERE LEVEL = :IN_ZONE_LEVEL --AND HAS_OUTPUT_DATASET_FLAG =1 
+ AND LOCATION_NAME LIKE '%' || :IN_LOCATION_NAME || '%'
+ AND VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_MODEL_ID;
+ 
+ SELECT COUNT(1) INTO I_COUNT FROM :SQL1;
+ 
+
+  
+ IF I_COUNT =0 THEN
+   out_location_info = SELECT NULL AS LOCATION_ID,NULL AS LOCATION_NAME,NULL AS XPOS,NULL AS YPOS FROM DUMMY;
+   return;
+ END IF;
+ 
+ SELECT TOP 1 LOCATION_TYPE INTO VAR_LOCATION_TYPE 
+ FROM :SQL1;
+ 
+ IF :VAR_LOCATION_TYPE = :TYPE_LOCATION THEN
+ 
+   out_location_info = SELECT T1.LOCATION_ID,T1.LOCATION_NAME,T2.XPOS,T2.YPOS
+   FROM :SQL1 T1
+   INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T2 ON (T1.LOCATION_ID = T2.ID);
+   
+ ELSEIF  :VAR_LOCATION_TYPE = :TYPE_LOCATION_GROUP THEN
+ 
+   out_location_info = SELECT T1.LOCATION_ID,T1.LOCATION_NAME,T3.XPOS,T3.YPOS
+   FROM :SQL1 T1
+   INNER JOIN "sap.tm.trp.db.systemmanagement::t_location_group" T2 ON (T1.LOCATION_ID = T2.ID)
+   INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T3 ON (T2.PRIME_LOC_ID = T3.ID);
+   
+  
+   
+ ELSEIF  :VAR_LOCATION_TYPE = :TYPE_ZONE THEN
+ 
+  out_location_info = 
+	   SELECT T1.LOCATION_ID,T1.LOCATION_NAME,AVG(T4.XPOS) AS XPOS,AVG(T4.YPOS) AS YPOS
+	   FROM :SQL1 T1
+	   INNER JOIN "sap.tm.trp.db.semantic.location::v_zone" T2 ON (T1.LOCATION_ID = T2.ID)
+	   INNER JOIN  "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T3 ON (T2.ID = T3.ZONE_ID)
+	   INNER JOIN  "sap.tm.trp.db.semantic.location::v_location" T4 ON (T3.LOCATION_ID = T4.ID)
+	   GROUP BY  T1.LOCATION_ID,T1.LOCATION_NAME;
+   
+ ELSEIF  :VAR_LOCATION_TYPE = :TYPE_ZONE_GROUP THEN
+ 
+ out_location_info = 
+	   SELECT T1.LOCATION_ID,T1.LOCATION_NAME,AVG(T6.XPOS) AS XPOS,AVG(T6.YPOS) AS YPOS
+	   FROM :SQL1 T1
+	   INNER JOIN "sap.tm.trp.db.systemmanagement::t_zone_group" T2 ON (T1.LOCATION_ID = T2.ID)
+	   INNER JOIN "sap.tm.trp.db.systemmanagement::t_zone_group_item" T3 ON (T2.ID = T3.ZONE_GROUP_ID)
+	   INNER JOIN "sap.tm.trp.db.semantic.location::v_zone" T4 ON (T3.ZONE_ID = T4.ID)
+	   INNER JOIN  "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T5 ON (T4.ID = T5.ZONE_ID)
+	   INNER JOIN  "sap.tm.trp.db.semantic.location::v_location" T6 ON (T5.LOCATION_ID = T6.ID)
+	   GROUP BY  T1.LOCATION_ID,T1.LOCATION_NAME;
+ 
+ 
+ 
+ ELSEIF  :VAR_LOCATION_TYPE = :TYPE_REGION THEN
+ 
+ --Currently, the boundary of the region on map on the indicated level will be the boudary of the zone it's self, not the zone and all the children zone's boundary 
+ out_location_info = 
+	   SELECT T1.LOCATION_ID,T1.LOCATION_NAME,AVG(T4.XPOS) AS XPOS,AVG(T4.YPOS) AS YPOS
+	   FROM :SQL1 T1
+	   INNER JOIN "sap.tm.trp.db.semantic.location::v_zone" T2 ON (T1.LOCATION_ID = T2.ID)
+	   INNER JOIN  "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T3 ON (T2.ID = T3.ZONE_ID)
+	   INNER JOIN  "sap.tm.trp.db.semantic.location::v_location" T4 ON (T3.LOCATION_ID = T4.ID)
+	   GROUP BY  T1.LOCATION_ID,T1.LOCATION_NAME;
+	   
+ ELSEIF  :VAR_LOCATION_TYPE = :TYPE_REGION_GROUP THEN
+    out_location_info = 
+	   SELECT T1.LOCATION_ID,T1.LOCATION_NAME,AVG(T6.XPOS) AS XPOS,AVG(T6.YPOS) AS YPOS
+	   FROM :SQL1 T1
+	   INNER JOIN "sap.tm.trp.db.systemmanagement::t_region_group" T2 ON (T1.LOCATION_ID = T2.ID)
+	   INNER JOIN "sap.tm.trp.db.systemmanagement::t_region_group_item" T3 ON (T2.ID = T3.REGION_GROUP_ID)
+	   INNER JOIN "sap.tm.trp.db.semantic.location::v_zone" T4 ON (T3.ZONE_ID = T4.ID)
+	   INNER JOIN  "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T5 ON (T4.ID = T5.ZONE_ID)
+	   INNER JOIN  "sap.tm.trp.db.semantic.location::v_location" T6 ON (T5.LOCATION_ID = T6.ID)
+	   GROUP BY  T1.LOCATION_ID,T1.LOCATION_NAME;
+ 
+ END IF;
+
+END;

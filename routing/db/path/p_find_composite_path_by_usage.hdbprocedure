@@ -1,0 +1,40 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_find_composite_path_by_usage"(
+   IN network_code NVARCHAR(50),
+   IN basic_path_id BIGINT,
+   OUT composite_path_id TABLE (path_id BIGINT, network_code NVARCHAR(50))
+)
+    LANGUAGE SQLSCRIPT 
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_ROUTING"
+    READS SQL DATA 
+    AS
+BEGIN
+    
+    DECLARE network_id BIGINT;
+    DECLARE ACTION_DELETE CHAR(1) := 'D';
+
+    -- No exception is handled
+    DECLARE EXIT HANDLER FOR SQL_ERROR_CODE 1299
+    BEGIN
+
+    END;
+    
+    SELECT id INTO network_id
+	FROM "sap.tm.trp.routing.db.path::t_network_model" 
+	WHERE code = :network_code;
+	
+	network_ids = SELECT id, code FROM "sap.tm.trp.routing.db.path::t_network_model" 
+	WHERE base_network_id = :network_id
+	UNION ALL
+	SELECT :network_id AS id, :network_code AS code FROM DUMMY;
+
+    composite_path_id = SELECT DISTINCT p.id AS path_id, i.code AS network_code
+    FROM "sap.tm.trp.routing.db.path::t_path_sequence" AS s
+    INNER JOIN "sap.tm.trp.routing.db.path::t_path" AS p
+    ON s.path_id = p.id
+    INNER JOIN :network_ids AS i
+    ON p.network_model_id = i.id
+    WHERE s.basic_path_id = :basic_path_id AND p.ACTION <> :ACTION_DELETE
+    ORDER BY i.code;
+    
+END;

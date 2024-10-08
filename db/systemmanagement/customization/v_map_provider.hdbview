@@ -1,0 +1,44 @@
+schema = "SAP_TM_TRP";
+query = "SELECT A1.ID,A1.name, A1.enable_flag as ENABLE_FLAG, A1.DESC AS DESC ,A1.CREATED_BY AS CREATED_BY,A2.COPYRIGHT as COPY_RIGHT,
+			A1.CREATED_ON AS CREATED_ON,A1.LAST_CHANGED_BY AS LAST_CHANGED_BY ,A1.LAST_CHANGED_ON AS LAST_CHANGED_ON from 
+			(SELECT T1.ID,
+                T1.NAME,
+                T1.FLAG AS ENABLE_FLAG,
+                IFNULL(T2.DESC,T1.NAME) AS DESC,
+                CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                  WHEN (T1.CREATE_BY <> 0 AND T1.CREATE_BY IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+			      WHEN T1.CREATE_BY = 0 OR T1.CREATE_BY IS NULL THEN ''
+			      ELSE '***' END AS CREATED_BY,
+                T1.CREATE_AT AS CREATED_ON,
+                CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                  WHEN (T1.LAST_MODIFIED_BY <> 0 AND T1.LAST_MODIFIED_BY IS NOT NULL) AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+			      WHEN T1.LAST_MODIFIED_BY = 0 OR T1.LAST_MODIFIED_BY IS NULL THEN ''
+			      ELSE '***' END AS LAST_CHANGED_BY,
+                T1.LAST_MODIFIED_AT AS LAST_CHANGED_ON
+         FROM \"sap.tm.trp.db.systemmanagement::t_map_provider\" AS T1 
+         LEFT OUTER JOIN (SELECT A.* FROM \"sap.tm.trp.db.systemmanagement.customization::t_map_provider_t\" AS A
+                          INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS B
+                             ON (A.SPRAS = B.SPRAS)) T2 
+         ON (T1.ID = T2.ID)
+         LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS U1
+                  ON (T1.CREATE_BY = U1.ID)
+         
+         LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS U2
+                  ON (T1.LAST_MODIFIED_BY = U2.ID)
+         LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T9 
+                  ON U1.USERNAME = T9.USERNAME
+         LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T10 
+                  ON U2.USERNAME = T10.USERNAME                     
+         CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE) A1 
+         left outer join \"sap.tm.trp.db.systemmanagement::t_mapprovider_copyright\" as A2 on (A2.P_ID = A1.ID)";
+                
+         
+         
+depends_on_table = ["sap.tm.trp.db.systemmanagement::t_map_provider",
+					"sap.tm.trp.db.systemmanagement::t_mapprovider_copyright",
+                    "sap.tm.trp.db.systemmanagement.customization::t_map_provider_t"];
+depends_on_view = ["sap.tm.trp.db.semantic.common::v_lang_code",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_unblock_users",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];           
+       

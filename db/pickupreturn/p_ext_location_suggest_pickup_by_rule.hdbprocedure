@@ -1,0 +1,185 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_location_suggest_pickup_by_rule" ( 
+    IN RULE_ID BIGINT, -- pickup return rule
+    IN LDR_RULE_ID BIGINT,   -- location determination rule
+    IN SD_PLAN_ID BIGINT,
+    IN EXECUTION_ID BIGINT,
+    IN NODE_ID BIGINT,  
+    IN t_selected_tu "sap.tm.trp.db.pickupreturn::tt_tu_info",  
+    IN t_impacted_supply_demand "sap.tm.trp.db.pickupreturn::tt_impacted_supply_demand",
+    IN t_transportation_cost "sap.tm.trp.db.pickupreturn::tt_transportation_cost",
+    IN t_handling_cost "sap.tm.trp.db.pickupreturn::tt_handling_cost",
+    IN t_storage_cost "sap.tm.trp.db.costmodel.storagecost::tt_storage_cost_period",
+    IN T_HANDLING_CAPACITY "sap.tm.trp.db.planningcockpit::tt_location_handling_capacity",
+    OUT result "sap.tm.trp.db.pickupreturn::tt_suggestion_data_short"          
+   ) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+    DECLARE RULE_TYPE INTEGER;
+    DECLARE RULE_SP VARCHAR(200);
+    DECLARE PICKUPRETURN_MODE VARCHAR(2);
+    DECLARE V_SHIPPER_LOCATION VARCHAR(50);
+        
+    SELECT IFNULL(MAX(T1.NAME), '') INTO RULE_SP
+    FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule" T1
+    WHERE T1.RULE_ID = :LDR_RULE_ID;
+    
+    SELECT IFNULL(MAX(CASE RULE_TYPE WHEN 1 THEN 'EP' WHEN 2 THEN 'ER' END),''), IFNULL(MAX(RULE_TYPE),0)
+    INTO PICKUPRETURN_MODE, RULE_TYPE       
+    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID = :RULE_ID;
+ 
+    SELECT IFNULL(MAX(SHIPPER_LOCATION),'') 
+    INTO V_SHIPPER_LOCATION FROM :t_selected_tu;
+        
+    INSERT INTO  "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_booking_ER_LDR_balance_cost_base_inputGlobalTemp"(
+                    PR_RULE_ID,
+                    TU_ID,
+                    EQUIPMENT_ID,
+                    EQUIP_TYPE_NAME,
+                    QUANTITY,
+                    LOCATION_ID,
+                    LOCATION_NAME,
+                    PLANNED_DATE,
+                    TU_TYPE,
+                    ITE_KEY,
+                    SHIPPER_ID,
+                    SHIPPER_NAME,
+                    POL,
+                    POL_NAME,
+                    POD,
+                    POD_NAME,
+                    CONSIGNEE_ID,
+                    CONSIGNEE_NAME,
+                    CUSTOMER_NAME,
+                    PLANNING_RELEVANT,
+                    EXECUTION_STATUS,
+                    LIFECYCLE_STATUS,
+                    BOOKING_DATE,
+                    PLAN_EXECUTION_ID,
+                    PLAN_MODEL_ID,
+                    NODE_ID,
+                    DEPOT_ID,
+                    DEPOT_NAME,
+                    STOCK,
+                    SUPPLY,
+                    DEMAND,
+                    IMPACTED_SUPPLY,
+                    IMPACTED_DEMAND,
+                    BALANCE_SUPPLY_DEMAND,
+                    BALANCE_STOCK_SUPPLY_DEMAND,
+                    MIN_SAFETY_STOCK,
+                    MAX_CAPACITY,
+                    COST_MODEL_ID,
+                    TR_COST,
+                    HANDLE_COST,
+                    FREE_DAYS,
+                    FREE_AMOUNT,
+                    STORAGE_COST,
+                    MAX_SAFETY_STOCK,
+                    MIN_SAFETY_STOCK_HEADER,
+                    MAX_SAFETY_STOCK_HEADER,
+                    MAX_CAPACITY_HEADER,
+                    STOCK_BALANCE_HEADER,
+                    HANDLING_CAPACITY,
+                    SUPPLY_DEMAND,
+                    REMAINING_HANDLING_CAPACITY)
+           SELECT DISTINCT :RULE_ID,
+                    T5.TU_ID,
+                    T5.RESOURCE_TYPE,
+                    T0.EQUIP_TYPE_NAME, 
+                    T5.QUANTITY,
+                    T5.SHIPPER_LOCATION_ID AS LOCATION_ID,
+                    T5.SHIPPER_LOCATION AS LOCATION_NAME,
+                    T5.PRE_DATE,
+                    T5.TU_TYPE,
+                    T5.ITE_KEY, -- T5.ITE_KEY,
+                    T5.SHIPPER_ID ,
+                    T5.SHIPPER,
+                    T5.POL,
+                    T5.POL_NAME,
+                    T5.POD,
+                    T5.POD_NAME,
+                    T5.CONSIGNEE_ID ,
+                    T5.CONSIGNEE,
+                    T5.CUSTOMER_NAME, --T5."CUSTOMER_NAME",
+                    T5.RELEVANT_PLANNING,
+                    T5.STATUS, --T5."EXECUTION_STATUS",
+                    T5.LIFECYCLE_STATUS, --T5."LIFECYCLE_STATUS",
+                    T5.BOOKING_DATE, --T5."BOOKING_DATE"
+                    :EXECUTION_ID,
+                    :SD_PLAN_ID, 
+                    :NODE_ID,
+                    T0.LOCATION_ID,
+                    T0.LOCATION_NAME,
+                    T0.STOCK,
+                    T0.SUPPLY,
+                    T0.DEMAND,
+                    T0.IMPACTED_SUPPLY,
+                    T0.IMPACTED_DEMAND,
+                    T0.BALANCE_SUPPLY_DEMAND,
+                    T0.BALANCE_STOCK_SUPPLY_DEMAND,
+                    T0.MIN_SAFETY_STOCK,
+                    T0.MAX_CAPACITY,
+                    0,
+                    T1.COST,
+                    IFNULL(T2.COST, 0),
+                    0 AS FREE_DAYS,
+                    0 AS FREE_AMOUNT,
+                    IFNULL(T3.COST,0) AS STORAGE_COST,
+                    T0.MAX_SAFETY_STOCK,
+                    T0.MIN_SAFETY_STOCK_HEADER,
+                    T0.MAX_SAFETY_STOCK_HEADER,
+                    T0.MAX_CAPACITY_HEADER,
+                    T0.STOCK_BALANCE_HEADER,
+                    T8.HANDLING_CAPACITY,
+                    IFNULL(T8.SUPPLY + T8.DEMAND,0) AS SUPPLY_DEMAND,
+                    IFNULL(T8.HANDLING_CAPACITY - T8.SUPPLY - T8.DEMAND, 999999) AS REMAINING_HANDLING_CAPACITY
+              FROM :t_impacted_supply_demand  T0 
+              INNER JOIN :t_transportation_cost  T1 
+              ON (T0.LOCATION_NAME = T1.FROM_LOCATION AND T1.RESOURCE_TYPE = T0.EQUIP_TYPE_ID AND T1.TO_LOCATION = :V_SHIPPER_LOCATION)
+              LEFT JOIN :t_handling_cost        T2 ON (T0.LOCATION_NAME = T2.LOCATION AND T2.RESOURCE_TYPE = T0.EQUIP_TYPE_ID)              
+              LEFT JOIN :t_storage_cost        T3 ON (T0.LOCATION_NAME = T3.LOCATION AND T3.RESOURCE_TYPE = T0.EQUIP_TYPE_ID)
+              LEFT JOIN :t_selected_tu T5 ON (T5.RESOURCE_TYPE = T0.EQUIP_TYPE_ID)
+	          LEFT OUTER JOIN :T_HANDLING_CAPACITY T8	ON T0.LOCATION_ID = T8.LOCATION_ID AND T0.START_TIME = T8.START_TIME AND T0.END_TIME = T8.END_TIME;
+        
+        CALL "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::p_call_ER_LDR_rules"(
+        :PICKUPRETURN_MODE,
+        :RULE_SP,
+        ER_LDR_RESULT
+        ); 
+     
+       ldr_result = SELECT DISTINCT T1.DEPOT_ID AS LOCATION_ID ,
+                          T1.DEPOT_NAME AS LOCATION_NAME ,
+                          T1.EQUIPMENT_ID  AS EQUIP_TYPE_ID,
+                          T1.EQUIP_TYPE_NAME,                                                    
+                          IFNULL (TO_VARCHAR(TO_DECIMAL(T1.TR_COST * T1.QUANTITY, 13, 2)),'0.00') || ' / ' 
+                          || IFNULL (TO_VARCHAR(TO_DECIMAL(T1.HANDLE_COST * T1.QUANTITY, 13, 2)),'0.00') || ' / '
+                          || IFNULL (TO_VARCHAR(TO_DECIMAL(T1.STORAGE_COST * T1.QUANTITY, 13, 2)),'0.00')   AS EXP_TRAN_COS,
+                          IFNULL (TO_VARCHAR(TO_DECIMAL((T1.TR_COST+T1.HANDLE_COST-T1.STORAGE_COST) * T1.QUANTITY, 13, 2)),'0.00') AS TOTAL_COST,
+                          T1.SUPPLY - T1.DEMAND  AS CUR_BALANCING_SD_PLAN,
+                          T1.SUPPLY-T1.DEMAND - T1.IMPACTED_DEMAND + T1.IMPACTED_SUPPLY AS IMPACTED_SD_PLAN,                          
+                          IFNULL (TO_VARCHAR(T1.STOCK),'0')||' / '||IFNULL (TO_VARCHAR(T1.MAX_CAPACITY),'999999') AS CUR_STOCK,
+                          T1.REMAINING_HANDLING_CAPACITY,
+                          T2.LOC_RANK AS LOCATION_RANK
+                   FROM :ER_LDR_RESULT T2
+                   INNER JOIN "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_booking_ER_LDR_balance_cost_base_inputGlobalTemp" T1
+                   ON (T1.TU_ID = T2.TU_ID 
+                       AND T1.EQUIPMENT_ID = T2.EQUIPMENT_ID
+                       AND T1.LOCATION_ID  = T2.LOCATION_ID
+                       AND T1.PLANNED_DATE = T2.PLANNED_DATE 
+                       AND T1.TU_TYPE = T2.TU_TYPE
+                       AND T1.PLAN_EXECUTION_ID = T2.PLAN_EXECUTION_ID 
+                       AND T1.NODE_ID = T2.NODE_ID
+                       AND T1.DEPOT_ID = T2.DEPOT_ID)
+                   WHERE T2.ER_LDR = 'LDR';
+
+      result = SELECT DISTINCT LOCATION_ID, LOCATION_NAME, EQUIP_TYPE_ID, EQUIP_TYPE_NAME,  
+                      EXP_TRAN_COS, TOTAL_COST, CUR_BALANCING_SD_PLAN, IMPACTED_SD_PLAN,  CUR_STOCK,
+                      REMAINING_HANDLING_CAPACITY,
+               ROW_NUMBER() OVER (ORDER BY LOCATION_RANK) AS RANK
+               FROM :ldr_result; 
+END;

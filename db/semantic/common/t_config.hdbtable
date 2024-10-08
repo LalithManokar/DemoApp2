@@ -1,0 +1,13 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+  {name = "CODE"; sqlType = NVARCHAR; length = 20; nullable = true;},
+  {name = "NAME"; sqlType = NVARCHAR; length = 20; nullable = true; unique = true;},
+  {name = "CLIENT_CODE"; sqlType = VARCHAR; length = 10;},
+  {name = "ZONE_HIERARCHY_ID"; sqlType = VARCHAR; length = 32;},
+  {name = "CREATE_BY"; sqlType = BIGINT; comment="create user id";},
+  {name = "CREATE_AT"; sqlType = TIMESTAMP;},
+  {name = "LAST_MODIFIED_BY"; sqlType = BIGINT;},
+  {name = "LAST_MODIFIED_AT"; sqlType = TIMESTAMP;}    
+];
+table.primaryKey.pkcolumns = ["CODE"];

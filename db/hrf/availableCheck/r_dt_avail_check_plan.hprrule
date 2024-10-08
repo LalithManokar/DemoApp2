@@ -1,0 +1,250 @@
+{
+    "description":"Availability Check Plan Rule",
+    "status":"Active",
+    "ruleBody":{
+        "type":"decisionTable",
+        "hitPolicy":"firstMatch",
+        "content":{
+            "headers":[
+                {
+                    "colID":"CS15295d81704x65125",
+                    "expression":"AvailabilityCheckPlanInput.LOCATION_NAME",
+                    "alias":"LOCATION_NAME",
+                    "type":"condition",
+                    "width":282
+                },
+                {
+                    "colID":"CS15295d87d49x407f5",
+                    "expression":"AvailabilityCheckPlanInput.EQUIP_TYPE",
+                    "alias":"EQUIP_TYPE",
+                    "type":"condition",
+                    "width":236
+                },
+                {
+                    "colID":"CS15295d93ca3x610cf",
+                    "expression":"AvailabilityCheckPlanInput.REQUEST_CHECK_TYPE",
+                    "alias":"REQUEST_CHECK_TYPE",
+                    "type":"condition",
+                    "width":161
+                },
+                {
+                    "colID":"AS15295d72f32xd5e98",
+                    "name":"SD_PLAN",
+                    "type":"output",
+                    "width":100
+                }
+            ],
+            "rows":[
+                {
+                    "rowID":"0",
+                    "row":[
+                        {
+                            "colID":"CS15295d81704x65125",
+                            "content":"exists in ('CNYNFDLIU', 'CNTAODGAD')",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS15295d87d49x407f5",
+                            "content":"exists in ('20ST', '40HC', '40RP', '40ST')",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS15295d93ca3x610cf",
+                            "content":"is equal to 'A'",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"AS15295d72f32xd5e98",
+                            "content":"'APRIL_PLAN8'"
+                        }
+                    ]
+                },
+                {
+                    "rowID":"1",
+                    "row":[
+                        {
+                            "colID":"CS15295d81704x65125",
+                            "content":"exists in('CNSHADANX', 'CNCKGDCKG')",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS15295d87d49x407f5",
+                            "content":"exists in ('20ST', '40HC', '40RP', '40ST')",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS15295d93ca3x610cf",
+                            "content":"is equal to 'A'",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"AS15295d72f32xd5e98",
+                            "content":"'FIT_VP_S004'"
+                        }
+                    ]
+                },
+                {
+                    "rowID":"3",
+                    "row":[
+                        {
+                            "colID":"CS15295d81704x65125",
+                            "content":"exists in ('AEJEA')",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS15295d87d49x407f5",
+                            "content":"exists in ('20ST')",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS15295d93ca3x610cf",
+                            "content":"is equal to 'A'",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"AS15295d72f32xd5e98",
+                            "content":"'APRIL_PLAN_1'"
+                        }
+                    ]
+                },
+                {
+                    "rowID":"4",
+                    "row":[
+                        {
+                            "colID":"CS15295d81704x65125",
+                            "content":"exists in ('CNSHADJFL','CNDLCDPCM')",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS15295d87d49x407f5",
+                            "content":"exists in ('20ST')",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS15295d93ca3x610cf",
+                            "content":"is equal to 'C'",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"AS15295d72f32xd5e98",
+                            "content":"'TRR_SD_AEU'"
+                        }
+                    ]
+                },
+                {
+                    "rowID":"5",
+                    "row":[
+                        {
+                            "colID":"CS15295d81704x65125",
+                            "content":"exists in ('AEKLFDKFK')",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS15295d87d49x407f5",
+                            "content":"exists in ('20ST')",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS15295d93ca3x610cf",
+                            "content":"is equal to 'C'",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"AS15295d72f32xd5e98",
+                            "content":"'TRR_SD_AEU'"
+                        }
+                    ]
+                },
+                {
+                    "rowID":"6",
+                    "row":[
+                        {
+                            "colID":"CS15295d81704x65125",
+                            "content":"exists in ('CNYNFDLIU')",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS15295d87d49x407f5",
+                            "content":"exists in ('40RP')",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS15295d93ca3x610cf",
+                            "content":"is equal to 'A'",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"AS15295d72f32xd5e98",
+                            "content":"'APRIL_PLAN8'"
+                        }
+                    ]
+                },
+                {
+                    "rowID":"7",
+                    "row":[
+                        {
+                            "colID":"CS15295d81704x65125",
+                            "content":"exists in ('CNNGBDYUA')",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS15295d87d49x407f5",
+                            "content":"exists in ('20ST')",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS15295d93ca3x610cf",
+                            "content":"is equal to 'A'",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"AS15295d72f32xd5e98",
+                            "content":"'TER_ASIA'"
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "vocabulary":"sap.tm.trp.db.hrf.availableCheck::voc_avail_check_plan",
+    "output":"AvailabilityCheckSDPlanOutput",
+    "embeddedServices":[
+        {
+            "readOnly":true,
+            "allowCalibration":false,
+            "executionContext":{
+                "dataObject":{ 
+                    "name":"AvailabilityCheckPlanInput",
+                    "keys":[
+                        "LOCATION_NAME",
+                        "LOCATION_TYPE",
+                        "EQUIP_TYPE",
+                        "REQUEST_TIME",
+                        "QUANTITY",
+                        "REQUEST_CHECK_TYPE"
+                    ]
+                },
+                "parameters":{
+                    "definition":[
+                        {
+                            "name":"AvailabilityCheckPlanInput",
+                            "dataType":"DataObject",
+                            "description":"AvailabilityCheckPlanInput",
+                            "dataObject":{
+                                "name":"AvailabilityCheckPlanInput",
+                                "identifiers":[
+                                    "LOCATION_NAME",
+                                    "LOCATION_TYPE",
+                                    "EQUIP_TYPE",
+                                    "REQUEST_TIME",
+                                    "QUANTITY", 
+                                    "REQUEST_CHECK_TYPE"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

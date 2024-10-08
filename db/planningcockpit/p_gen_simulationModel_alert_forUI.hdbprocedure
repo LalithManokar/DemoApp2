@@ -1,0 +1,31 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_gen_simulationModel_alert_forUI" (
+IN PLAN_EXECUTION_ID BIGINT,
+IN SCENARIO_ID BIGINT,
+IN NODE_ID BIGINT,
+OUT OUTPUT_RECORDS INTEGER  
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN SEQUENTIAL EXECUTION
+
+    DECLARE FILTER_TYPE INTEGER;
+    DECLARE OUTPUT_ALERT_SCORE_RECORDS INTEGER;
+    
+    SELECT IFNULL (MIN(FILTER_TYPE),0)
+    INTO FILTER_TYPE 
+    FROM "sap.tm.trp.db.planningcockpit::t_alert_output_simulation" 
+    --WHERE PLAN_EXECUTION_ID = TO_VARCHAR (:PLAN_EXECUTION_ID)
+    WHERE PLAN_EXECUTION_ID = :PLAN_EXECUTION_ID
+    AND SCENARIO_ID = :SCENARIO_ID;
+    
+    CALL "sap.tm.trp.db.planningcockpit::p_normalizing_alert_score_simulation"(:PLAN_EXECUTION_ID,:SCENARIO_ID,OUTPUT_ALERT_SCORE_RECORDS);
+    
+    IF ( :OUTPUT_ALERT_SCORE_RECORDS > 0 )
+    THEN 
+      CALL "sap.tm.trp.db.planningcockpit::p_compose_Score_alert_forUI_simulation"(:PLAN_EXECUTION_ID,:SCENARIO_ID,:NODE_ID,:FILTER_TYPE,OUTPUT_RECORDS);  
+    ELSE
+        OUTPUT_RECORDS := -1;
+    END IF;
+END;

@@ -1,0 +1,16 @@
+schema="SAP_TM_TRP";
+
+query="SELECT T1.ID,
+				T1.RULE_NAME AS NAME,
+				T1.DESCRIPTION AS DESC,
+				T3.USERNAME AS CREATED_BY,
+				T4.USERNAME AS MODIFIED_BY
+            FROM \"sap.tm.trp.db.archive::t_archive_rule\" T1
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T3
+            ON T1.CREATED_BY=T3.ID
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T4
+            ON T1.MODIFIED_BY=T4.ID";
+                       
+depends_on_table = ["sap.tm.trp.db.archive::t_archive_rule"];
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];
+                    

@@ -1,0 +1,36 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::p_cost_dataset_delete_check" (
+   IN ID  BIGINT,
+   OUT WHEREUSED "sap.tm.trp.db.whereusedlist::v_used_cost_dataset" 
+   ) 
+	 LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+  DECLARE OBJECT_CODE VARCHAR(20);
+  
+  --get code by id
+  SELECT IFNULL (MAX (NAME),'') 
+  INTO OBJECT_CODE 
+  FROM "sap.tm.trp.db.costmodel::t_cost_dataset"
+  WHERE ID = :ID;
+  
+  --get used list by code
+  WHEREUSED = SELECT
+				OBJECT_CODE
+				,USED_OBJECT_ID
+				,NAME
+				,CODE
+				,CATEGORY
+				,DESC
+				,VISIBILITY
+				,CREATED_BY
+				,MODIFIED_BY
+				,MODIFIED_TIME
+				,RESOURCE_CATEGORY
+              FROM "sap.tm.trp.db.whereusedlist::v_used_cost_dataset"
+              WHERE OBJECT_CODE = :OBJECT_CODE;
+  
+  
+END;

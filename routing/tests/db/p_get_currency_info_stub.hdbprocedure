@@ -1,0 +1,19 @@
+PROCEDURE "SAP_TM_ROUTING_TEST"."sap.tm.trp.routing.tests.db::p_get_currency_info_stub" (
+    IN COST_MODEL_ID BIGINT,
+    OUT COST_MODEL TABLE (ID BIGINT, NAME VARCHAR(200), CURRENCY_CODE VARCHAR(20), 
+        CREATED_BY NVARCHAR(50), CREATED_ON TIMESTAMP, CHANGED_BY NVARCHAR(50), CHANGED_ON TIMESTAMP)
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING_TEST
+   READS SQL DATA AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+   cost_model = 
+   SELECT id, name, currency_code, 
+   SESSION_CONTEXT('APPLICATIONUSER') AS created_by, CURRENT_UTCTIMESTAMP AS created_on, SESSION_CONTEXT('APPLICATIONUSER') AS changed_by, CURRENT_UTCTIMESTAMP AS changed_on
+   FROM "sap.tm.trp.routing.tests.db::t_currency_info_test"
+   WHERE id = :cost_model_id;
+END

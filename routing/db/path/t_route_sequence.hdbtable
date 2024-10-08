@@ -1,0 +1,23 @@
+table.schemaName = "SAP_TM_ROUTING";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ROUTE_ID"; sqlType = BIGINT; },
+    {name = "SEQUENCE"; sqlType = INTEGER; },
+    {name = "LOCATION"; sqlType = NVARCHAR; length = 50; },
+    {name = "PRE_TRIP_SEQUENCE"; sqlType = INTEGER; }, // The trip sequence number in the trip whose to_location equal to current location
+    {name = "NEXT_TRIP_SEQUENCE"; sqlType = INTEGER; },  // The trip sequence number in the trip whose from_location equal to current location
+    {name = "BASIC_PATH_ID"; sqlType = BIGINT; },
+    {name = "PATH_TYPE"; sqlType = VARCHAR; length = 10; }, // P for path and C for connection
+    {name = "MTR"; sqlType = NVARCHAR; length = 10; },
+    {name = "TRIP_ID"; sqlType = NVARCHAR; length = 100; },
+    {name = "TRIP_NAME"; sqlType = NVARCHAR; length = 100; },
+    {name = "DEPARTURE_TIME"; sqlType = TIMESTAMP; },
+    {name = "ARRIVAL_TIME"; sqlType = TIMESTAMP; },
+    {name = "DISTANCE"; sqlType = DOUBLE; },
+    {name = "STORAGE_COST"; sqlType = DOUBLE; },
+    {name = "HANDLING_COST"; sqlType = DOUBLE; },
+    {name = "TRANSPORT_COST"; sqlType = DOUBLE; },
+    {name = "COST_CURRENCY"; sqlType = NVARCHAR; length = 10; },
+    {name = "HANDLING_TYPE"; sqlType = VARCHAR; length = 10; }
+];
+table.primaryKey.pkcolumns = ["ROUTE_ID", "SEQUENCE"];

@@ -1,0 +1,31 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.settings::p_check_lane_for_location_pair_group" (
+    IN ORIGIN_LANE "sap.tm.trp.db.pickupreturn::tt_location_based_cost_info",
+    OUT FILTERD_LANE "sap.tm.trp.db.pickupreturn::tt_location_based_cost_info"
+   )
+     LANGUAGE SQLSCRIPT
+     SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+     AS
+BEGIN
+	DECLARE ACTIVATION_STATUS CHAR(1);
+    DECLARE GROUP_FIELD_NAME1 VARCHAR(200);
+    DECLARE GROUP_FIELD_NAME2 VARCHAR(200);
+
+	CALL "sap.tm.trp.db.pickupreturn.settings::p_get_location_pair_group"(ACTIVATION_STATUS,GROUP_FIELD_NAME1,GROUP_FIELD_NAME2);
+	
+	IF :ACTIVATION_STATUS = 'X' THEN
+    	PAIR_GROUP = SELECT 
+        	    T1.*, 
+        	    T2.PAIR_GROUP1 AS FROM_PAIR_GROUP1, 
+        	    T2.PAIR_GROUP2 AS FROM_PAIR_GROUP2, 
+        	    T3.PAIR_GROUP1 AS TO_PAIR_GROUP1, 
+        	    T3.PAIR_GROUP2 AS TO_PAIR_GROUP2 
+    	    FROM :ORIGIN_LANE T1
+    	    INNER JOIN "sap.tm.trp.db.semantic.location::v_location_enhance_group" T2 ON T1.FROM_LOCATION = T2.NAME
+    	    INNER JOIN "sap.tm.trp.db.semantic.location::v_location_enhance_group" T3 ON T1.TO_LOCATION = T3.NAME;
+    	FILTERD_LANE = SELECT DISTINCT FROM_LOCATION,TO_LOCATION,MTR,RESOURCE_TYPE,CARRIER,DISTANCE,DURATION FROM :PAIR_GROUP 
+    		WHERE (FROM_PAIR_GROUP1 <> '' AND FROM_PAIR_GROUP1 = TO_PAIR_GROUP1) OR (FROM_PAIR_GROUP2 <> '' AND FROM_PAIR_GROUP2 = TO_PAIR_GROUP2);
+	ELSE
+		FILTERD_LANE = SELECT * FROM :ORIGIN_LANE;
+	END IF ;
+END

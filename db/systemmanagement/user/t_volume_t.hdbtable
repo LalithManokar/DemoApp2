@@ -1,0 +1,8 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "VOLUME_CODE"; sqlType = NVARCHAR; length = 20; nullable = false;},
+    {name = "LANG_CODE"; sqlType = VARCHAR; length = 2; nullable = false;},
+    {name = "DESC"; sqlType = VARCHAR; length = 50; nullable = true;}
+];
+table.primaryKey.pkcolumns = ["VOLUME_CODE", "LANG_CODE"];

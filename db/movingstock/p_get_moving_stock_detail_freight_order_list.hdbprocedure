@@ -1,0 +1,75 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.movingstock::p_get_moving_stock_detail_freight_order_list" (
+IN IN_Document_IDs "sap.tm.trp.db.movingstock::tt_freight_order_list",
+IN IN_Equip_Types "sap.tm.trp.db.movingstock::tt_equip_types",
+IN IN_RESOURCE_CATEGORY VARCHAR(50),
+OUT res_out "sap.tm.trp.db.movingstock::tt_resource_stock_for_freight_order"
+)
+  LANGUAGE SQLSCRIPT
+  SQL SECURITY INVOKER
+  DEFAULT SCHEMA "SAP_TM_TRP"
+  READS SQL DATA 
+  
+AS
+BEGIN
+      
+    -- get load/discharges for all the departure locations
+    CALL "sap.tm.trp.db.movingstock::p_get_load_discharge_freight_order_list"(:IN_Document_IDs,:IN_Equip_Types,:IN_RESOURCE_CATEGORY,:lus);
+                     
+    -- per voyage,tu,equip type  
+    -- assume the empty/laden load/discharge for the location sequence are as following
+    -- seq    load    unload
+    -- 10      L1      U1
+    -- 20      L2      U2
+    -- 30      L3      U3
+    -- 40      L4      U4
+    -- then the stock are as following
+    -- seq    load    unload   stock
+    -- 10      L1      U1        0
+    -- 20      L2      U2     L1 - U1
+    -- 30      L3      U3     L1-U1 + L2-U2
+    -- 40      L4      U4     L1-U1 + L2-U2 + L3-U3
+
+    -- we first compute 
+    -- seq    load    unload   sub
+    -- 10      L1      U1      L1-U1
+    -- 20      L2      U2      L2-U2
+    -- 30      L3      U3      L3-U3
+    -- 40      L4      U4      L4-U4
+
+    -- then aggregate the sub values for all the location sequnce that before current location sequnce, the result is the stock at the current location sequence 
+    lus_sub = SELECT t1.TOR_ID,t1.LOC_SEQ,t1.LOCATION_ID, t1.LOCATION_NAME, t1.RESOURCE_TYPE,
+              t1.QUANTITY_LADEN_LOAD - t1.QUANTITY_LADEN_UNLOAD AS LADEN_SUB,
+              t1.QUANTITY_EMPTY_LOAD - t1.QUANTITY_EMPTY_UNLOAD AS EMPTY_SUB 
+              FROM :lus t1;
+    
+
+    stocks =            
+             SELECT  t1.TOR_ID, t1.LOC_SEQ, t1.LOCATION_ID, t1.LOCATION_NAME,t1.RESOURCE_TYPE,
+                     sum(t1.LADEN_SUB)over(partition by t1.TOR_ID,t1.RESOURCE_TYPE order by t1.LOC_SEQ) AS LADEN_STOCK,
+                     sum(t1.EMPTY_SUB)over(partition by t1.TOR_ID,t1.RESOURCE_TYPE order by t1.LOC_SEQ) AS EMPTY_STOCK
+               FROM :lus_sub  t1;              
+                              
+                              
+    
+	-- generate the output
+    res_out = SELECT t1.TOR_ID AS "FreightBookingID",
+                     t1.LOC_SEQ AS "SequenceNumber", 
+                     t1.LOCATION_NAME AS "Location",
+                     t1.RESOURCE_TYPE AS "EquipmentSizetype", 
+                     t1.ARRIVAL_UTC,
+                     t1.DEPARTURE_UTC,
+                     t2.LADEN_STOCK AS "StockLaden", 
+                     t2.EMPTY_STOCK AS "StockEmpty",
+                     t1.QUANTITY_LADEN_UNLOAD AS "LadenDischarge", 
+                     t1.QUANTITY_EMPTY_UNLOAD AS "EmptyDischarge", 
+                     t1.QUANTITY_LADEN_LOAD AS "LadenLoad",
+                     t1.QUANTITY_EMPTY_LOAD AS "EmptyLoad" ,
+                     t1.SCH_DEP as "ScheduleDeparture",
+                     t1.VOYAGE,
+                     t1.VESSEL_ID
+              FROM :lus t1
+              INNER JOIN :stocks t2 ON ( t1.LOC_SEQ = t2.LOC_SEQ AND t1.LOCATION_ID = t2.LOCATION_ID AND t1.RESOURCE_TYPE = t2.RESOURCE_TYPE AND t1.TOR_ID = t2.TOR_ID);
+                
+			  
+
+END;

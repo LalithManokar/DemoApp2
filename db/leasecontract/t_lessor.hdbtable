@@ -1,0 +1,25 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},	
+	{name = "LESSOR_AGREMENT_REFERENCE"; sqlType = NVARCHAR;length = 100;nullable = false;},
+    {name = "NAME"; sqlType = NVARCHAR; length = 100; nullable = false;},
+	{name = "ADDRESS_LINE1"; sqlType = NVARCHAR; length = 255; nullable = false;},
+	{name = "ADDRESS_LINE2"; sqlType = NVARCHAR; length = 255; nullable = true;},
+	{name = "ADDRESS_LINE3"; sqlType = NVARCHAR; length = 255; nullable = true;},
+    {name = "DESC"; sqlType = NVARCHAR; length = 1000; nullable = true;},
+    {name = "CITY"; sqlType = NVARCHAR; length = 40; nullable = true; comment = "City"; },  
+	{name = "STATE"; sqlType = NVARCHAR; length = 40; nullable = true; comment = "State"; },  
+	{name = "COUNTRY"; sqlType = NVARCHAR; length = 40; nullable = true; comment = "Country"; },	
+    {name = "POST_CODE"; sqlType = NVARCHAR; length = 10; nullable = true; comment = "Postal code"; },    
+    {name = "PHONE1"; sqlType = NVARCHAR; length = 30; nullable = true; comment = "Telephone number"; },
+    {name = "PHONE2"; sqlType = NVARCHAR; length = 30; nullable = true; comment = "Telephone number2"; },
+    {name = "FAX_NUMBER1"; sqlType = NVARCHAR; length = 30; nullable = true; comment = "Fax number"; },
+	{name = "FAX_NUMBER2"; sqlType = NVARCHAR; length = 30; nullable = true; comment = "Fax number2"; },
+	{name = "EMAIL1"; sqlType = NVARCHAR; length = 30; nullable = true; comment = "E-mail id1"; },
+	{name = "EMAIL2"; sqlType = NVARCHAR; length = 30; nullable = true; comment = "E-mail id2"; },
+    {name = "COMPANY_URL"; sqlType = NVARCHAR; length = 255; nullable = true; comment = "URL of the company"; },
+    {name = "IMAGE_URL"; sqlType = NVARCHAR; length = 255; nullable = true; comment = "Company Logo URL"; },
+    {name = "CODE"; sqlType = NVARCHAR; length = 22; nullable = false;}
+];
+table.primaryKey.pkcolumns = ["ID"];

@@ -1,0 +1,8 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT DISTINCT L.ID,L.MESSAGE,E.TABLE_NAME,E.COLUMN_NAME,E.TYPE,E.CODE 
+		FROM \"sap.tm.trp.db.leasecontract::t_lease_contract_import_log\" L
+		INNER JOIN \"sap.tm.trp.db.leasecontract::t_lease_contract_import_errors\" E
+		ON L.ID=E.LOG_ID";
+
+depends_on_table=["sap.tm.trp.db.leasecontract::t_lease_contract_import_log"];  
+depends_on_table=["sap.tm.trp.db.leasecontract::t_lease_contract_import_errors"];  

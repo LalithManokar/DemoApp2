@@ -1,0 +1,951 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.dataprovisioning::sp_lease_contract_data_provision" (OUT P_MESSAGE NVARCHAR(500)) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+V_CNT_LESSOR BIGINT;
+V_CNT_LEASE_TYPE BIGINT;
+V_CNT_CONT_COND BIGINT;
+V_CNT_HIRE_TERM BIGINT;
+V_CNT_HIRE_INVALID_LOC BIGINT;
+V_CNT_HIRE_INVALID_EQUI BIGINT;
+V_CNT_HIRE_COND BIGINT;
+V_CNT_COND_INVALID_LOC BIGINT;
+V_CNT_COND_INVALID_EQUI BIGINT;
+V_CNT_PER_DIEM BIGINT;
+V_CNT_PD_INVALID_EQUI BIGINT;
+V_CNT_HIRE_L BIGINT;
+V_CNT_HIRE_LG BIGINT;
+V_CNT_HIRE_Z BIGINT;
+V_CNT_HIRE_ZG BIGINT;
+V_CNT_HIRE_R BIGINT;
+V_CNT_HIRE_RG BIGINT;
+V_CNT_HIRE_E BIGINT;
+V_CNT_HIRE_EG BIGINT;
+V_CNT_COND_L BIGINT;
+V_CNT_COND_LG BIGINT;
+V_CNT_COND_Z BIGINT;
+V_CNT_COND_ZG BIGINT;
+V_CNT_COND_R BIGINT;
+V_CNT_COND_RG BIGINT;
+V_CNT_COND_E BIGINT;
+V_CNT_COND_EG BIGINT;
+V_CNT_PD_E BIGINT;
+V_CNT_PD_EG BIGINT;
+V_TOTAL_COUNT BIGINT;
+MESSAGE NVARCHAR(500);
+OUT_VALUE INT;
+
+BEGIN
+--Total validations: 24.
+
+	--Validations for Referential Integrity.
+	--1. t_lease_contract and t_lessor.
+	--2. t_lease_contract and t_lease_type.
+	--3. t_lease_contract_condition and t_lease_contract
+	--4. t_lease_contract_hire_term and t_lease_contract
+	--5. t_lease_contract_hire_condition and t_lease_contract
+	--6. t_lease_contract_per_diem and t_lease_contract
+	
+	--Validations for the existance of equipments in below three tables 
+	--t_lease_contract_hire_term, t_lease_contract_hire_condition and t_lease_contract_per_diem.
+	--Total Validations:  2 types of equipments x 3 tables = 6 validations.
+	
+	--Validations for the existance of locations in below two tables
+	--t_lease_contract_hire_term, t_lease_contract_hire_condition. 
+	--Total Validations:  6 types of locations x 2 tables = 12 validations.
+	
+	DECLARE CONDITION_VALIDATION CONDITION FOR SQL_ERROR_CODE 10001;
+	
+	
+	DECLARE EXIT HANDLER FOR CONDITION_VALIDATION 
+	BEGIN
+	
+		P_MESSAGE := 'Validation Failed'; 
+		EXEC('COMMIT');
+	
+	END;
+	
+	DECLARE EXIT HANDLER FOR SQLEXCEPTION
+	BEGIN
+		P_MESSAGE := ::SQL_ERROR_MESSAGE;
+	END; 
+	
+	delete from "sap.tm.trp.db.leasecontract::t_lease_contract_import_log";
+	delete from "sap.tm.trp.db.leasecontract::t_lease_contract_import_errors";
+	
+	truncate table "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code";
+	
+--Validations for Referential Integrity.	
+	--1. t_lease_contract and t_lessor.
+	insert into "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code" 
+	select "CODE" from "sap.tm.trp.db.dataprovisioning::t_lessor_ext_src";
+	
+	SELECT COUNT(1) INTO V_CNT_LESSOR FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_ext_src"
+	WHERE LESSOR_CODE NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_LESSOR > 0 THEN 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(1,0,'t_lessor_ext_src','t_lease_contract_ext_src','LESSOR_CODE',0,'LESSOR_CODE','');
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(1,1,'t_lessor_ext_src','t_lease_contract_ext_src','LESSOR_CODE',0,'LESSOR_CODE','');
+	END IF;
+	
+	truncate table "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code";
+
+	
+	--2. t_lease_contract and t_lease_type.
+	insert into "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code" 
+	select "CODE" from "sap.tm.trp.db.dataprovisioning::t_lease_contract_type_ext_src";
+	
+	SELECT COUNT(1) INTO V_CNT_LEASE_TYPE FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_ext_src"
+	WHERE LEASE_TYPE_CODE NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_LEASE_TYPE > 0 THEN 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(2,0,'t_lease_contract_type_ext_src','t_lease_contract_ext_src','LEASE_TYPE_CODE',0,'LEASE_TYPE_CODE','');
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(2,1,'t_lease_contract_type_ext_src','t_lease_contract_ext_src','LEASE_TYPE_CODE',0,'LEASE_TYPE_CODE','');
+	
+	END IF;
+	
+	truncate table "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code";
+	
+	--
+	insert into "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code" 
+	select "CODE" from "sap.tm.trp.db.dataprovisioning::t_lease_contract_ext_src";
+	
+	--3. t_lease_contract_condition and t_lease_contract
+	SELECT COUNT(1) INTO V_CNT_CONT_COND FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_condition_ext_src"
+	WHERE CONTRACT_CODE NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_CONT_COND > 0 THEN  
+		
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(3,0,'t_lease_contract_ext_src','t_lease_contract_condition_ext_src','CONTRACT_CODE',0,'CONTRACT_CODE','');
+		
+		
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(3,1,'t_lease_contract_ext_src','t_lease_contract_condition_ext_src','CONTRACT_CODE',0,'CONTRACT_CODE','');
+	
+	END IF;
+	
+	--4. t_lease_contract_hire_term and t_lease_contract
+	SELECT COUNT(1) INTO V_CNT_HIRE_TERM FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_term_ext_src"
+	WHERE CONTRACT_CODE NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_HIRE_TERM > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(4,0,'t_lease_contract_ext_src','t_lease_contract_hire_term_ext_src','CONTRACT_CODE',0,'CONTRACT_CODE','');
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(4,1,'t_lease_contract_ext_src','t_lease_contract_hire_term_ext_src','CONTRACT_CODE',0,'CONTRACT_CODE','');
+	
+	END IF;
+	
+	--25. Check t_lease_contract_hire_term for invalid locations 
+	MESSAGE:='Location Types in t_lease_contract_hire_term_ext_src';
+	
+	SELECT COUNT(1) INTO V_CNT_HIRE_INVALID_LOC FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_term_ext_src"
+	WHERE LOCATION_TYPE NOT IN (1,2,3,4,5,6);
+	
+	IF :V_CNT_HIRE_INVALID_LOC > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(25,0,'','t_lease_contract_hire_term_ext_src','LOCATION_TYPE',0,'LOCATION_TYPE',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(25,1,'','t_lease_contract_hire_term_ext_src','LOCATION_TYPE',0,'LOCATION_TYPE',:MESSAGE);
+	
+	END IF;
+	
+	--26. Check t_lease_contract_hire_term for invalid equipments 
+	MESSAGE:='Equipment Types in t_lease_contract_hire_term_ext_src';
+	
+	SELECT COUNT(1) INTO V_CNT_HIRE_INVALID_EQUI FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_term_ext_src"
+	WHERE EQUIPMENT_CODE_TYPE NOT IN (1,2);
+	
+	IF :V_CNT_HIRE_INVALID_EQUI > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(26,0,'','t_lease_contract_hire_term_ext_src','EQUIPMENT_CODE_TYPE',0,'EQUIPMENT_CODE_TYPE',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(26,1,'','t_lease_contract_hire_term_ext_src','EQUIPMENT_CODE_TYPE',0,'EQUIPMENT_CODE_TYPE',:MESSAGE);
+	
+	END IF;
+	
+	--5. t_lease_contract_hire_condition and t_lease_contract
+	SELECT COUNT(1) INTO V_CNT_HIRE_COND FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_condition_ext_src"
+	WHERE CONTRACT_CODE NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_HIRE_COND > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(5,0,'t_lease_contract_ext_src','t_lease_contract_hire_condition_ext_src','CONTRACT_CODE',0,'CONTRACT_CODE','');
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(5,1,'t_lease_contract_ext_src','t_lease_contract_hire_condition_ext_src','CONTRACT_CODE',0,'CONTRACT_CODE','');
+	
+	END IF;
+	
+	--27. Check t_lease_contract_hire_condition for invalid locations 
+	MESSAGE:='Location Types in t_lease_contract_hire_term_ext_src';
+	
+	SELECT COUNT(1) INTO V_CNT_COND_INVALID_LOC FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_condition_ext_src"
+	WHERE LOCATION_TYPE NOT IN (1,2,3,4,5,6);
+	
+	IF :V_CNT_COND_INVALID_LOC > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(27,0,'','t_lease_contract_hire_condition_ext_src','LOCATION_TYPE',0,'LOCATION_TYPE',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(27,1,'','t_lease_contract_hire_condition_ext_src','LOCATION_TYPE',0,'LOCATION_TYPE',:MESSAGE);
+	
+	END IF;
+	
+	--28. Check t_lease_contract_hire_condition for invalid equipments 
+	MESSAGE:='Equipment Types in t_lease_contract_hire_term_ext_src';
+	
+	SELECT COUNT(1) INTO V_CNT_COND_INVALID_EQUI FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_condition_ext_src"
+	WHERE EQUIPMENT_CODE_TYPE NOT IN (1,2);
+	
+	IF :V_CNT_COND_INVALID_EQUI > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(28,0,'','t_lease_contract_hire_condition_ext_src','EQUIPMENT_CODE_TYPE',0,'EQUIPMENT_CODE_TYPE',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(28,1,'','t_lease_contract_hire_condition_ext_src','EQUIPMENT_CODE_TYPE',0,'EQUIPMENT_CODE_TYPE',:MESSAGE);
+	
+	END IF;
+	
+	--6. t_lease_contract_per_diem and t_lease_contract
+	SELECT COUNT(1) INTO V_CNT_PER_DIEM FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_per_diem_ext_src"
+	WHERE CONTRACT_CODE NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_PER_DIEM > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(6,0,'t_lease_contract_ext_src','t_lease_contract_per_diem_ext_src','CONTRACT_CODE',0,'CONTRACT_CODE','');
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(6,1,'t_lease_contract_ext_src','t_lease_contract_per_diem_ext_src','CONTRACT_CODE',0,'CONTRACT_CODE','');
+	
+	END IF;
+	
+	--29. Check t_lease_contract_per_diem for invalid equipments 
+	MESSAGE:='Equipment Types in t_lease_contract_hire_term_ext_src';
+	
+	SELECT COUNT(1) INTO V_CNT_PD_INVALID_EQUI FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_per_diem_ext_src"
+	WHERE EQUIPMENT_CODE_TYPE NOT IN (1,2);
+	
+	IF :V_CNT_PD_INVALID_EQUI > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(29,0,'','t_lease_contract_per_diem_ext_src','EQUIPMENT_CODE_TYPE',0,'EQUIPMENT_CODE_TYPE',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(29,1,'','t_lease_contract_per_diem_ext_src','EQUIPMENT_CODE_TYPE',0,'EQUIPMENT_CODE_TYPE',:MESSAGE);
+	
+	END IF;
+	
+	--
+	truncate table "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code";
+	
+--Validations for the existance of equipments and locations in below tables 	
+
+	--Location
+	
+	
+	
+	insert into "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code" 
+	select "NAME" as "CODE" from "sap.tm.trp.db.semantic.location::v_location";
+	
+	
+	--7. t_lease_contract_hire_term for location
+	MESSAGE:='Locations in t_lease_contract_hire_term_ext_src';
+	
+	SELECT COUNT(1) INTO V_CNT_HIRE_L FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_term_ext_src"
+	WHERE LOCATION_TYPE=1 AND LOCATION_ID NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_HIRE_L > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(7,0,'v_location','t_lease_contract_hire_term_ext_src','LOCATION_ID',1,'LOCATION_TYPE=1 AND LOCATION_ID',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(7,1,'v_location','t_lease_contract_hire_term_ext_src','LOCATION_ID',1,'LOCATION_TYPE=1 AND LOCATION_ID',:MESSAGE);
+	
+	END IF;
+	
+	
+	--8. t_lease_contract_hire_condition for location
+	MESSAGE:='Locations in t_lease_contract_hire_condition_ext_src';
+	SELECT COUNT(1) INTO V_CNT_COND_L FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_condition_ext_src"
+	WHERE LOCATION_TYPE=1 AND LOCATION_ID NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_COND_L > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(8,0,'v_location','t_lease_contract_hire_condition_ext_src','LOCATION_ID',1,'LOCATION_TYPE=1 AND LOCATION_ID',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(8,1,'v_location','t_lease_contract_hire_condition_ext_src','LOCATION_ID',1,'LOCATION_TYPE=1 AND LOCATION_ID',:MESSAGE);
+	
+	END IF;
+	
+	--
+	truncate table "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code";
+	
+	--Location Group
+	
+	
+	
+	insert into "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code" 
+	select "CODE" from "sap.tm.trp.db.systemmanagement::t_location_group";
+	
+	--9. t_lease_contract_hire_term for location group
+	MESSAGE:='Location Groups in t_lease_contract_hire_term_ext_src';
+	SELECT COUNT(1) INTO V_CNT_HIRE_LG FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_term_ext_src"
+	WHERE LOCATION_TYPE=2 AND LOCATION_ID NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_HIRE_LG > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(9,0,'t_location_group','t_lease_contract_hire_term_ext_src','LOCATION_ID',2,'LOCATION_TYPE=2 AND LOCATION_ID',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(9,1,'t_location_group','t_lease_contract_hire_term_ext_src','LOCATION_ID',2,'LOCATION_TYPE=2 AND LOCATION_ID',:MESSAGE);
+	
+	END IF;
+	
+	--10.t_lease_contract_hire_condition for location group
+	MESSAGE:='Location Groups in t_lease_contract_hire_condition_ext_src';
+	SELECT COUNT(1) INTO V_CNT_COND_LG FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_condition_ext_src"
+	WHERE LOCATION_TYPE=2 AND LOCATION_ID NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_COND_LG > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(10,0,'t_location_group','t_lease_contract_hire_condition_ext_src','LOCATION_ID',2,'LOCATION_TYPE=2 AND LOCATION_ID',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(10,1,'t_location_group','t_lease_contract_hire_condition_ext_src','LOCATION_ID',2,'LOCATION_TYPE=2 AND LOCATION_ID',:MESSAGE);
+	
+	END IF;
+	
+	--
+	truncate table "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code";
+	
+	--Zone
+	
+	
+	
+	insert into "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code" 
+	select "NAME" as "CODE" from "sap.tm.trp.db.semantic.location::v_zone";
+	
+	--11.t_lease_contract_hire_term for zone
+	MESSAGE:='Zones in t_lease_contract_hire_term_ext_src';
+	SELECT COUNT(1) INTO V_CNT_HIRE_Z FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_term_ext_src"
+	WHERE LOCATION_TYPE=3 AND LOCATION_ID NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_HIRE_Z > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(11,0,'v_zone','t_lease_contract_hire_term_ext_src','LOCATION_ID',3,'LOCATION_TYPE=3 AND LOCATION_ID',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(11,1,'v_zone','t_lease_contract_hire_term_ext_src','LOCATION_ID',3,'LOCATION_TYPE=3 AND LOCATION_ID',:MESSAGE);
+	
+	END IF;
+	
+	--12.t_lease_contract_hire_condition for zone
+	MESSAGE:='Zones in t_lease_contract_hire_condition_ext_src';
+	SELECT COUNT(1) INTO V_CNT_COND_Z FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_condition_ext_src"
+	WHERE LOCATION_TYPE=3 AND LOCATION_ID NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_COND_Z > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(12,0,'v_zone','t_lease_contract_hire_condition_ext_src','LOCATION_ID',3,'LOCATION_TYPE=3 AND LOCATION_ID',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(12,1,'v_zone','t_lease_contract_hire_condition_ext_src','LOCATION_ID',3,'LOCATION_TYPE=3 AND LOCATION_ID',:MESSAGE);
+	
+	END IF;
+	
+	--Region
+	
+	
+	
+	--13.t_lease_contract_hire_term for region
+	MESSAGE:='Regions in t_lease_contract_hire_term_ext_src';
+	SELECT COUNT(1) INTO V_CNT_HIRE_R FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_term_ext_src"
+	WHERE LOCATION_TYPE=5 AND LOCATION_ID NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_HIRE_R > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(13,0,'v_zone','t_lease_contract_hire_term_ext_src','LOCATION_ID',5,'LOCATION_TYPE=5 AND LOCATION_ID',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(13,1,'v_zone','t_lease_contract_hire_term_ext_src','LOCATION_ID',5,'LOCATION_TYPE=5 AND LOCATION_ID',:MESSAGE);
+	
+	END IF;
+	
+	--14.t_lease_contract_hire_condition for region
+	MESSAGE:='Regions in t_lease_contract_hire_condition_ext_src';
+	SELECT COUNT(1) INTO V_CNT_COND_R FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_condition_ext_src"
+	WHERE LOCATION_TYPE=5 AND LOCATION_ID NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_COND_R > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(14,0,'v_zone','t_lease_contract_hire_condition_ext_src','LOCATION_ID',5,'LOCATION_TYPE=5 AND LOCATION_ID',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(14,1,'v_zone','t_lease_contract_hire_condition_ext_src','LOCATION_ID',5,'LOCATION_TYPE=5 AND LOCATION_ID',:MESSAGE);
+	
+	END IF;
+	
+	--
+	truncate table "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code";
+	
+	--Zone Group
+	
+	
+	
+	insert into "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code" 
+	select "CODE" from "sap.tm.trp.db.systemmanagement::t_zone_group";
+	
+	--15. t_lease_contract_hire_term for zone group
+	MESSAGE:='Zone Groups in t_lease_contract_hire_term_ext_src';
+	SELECT COUNT(1) INTO V_CNT_HIRE_ZG FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_term_ext_src"
+	WHERE LOCATION_TYPE=4 AND LOCATION_ID NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_HIRE_ZG > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(15,0,'t_zone_group','t_lease_contract_hire_term_ext_src','LOCATION_ID',4,'LOCATION_TYPE=4 AND LOCATION_ID',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(15,1,'t_zone_group','t_lease_contract_hire_term_ext_src','LOCATION_ID',4,'LOCATION_TYPE=4 AND LOCATION_ID',:MESSAGE);
+	
+	END IF;
+	
+	--16. t_lease_contract_hire_condition for zone group
+	MESSAGE:='Zone Groups in t_lease_contract_hire_condition_ext_src';
+	SELECT COUNT(1) INTO V_CNT_COND_ZG FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_condition_ext_src"
+	WHERE LOCATION_TYPE=4 AND LOCATION_ID NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_COND_ZG > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(16,0,'t_zone_group','t_lease_contract_hire_condition_ext_src','LOCATION_ID',4,'LOCATION_TYPE=4 AND LOCATION_ID',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(16,1,'t_zone_group','t_lease_contract_hire_condition_ext_src','LOCATION_ID',4,'LOCATION_TYPE=4 AND LOCATION_ID',:MESSAGE);
+	
+	END IF;
+	
+	--
+	truncate table "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code";
+	
+	--Region Group
+	
+	
+	
+	insert into "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code" 
+	select "CODE" from "sap.tm.trp.db.systemmanagement::t_region_group";
+	
+	--17. t_lease_contract_hire_term for region group
+	MESSAGE:='Region Groups in t_lease_contract_hire_term_ext_src';
+	SELECT COUNT(1) INTO V_CNT_HIRE_RG FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_term_ext_src"
+	WHERE LOCATION_TYPE=6 AND LOCATION_ID NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_HIRE_RG > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(17,0,'t_region_group','t_lease_contract_hire_term_ext_src','LOCATION_ID',6,'LOCATION_TYPE=6 AND LOCATION_ID',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(17,1,'t_region_group','t_lease_contract_hire_term_ext_src','LOCATION_ID',6,'LOCATION_TYPE=6 AND LOCATION_ID',:MESSAGE);
+	
+	END IF;
+	
+	--18. t_lease_contract_hire_condition for region group
+	MESSAGE:='Region Groups in t_lease_contract_hire_condition_ext_src';
+	SELECT COUNT(1) INTO V_CNT_COND_RG FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_condition_ext_src"
+	WHERE LOCATION_TYPE=6 AND LOCATION_ID NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_COND_RG > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(18,0,'t_region_group','t_lease_contract_hire_condition_ext_src','LOCATION_ID',6,'LOCATION_TYPE=6 AND LOCATION_ID',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(18,1,'t_region_group','t_lease_contract_hire_condition_ext_src','LOCATION_ID',6,'LOCATION_TYPE=6 AND LOCATION_ID',:MESSAGE);
+	
+	END IF;
+	
+	--
+	truncate table "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code";
+	
+	--Equipment Code
+	
+	
+	
+	insert into "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code" 
+	select distinct RESOURCE_TYPE_CODE as "CODE" from "sap.tm.trp.db.semantic.resource::v_resource_type";
+	
+	--19. t_lease_contract_hire_term for equipment
+	MESSAGE:='Equipment Codes in t_lease_contract_hire_term_ext_src';
+	SELECT COUNT(1) INTO V_CNT_HIRE_E FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_term_ext_src"
+	WHERE EQUIPMENT_CODE_TYPE=1 AND EQUIPMENT_CODE NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_HIRE_E > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(19,0,'EQUI_CODE','t_lease_contract_hire_term_ext_src','EQUIPMENT_CODE',1,'EQUIPMENT_CODE_TYPE=1 AND EQUIPMENT_CODE',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(19,1,'EQUI_CODE','t_lease_contract_hire_term_ext_src','EQUIPMENT_CODE',1,'EQUIPMENT_CODE_TYPE=1 AND EQUIPMENT_CODE',:MESSAGE);
+	
+	END IF;
+	
+	--20. t_lease_contract_hire_condition for equipment
+	MESSAGE:='Equipment Codes in t_lease_contract_hire_condition_ext_src';
+	SELECT COUNT(1) INTO V_CNT_COND_E FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_condition_ext_src"
+	WHERE EQUIPMENT_CODE_TYPE=1 AND EQUIPMENT_CODE NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_COND_E > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(20,0,'EQUI_CODE','t_lease_contract_hire_condition_ext_src','EQUIPMENT_CODE',1,'EQUIPMENT_CODE_TYPE=1 AND EQUIPMENT_CODE',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(20,1,'EQUI_CODE','t_lease_contract_hire_condition_ext_src','EQUIPMENT_CODE',1,'EQUIPMENT_CODE_TYPE=1 AND EQUIPMENT_CODE',:MESSAGE);
+	
+	END IF;
+	
+	--21. t_lease_contract_per_diem for equipment
+	MESSAGE:='Equipment Codes in t_lease_contract_per_diem_ext_src';
+	SELECT COUNT(1) INTO V_CNT_PD_E FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_per_diem_ext_src"
+	WHERE EQUIPMENT_CODE_TYPE=1 AND EQUIPMENT_CODE NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_PD_E > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(21,0,'EQUI_CODE','t_lease_contract_per_diem_ext_src','EQUIPMENT_CODE',1,'EQUIPMENT_CODE_TYPE=1 AND EQUIPMENT_CODE',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(21,1,'EQUI_CODE','t_lease_contract_per_diem_ext_src','EQUIPMENT_CODE',1,'EQUIPMENT_CODE_TYPE=1 AND EQUIPMENT_CODE',:MESSAGE);
+	
+	END IF;
+	
+	--
+	truncate table "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code";
+	
+	--Equipment Group
+	
+	
+	
+	insert into "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code" 
+	select T1."CODE" 
+	from "sap.tm.trp.db.systemmanagement::t_equipment_group" T1;
+	
+	--22. t_lease_contract_hire_term for equipment group
+	MESSAGE:='Equipment Groups in t_lease_contract_hire_term_ext_src';
+	SELECT COUNT(1) INTO V_CNT_HIRE_EG FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_term_ext_src"
+	WHERE EQUIPMENT_CODE_TYPE=2 AND EQUIPMENT_CODE NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_HIRE_EG > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(22,0,'t_equipment_group','t_lease_contract_hire_term_ext_src','EQUIPMENT_CODE',2,'EQUIPMENT_CODE_TYPE=2 AND EQUIPMENT_CODE',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(22,1,'t_equipment_group','t_lease_contract_hire_term_ext_src','EQUIPMENT_CODE',2,'EQUIPMENT_CODE_TYPE=2 AND EQUIPMENT_CODE',:MESSAGE);
+	
+	END IF;
+	
+	--23. t_lease_contract_hire_condition for equipment group
+	MESSAGE:='Equipment Groups in t_lease_contract_hire_condition_ext_src';
+	SELECT COUNT(1) INTO V_CNT_COND_EG FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_condition_ext_src"
+	WHERE EQUIPMENT_CODE_TYPE=2 AND EQUIPMENT_CODE NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_COND_EG > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(23,0,'t_equipment_group','t_lease_contract_hire_condition_ext_src','EQUIPMENT_CODE',2,'EQUIPMENT_CODE_TYPE=2 AND EQUIPMENT_CODE',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(23,1,'t_equipment_group','t_lease_contract_hire_condition_ext_src','EQUIPMENT_CODE',2,'EQUIPMENT_CODE_TYPE=2 AND EQUIPMENT_CODE',:MESSAGE);
+	
+	END IF;
+	
+	--24. t_lease_contract_per_diem for equipment group
+	MESSAGE:='Equipment Groups in t_lease_contract_per_diem_ext_src';
+	SELECT COUNT(1) INTO V_CNT_PD_EG FROM "sap.tm.trp.db.dataprovisioning::t_lease_contract_per_diem_ext_src"
+	WHERE EQUIPMENT_CODE_TYPE=2 AND EQUIPMENT_CODE NOT IN 
+	(SELECT LTRIM(RTRIM(CODE)) FROM "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code");
+	
+	IF :V_CNT_PD_EG > 0 THEN  
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(24,0,'t_equipment_group','t_lease_contract_per_diem_ext_src','EQUIPMENT_CODE',2,'EQUIPMENT_CODE_TYPE=2 AND EQUIPMENT_CODE',:MESSAGE);
+		
+	ELSE 
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log"
+		(24,1,'t_equipment_group','t_lease_contract_per_diem_ext_src','EQUIPMENT_CODE',2,'EQUIPMENT_CODE_TYPE=2 AND EQUIPMENT_CODE',:MESSAGE);
+	
+	END IF;
+	
+	
+	
+	--
+	truncate table "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code";
+	
+	--Total Count
+	V_TOTAL_COUNT:= :V_CNT_LESSOR+
+					:V_CNT_LEASE_TYPE+
+					:V_CNT_CONT_COND+
+					:V_CNT_HIRE_TERM+
+					:V_CNT_HIRE_COND+
+					:V_CNT_PER_DIEM+
+					:V_CNT_HIRE_L+
+					:V_CNT_HIRE_LG+
+					:V_CNT_HIRE_Z+
+					:V_CNT_HIRE_ZG+
+					:V_CNT_HIRE_R+
+					:V_CNT_HIRE_RG+
+					:V_CNT_HIRE_E+
+					:V_CNT_HIRE_EG+
+					:V_CNT_COND_L+
+					:V_CNT_COND_LG+
+					:V_CNT_COND_Z+
+					:V_CNT_COND_ZG+
+					:V_CNT_COND_R+
+					:V_CNT_COND_RG+
+					:V_CNT_COND_E+
+					:V_CNT_COND_EG+
+					:V_CNT_PD_E+
+					:V_CNT_PD_EG+
+					:V_CNT_HIRE_INVALID_LOC+
+					:V_CNT_HIRE_INVALID_EQUI+
+					:V_CNT_COND_INVALID_LOC+
+					:V_CNT_COND_INVALID_EQUI+
+					:V_CNT_PD_INVALID_EQUI;
+	
+	-- If Total count is 0 then load the data else raise the exception.
+	IF :V_TOTAL_COUNT = 0 THEN 
+	
+		delete from "sap.tm.trp.db.leasecontract::t_lease_contract_per_diem";
+		delete from "sap.tm.trp.db.leasecontract::t_lease_contract_hire_term";
+		delete from "sap.tm.trp.db.leasecontract::t_lease_contract_hire_condition";
+		delete from "sap.tm.trp.db.leasecontract::t_lease_contract_condition";
+		delete from "sap.tm.trp.db.leasecontract::t_lease_contract";
+		delete from "sap.tm.trp.db.leasecontract::t_lessor";
+		delete from "sap.tm.trp.db.leasecontract::t_lease_contract_type";
+		
+		insert into "sap.tm.trp.db.leasecontract::t_lessor" 
+			("ID",
+			"CODE",
+			"LESSOR_AGREMENT_REFERENCE",
+			"NAME",
+			"ADDRESS_LINE1",
+			"ADDRESS_LINE2",
+			"ADDRESS_LINE3",
+			"DESC",
+			"CITY",
+			"STATE",
+			"COUNTRY",
+			"POST_CODE",
+			"PHONE1",
+			"PHONE2",
+			"FAX_NUMBER1",
+			"FAX_NUMBER2",
+			"EMAIL1",
+			"EMAIL2",
+			"COMPANY_URL",
+			"IMAGE_URL")
+		select 
+			"sap.tm.trp.db.leasecontract::s_lessor".NEXTVAL as "ID",
+			"CODE",
+			"LESSOR_AGREMENT_REFERENCE",
+			"NAME",
+			"ADDRESS_LINE1",
+			"ADDRESS_LINE2",
+			"ADDRESS_LINE3",
+			"DESC",
+			"CITY",
+			"STATE",
+			"COUNTRY",
+			"POST_CODE",
+			"PHONE1",
+			"PHONE2",
+			"FAX_NUMBER1",
+			"FAX_NUMBER2",
+			"EMAIL1",
+			"EMAIL2",
+			"COMPANY_URL",
+			"IMAGE_URL"
+		from "sap.tm.trp.db.dataprovisioning::t_lessor_ext_src";
+			
+		
+		insert into "sap.tm.trp.db.leasecontract::t_lease_contract_type"
+			("ID",
+			"CODE",
+			"TYPE")
+		select 
+			"sap.tm.trp.db.leasecontract::s_lease_contract_type".NEXTVAL as "ID",
+			"CODE",
+			"TYPE"
+		from "sap.tm.trp.db.dataprovisioning::t_lease_contract_type_ext_src";
+		
+		insert into "sap.tm.trp.db.leasecontract::t_lease_contract" 
+			("ID",
+			"CODE",
+			"LEASE_CONTRACT_REFERENCE",
+			"LEASE_TYPE_CODE",
+			"LESSOR_CODE",
+			"START_TIME",
+			"END_TIME",
+			"CURRENCY_CODE",
+			"UNIT",
+			"CREATED_ON",
+			"CREATED_BY",
+			"MODIFIED_ON",
+			"MODIFIED_BY",
+			"MAX_HIRE_QUANTITY",
+			"MIN_HIRE_QUANTITY",
+			"ACTIVE",
+			"LESSOR_ID",
+			"LEASE_TYPE",
+			"RESOURCE_CATEGORY",
+			"UNIT_TYPE")
+		select 
+			"sap.tm.trp.db.leasecontract::s_lease_contract".NEXTVAL as "ID",
+			LC."CODE",
+			LC."LEASE_CONTRACT_REFERENCE",
+			LT."CODE" as "LEASE_TYPE_CODE",
+			L."CODE" as "LESSOR_CODE",
+			LC."START_TIME",
+			LC."END_TIME",
+			LC."CURRENCY_CODE",
+			LC."UNIT",
+			LC."CREATED_ON",
+			LC."CREATED_BY",
+			LC."MODIFIED_ON",
+			LC."MODIFIED_BY",
+			LC."MAX_HIRE_QUANTITY",
+			LC."MIN_HIRE_QUANTITY",
+			LC."ACTIVE",
+			L."ID" as "LESSOR_ID",
+			LT."ID" as "LEASE_TYPE",
+			LC."RESOURCE_CATEGORY" as "RESOURCE_CATEGORY",
+			LC."UNIT_TYPE"
+		from "sap.tm.trp.db.dataprovisioning::t_lease_contract_ext_src" LC
+		inner join "sap.tm.trp.db.leasecontract::t_lessor" L 
+		on LC."LESSOR_CODE" = L."CODE" 
+		inner join "sap.tm.trp.db.leasecontract::t_lease_contract_type" LT
+		on LC."LEASE_TYPE_CODE" = LT."CODE";
+		
+		insert into "sap.tm.trp.db.leasecontract::t_lease_contract_condition"
+			("ID",
+			"CODE",
+			"CONTRACT_CODE",
+			"EQUIP_CODE",
+			"EQUIPMENT_CODE_TYPE",
+			"MIN_HOLD_PERIOD",
+			"PERIOD_TYPE",
+			"MIN_HOLD_QUANTITY",
+			"MAX_HOLD_QUANTITY",
+			"MIN_RETURN_PERIOD",
+			"MIN_RETURN_QUANTITY",
+			"MAX_RETURN_QUANTITY",
+			"REMARK",
+			"ACTIVE",
+			"CONTRACT_ID"
+			)
+		select 
+			"sap.tm.trp.db.leasecontract::s_lease_contract_condition".NEXTVAL as "ID",
+			LCC."CODE",
+			LC."CODE" as "CONTRACT_CODE",
+			LCC."EQUIP_CODE",
+			LCC."EQUIPMENT_CODE_TYPE",
+			LCC."MIN_HOLD_PERIOD",
+			LCC."PERIOD_TYPE",
+			LCC."MIN_HOLD_QUANTITY",
+			LCC."MAX_HOLD_QUANTITY",
+			LCC."MIN_RETURN_PERIOD",
+			LCC."MIN_RETURN_QUANTITY",
+			LCC."MAX_RETURN_QUANTITY",
+			LCC."REMARK",
+			LCC."ACTIVE",
+			LC."ID" as "CONTRACT_ID"
+		from "sap.tm.trp.db.dataprovisioning::t_lease_contract_condition_ext_src" LCC
+		inner join "sap.tm.trp.db.leasecontract::t_lease_contract" LC 
+		on LCC."CONTRACT_CODE"=LC."CODE";
+		
+		
+		insert into "sap.tm.trp.db.leasecontract::t_lease_contract_hire_term" 
+			("ID",
+			"CODE",
+			"CONTRACT_CODE",
+			"START_TIME",
+			"END_TIME",
+			"LOCATION_ID",
+			"LOCATION_TYPE",
+			"EQUIPMENT_CODE_TYPE",
+			"EQUIPMENT_CODE",
+			"MIN_HIRE_QUANTITY",
+			"MAX_HIRE_QUANTITY",
+			"FEE",
+			"PENALTY_FEE",
+			"REMARK",
+			"CREATION_DATE",
+			"MODIFIED_DATE",
+			"CREATED_BY",
+			"MODIFIED_BY",
+			"HIRE_TYPE",
+			"ACTIVE",
+			"LEASE_CONTRACT_ID"
+			)
+		select 
+			"sap.tm.trp.db.leasecontract::s_lease_contract_hire_term".NEXTVAL as "ID",
+			HT."CODE",
+			LC."CODE" as "CONTRACT_CODE",
+			HT."START_TIME",
+			HT."END_TIME",
+			HT."LOCATION_ID",
+			HT."LOCATION_TYPE",
+			HT."EQUIPMENT_CODE_TYPE",
+			HT."EQUIPMENT_CODE",
+			HT."MIN_HIRE_QUANTITY",
+			HT."MAX_HIRE_QUANTITY",
+			HT."FEE",
+			HT."PENALTY_FEE",
+			HT."REMARK",
+			HT."CREATION_DATE",
+			HT."MODIFIED_DATE",
+			HT."CREATED_BY",
+			HT."MODIFIED_BY",
+			HT."HIRE_TYPE",
+			HT."ACTIVE",
+			LC."ID" as "LEASE_CONTRACT_ID"
+		from "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_term_ext_src" HT
+		inner join "sap.tm.trp.db.leasecontract::t_lease_contract" LC 
+		on HT."CONTRACT_CODE"=LC."CODE";
+ 
+ 		insert into "sap.tm.trp.db.leasecontract::t_lease_contract_hire_condition"
+ 			("ID",
+			"CODE",
+			"CONTRACT_CODE",
+			"LOCATION_ID",
+			"LOCATION_TYPE",
+			"EQUIPMENT_CODE_TYPE",
+			"EQUIPMENT_CODE",
+			"MIN_HIRE_QUANTITY",
+			"MAX_HIRE_QUANTITY",
+			"HIRE_TYPE",
+			"CREATION_DATE",
+			"MODIFIED_DATE",
+			"CREATED_BY",
+			"MODIFIED_BY",
+			"ACTIVE",
+			"LEASE_CONTRACT_ID"
+ 			)
+		select 
+			"sap.tm.trp.db.leasecontract::s_lease_contract_hire_condition".NEXTVAL as "ID",
+			HC."CODE",
+			LC."CODE" as "CONTRACT_CODE",
+			HC."LOCATION_ID",
+			HC."LOCATION_TYPE",
+			HC."EQUIPMENT_CODE_TYPE",
+			HC."EQUIPMENT_CODE",
+			HC."MIN_HIRE_QUANTITY",
+			HC."MAX_HIRE_QUANTITY",
+			HC."HIRE_TYPE",
+			HC."CREATION_DATE",
+			HC."MODIFIED_DATE",
+			HC."CREATED_BY",
+			HC."MODIFIED_BY",
+			HC."ACTIVE",
+			LC."ID" as "LEASE_CONTRACT_ID"
+		from "sap.tm.trp.db.dataprovisioning::t_lease_contract_hire_condition_ext_src" HC
+		inner join "sap.tm.trp.db.leasecontract::t_lease_contract" LC 
+		on HC."CONTRACT_CODE"=LC."CODE"; 
+ 
+ 		insert into "sap.tm.trp.db.leasecontract::t_lease_contract_per_diem" 
+ 			("ID",
+			"CODE",
+			"CONTRACT_CODE",
+			"EQUIPMENT_CODE",
+			"EQUIPMENT_CODE_TYPE",
+			"PER_DIEM",
+			"CREATION_DATE",
+			"MODIFIED_DATE",
+			"CREATED_BY",
+			"MODIFIED_BY",
+			"ACTIVE",
+			"LEASE_CONTRACT_ID"
+ 			)
+		select 
+			"sap.tm.trp.db.leasecontract::s_lease_contract_per_diem".NEXTVAL as "ID",
+			PD."CODE",
+			LC."CODE" as "CONTRACT_CODE",
+			PD."EQUIPMENT_CODE",
+			PD."EQUIPMENT_CODE_TYPE",
+			PD."PER_DIEM",
+			PD."CREATION_DATE",
+			PD."MODIFIED_DATE",
+			PD."CREATED_BY",
+			PD."MODIFIED_BY",
+			PD."ACTIVE",
+			LC."ID" as "LEASE_CONTRACT_ID"
+		from "sap.tm.trp.db.dataprovisioning::t_lease_contract_per_diem_ext_src" PD
+		inner join "sap.tm.trp.db.leasecontract::t_lease_contract" LC 
+		on PD."CONTRACT_CODE"=LC."CODE"; 
+		
+		--Call the matrialization procedure
+		call "sap.tm.trp.db.leasecontract::sp_lease_contract_hire_term_materialized_full"(:OUT_VALUE);
+	
+		P_MESSAGE := 'Load is Finished';
+	ELSE 
+		
+		SIGNAL CONDITION_VALIDATION;
+		
+	END IF;
+	
+END;

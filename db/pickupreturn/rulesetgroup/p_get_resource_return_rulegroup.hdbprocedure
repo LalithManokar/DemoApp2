@@ -1,0 +1,55 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_get_resource_return_rulegroup" (
+    IN lt_tu_detail_list "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_ord_filtered_tu_return_rulegroup",
+    OUT out_resource "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_tu_resource_info"
+    ) 
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_TRP"
+   READS SQL DATA AS
+BEGIN
+   
+    lt_distinct_resource = select distinct resource_name from :lt_tu_detail_list;
+    
+    lt_resource = select t1.resource_name,
+                    t1.LEASE_CONTRACT_REF,
+                    t1.SPECIAL_INSTRUCTION,
+                    t1.OWNERSHIP_CODE
+                    from "sap.tm.trp.db.semantic.resource::v_resource_master" t1
+                    where t1.resource_name in 
+                    (select resource_name from :lt_distinct_resource);
+    
+    lt_resource_status = select t1.resource_name,
+                        t1.CURRENT_LOCATION_ID,
+                        t1.CURRENT_LOCATION
+                        from "sap.tm.trp.db.semantic.resource::v_resource_status" t1
+                        where t1.resource_name in 
+                        (select resource_name from :lt_resource);
+
+    out_RESOURCE = SELECT DISTINCT T1.TOR_ID, 
+                                           T2.LEASE_CONTRACT_REF AS LEASE_AGREEMENT,
+                                          T2.OWNERSHIP_CODE AS LEASE_TYPE_CODE,
+                                          T5.DESC AS LEASE_TYPE,
+                                          LEASE_CONTRACT_TYPE.TYPE AS LEASE_CONTRACT_TYPE,
+                                          IFNULL(T22.SPECIAL_INSTRUCTION_CODE,T2.SPECIAL_INSTRUCTION) AS SPECIAL_INSTRUCTION_CODE,
+                                          IFNULL(T22.SPECIAL_INSTRUCTION_NAME,T4.DESC) AS SPECIAL_INSTRUCTION_NAME,
+                                          T3.CURRENT_LOCATION_ID AS LAST_LOCATION_ID,
+                                          T3.CURRENT_LOCATION AS LAST_LOCATION_NAME
+              FROM :lt_tu_detail_list T1
+              LEFT JOIN :lt_resource T2 ON (T1.RESOURCE_NAME = T2.RESOURCE_NAME)
+              LEFT JOIN "sap.tm.trp.db.leasecontract::t_lease_contract" AS LEASE_CONTRACT ON (T2.LEASE_CONTRACT_REF = LEASE_CONTRACT.LEASE_CONTRACT_REFERENCE)
+              LEFT JOIN "sap.tm.trp.db.leasecontract::t_lease_contract_type" AS LEASE_CONTRACT_TYPE ON (LEASE_CONTRACT.LEASE_TYPE = LEASE_CONTRACT_TYPE.ID)
+              LEFT JOIN "sap.tm.trp.db.semantic.resource::v_special_instruction_t" T4 ON(T2.SPECIAL_INSTRUCTION = T4.CODE)         
+              LEFT JOIN "sap.tm.trp.db.semantic.resource::v_ownership_t" T5 ON (T2.OWNERSHIP_CODE = T5.CODE)                                                              
+              LEFT JOIN :lt_resource_status T3 ON (T1.RESOURCE_NAME = T3.RESOURCE_NAME)   
+              LEFT JOIN  (SELECT A.RULE_ID, A.TU_ID, C.RESOURCE_NAME, A.SPECIAL_INSTRUCTION_CODE, B.DESC AS SPECIAL_INSTRUCTION_NAME
+                          	 	  FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction" A
+                          	 	  LEFT JOIN "sap.tm.trp.db.semantic.resource::v_special_instruction_t" B ON (A.SPECIAL_INSTRUCTION_CODE = B.CODE)
+                          	 	  LEFT JOIN "sap.tm.trp.db.semantic.resource::v_resource_master" C ON (A.RESOURCE_ID = C.RESOURCE_ID)                      
+                         ) T22 ON (T1.RESOURCE_NAME = T22.RESOURCE_NAME AND T22.RULE_ID = T1.RULE_ID AND T1.TOR_ID = T22.TU_ID)   ;             
+                          	 	 
+              
+              
+
+
+         
+END

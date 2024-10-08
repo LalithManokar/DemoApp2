@@ -1,0 +1,190 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_tu_location_clear" (
+    IN RULE_ID BIGINT,
+    IN RESOURCE_CATEGORY VARCHAR(50),
+    OUT TOTAL_COUNT INTEGER,
+    OUT TU_OUTPUT "sap.tm.trp.db.pickupreturn::tt_location_assignment_tu",
+    OUT TU_BOOKING_LIST "sap.tm.trp.db.pickupreturn::tt_tu_booking_list",
+    OUT EXEC_STATUS_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT EQUIP_TYPE_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT SHIPPER_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT CONSIGNEE_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT SHIPPER_LOC_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT CONSIGNEE_LOC_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT POL_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT POD_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT CURRENT_LOC_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list"    
+    
+   ) 
+	 LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+   DECLARE USER_NAME VARCHAR(60);
+   DECLARE V_SCHEDULE_TIME_TYPE INTEGER;
+   DECLARE RULE_TYPE INTEGER;
+   DECLARE V_PARAMETER VARCHAR(5000):='';
+    
+   SELECT IFNULL(MAX(RULE_TYPE),0) INTO RULE_TYPE
+   FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+   WHERE ID = :RULE_ID;   
+   
+   SELECT IFNULL (SCHEDULE_TIME_TYPE,0) INTO V_SCHEDULE_TIME_TYPE 
+   FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+   WHERE ID = :RULE_ID;
+    
+   SELECT IFNULL (MAX (USERNAME),'') INTO USER_NAME 
+   FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+   
+   IF :V_SCHEDULE_TIME_TYPE = 1 THEN
+     TRUNCATE TABLE "sap.tm.trp.db.pickupreturn::t_pickupreturn_global_draft";
+     --WHERE RULE_ID = :RULE_ID;
+     TRUNCATE TABLE "sap.tm.trp.db.pickupreturn::t_pickupreturn_global_stage";
+     DELETE FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction"
+     WHERE RULE_ID = :RULE_ID;  
+   ELSE
+	   DELETE FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft"
+	   WHERE RULE_ID = :RULE_ID  
+	   AND USER = :USER_NAME;
+	   
+	   DELETE FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction"
+	   WHERE RULE_ID = :RULE_ID
+	   AND USER = :USER_NAME;
+   END IF ;
+   
+   --All tu
+   IF :V_SCHEDULE_TIME_TYPE != 1 THEN
+   CALL "sap.tm.trp.db.pickupreturn::p_ext_get_tu_for_location_assignment" ( 
+      :RULE_ID,
+      :RESOURCE_CATEGORY,
+      :V_PARAMETER,
+      TU_INFO
+    );
+   
+   
+    
+   --Output tu
+   --CALL "sap.tm.trp.db.pickupreturn::p_ext_get_staging_tu"(:RULE_ID, TU_OUTPUT);
+   TU_OUTPUT = SELECT DISTINCT RULE_ID,
+							RULE_TYPE,
+							TRANSPORTATION_ID,
+							TU_TYPE_CODE,
+							TU_TYPE,
+							EXECUTION_STATUS_CODE,
+							STATUS,
+							LIFECYCLE_CODE,
+							LIFECYCLE_STATUS,
+							SHIPPER_ID,
+							SHIPPER,
+							CONSIGNEE_ID,
+							CONSIGNEE,
+							RESOURCE_TYPE,
+							QUANTITY,
+							ASSIGNED_CONTAINERS,
+							RESOURCE_NUMBER,
+							SOURCE_LOCATION_ID,
+							SOURCE_LOCATION,
+							DESTINATION_LOCATION_ID,
+							DESTINATION_LOCATION,
+							POL,
+							POL_NAME,
+							POD,
+							POD_NAME,
+							RELEVANT_PLANNING,
+							CUSTOMER_CODE,
+							CUSTOMER_NAME,
+							BOOKING_DATE,
+							BOOKING_REFERENCE,
+							ORIGINAL_PICKUP_DATE,
+							ORIGINAL_PICKUP_LOCATION_ID,
+							ORIGINAL_PICKUP_LOCATION,
+							PICKUP_DATE,
+							PICKUP_LOCATION_ID,
+							PICKUP_LOCATION,
+							ORIGINAL_RETURN_DATE,
+							ORIGINAL_RETURN_LOCATION_ID,
+							ORIGINAL_RETURN_LOCATION,
+							RETURN_DATE,
+							RETURN_LOCATION_ID,
+							RETURN_LOCATION,
+							ASSIGN_STATUS,
+							FLAG,
+							ITE_KEY,
+                            MOT,
+                            MEANS_OF_TRANSPORTATION,
+                            CARRIER_POL,
+                            CARRIER_POD,
+                            VOYAGE_POL,
+                            VOYAGE_POD,
+                            SPECIAL_INSTRUCTION_CODE,
+                            SPECIAL_INSTRUCTION_NAME,
+                            LAST_LOCATION_ID,
+                            LAST_LOCATION_NAME,
+                            LEASE_AGREEMENT,
+                            LEASE_TYPE_CODE,
+                            LEASE_TYPE,
+                            LEASE_CONTRACT_TYPE,
+                            ASSIGNED_RESOURCE,
+                            VESSEL_CUTOFF_TIME,
+                            VESSEL_ARRIVAL_DATE,
+                            VESSEL_POL,
+                            VESSEL_POD,
+                            STREETTURN_TU_ID,
+                            INVALID,
+                            PLAN_STATUS                            
+				        FROM :TU_INFO;						
+			   
+   SELECT COUNT(*) INTO TOTAL_COUNT FROM :TU_OUTPUT;
+   
+   TU_BOOKING_LIST = SELECT TRANSPORTATION_ID AS TU_ID,
+							BOOKING_REFERENCE
+						FROM :TU_OUTPUT;						
+
+--------------------------Changes for facet filter--------------------------------
+     EXEC_STATUS_LIST_OUTPUT = SELECT DISTINCT STATUS AS KEY,
+                                     STATUS AS TEXT
+                              FROM :TU_OUTPUT ORDER BY KEY;
+                              
+    EQUIP_TYPE_LIST_OUTPUT = SELECT DISTINCT RESOURCE_TYPE AS KEY,
+                                    RESOURCE_TYPE AS TEXT
+                             FROM :TU_OUTPUT ORDER BY KEY;
+                             
+    SHIPPER_LIST_OUTPUT = SELECT DISTINCT SHIPPER AS KEY, 
+                                 SHIPPER AS TEXT 
+                          FROM :TU_OUTPUT ORDER BY KEY;
+                          
+    CONSIGNEE_LIST_OUTPUT = SELECT DISTINCT CONSIGNEE AS KEY, 
+                                   CONSIGNEE AS TEXT 
+                            FROM :TU_OUTPUT ORDER BY KEY;
+                            
+    SHIPPER_LOC_LIST_OUTPUT = SELECT DISTINCT DESTINATION_LOCATION AS KEY,
+                                     DESTINATION_LOCATION AS TEXT
+                              FROM :TU_OUTPUT ORDER BY KEY;
+                              
+    CONSIGNEE_LOC_LIST_OUTPUT = SELECT DISTINCT SOURCE_LOCATION AS KEY,
+                                       SOURCE_LOCATION AS TEXT
+                                FROM :TU_OUTPUT ORDER BY KEY;
+                                
+    POL_LIST_OUTPUT = SELECT DISTINCT POL_NAME AS KEY,
+                             POL_NAME AS TEXT
+                      FROM :TU_OUTPUT ORDER BY KEY;
+                      
+    POD_LIST_OUTPUT = SELECT DISTINCT POD_NAME AS KEY,
+                             POD_NAME AS TEXT
+                      FROM :TU_OUTPUT ORDER BY KEY;
+    
+    IF       :RULE_TYPE = 1 THEN                  
+                  CURRENT_LOC_LIST_OUTPUT = SELECT DISTINCT ORIGINAL_PICKUP_LOCATION AS KEY,
+                                                   ORIGINAL_PICKUP_LOCATION AS TEXT
+                                            FROM :TU_OUTPUT ORDER BY KEY;
+    ELSE
+              CURRENT_LOC_LIST_OUTPUT = SELECT DISTINCT ORIGINAL_RETURN_LOCATION AS KEY,
+                                                   ORIGINAL_RETURN_LOCATION AS TEXT
+                                            FROM :TU_OUTPUT ORDER BY KEY;
+    END IF;
+    ELSE
+   
+   END IF;
+
+END;

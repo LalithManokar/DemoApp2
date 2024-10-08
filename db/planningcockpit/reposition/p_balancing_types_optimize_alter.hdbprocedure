@@ -1,0 +1,54 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::p_balancing_types_optimize_alter"(
+IN name_value_conf "sap.tm.trp.db.planningcockpit.reposition::tt_name_value_conf",
+IN pt_init "sap.tm.trp.db.planningcockpit.reposition::tt_route_detail_res",
+IN t_supply_demand "sap.tm.trp.db.planningcockpit.reposition::tt_supply_demand",
+IN t_route_detail "sap.tm.trp.db.planningcockpit.reposition::tt_route_detail",
+IN t_route "sap.tm.trp.db.planningcockpit.reposition::tt_route",
+IN t_route_cap "sap.tm.trp.db.planningcockpit.reposition::tt_route_cap",
+IN t_type_teu "sap.tm.trp.db.planningcockpit.reposition::tt_type_teu",
+OUT t_route_res "sap.tm.trp.db.planningcockpit.reposition::tt_route_res",
+OUT t_route_detail_res "sap.tm.trp.db.planningcockpit.reposition::tt_route_detail_res",
+OUT t_new_sd_plan "sap.tm.trp.db.planningcockpit.reposition::tt_supply_demand",
+OUT solver_runtime INT,
+OUT flag VARCHAR(20)
+)
+LANGUAGE SQLSCRIPT 
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN 
+
+
+t_route_res = SELECT "ROUTE_ID",
+					 "CONTAINER_TYPE",
+					 0 AS "QUANTITY",
+					 "TOTAL_COST",
+					 "FROM_LOCATION",
+					 "TO_LOCATION",
+					 "FROM_TIME",
+					 "TO_TIME"
+			   FROM :t_route;
+
+t_route_detail_res = SELECT "ROUTE_ID",
+							"CONTAINER_TYPE",
+							"LOCATION",
+							"SEQUENCE",
+							"ARRIVAL_TIME",
+							"DEPARTURE_TIME",
+							"HANDLING_TIME",
+							"STORAGE_COSTUNIT" AS "STORAGE_COST",
+							"HANDLING_COSTUNIT" AS "HANDLING_COST",
+							"TRANSPORTATION_COSTUNIT" AS "TRANSPORTATION_COST",
+							"HANDLING_TYPE",
+							0 AS "QUANTITY",
+							"MTR"
+					  FROM :t_route_detail;
+
+solver_runtime := NANO100_BETWEEN (CURRENT_UTCTIMESTAMP, CURRENT_UTCTIMESTAMP)/10000;
+
+
+t_new_sd_plan = SELECT * FROM :t_supply_demand;
+
+flag := 'CLOSED'; 
+
+END;

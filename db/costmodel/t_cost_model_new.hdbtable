@@ -1,0 +1,18 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "NAME"; sqlType = VARCHAR; length = 200; nullable = false;},
+    {name = "DESC"; sqlType = VARCHAR; length = 500; nullable = true;},
+    {name = "CURRENCY_CODE"; sqlType = VARCHAR; length = 20; nullable = true;},
+    {name = "CREATED_BY"; sqlType = BIGINT; nullable = true;},
+    {name = "CREATED_ON"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "LAST_MODIFIED_BY"; sqlType = BIGINT; nullable = true;},
+    {name = "LAST_MODIFIED_ON"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "RESOURCE_CATEGORY"; sqlType = NVARCHAR; length = 20;nullable = true;} 
+];
+table.indexes = [
+  {name = "COST_MODEL_INDEX_NAME"; unique = true; indexColumns = ["NAME"];}
+];
+
+table.primaryKey.pkcolumns = ["ID"];

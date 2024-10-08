@@ -1,0 +1,106 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_auth_equip_code_by_sd_plan_id" (
+	IN SD_PLAN_ID "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_sd_plan_rulegroup",
+    OUT RESOURCES_DETAILS "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_auth_sd_resource_id" 
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   --DEFAULT SCHEMA <default_schema_name>
+   READS SQL DATA AS
+BEGIN
+ 	   declare lv_admin_check integer :=0;
+       --declare lv_plan_id  bigint := :iv_plan_id; 
+       declare lv_username nvarchar(100);
+
+       --Get XS User / Session User  
+       select IFNULL(SESSION_CONTEXT('XS_APPLICATIONUSER'),SESSION_USER) into lv_username from dummy;
+
+       --Check if the User is Admin or has full authorization
+       --1. If user type = 99, then everything authorized 
+       select count(username) into lv_admin_check
+                                        from "sap.tm.trp.db.systemmanagement.user::t_user" 
+                                        where username = :lv_username and user_type_id = 99;
+
+       --2. if user type <>99, then check if he has 'UnrestrictedRead'
+       if :lv_admin_check <> 1 then
+             SELECT count(user_name) into lv_admin_check
+                           FROM "SYS"."EFFECTIVE_APPLICATION_PRIVILEGES" T1
+                           WHERE USER_NAME = :lv_username and 
+                                 T1.PRIVILEGE = 'sap.tm.trp.service::UnrestrictedRead' and
+                                 IS_VALID ='TRUE';
+       end if;
+       
+       --Get all the relevant Equipment types for the passed SD Plan id
+       lt_equi_filterid = select * from "sap.tm.trp.db.filter::t_filter_equipment_filter" as t_equip_filterid
+                                       where exists (select filter_group_id from "sap.tm.trp.db.pipeline::t_plan_model" t_plan
+                                                           where t_plan.id in (select plan_id from  :SD_PLAN_ID)and t_equip_filterid.filter_group_id = t_plan.filter_group_id
+                                        );
+       lt_equi_list = select * from "sap.tm.trp.db.filter::t_equipment_filter_equipment" t_equip_filter
+                      where exists (select * from :lt_equi_filterid 
+                                               where :lt_equi_filterid.equipment_filter_id = t_equip_filter.equipment_filter_id);
+    
+       if :lv_admin_check <> 1 then
+             --Not admin user, role check required
+             --3. Get the list of roles for that user
+             lt_roles = select role_id from "sap.tm.trp.db.systemmanagement.user::t_user_role"
+                                   where user_id = (select id from "sap.tm.trp.db.systemmanagement.user::t_user" where username = :lv_username);
+       
+             lt_equi_auth = select equip_grp.* 
+                                          from "sap.tm.trp.db.systemmanagement.user::t_role_resource" role_res
+                                            inner join "sap.tm.trp.db.systemmanagement::t_equipment_group_item" equip_grp
+                                              on equip_grp.EQUI_CODE = role_res.res_type and
+                                                    equip_grp.resource_category = role_res.res_category
+                                          where role_res.role_id in (select role_id from :lt_roles);
+             
+             --Check for Equipment code
+             lt_equi_grp_authorized = select distinct equipment_filter_id,
+                                                                                 equipment_group_id,
+                                                                   EQUI_CODE,
+                                                                   resource_category
+                                                             from :lt_equi_list
+                                         where exists (select * FROM :lt_equi_auth WHERE :lt_equi_list.equipment_group_id = :lt_equi_auth.equipment_group_id);
+
+             --Check for Equipment group
+             lt_equi_code_authorized = select distinct equipment_filter_id,
+                                                                                   equipment_group_id,
+                                                                                   equi_code,
+                                                                    resource_category
+                                                             from :lt_equi_list
+                                         where exists (select * FROM :lt_equi_auth  WHERE :lt_equi_list.equi_code = :lt_equi_auth.equi_code);
+
+             --Combine the results
+             RESOURCES_DETAILS = 
+                    select IFNULL(EQUI_CODE,EQUIPMENT_GROUP_ID) AS EQUIP_TYPE_ID, 
+                              equipment_filter_id as EQUIP_FILTER_ID,
+                              equipment_group_id as EQUIP_GROUP_ID,
+                              EQUI_CODE as EQUIP_CODE,
+                              resource_category
+                      from (
+                           select --:lv_admin_check as TYP, 
+                                        equipment_filter_id,
+                                        equipment_group_id,
+                                        EQUI_CODE,
+                                        resource_category
+                                    from :lt_equi_grp_authorized
+                               union
+                           select --:lv_admin_check as TYP, 
+                                        equipment_filter_id,
+                                        equipment_group_id,
+                                        EQUI_CODE,
+                                        resource_category
+                                    from :lt_equi_code_authorized
+                       ) order by EQUIP_TYPE_ID;
+             
+       else
+       --Admin user, just return the equi.types
+             RESOURCES_DETAILS = select --:lv_admin_check as TYP, 
+                                    IFNULL(EQUI_CODE,EQUIPMENT_GROUP_ID) AS EQUIP_TYPE_ID,
+                                    equipment_filter_id as EQUIP_FILTER_ID,
+                                    equipment_group_id as EQUIP_GROUP_ID,
+                                    EQUI_CODE as EQUIP_CODE,
+                                    resource_category
+                           from :lt_equi_list
+                          order by EQUIP_TYPE_ID;
+       end if;
+ 		
+ 	 
+END /********* End Procedure Script ************/

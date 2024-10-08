@@ -1,0 +1,649 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_freight_booking_moving_stock" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_lease_contract_visibility"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="LOCATION_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="LOCATION_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="EQUIP_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="EQUIP_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="START_DATE_TIME" parameter="true">
+      <descriptions defaultDescription="START_DATE_TIME"/>
+      <variableProperties datatype="TIMESTAMP" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="END_DATE_TIME" parameter="true">
+      <descriptions defaultDescription="END_DATE_TIME"/>
+      <variableProperties datatype="TIMESTAMP" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="TIME_FILTER_BY" parameter="true">
+      <descriptions defaultDescription="TIME_FILTER_BY"/>
+      <variableProperties datatype="NVARCHAR" length="255" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="EQUIPMENT_TYPE" parameter="true">
+      <descriptions defaultDescription="EQUIPMENT_TYPE"/>
+      <variableProperties datatype="VARCHAR" length="10" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="LOCATION" parameter="true">
+      <descriptions defaultDescription="LOCATION"/>
+      <variableProperties datatype="NVARCHAR" length="20" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="RESOURCE_CATEGORY" parameter="true">
+      <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+      <variableProperties datatype="VARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="DOCUMENT" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="DOCUMENT_TYPE" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="CARRIER" length="40"/>
+        <viewAttribute datatype="NVARCHAR" id="SHIPPER" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="CONSIGNEE" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="PURCHASE_ORGANIZATION" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="PURCH_GRP_ID" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="TRMODCOD" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="MTR" length="10"/>
+        <viewAttribute datatype="NVARCHAR" id="RESPONSIBLE_PERSON" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="SOURCE_LOCATION" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="SOURCE_LOCATION_ADDR" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="DESTINATION_LOCATION" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="DESTINATION_LOCATION_ADDR" length="100"/>
+        <viewAttribute datatype="TIMESTAMP" id="DEPARTURE_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="ARRIVAL_TIME"/>
+        <viewAttribute datatype="NVARCHAR" id="LAST_LOCATION" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="NEXT_PLANNED_LOCATION" length="100"/>
+        <viewAttribute datatype="INTEGER" id="STOCK"/>
+        <viewAttribute datatype="NVARCHAR" id="SCHEDULE_ID" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="VOYAGE" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="TRAIN_ID" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="EXECUTION_STATUS" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="EXECUTION_STATUS_TXT" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="LIFECYCLE_STATUS" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="LIFECYCLE_STATUS_TXT" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="PARTNER_REF_ID" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="PARTNER_MBL_ID" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="MAX_UTIL" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="MAX_UTIL_MASS" length="60"/>
+        <viewAttribute datatype="DECIMAL" id="FIRST_SHP_TRANSM" length="13" scale="2"/>
+        <viewAttribute datatype="VARCHAR" id="ERP_SHPM_BTDID" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="LAST_SHPM_TRANSM" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="ERP_SHPM_LOGSYS" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="ERP_SHPM_TYPE" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="CUSTOMS" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="CREATION_TYPE_TXT" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="DOC_CHECK_STATUS_TXT" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="CROSS_DOC_CHECK_STATUS_TXT" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="COMPLIANCE_STATUS_TXT" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="VESSEL_ID" length="40"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#LOCATION_FILTER_ID</localVariable>
+      <localVariable>#EQUIP_FILTER_ID</localVariable>
+      <localVariable>#START_DATE_TIME</localVariable>
+      <localVariable>#END_DATE_TIME</localVariable>
+      <localVariable>#TIME_FILTER_BY</localVariable>
+      <localVariable>#EQUIPMENT_TYPE</localVariable>
+      <localVariable>#LOCATION</localVariable>
+      <localVariable>#RESOURCE_CATEGORY</localVariable>
+      <definition>BEGIN&#xD;
+    declare var_arrival_length int;&#xD;
+	DECLARE GEO_FLAG INT;&#xD;
+    DECLARE EQUIP_FLAG INT;&#xD;
+&#xD;
+    DECLARE TIME_FILTER_TYPE NVARCHAR(50);&#xD;
+    DECLARE AUTH SMALLINT;&#xD;
+    DECLARE CURTIME TIMESTAMP;&#xD;
+    DECLARE VAL_ITEM_CAT VARCHAR(50);&#xD;
+&#xD;
+         &#xD;
+    DECLARE CUSTOMCONDITION CONDITION FOR SQL_ERROR_CODE 10001;/* Custom Error Code = 10001*/   &#xD;
+    /*User Defined exception handler */       &#xD;
+    DECLARE EXIT HANDLER FOR CUSTOMCONDITION RESIGNAL ;&#xD;
+    &#xD;
+     SELECT  IFNULL(MAX(VALUE),'') INTO  VAL_ITEM_CAT &#xD;
+        from  &quot;sap.tm.trp.db.systemmanagement::t_config_cust&quot;  a  &#xD;
+       where  a.CODE = :RESOURCE_CATEGORY&#xD;
+         and  a.KEY = 'ITEM_CAT';&#xD;
+&#xD;
+    LOCATION_FILTER=SELECT :LOCATION_FILTER_ID AS ID FROM DUMMY;&#xD;
+   &#xD;
+   CALL &quot;sap.tm.trp.db.systemmanagement::p_check_location_filter_authorization&quot;(&#xD;
+          :LOCATION_FILTER,&#xD;
+          :AUTH&#xD;
+         );&#xD;
+      &#xD;
+    /*Location authorization */ &#xD;
+   IF AUTH = 0 THEN&#xD;
+          /* Signaling Custom error and setting the Custom Error Message */&#xD;
+         SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'LOCATION FILTER NOT AUTHORIZED';&#xD;
+    END IF;&#xD;
+   &#xD;
+   &#xD;
+    EQUIPMENT_FILTER=SELECT :EQUIP_FILTER_ID AS ID FROM DUMMY;&#xD;
+    &#xD;
+    CALL &quot;sap.tm.trp.db.systemmanagement::p_check_equipment_filter_authorization&quot;(&#xD;
+         :EQUIPMENT_FILTER,&#xD;
+          :AUTH&#xD;
+          );&#xD;
+   &#xD;
+    /*Equipment authorization */             &#xD;
+    IF :AUTH = 0 THEN&#xD;
+          /* Signaling Custom error and setting the Custom Error Message */&#xD;
+          SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'EQUIPMENT FILTER NOT AUTHORIZED';&#xD;
+    END IF;&#xD;
+ &#xD;
+    SELECT IFNULL(MAX(LOCATION_TYPE),1) INTO GEO_FLAG&#xD;
+    FROM &quot;sap.tm.trp.db.filter::t_location_filter&quot; WHERE ID = :LOCATION_FILTER_ID;&#xD;
+        &#xD;
+    -- Get filtered locations                &#xD;
+    IF LENGTH(:LOCATION) > 0 THEN&#xD;
+       CALL &quot;sap.tm.trp.db.filter::p_get_locations_by_geo_name&quot;(:LOCATION, :GEO_FLAG, provided_locations);&#xD;
+       LOCATION_NAME = &#xD;
+           SELECT DISTINCT T2.NAME AS LOCATION&#xD;
+           FROM :provided_locations T1 &#xD;
+           INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; T2 ON (T1.LOCATION_ID = T2.ID);     &#xD;
+       &#xD;
+    ELSE &#xD;
+       CALL &quot;sap.tm.trp.db.filter::p_get_locations_by_locfilterid&quot;(:LOCATION_FILTER_ID,LOCATION_ID);&#xD;
+&#xD;
+       LOCATION_NAME =&#xD;
+           SELECT DISTINCT T2.NAME AS LOCATION&#xD;
+           FROM :LOCATION_ID T1&#xD;
+           INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; T2 ON (T1.LOCATION_ID = T2.ID);    			&#xD;
+    END IF;&#xD;
+&#xD;
+    -- Get filtered equipments  &#xD;
+    CALL &quot;sap.tm.trp.db.filter::p_get_equips_by_filterid_name&quot; (:EQUIP_FILTER_ID, :EQUIPMENT_TYPE, EQUIPMENT_NAME); &#xD;
+&#xD;
+    -- apply date offset on current time &#xD;
+    SELECT ADD_DAYS(CURRENT_UTCTIMESTAMP,IFNULL(MAX(DATE_OFFSET), 0)) INTO CURTIME&#xD;
+    FROM &quot;sap.tm.trp.db.stock::t_start_time_for_user&quot;&#xD;
+    WHERE USER = (SELECT USERNAME FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;); &#xD;
+    &#xD;
+    &#xD;
+    location_filter_list =    select distinct T1.FREIGHT_ORDER_KEY &#xD;
+                              FROM &quot;sap.tm.trp.db.semantic.order::v_freight_order_stop&quot; t1&#xD;
+                              inner join :LOCATION_NAME t2 on  t2.LOCATION = T1.LOCATION_NAME ;        &#xD;
+ &#xD;
+    distinct_fo_key = select distinct A.FREIGHT_ORDER_KEY&#xD;
+                 FROM &quot;sap.tm.trp.db.semantic.order::v_freight_order_item&quot; A&#xD;
+	             inner join :EQUIPMENT_NAME  b on a.RESOURCE_TYPE = b.EQUIPMENT_TYPE&#xD;
+	             INNER JOIN  &quot;sap.tm.trp.db.semantic.resource::v_resource_category&quot; t6&#xD;
+	              ON (A.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :RESOURCE_CATEGORY)&#xD;
+	                  where a.ITEM_CAT=:VAL_ITEM_CAT;&#xD;
+		&#xD;
+    -- Applying the time filter and locations on the master view&#xD;
+    IF :TIME_FILTER_BY = 'DEPARTURE_TIME'   &#xD;
+	THEN&#xD;
+	&#xD;
+	var_out_tmp = select t1.DOCUMENT, &#xD;
+			         t1.DOCUMENT_TYPE,&#xD;
+			         t1.CARRIER, &#xD;
+			         t1.SHIPPER, &#xD;
+			         t1.CONSIGNEE, &#xD;
+			         t1.PURCHASE_ORGANIZATION,&#xD;
+			         t1.PURCH_GRP_ID,&#xD;
+			         t1.TRMODCOD,&#xD;
+                     t1.MTR,&#xD;
+			         t1.RESPONSIBLE_PERSON,&#xD;
+			         t1.SOURCE_LOCATION, &#xD;
+			         t1.SOURCE_LOCATION_ADDR,&#xD;
+			         t1.DESTINATION_LOCATION,&#xD;
+			         t1.DESTINATION_LOCATION_ADDR,&#xD;
+			         t1.DEPARTURE_TIME,&#xD;
+			         t1.ARRIVAL_TIME,&#xD;
+			         t1.PREVIOUS_LOCATION as LAST_LOCATION,&#xD;
+			         t1.NEXT_LOCATION as NEXT_PLANNED_LOCATION, &#xD;
+			         0  as STOCK,&#xD;
+			         t1.SCHEDULE_ID,&#xD;
+			         t1.VOYAGE,&#xD;
+			         t1.EXECUTION_STATUS,&#xD;
+			         t1.EXECUTION_STATUS_TXT, &#xD;
+			         t1.LIFECYCLE_STATUS,&#xD;
+			         t1.LIFECYCLE_STATUS_TXT,&#xD;
+			         t1.PARTNER_REF_ID,&#xD;
+                     t1.PARTNER_MBL_ID,&#xD;
+			         t1.MAX_UTIL,&#xD;
+			         t1.MAX_UTIL_MASS,&#xD;
+			         t1.FIRST_SHP_TRANSM,&#xD;
+			         t1.ERP_SHPM_BTDID,&#xD;
+			         t1.LAST_SHPM_TRANSM,&#xD;
+			         t1.ERP_SHPM_LOGSYS,&#xD;
+			         t1.ERP_SHPM_TYPE,   &#xD;
+			         t1.CUSTOMS,&#xD;
+			         t1.CREATION_TYPE_TXT,   &#xD;
+			         t1.DOC_CHECK_STATUS_TXT,&#xD;
+			         t1.CROSS_DOC_CHECK_STATUS_TXT,&#xD;
+			         t1.COMPLIANCE_STATUS_TXT,&#xD;
+			         t1.VESSEL_ID&#xD;
+			             &#xD;
+	            from &quot;sap.tm.trp.db.movingstock::v_movingstock_tor&quot; t1&#xD;
+	      inner join :location_filter_list t2 on t1.ROOT_DB_KEY = t2.FREIGHT_ORDER_KEY &#xD;
+	      inner join :distinct_fo_key      t3 on t1.ROOT_DB_KEY = t3.FREIGHT_ORDER_KEY &#xD;
+	           where t1.DEPARTURE_TIME >= :START_DATE_TIME &#xD;
+	             and t1.DEPARTURE_TIME &lt; :END_DATE_TIME;&#xD;
+	        &#xD;
+	   &#xD;
+        &#xD;
+	                        						&#xD;
+	 &#xD;
+	&#xD;
+								&#xD;
+    ELSE IF (:TIME_FILTER_BY = 'ARRIVAL_TIME' )&#xD;
+    THEN&#xD;
+&#xD;
+    var_out_tmp = select  t1.DOCUMENT, &#xD;
+			         t1.DOCUMENT_TYPE,&#xD;
+			         t1.CARRIER, &#xD;
+			         t1.SHIPPER, &#xD;
+			         t1.CONSIGNEE, &#xD;
+			         t1.PURCHASE_ORGANIZATION,&#xD;
+			         t1.PURCH_GRP_ID,&#xD;
+			         t1.TRMODCOD,&#xD;
+                     t1.MTR,&#xD;
+			         t1.RESPONSIBLE_PERSON,&#xD;
+			         t1.SOURCE_LOCATION, &#xD;
+			         t1.SOURCE_LOCATION_ADDR,&#xD;
+			         t1.DESTINATION_LOCATION,&#xD;
+			         t1.DESTINATION_LOCATION_ADDR,&#xD;
+			         t1.DEPARTURE_TIME,&#xD;
+			         t1.ARRIVAL_TIME,&#xD;
+			         t1.PREVIOUS_LOCATION as LAST_LOCATION,&#xD;
+			         t1.NEXT_LOCATION as NEXT_PLANNED_LOCATION, &#xD;
+			         0  as STOCK,&#xD;
+			         t1.SCHEDULE_ID,&#xD;
+			         t1.VOYAGE,&#xD;
+			         t1.EXECUTION_STATUS,&#xD;
+			         t1.EXECUTION_STATUS_TXT, &#xD;
+			         t1.LIFECYCLE_STATUS,&#xD;
+			         t1.LIFECYCLE_STATUS_TXT,&#xD;
+			       --  t1.HANDLING_EXECUTION_STATUS,&#xD;
+			         t1.PARTNER_REF_ID,&#xD;
+                     t1.PARTNER_MBL_ID,&#xD;
+			         t1.MAX_UTIL,&#xD;
+			         t1.MAX_UTIL_MASS,&#xD;
+			         t1.FIRST_SHP_TRANSM,&#xD;
+			         t1.ERP_SHPM_BTDID,&#xD;
+			         t1.LAST_SHPM_TRANSM,&#xD;
+			         t1.ERP_SHPM_LOGSYS,&#xD;
+			         t1.ERP_SHPM_TYPE,   &#xD;
+			         t1.CUSTOMS,&#xD;
+			         &#xD;
+			         t1.CREATION_TYPE_TXT,   &#xD;
+			             &#xD;
+			         t1.DOC_CHECK_STATUS_TXT,&#xD;
+			         &#xD;
+			         t1.CROSS_DOC_CHECK_STATUS_TXT,&#xD;
+			         &#xD;
+			         t1.COMPLIANCE_STATUS_TXT, &#xD;
+			         t1.VESSEL_ID&#xD;
+			    from &quot;sap.tm.trp.db.movingstock::v_movingstock_tor&quot; t1&#xD;
+	      inner join :location_filter_list t2 on t1.ROOT_DB_KEY = t2.FREIGHT_ORDER_KEY &#xD;
+	      inner join :distinct_fo_key      t3 on t1.ROOT_DB_KEY = t3.FREIGHT_ORDER_KEY &#xD;
+	           where t1.ARRIVAL_TIME >= :START_DATE_TIME  -- need change &#xD;
+	             and t1.ARRIVAL_TIME &lt; :END_DATE_TIME;    -- need change&#xD;
+									&#xD;
+	ELSE IF :TIME_FILTER_BY = 'NO_FILTER'&#xD;
+	THEN&#xD;
+&#xD;
+    &#xD;
+	var_out_tmp = select t1.DOCUMENT, &#xD;
+			         t1.DOCUMENT_TYPE,&#xD;
+			         t1.CARRIER, &#xD;
+			         t1.SHIPPER, &#xD;
+			         t1.CONSIGNEE, &#xD;
+			         t1.PURCHASE_ORGANIZATION,&#xD;
+			         t1.PURCH_GRP_ID,&#xD;
+			         t1.TRMODCOD,&#xD;
+                     t1.MTR,&#xD;
+			         t1.RESPONSIBLE_PERSON,&#xD;
+			         t1.SOURCE_LOCATION, &#xD;
+			         t1.SOURCE_LOCATION_ADDR,&#xD;
+			         t1.DESTINATION_LOCATION,&#xD;
+			         t1.DESTINATION_LOCATION_ADDR,&#xD;
+			         t1.DEPARTURE_TIME,&#xD;
+			         t1.ARRIVAL_TIME,&#xD;
+			         t1.PREVIOUS_LOCATION as LAST_LOCATION,&#xD;
+			         t1.NEXT_LOCATION as NEXT_PLANNED_LOCATION, &#xD;
+			         0  as STOCK,&#xD;
+			         t1.SCHEDULE_ID,&#xD;
+			         t1.VOYAGE,&#xD;
+			         t1.EXECUTION_STATUS,&#xD;
+			         t1.EXECUTION_STATUS_TXT, &#xD;
+			         t1.LIFECYCLE_STATUS,&#xD;
+			         t1.LIFECYCLE_STATUS_TXT,&#xD;
+			      --   t1.HANDLING_EXECUTION_STATUS,&#xD;
+			         t1.PARTNER_REF_ID,&#xD;
+                     t1.PARTNER_MBL_ID,&#xD;
+			         t1.MAX_UTIL,&#xD;
+			         t1.MAX_UTIL_MASS,&#xD;
+			         t1.FIRST_SHP_TRANSM,&#xD;
+			         t1.ERP_SHPM_BTDID,&#xD;
+			         t1.LAST_SHPM_TRANSM,&#xD;
+			         t1.ERP_SHPM_LOGSYS,&#xD;
+			         t1.ERP_SHPM_TYPE,   &#xD;
+			         t1.CUSTOMS,&#xD;
+			         &#xD;
+			         t1.CREATION_TYPE_TXT,   &#xD;
+			             &#xD;
+			         t1.DOC_CHECK_STATUS_TXT,&#xD;
+			         &#xD;
+			         t1.CROSS_DOC_CHECK_STATUS_TXT,&#xD;
+			         &#xD;
+			         t1.COMPLIANCE_STATUS_TXT,&#xD;
+			           t1.VESSEL_ID &#xD;
+		        from &quot;sap.tm.trp.db.movingstock::v_movingstock_tor&quot; t1&#xD;
+	      inner join :location_filter_list t2 on t1.ROOT_DB_KEY = t2.FREIGHT_ORDER_KEY &#xD;
+	      inner join :distinct_fo_key      t3 on t1.ROOT_DB_KEY = t3.FREIGHT_ORDER_KEY ;	&#xD;
+	      &#xD;
+	         	&#xD;
+									&#xD;
+	END IF;&#xD;
+	END IF;&#xD;
+    END IF;&#xD;
+&#xD;
+&#xD;
+    var_document_id = select distinct document as tor_id from :var_out_tmp;&#xD;
+    &#xD;
+    &#xD;
+    call &quot;sap.tm.trp.db.movingstock::p_get_moving_stock_detail_freight_order_list&quot;&#xD;
+    (:var_document_id,:EQUIPMENT_NAME,:RESOURCE_CATEGORY, var_load_discharge);&#xD;
+    &#xD;
+                   &#xD;
+    var_arrival = select &quot;FreightBookingID&quot;,  max(&quot;SequenceNumber&quot;) as min_LOC_SEQ &#xD;
+                      from :var_load_discharge&#xD;
+                      WHERE CURRENT_UTCTIMESTAMP >= &#xD;
+                            case when ifnull(ARRIVAL_UTC,'') = '' then TO_TIMESTAMP(DEPARTURE_UTC) else  TO_TIMESTAMP(ARRIVAL_UTC) end              &#xD;
+                      GROUP by &quot;FreightBookingID&quot;                    &#xD;
+                      ;&#xD;
+                      &#xD;
+              &#xD;
+                   &#xD;
+    var_stock = select t1.&quot;FreightBookingID&quot;, &#xD;
+                SUM (&quot;StockLaden&quot; + &quot;StockEmpty&quot;) as stock&#xD;
+                from :var_load_discharge as t1&#xD;
+                inner join :var_arrival as t2&#xD;
+                on t1.&quot;FreightBookingID&quot; = t2.&quot;FreightBookingID&quot;&#xD;
+                and t1.&quot;SequenceNumber&quot; = t2.min_LOC_SEQ&#xD;
+                GROUP BY t1.&quot;FreightBookingID&quot;;&#xD;
+                &#xD;
+           &#xD;
+ 												&#xD;
+	var_out = select &#xD;
+	                 t1.DOCUMENT, &#xD;
+			         t1.DOCUMENT_TYPE,&#xD;
+			         t1.CARRIER, &#xD;
+			         t1.SHIPPER, &#xD;
+			         t1.CONSIGNEE, &#xD;
+			         t1.PURCHASE_ORGANIZATION,&#xD;
+			         t1.PURCH_GRP_ID,&#xD;
+			         t1.TRMODCOD,&#xD;
+                     t1.MTR,&#xD;
+			         t1.RESPONSIBLE_PERSON,&#xD;
+			         t1.SOURCE_LOCATION, &#xD;
+			         t1.SOURCE_LOCATION_ADDR,&#xD;
+			         t1.DESTINATION_LOCATION,&#xD;
+			         t1.DESTINATION_LOCATION_ADDR,&#xD;
+			         t1.DEPARTURE_TIME,&#xD;
+			         t1.ARRIVAL_TIME,&#xD;
+			         t1.LAST_LOCATION,&#xD;
+			         t1.NEXT_PLANNED_LOCATION, 	         &#xD;
+                     ifnull(t2.stock,0) as stock,--fix ticket 1780206184&#xD;
+			         t1.SCHEDULE_ID,&#xD;
+			         t1.VOYAGE ,&#xD;
+			         t1.VOYAGE  as TRAIN_ID,&#xD;
+			         t1.EXECUTION_STATUS,&#xD;
+			         t1.EXECUTION_STATUS_TXT, &#xD;
+			         t1.LIFECYCLE_STATUS,&#xD;
+			         t1.LIFECYCLE_STATUS_TXT,&#xD;
+			      --   t1.HANDLING_EXECUTION_STATUS,&#xD;
+			         t1.PARTNER_REF_ID,&#xD;
+                     t1.PARTNER_MBL_ID,&#xD;
+			         t1.MAX_UTIL,&#xD;
+			         t1.MAX_UTIL_MASS,&#xD;
+			         t1.FIRST_SHP_TRANSM,&#xD;
+			         t1.ERP_SHPM_BTDID,&#xD;
+			         t1.LAST_SHPM_TRANSM,&#xD;
+			         t1.ERP_SHPM_LOGSYS,&#xD;
+			         t1.ERP_SHPM_TYPE,   &#xD;
+			         t1.CUSTOMS,		         &#xD;
+			         t1.CREATION_TYPE_TXT,   			             &#xD;
+			         t1.DOC_CHECK_STATUS_TXT,			         &#xD;
+			         t1.CROSS_DOC_CHECK_STATUS_TXT,		         &#xD;
+			         t1.COMPLIANCE_STATUS_TXT,&#xD;
+			         t1.VESSEL_ID&#xD;
+	          from :var_out_tmp as t1&#xD;
+	          left outer join :var_stock as t2&#xD;
+              --inner join :var_arrival as t2&#xD;
+	          on t1.document = t2.&quot;FreightBookingID&quot;;    &#xD;
+    &#xD;
+    &#xD;
+    &#xD;
+	      &#xD;
+&#xD;
+&#xD;
+END;</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="DOCUMENT" order="1">
+        <descriptions defaultDescription="VESSEL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="DOCUMENT"/>
+      </attribute>
+      <attribute id="DOCUMENT_TYPE" order="2">
+        <descriptions defaultDescription="RESOURCE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="DOCUMENT_TYPE"/>
+      </attribute>
+      <attribute id="CARRIER" order="3">
+        <descriptions defaultDescription="SCHEDULE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="CARRIER"/>
+      </attribute>
+      <attribute id="SHIPPER" order="4">
+        <descriptions defaultDescription="VOYAGE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="SHIPPER"/>
+      </attribute>
+      <attribute id="CONSIGNEE" order="5">
+        <descriptions defaultDescription="DEPARTURE_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="CONSIGNEE"/>
+      </attribute>
+      <attribute id="PURCHASE_ORGANIZATION" order="6">
+        <descriptions defaultDescription="ORIGIN"/>
+        <keyMapping columnObjectName="Script_View" columnName="PURCHASE_ORGANIZATION"/>
+      </attribute>
+      <attribute id="PURCH_GRP_ID" order="7">
+        <descriptions defaultDescription="PURCH_GRP_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PURCH_GRP_ID"/>
+      </attribute>
+      <attribute id="TRMODCOD" order="8">
+        <descriptions defaultDescription="TRMDCOD"/>
+        <keyMapping columnObjectName="Script_View" columnName="TRMODCOD"/>
+      </attribute>
+      <attribute id="MTR" order="9">
+        <descriptions defaultDescription="MTR"/>
+        <keyMapping columnObjectName="Script_View" columnName="MTR"/>
+      </attribute>
+      <attribute id="RESPONSIBLE_PERSON" order="10">
+        <descriptions defaultDescription="LAST_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESPONSIBLE_PERSON"/>
+      </attribute>
+      <attribute id="SOURCE_LOCATION" order="11">
+        <descriptions defaultDescription="ARRIVAL_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="SOURCE_LOCATION"/>
+      </attribute>
+      <attribute id="SOURCE_LOCATION_ADDR" order="12">
+        <descriptions defaultDescription="SOURCE_LOCATION_ADDR"/>
+        <keyMapping columnObjectName="Script_View" columnName="SOURCE_LOCATION_ADDR"/>
+      </attribute>
+      <attribute id="DESTINATION_LOCATION" order="13">
+        <descriptions defaultDescription="STOCK"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESTINATION_LOCATION"/>
+      </attribute>
+      <attribute id="DESTINATION_LOCATION_ADDR" order="14">
+        <descriptions defaultDescription="DESTINATION_LOCATION_ADDR"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESTINATION_LOCATION_ADDR"/>
+      </attribute>
+      <attribute id="DEPARTURE_TIME" order="15">
+        <descriptions defaultDescription="DESTINATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="DEPARTURE_TIME"/>
+      </attribute>
+      <attribute id="ARRIVAL_TIME" order="16">
+        <descriptions defaultDescription="NEXT_PLANNED_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="ARRIVAL_TIME"/>
+      </attribute>
+      <attribute id="LAST_LOCATION" order="17">
+        <descriptions defaultDescription="LAST_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="LAST_LOCATION"/>
+      </attribute>
+      <attribute id="NEXT_PLANNED_LOCATION" order="18">
+        <descriptions defaultDescription="NEXT_PLANNED_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="NEXT_PLANNED_LOCATION"/>
+      </attribute>
+      <attribute id="STOCK" order="19">
+        <descriptions defaultDescription="STOCK"/>
+        <keyMapping columnObjectName="Script_View" columnName="STOCK"/>
+      </attribute>
+      <attribute id="SCHEDULE_ID" order="20">
+        <descriptions defaultDescription="SCHEDULE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="SCHEDULE_ID"/>
+      </attribute>
+      <attribute id="VOYAGE" order="21">
+        <descriptions defaultDescription="VOYAGE"/>
+        <keyMapping columnObjectName="Script_View" columnName="VOYAGE"/>
+      </attribute>
+      <attribute id="TRAIN_ID" order="22">
+        <descriptions defaultDescription="TRAIN_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TRAIN_ID"/>
+      </attribute>
+      <attribute id="EXECUTION_STATUS" order="23">
+        <descriptions defaultDescription="EXECUTION_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="EXECUTION_STATUS"/>
+      </attribute>
+      <attribute id="EXECUTION_STATUS_TXT" order="24">
+        <descriptions defaultDescription="EXECUTION_STATUS_TXT"/>
+        <keyMapping columnObjectName="Script_View" columnName="EXECUTION_STATUS_TXT"/>
+      </attribute>
+      <attribute id="LIFECYCLE_STATUS" order="25">
+        <descriptions defaultDescription="LIFECYCLE_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="LIFECYCLE_STATUS"/>
+      </attribute>
+      <attribute id="LIFECYCLE_STATUS_TXT" order="26">
+        <descriptions defaultDescription="LIFECYCLE_STATUS_TXT"/>
+        <keyMapping columnObjectName="Script_View" columnName="LIFECYCLE_STATUS_TXT"/>
+      </attribute>
+      <attribute id="PARTNER_REF_ID" order="27">
+        <descriptions defaultDescription="PARTNER_REF_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PARTNER_REF_ID"/>
+      </attribute>
+      <attribute id="PARTNER_MBL_ID" order="28">
+        <descriptions defaultDescription="PARTNER_MBL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PARTNER_MBL_ID"/>
+      </attribute>
+      <attribute id="MAX_UTIL" order="29">
+        <descriptions defaultDescription="MAX_UTIL"/>
+        <keyMapping columnObjectName="Script_View" columnName="MAX_UTIL"/>
+      </attribute>
+      <attribute id="MAX_UTIL_MASS" order="30">
+        <descriptions defaultDescription="MAX_UTIL_MASS"/>
+        <keyMapping columnObjectName="Script_View" columnName="MAX_UTIL_MASS"/>
+      </attribute>
+      <attribute id="FIRST_SHP_TRANSM" order="31">
+        <descriptions defaultDescription="FIRST_SHPM_TRANSM"/>
+        <keyMapping columnObjectName="Script_View" columnName="FIRST_SHP_TRANSM"/>
+      </attribute>
+      <attribute id="ERP_SHPM_BTDID" order="32">
+        <descriptions defaultDescription="ERP_SHPM_BTDID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ERP_SHPM_BTDID"/>
+      </attribute>
+      <attribute id="LAST_SHPM_TRANSM" order="33">
+        <descriptions defaultDescription="LAST_SHPM_TRANSM"/>
+        <keyMapping columnObjectName="Script_View" columnName="LAST_SHPM_TRANSM"/>
+      </attribute>
+      <attribute id="ERP_SHPM_LOGSYS" order="34">
+        <descriptions defaultDescription="ERP_SHPM_LOGSYS"/>
+        <keyMapping columnObjectName="Script_View" columnName="ERP_SHPM_LOGSYS"/>
+      </attribute>
+      <attribute id="ERP_SHPM_TYPE" order="35">
+        <descriptions defaultDescription="ERP_SHPM_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="ERP_SHPM_TYPE"/>
+      </attribute>
+      <attribute id="CUSTOMS" order="36">
+        <descriptions defaultDescription="CUSTOMS"/>
+        <keyMapping columnObjectName="Script_View" columnName="CUSTOMS"/>
+      </attribute>
+      <attribute id="CREATION_TYPE_TXT" order="37">
+        <descriptions defaultDescription="CREATION_TYPE_TXT"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATION_TYPE_TXT"/>
+      </attribute>
+      <attribute id="DOC_CHECK_STATUS_TXT" order="38">
+        <descriptions defaultDescription="DOC_CHECK_STATUS_TXT"/>
+        <keyMapping columnObjectName="Script_View" columnName="DOC_CHECK_STATUS_TXT"/>
+      </attribute>
+      <attribute id="CROSS_DOC_CHECK_STATUS_TXT" order="39">
+        <descriptions defaultDescription="CROSS_DOC_CHECK_STATUS_TXT"/>
+        <keyMapping columnObjectName="Script_View" columnName="CROSS_DOC_CHECK_STATUS_TXT"/>
+      </attribute>
+      <attribute id="COMPLIANCE_STATUS_TXT" order="40">
+        <descriptions defaultDescription="COMPLIANCE_STATUS_TXT"/>
+        <keyMapping columnObjectName="Script_View" columnName="COMPLIANCE_STATUS_TXT"/>
+      </attribute>
+      <attribute id="VESSEL_ID" order="41">
+        <descriptions defaultDescription="VESSLE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="VESSEL_ID"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

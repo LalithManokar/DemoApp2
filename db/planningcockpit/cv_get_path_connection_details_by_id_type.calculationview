@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_path_connection_details_by_id_type" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_path_connection_head_by_id_type"/>
+  <localVariables>
+    <variable id="PATH_ID" parameter="true">
+      <descriptions defaultDescription="PATH_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="PATH_TYPE" parameter="true">
+      <descriptions defaultDescription="PATH_TYPE"/>
+      <variableProperties datatype="VARCHAR" length="10" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="PATH_ID"/>
+        <viewAttribute datatype="VARCHAR" id="PATH_TYPE" length="10"/>
+        <viewAttribute datatype="INTEGER" id="SEQUENCE"/>
+        <viewAttribute datatype="VARCHAR" id="FROM_LOCATION" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="TO_LOCATION" length="50"/>
+        <viewAttribute datatype="DECIMAL" id="DISTANCE" length="18" scale="3"/>
+        <viewAttribute datatype="DECIMAL" id="DURATION" length="18" scale="3"/>
+        <viewAttribute datatype="DECIMAL" id="STAY_TIME" length="18" scale="3"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#PATH_ID</localVariable>
+      <localVariable>#PATH_TYPE</localVariable>
+      <definition>
+BEGIN 
+var_out =
+	SELECT
+		PATH_ID
+		,PATH_TYPE
+		,SEQUENCE
+		,FROM_LOCATION
+		,TO_LOCATION
+		,DISTANCE
+		,DURATION
+		,STAY_TIME
+	FROM (
+		SELECT
+			ID AS PATH_ID
+			,'C' AS PATH_TYPE
+			,1 AS SEQUENCE
+			,FROM_LOCATION
+			,TO_LOCATION
+			,DISTANCE
+			,DURATION
+			,0 AS STAY_TIME
+		FROM &quot;sap.tm.trp.routing.db.dataset::t_connection&quot; 
+		WHERE ID = :PATH_ID
+		UNION
+		SELECT
+			PATH_ID
+			,'P' AS PATH_TYPE
+			,SEQUENCE
+			,FROM_LOCATION
+			,TO_LOCATION
+			,DISTANCE
+			,DURATION
+			,STAY_TIME
+		FROM &quot;sap.tm.trp.routing.db.dataset::v_path_connection&quot;
+		WHERE PATH_ID = :PATH_ID
+	)
+	WHERE PATH_TYPE = :PATH_TYPE
+	ORDER BY PATH_ID,SEQUENCE,PATH_TYPE
+	;
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="PATH_TYPE" order="2">
+        <descriptions defaultDescription="PATH_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="PATH_TYPE"/>
+      </attribute>
+      <attribute id="FROM_LOCATION" order="4">
+        <descriptions defaultDescription="FROM_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="FROM_LOCATION"/>
+      </attribute>
+      <attribute id="TO_LOCATION" order="5">
+        <descriptions defaultDescription="TO_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="TO_LOCATION"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="PATH_ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="PATH_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="PATH_ID"/>
+      </measure>
+      <measure id="SEQUENCE" order="3" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="SEQUENCE"/>
+        <measureMapping columnObjectName="Script_View" columnName="SEQUENCE"/>
+      </measure>
+      <measure id="DISTANCE" order="6" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DISTANCE"/>
+        <measureMapping columnObjectName="Script_View" columnName="DISTANCE"/>
+      </measure>
+      <measure id="DURATION" order="7" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DURATION"/>
+        <measureMapping columnObjectName="Script_View" columnName="DURATION"/>
+      </measure>
+      <measure id="STAY_TIME" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="STAT_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="STAY_TIME"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

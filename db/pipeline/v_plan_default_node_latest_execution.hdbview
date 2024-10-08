@@ -1,0 +1,13 @@
+schema="SAP_TM_TRP";
+query="SELECT B.ID AS PLAN_MODEL_ID, A.EXECUTION_ID, B.PIPELINE_MODEL_ID, C.NODE_ID FROM 
+        \"sap.tm.trp.db.pipeline::t_plan_model\" AS B        
+       LEFT JOIN (SELECT DISTINCT PLAN_MODEL_ID,FIRST_VALUE(ID) over (PARTITION BY PLAN_MODEL_ID ORDER BY EXECUTE_ON DESC) AS EXECUTION_ID 
+                FROM \"sap.tm.trp.db.pipeline::t_plan_execution\" )AS A
+                ON A.PLAN_MODEL_ID = B.ID
+       LEFT JOIN \"sap.tm.trp.db.pipeline::v_pipeline_model\" AS C
+       ON B.PIPELINE_MODEL_ID = C.ID";
+       
+       
+       
+depends_on_table = ["sap.tm.trp.db.pipeline::t_plan_execution", "sap.tm.trp.db.pipeline::t_plan_model"];
+depends_on_view  = ["sap.tm.trp.db.pipeline::v_pipeline_model"];

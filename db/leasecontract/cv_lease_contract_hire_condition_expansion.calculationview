@@ -1,0 +1,580 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_lease_contract_hire_condition_expansion" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_lease_contract_hire_condition_expansion"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="LEASE_CONTRACT_ID_IN" parameter="true">
+      <descriptions defaultDescription="LEASE_CONTRACT_ID_IN"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="BIGINT" id="LEASE_CONTRACT_ID"/>
+        <viewAttribute datatype="TINYINT" id="LOCATION_TYPE"/>
+        <viewAttribute datatype="NVARCHAR" id="LOCATION_GROUP_NAME" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="LOCATION" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="LOCATION_GUID" length="22"/>
+        <viewAttribute datatype="TINYINT" id="EQUIPMENT_CODE_TYPE"/>
+        <viewAttribute datatype="NVARCHAR" id="EQUIPMENT_CODE" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="EQUIPMENT_GROUP_NAME" length="22"/>
+        <viewAttribute datatype="INTEGER" id="MAX_HIRE_QUANTITY"/>
+        <viewAttribute datatype="INTEGER" id="MIN_HIRE_QUANTITY"/>
+        <viewAttribute datatype="TINYINT" id="HIRE_TYPE"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#LEASE_CONTRACT_ID_IN</localVariable>
+      <definition> &#xD;
+  &#xD;
+ BEGIN &#xD;
+DECLARE COUNT_CHECK INTEGER;&#xD;
+&#xD;
+HIRE_CONDITION_DUMMY = &#xD;
+SELECT HC.ID,&#xD;
+	  HC.LEASE_CONTRACT_ID,&#xD;
+	  HC.LOCATION_TYPE,&#xD;
+	  HC.LOCATION_ID AS LOCATION_GROUP_NAME,&#xD;
+	  NULL  AS LOCATION,&#xD;
+	  NULL AS LOCATION_GUID,&#xD;
+	  HC.EQUIPMENT_CODE_TYPE,&#xD;
+	  HC.EQUIPMENT_CODE AS EQUIPMENT_CODE,--this is type in ui&#xD;
+	  HC.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,&#xD;
+	  HC.MAX_HIRE_QUANTITY AS MAX_HIRE_QUANTITY,&#xD;
+	  HC.MIN_HIRE_QUANTITY AS MIN_HIRE_QUANTITY,&#xD;
+	  HC.HIRE_TYPE&#xD;
+FROM &quot;sap.tm.trp.db.leasecontract::t_lease_contract_hire_condition&quot; HC WHERE 1=2;&#xD;
+&#xD;
+IF :LEASE_CONTRACT_ID_IN=0 THEN &#xD;
+	ACTIVE_ON_HIRE_CONDITION =&#xD;
+	SELECT HC.ID,&#xD;
+		  HC.LEASE_CONTRACT_ID,		  &#xD;
+		  HC.LOCATION_TYPE,&#xD;
+		  HC.LOCATION_ID,		  &#xD;
+		  HC.EQUIPMENT_CODE_TYPE,&#xD;
+		  HC.EQUIPMENT_CODE,		  &#xD;
+		  HC.MAX_HIRE_QUANTITY AS MAX_HIRE_QUANTITY,&#xD;
+		  HC.MIN_HIRE_QUANTITY AS MIN_HIRE_QUANTITY,&#xD;
+		  HC.HIRE_TYPE&#xD;
+	FROM &quot;sap.tm.trp.db.leasecontract::t_lease_contract_hire_condition&quot; HC&#xD;
+	WHERE HIRE_TYPE=1 AND ACTIVE=1;&#xD;
+ELSE&#xD;
+ACTIVE_ON_HIRE_CONDITION =&#xD;
+	SELECT HC.ID,&#xD;
+		  HC.LEASE_CONTRACT_ID,		  &#xD;
+		  HC.LOCATION_TYPE,&#xD;
+		  HC.LOCATION_ID,		  &#xD;
+		  HC.EQUIPMENT_CODE_TYPE,&#xD;
+		  HC.EQUIPMENT_CODE,		  &#xD;
+		  HC.MAX_HIRE_QUANTITY AS MAX_HIRE_QUANTITY,&#xD;
+		  HC.MIN_HIRE_QUANTITY AS MIN_HIRE_QUANTITY,&#xD;
+		  HC.HIRE_TYPE&#xD;
+	FROM &quot;sap.tm.trp.db.leasecontract::t_lease_contract_hire_condition&quot; HC&#xD;
+	WHERE HIRE_TYPE=1 AND ACTIVE=1 AND LEASE_CONTRACT_ID=:LEASE_CONTRACT_ID_IN;&#xD;
+END IF;	&#xD;
+&#xD;
+--EXPANSION&#xD;
+&#xD;
+--DEPOT,EQUIPMENT&#xD;
+HC_DEPOT_ET=&#xD;
+SELECT HC.ID,&#xD;
+	  HC.LEASE_CONTRACT_ID,&#xD;
+	  HC.LOCATION_TYPE,&#xD;
+	  HC.LOCATION_ID AS LOCATION_GROUP_NAME,&#xD;
+	  LOC.NAME AS LOCATION,&#xD;
+	  LOC.ID AS LOCATION_GUID,&#xD;
+	  HC.EQUIPMENT_CODE_TYPE,&#xD;
+	  HC.EQUIPMENT_CODE AS EQUIPMENT_CODE,&#xD;
+	  HC.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,&#xD;
+	  HC.MAX_HIRE_QUANTITY AS MAX_HIRE_QUANTITY,&#xD;
+	  HC.MIN_HIRE_QUANTITY AS MIN_HIRE_QUANTITY,&#xD;
+	  HC.HIRE_TYPE&#xD;
+FROM :ACTIVE_ON_HIRE_CONDITION HC&#xD;
+INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; LOC  ON HC.LOCATION_ID = LOC.NAME --LOC.ID&#xD;
+WHERE HC.LOCATION_TYPE=1 AND HC.EQUIPMENT_CODE_TYPE=1;&#xD;
+&#xD;
+--DEPOT_GROUP,EQUIPMENT&#xD;
+&#xD;
+SELECT COUNT(1) INTO COUNT_CHECK FROM :ACTIVE_ON_HIRE_CONDITION WHERE LOCATION_TYPE = 2 AND EQUIPMENT_CODE_TYPE=1;&#xD;
+IF :COUNT_CHECK > 0 THEN&#xD;
+&#xD;
+	HC_DEPOT_GRP_ET=&#xD;
+		SELECT HC.ID,&#xD;
+			  HC.LEASE_CONTRACT_ID,&#xD;
+			  HC.LOCATION_TYPE,&#xD;
+			  HC.LOCATION_ID AS LOCATION_GROUP_NAME,&#xD;
+			  LOC.NAME AS LOCATION,&#xD;
+			  LOC.ID AS LOCATION_GUID,&#xD;
+			  HC.EQUIPMENT_CODE_TYPE,&#xD;
+			  HC.EQUIPMENT_CODE AS EQUIPMENT_CODE,&#xD;
+			  HC.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,&#xD;
+			  HC.MAX_HIRE_QUANTITY AS MAX_HIRE_QUANTITY,&#xD;
+			  HC.MIN_HIRE_QUANTITY AS MIN_HIRE_QUANTITY,&#xD;
+			  HC.HIRE_TYPE&#xD;
+		FROM :ACTIVE_ON_HIRE_CONDITION HC&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_location_group&quot; LOC_GRP ON HC.LOCATION_ID=LOC_GRP.CODE --LOC_GRP.ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_location_group_item&quot; LOC_GRP_ITEM ON LOC_GRP_ITEM.LOCATION_GROUP_ID=LOC_GRP.ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; LOC  ON LOC_GRP_ITEM.LOCATION_ID = LOC.ID&#xD;
+		WHERE HC.LOCATION_TYPE=2 AND HC.EQUIPMENT_CODE_TYPE=1   ;&#xD;
+	  &#xD;
+ELSE&#xD;
+ &#xD;
+	HC_DEPOT_GRP_ET = SELECT * FROM :HIRE_CONDITION_DUMMY;&#xD;
+&#xD;
+END IF;&#xD;
+&#xD;
+-- REGION,EQUIPMENT&#xD;
+SELECT COUNT(1) INTO COUNT_CHECK FROM :ACTIVE_ON_HIRE_CONDITION WHERE LOCATION_TYPE = 5 AND EQUIPMENT_CODE_TYPE=1;&#xD;
+IF :COUNT_CHECK > 0 THEN&#xD;
+&#xD;
+	HC_REGION_ET=&#xD;
+		SELECT HC.ID,&#xD;
+			  HC.LEASE_CONTRACT_ID,&#xD;
+			  HC.LOCATION_TYPE,&#xD;
+			  HC.LOCATION_ID AS LOCATION_GROUP_NAME,&#xD;
+			  LOC.NAME AS LOCATION,&#xD;
+			  LOC.ID AS LOCATION_GUID,&#xD;
+			  HC.EQUIPMENT_CODE_TYPE,&#xD;
+			  HC.EQUIPMENT_CODE AS EQUIPMENT_CODE,&#xD;
+			  HC.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,&#xD;
+			  HC.MAX_HIRE_QUANTITY AS MAX_HIRE_QUANTITY,&#xD;
+			  HC.MIN_HIRE_QUANTITY AS MIN_HIRE_QUANTITY,&#xD;
+			  HC.HIRE_TYPE&#xD;
+		FROM :ACTIVE_ON_HIRE_CONDITION HC&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_zone&quot; Z ON HC.LOCATION_ID=Z.NAME --Z.ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::v_region_location_all&quot; R_ALL ON R_ALL.ROOT_ID = Z.ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; LOC ON R_ALL.LOCATION_ID=LOC.ID&#xD;
+		WHERE HC.LOCATION_TYPE=5 AND HC.EQUIPMENT_CODE_TYPE=1   ;&#xD;
+&#xD;
+ELSE &#xD;
+&#xD;
+	HC_REGION_ET = SELECT * FROM :HIRE_CONDITION_DUMMY;&#xD;
+&#xD;
+END IF;&#xD;
+&#xD;
+&#xD;
+-- REGION GROUP,EQUIPMENT&#xD;
+SELECT COUNT(1) INTO COUNT_CHECK FROM :ACTIVE_ON_HIRE_CONDITION WHERE LOCATION_TYPE = 6 AND EQUIPMENT_CODE_TYPE=1;&#xD;
+IF :COUNT_CHECK > 0 THEN&#xD;
+&#xD;
+	HC_REGION_GRP_ET=&#xD;
+		SELECT HC.ID,&#xD;
+			  HC.LEASE_CONTRACT_ID,&#xD;
+			  HC.LOCATION_TYPE,&#xD;
+			  HC.LOCATION_ID AS LOCATION_GROUP_NAME,&#xD;
+			  LOC.NAME AS LOCATION,&#xD;
+			  LOC.ID AS LOCATION_GUID,&#xD;
+			  HC.EQUIPMENT_CODE_TYPE,&#xD;
+			  HC.EQUIPMENT_CODE AS EQUIPMENT_CODE,&#xD;
+			  HC.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,&#xD;
+			  HC.MAX_HIRE_QUANTITY AS MAX_HIRE_QUANTITY,&#xD;
+			  HC.MIN_HIRE_QUANTITY AS MIN_HIRE_QUANTITY,&#xD;
+			  HC.HIRE_TYPE&#xD;
+		FROM :ACTIVE_ON_HIRE_CONDITION HC&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_region_group&quot; R_GRP ON HC.LOCATION_ID=R_GRP.CODE --R_GRP.ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_region_group_item&quot; R_GRP_ITEM ON R_GRP.ID = R_GRP_ITEM.REGION_GROUP_ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::v_region_location_all&quot; R_ALL ON  R_GRP_ITEM.ZONE_ID = R_ALL.ROOT_ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; LOC ON R_ALL.LOCATION_ID=LOC.ID&#xD;
+		WHERE HC.LOCATION_TYPE=6 AND HC.EQUIPMENT_CODE_TYPE=1   ;&#xD;
+&#xD;
+ELSE &#xD;
+&#xD;
+	HC_REGION_GRP_ET = SELECT * FROM :HIRE_CONDITION_DUMMY;&#xD;
+&#xD;
+END IF;&#xD;
+&#xD;
+--DEPOT,EQUIPMENT GROUP&#xD;
+SELECT COUNT(1) INTO COUNT_CHECK FROM :ACTIVE_ON_HIRE_CONDITION WHERE LOCATION_TYPE = 1 AND EQUIPMENT_CODE_TYPE=2;&#xD;
+IF :COUNT_CHECK > 0 THEN&#xD;
+&#xD;
+	HC_DEPOT_ET_GRP=&#xD;
+		SELECT HC.ID,&#xD;
+			  HC.LEASE_CONTRACT_ID,&#xD;
+			  HC.LOCATION_TYPE,&#xD;
+			  HC.LOCATION_ID AS LOCATION_GROUP_NAME,&#xD;
+			  LOC.NAME AS LOCATION,&#xD;
+			  LOC.ID AS LOCATION_GUID,&#xD;
+			  HC.EQUIPMENT_CODE_TYPE,&#xD;
+			  EGI.EQUI_CODE AS EQUIPMENT_CODE,&#xD;
+			  HC.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,&#xD;
+			  HC.MAX_HIRE_QUANTITY AS MAX_HIRE_QUANTITY,&#xD;
+			  HC.MIN_HIRE_QUANTITY AS MIN_HIRE_QUANTITY,&#xD;
+			  HC.HIRE_TYPE&#xD;
+		FROM :ACTIVE_ON_HIRE_CONDITION HC&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; LOC  ON HC.LOCATION_ID = LOC.NAME --LOC.ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_equipment_group&quot; EG ON HC.EQUIPMENT_CODE = EG.CODE&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth&quot; EGI ON EG.ID=EGI.EQUIPMENT_GROUP_ID &#xD;
+		WHERE HC.LOCATION_TYPE=1 AND HC.EQUIPMENT_CODE_TYPE=2   ;&#xD;
+		&#xD;
+ELSE &#xD;
+&#xD;
+	HC_DEPOT_ET_GRP = SELECT * FROM :HIRE_CONDITION_DUMMY;&#xD;
+&#xD;
+END IF;&#xD;
+&#xD;
+--DEPOT_GROUP,EQUIPMENT GROUP&#xD;
+SELECT COUNT(1) INTO COUNT_CHECK FROM :ACTIVE_ON_HIRE_CONDITION WHERE LOCATION_TYPE=2 AND EQUIPMENT_CODE_TYPE=2;&#xD;
+IF :COUNT_CHECK > 0 THEN &#xD;
+&#xD;
+	HC_DEPOT_GRP_ET_GRP = &#xD;
+		SELECT HC.ID,&#xD;
+			  HC.LEASE_CONTRACT_ID,&#xD;
+			  HC.LOCATION_TYPE,&#xD;
+			  HC.LOCATION_ID AS LOCATION_GROUP_NAME,&#xD;
+			  LOC.NAME AS LOCATION,&#xD;
+			  LOC.ID AS LOCATION_GUID,&#xD;
+			  HC.EQUIPMENT_CODE_TYPE,&#xD;
+			  EGI.EQUI_CODE AS EQUIPMENT_CODE,&#xD;
+			  HC.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,&#xD;
+			  HC.MAX_HIRE_QUANTITY AS MAX_HIRE_QUANTITY,&#xD;
+			  HC.MIN_HIRE_QUANTITY AS MIN_HIRE_QUANTITY,&#xD;
+			  HC.HIRE_TYPE&#xD;
+		FROM :ACTIVE_ON_HIRE_CONDITION HC&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_location_group&quot; LOC_GRP ON HC.LOCATION_ID=LOC_GRP.CODE --LOC_GRP.ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_location_group_item&quot; LOC_GRP_ITEM ON LOC_GRP_ITEM.LOCATION_GROUP_ID=LOC_GRP.ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; LOC  ON LOC_GRP_ITEM.LOCATION_ID = LOC.ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_equipment_group&quot; EG ON HC.EQUIPMENT_CODE = EG.CODE&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth&quot; EGI ON EG.ID=EGI.EQUIPMENT_GROUP_ID&#xD;
+		WHERE HC.LOCATION_TYPE=2 AND HC.EQUIPMENT_CODE_TYPE=2   ;&#xD;
+ELSE&#xD;
+ &#xD;
+	HC_DEPOT_GRP_ET_GRP = SELECT * FROM :HIRE_CONDITION_DUMMY;&#xD;
+	&#xD;
+END IF;&#xD;
+&#xD;
+&#xD;
+&#xD;
+-- REGION,EQUIPMENT GROUP&#xD;
+SELECT COUNT(1) INTO COUNT_CHECK FROM :ACTIVE_ON_HIRE_CONDITION WHERE LOCATION_TYPE=5 AND EQUIPMENT_CODE_TYPE=2;&#xD;
+IF :COUNT_CHECK > 0 THEN &#xD;
+&#xD;
+	HC_REGION_ET_GRP=&#xD;
+		SELECT HC.ID,&#xD;
+			  HC.LEASE_CONTRACT_ID,&#xD;
+			  HC.LOCATION_TYPE,&#xD;
+			  HC.LOCATION_ID AS LOCATION_GROUP_NAME,&#xD;
+			  LOC.NAME AS LOCATION,&#xD;
+			  LOC.ID AS LOCATION_GUID,&#xD;
+			  HC.EQUIPMENT_CODE_TYPE,&#xD;
+			  EGI.EQUI_CODE AS EQUIPMENT_CODE,&#xD;
+			  HC.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,&#xD;
+			  HC.MAX_HIRE_QUANTITY AS MAX_HIRE_QUANTITY,&#xD;
+			  HC.MIN_HIRE_QUANTITY AS MIN_HIRE_QUANTITY,&#xD;
+			  HC.HIRE_TYPE&#xD;
+		FROM :ACTIVE_ON_HIRE_CONDITION HC&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_zone&quot; Z ON HC.LOCATION_ID=Z.NAME --Z.ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::v_region_location_all&quot; R_ALL ON R_ALL.ROOT_ID = Z.ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; LOC ON R_ALL.LOCATION_ID=LOC.ID		&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_equipment_group&quot; EG ON HC.EQUIPMENT_CODE = EG.CODE&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth&quot; EGI ON EG.ID=EGI.EQUIPMENT_GROUP_ID&#xD;
+		WHERE HC.LOCATION_TYPE=5 AND HC.EQUIPMENT_CODE_TYPE=2;&#xD;
+		&#xD;
+ELSE &#xD;
+&#xD;
+	HC_REGION_ET_GRP = SELECT * FROM :HIRE_CONDITION_DUMMY;&#xD;
+&#xD;
+END IF;&#xD;
+&#xD;
+&#xD;
+-- REGION GROUP,EQUIPMENT GROUP&#xD;
+SELECT COUNT(1) INTO COUNT_CHECK FROM :ACTIVE_ON_HIRE_CONDITION WHERE LOCATION_TYPE=6 AND EQUIPMENT_CODE_TYPE=2;&#xD;
+IF :COUNT_CHECK > 0 THEN &#xD;
+&#xD;
+	HC_REGION_GRP_ET_GRP=&#xD;
+		SELECT HC.ID,&#xD;
+			  HC.LEASE_CONTRACT_ID,&#xD;
+			  HC.LOCATION_TYPE,&#xD;
+			  HC.LOCATION_ID AS LOCATION_GROUP_NAME,&#xD;
+			  LOC.NAME AS LOCATION,&#xD;
+			  LOC.ID AS LOCATION_GUID,&#xD;
+			  HC.EQUIPMENT_CODE_TYPE,&#xD;
+			  EGI.EQUI_CODE AS EQUIPMENT_CODE,&#xD;
+			  HC.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,&#xD;
+			  HC.MAX_HIRE_QUANTITY AS MAX_HIRE_QUANTITY,&#xD;
+			  HC.MIN_HIRE_QUANTITY AS MIN_HIRE_QUANTITY,&#xD;
+			  HC.HIRE_TYPE&#xD;
+		FROM :ACTIVE_ON_HIRE_CONDITION HC&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_region_group&quot; R_GRP ON HC.LOCATION_ID=R_GRP.CODE --R_GRP.ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_region_group_item&quot; R_GRP_ITEM ON R_GRP.ID = R_GRP_ITEM.REGION_GROUP_ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::v_region_location_all&quot; R_ALL ON  R_GRP_ITEM.ZONE_ID = R_ALL.ROOT_ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; LOC ON R_ALL.LOCATION_ID=LOC.ID		&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_equipment_group&quot; EG ON HC.EQUIPMENT_CODE = EG.CODE&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth&quot; EGI ON EG.ID=EGI.EQUIPMENT_GROUP_ID&#xD;
+		WHERE HC.LOCATION_TYPE=6 AND HC.EQUIPMENT_CODE_TYPE=2;&#xD;
+&#xD;
+ELSE &#xD;
+&#xD;
+HC_REGION_GRP_ET_GRP = SELECT * FROM :HIRE_CONDITION_DUMMY;&#xD;
+&#xD;
+END IF;&#xD;
+&#xD;
+--ONLY EQUIPMENT&#xD;
+SELECT COUNT(1) INTO COUNT_CHECK FROM :ACTIVE_ON_HIRE_CONDITION WHERE LOCATION_TYPE IS NULL AND EQUIPMENT_CODE_TYPE=1;&#xD;
+IF :COUNT_CHECK >0 THEN&#xD;
+&#xD;
+	HC_EQUIP=&#xD;
+	SELECT HC.ID,&#xD;
+		  HC.LEASE_CONTRACT_ID,&#xD;
+		  HC.LOCATION_TYPE,&#xD;
+		  HC.LOCATION_ID AS LOCATION_GROUP_NAME,&#xD;
+		  NULL AS LOCATION,&#xD;
+		  NULL AS LOCATION_GUID,&#xD;
+		  HC.EQUIPMENT_CODE_TYPE,&#xD;
+		  HC.EQUIPMENT_CODE AS EQUIPMENT_CODE,&#xD;
+		  HC.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,&#xD;
+		  HC.MAX_HIRE_QUANTITY AS MAX_HIRE_QUANTITY,&#xD;
+		  HC.MIN_HIRE_QUANTITY AS MIN_HIRE_QUANTITY,&#xD;
+		  HC.HIRE_TYPE&#xD;
+		FROM :ACTIVE_ON_HIRE_CONDITION HC&#xD;
+		WHERE HC.LOCATION_TYPE IS NULL AND HC.EQUIPMENT_CODE_TYPE=1;&#xD;
+&#xD;
+ELSE&#xD;
+&#xD;
+HC_EQUIP=SELECT * FROM :HIRE_CONDITION_DUMMY;&#xD;
+&#xD;
+END IF;&#xD;
+&#xD;
+--ONLY EQUIPMENT_GROUP&#xD;
+SELECT COUNT(1) INTO COUNT_CHECK FROM :ACTIVE_ON_HIRE_CONDITION WHERE LOCATION_TYPE IS NULL AND EQUIPMENT_CODE_TYPE=2;&#xD;
+IF :COUNT_CHECK >0 THEN&#xD;
+&#xD;
+	HC_EQUIP_GRP=&#xD;
+		SELECT HC.ID,&#xD;
+		  HC.LEASE_CONTRACT_ID,&#xD;
+		  HC.LOCATION_TYPE,&#xD;
+		  HC.LOCATION_ID AS LOCATION_GROUP_NAME,&#xD;
+		  NULL AS LOCATION,&#xD;
+		  NULL AS LOCATION_GUID,&#xD;
+		  HC.EQUIPMENT_CODE_TYPE,&#xD;
+		  EGI.EQUI_CODE AS EQUIPMENT_CODE,&#xD;
+		  HC.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,&#xD;
+		  HC.MAX_HIRE_QUANTITY AS MAX_HIRE_QUANTITY,&#xD;
+		  HC.MIN_HIRE_QUANTITY AS MIN_HIRE_QUANTITY,&#xD;
+		  HC.HIRE_TYPE&#xD;
+		FROM :ACTIVE_ON_HIRE_CONDITION HC&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_equipment_group&quot; EG ON HC.EQUIPMENT_CODE = EG.CODE&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth&quot; EGI ON EG.ID=EGI.EQUIPMENT_GROUP_ID&#xD;
+		WHERE HC.LOCATION_TYPE IS NULL AND HC.EQUIPMENT_CODE_TYPE=2;&#xD;
+ELSE&#xD;
+&#xD;
+	HC_EQUIP_GRP=SELECT * FROM :HIRE_CONDITION_DUMMY;&#xD;
+	&#xD;
+END IF;&#xD;
+&#xD;
+----ONLY LOCATION&#xD;
+SELECT COUNT(1) INTO COUNT_CHECK FROM :ACTIVE_ON_HIRE_CONDITION WHERE LOCATION_TYPE=1 AND EQUIPMENT_CODE_TYPE IS NULL;&#xD;
+IF :COUNT_CHECK >0 THEN&#xD;
+	&#xD;
+	HC_DEPOT=&#xD;
+		SELECT HC.ID,&#xD;
+			  HC.LEASE_CONTRACT_ID,&#xD;
+			  HC.LOCATION_TYPE,&#xD;
+			  HC.LOCATION_ID AS LOCATION_GROUP_NAME,&#xD;
+			  LOC.NAME AS LOCATION,&#xD;
+			  LOC.ID AS LOCATION_GUID,&#xD;
+			  HC.EQUIPMENT_CODE_TYPE,&#xD;
+			  HC.EQUIPMENT_CODE AS EQUIPMENT_CODE,&#xD;
+			  HC.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,&#xD;
+			  HC.MAX_HIRE_QUANTITY AS MAX_HIRE_QUANTITY,&#xD;
+			  HC.MIN_HIRE_QUANTITY AS MIN_HIRE_QUANTITY,&#xD;
+			  HC.HIRE_TYPE&#xD;
+		FROM :ACTIVE_ON_HIRE_CONDITION HC&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; LOC  ON HC.LOCATION_ID = LOC.NAME --LOC.ID&#xD;
+		WHERE HC.LOCATION_TYPE=1 AND HC.EQUIPMENT_CODE_TYPE IS NULL;&#xD;
+ELSE&#xD;
+&#xD;
+	HC_DEPOT=SELECT * FROM :HIRE_CONDITION_DUMMY;&#xD;
+&#xD;
+END IF;&#xD;
+&#xD;
+&#xD;
+SELECT COUNT(1) INTO COUNT_CHECK FROM :ACTIVE_ON_HIRE_CONDITION WHERE LOCATION_TYPE=2 AND EQUIPMENT_CODE_TYPE IS NULL;&#xD;
+IF :COUNT_CHECK >0 THEN&#xD;
+&#xD;
+	HC_DEPOT_GROUP=&#xD;
+		SELECT HC.ID,&#xD;
+			  HC.LEASE_CONTRACT_ID,&#xD;
+			  HC.LOCATION_TYPE,&#xD;
+			  HC.LOCATION_ID AS LOCATION_GROUP_NAME,&#xD;
+			  LOC.NAME AS LOCATION,&#xD;
+			  LOC.ID AS LOCATION_GUID,&#xD;
+			  HC.EQUIPMENT_CODE_TYPE,&#xD;
+			  HC.EQUIPMENT_CODE AS EQUIPMENT_CODE,&#xD;
+			  HC.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,&#xD;
+			  HC.MAX_HIRE_QUANTITY AS MAX_HIRE_QUANTITY,&#xD;
+			  HC.MIN_HIRE_QUANTITY AS MIN_HIRE_QUANTITY,&#xD;
+			  HC.HIRE_TYPE&#xD;
+		FROM :ACTIVE_ON_HIRE_CONDITION HC&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_location_group&quot; LOC_GRP ON HC.LOCATION_ID=LOC_GRP.CODE --LOC_GRP.ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_location_group_item&quot; LOC_GRP_ITEM ON LOC_GRP_ITEM.LOCATION_GROUP_ID=LOC_GRP.ID&#xD;
+		INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; LOC  ON LOC_GRP_ITEM.LOCATION_ID = LOC.ID&#xD;
+		WHERE HC.LOCATION_TYPE=2 AND HC.EQUIPMENT_CODE_TYPE IS NULL;&#xD;
+		&#xD;
+ELSE&#xD;
+&#xD;
+	HC_DEPOT_GROUP=SELECT * FROM :HIRE_CONDITION_DUMMY;&#xD;
+	&#xD;
+END IF;&#xD;
+&#xD;
+SELECT COUNT(1) INTO COUNT_CHECK FROM :ACTIVE_ON_HIRE_CONDITION WHERE LOCATION_TYPE=5 AND EQUIPMENT_CODE_TYPE IS NULL;&#xD;
+IF :COUNT_CHECK >0 THEN&#xD;
+&#xD;
+	HC_REGION=&#xD;
+		SELECT HC.ID,&#xD;
+				  HC.LEASE_CONTRACT_ID,&#xD;
+				  HC.LOCATION_TYPE,&#xD;
+				  HC.LOCATION_ID AS LOCATION_GROUP_NAME,&#xD;
+				  LOC.NAME AS LOCATION,&#xD;
+				  LOC.ID AS LOCATION_GUID,&#xD;
+				  HC.EQUIPMENT_CODE_TYPE,&#xD;
+				  HC.EQUIPMENT_CODE AS EQUIPMENT_CODE,&#xD;
+				  HC.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,&#xD;
+				  HC.MAX_HIRE_QUANTITY AS MAX_HIRE_QUANTITY,&#xD;
+				  HC.MIN_HIRE_QUANTITY AS MIN_HIRE_QUANTITY,&#xD;
+				  HC.HIRE_TYPE&#xD;
+			FROM :ACTIVE_ON_HIRE_CONDITION HC&#xD;
+			INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_zone&quot; Z ON HC.LOCATION_ID=Z.NAME --Z.ID&#xD;
+			INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::v_region_location_all&quot; R_ALL ON R_ALL.ROOT_ID = Z.ID&#xD;
+			INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; LOC ON R_ALL.LOCATION_ID=LOC.ID&#xD;
+			WHERE HC.LOCATION_TYPE=5 AND HC.EQUIPMENT_CODE_TYPE IS NULL;&#xD;
+ELSE&#xD;
+&#xD;
+	HC_REGION=SELECT * FROM :HIRE_CONDITION_DUMMY;&#xD;
+	&#xD;
+END IF;&#xD;
+&#xD;
+SELECT COUNT(1) INTO COUNT_CHECK FROM :ACTIVE_ON_HIRE_CONDITION WHERE LOCATION_TYPE=6 AND EQUIPMENT_CODE_TYPE IS NULL;&#xD;
+IF :COUNT_CHECK >0 THEN&#xD;
+&#xD;
+	HC_REGION_GRP=&#xD;
+		SELECT HC.ID,&#xD;
+				  HC.LEASE_CONTRACT_ID,&#xD;
+				  HC.LOCATION_TYPE,&#xD;
+				  HC.LOCATION_ID AS LOCATION_GROUP_NAME,&#xD;
+				  LOC.NAME AS LOCATION,&#xD;
+				  LOC.ID AS LOCATION_GUID,&#xD;
+				  HC.EQUIPMENT_CODE_TYPE,&#xD;
+				  HC.EQUIPMENT_CODE AS EQUIPMENT_CODE,&#xD;
+				  HC.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,&#xD;
+				  HC.MAX_HIRE_QUANTITY AS MAX_HIRE_QUANTITY,&#xD;
+				  HC.MIN_HIRE_QUANTITY AS MIN_HIRE_QUANTITY,&#xD;
+				  HC.HIRE_TYPE&#xD;
+			FROM :ACTIVE_ON_HIRE_CONDITION HC&#xD;
+			INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_region_group&quot; R_GRP ON HC.LOCATION_ID=R_GRP.CODE --R_GRP.ID&#xD;
+			INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_region_group_item&quot; R_GRP_ITEM ON R_GRP.ID = R_GRP_ITEM.REGION_GROUP_ID&#xD;
+			INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::v_region_location_all&quot; R_ALL ON  R_GRP_ITEM.ZONE_ID = R_ALL.ROOT_ID&#xD;
+			INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; LOC ON R_ALL.LOCATION_ID=LOC.ID&#xD;
+			WHERE HC.LOCATION_TYPE=6 AND HC.EQUIPMENT_CODE_TYPE IS NULL;&#xD;
+ELSE&#xD;
+&#xD;
+	HC_REGION_GRP=SELECT * FROM :HIRE_CONDITION_DUMMY;&#xD;
+	&#xD;
+END IF;&#xD;
+&#xD;
+&#xD;
+&#xD;
+var_out = &#xD;
+	SELECT * FROM :HC_DEPOT_ET UNION&#xD;
+	SELECT * FROM :HC_DEPOT_GRP_ET UNION&#xD;
+&#xD;
+	SELECT * FROM :HC_REGION_ET UNION&#xD;
+	SELECT * FROM :HC_REGION_GRP_ET UNION&#xD;
+	SELECT * FROM :HC_DEPOT_ET_GRP UNION&#xD;
+	SELECT * FROM :HC_DEPOT_GRP_ET_GRP UNION&#xD;
+	&#xD;
+	SELECT * FROM :HC_REGION_ET_GRP UNION&#xD;
+	SELECT * FROM :HC_REGION_GRP_ET_GRP UNION &#xD;
+	SELECT * FROM :HC_EQUIP UNION&#xD;
+	SELECT * FROM :HC_EQUIP_GRP UNION&#xD;
+	SELECT * FROM :HC_DEPOT UNION&#xD;
+	SELECT * FROM :HC_DEPOT_GROUP UNION&#xD;
+	&#xD;
+	SELECT * FROM :HC_REGION UNION&#xD;
+	SELECT * FROM :HC_REGION_GRP;&#xD;
+&#xD;
+&#xD;
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="LOCATION_GROUP_NAME" order="4">
+        <descriptions defaultDescription="LOCATION_GROUP_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_GROUP_NAME"/>
+      </attribute>
+      <attribute id="LOCATION" order="5">
+        <descriptions defaultDescription="LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION"/>
+      </attribute>
+      <attribute id="LOCATION_GUID" order="6">
+        <descriptions defaultDescription="LOCATION_GUID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_GUID"/>
+      </attribute>
+      <attribute id="EQUIPMENT_CODE" order="8">
+        <descriptions defaultDescription="EQUIPMENT_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_CODE"/>
+      </attribute>
+      <attribute id="EQUIPMENT_GROUP_NAME" order="9">
+        <descriptions defaultDescription="EQUIPMENT_GROUP_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_GROUP_NAME"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="ID"/>
+      </measure>
+      <measure id="LEASE_CONTRACT_ID" order="2" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LEASE_CONTRACT_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="LEASE_CONTRACT_ID"/>
+      </measure>
+      <measure id="LOCATION_TYPE" order="3" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LOCATION_TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="LOCATION_TYPE"/>
+      </measure>
+      <measure id="EQUIPMENT_CODE_TYPE" order="7" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="EQUIPMENT_CODE_TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="EQUIPMENT_CODE_TYPE"/>
+      </measure>
+      <measure id="MAX_HIRE_QUANTITY" order="10" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MAX_HIRE_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="MAX_HIRE_QUANTITY"/>
+      </measure>
+      <measure id="MIN_HIRE_QUANTITY" order="11" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MIN_HIRE_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="MIN_HIRE_QUANTITY"/>
+      </measure>
+      <measure id="HIRE_TYPE" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="HIRE_TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="HIRE_TYPE"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

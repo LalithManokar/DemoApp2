@@ -1,0 +1,140 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_virtual_plan_valid_check" (
+	IN in_virtual_plan_id BIGINT,
+	OUT out_status SMALLINT
+	) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	--READS SQL DATA 
+	AS
+BEGIN
+
+DECLARE STATUS_VALID SMALLINT := 0;
+DECLARE STATUS_SUSPEND SMALLINT := 1;
+DECLARE STATUS_INVALID SMALLINT := 2;
+DECLARE LOCATION_TYPE_LOCATION INTEGER := 1;
+DECLARE LOCATION_TYPE_LOCATION_GROUP INTEGER := 2;
+DECLARE LOCATION_TYPE_REGION INTEGER := 5;
+DECLARE LOCATION_TYPE_REGION_GROUP INTEGER := 6;
+DECLARE VAR_LOCATION_TYPE INTEGER := 0;
+DECLARE VAR_LOCATION_FILTER_ID INTEGER := 0;
+DECLARE VAR_EQUIPMENT_FILTER_ID INTEGER := 0;
+DECLARE I_COUNT INTEGER := 0;
+DECLARE PLAN_TYPE_VIRTUAL_PLAN INTEGER := 3;
+DECLARE PLAN_TYPE_VIRTUAL_KPI_PLAN INTEGER := 5;
+DECLARE PLAN_TYPE_PERSISTED_PLAN INTEGER := 1;
+DECLARE PLAN_TYPE_KPI_PERSISTED_PLAN INTEGER := 4;
+DECLARE VAR_PLAN_TYPE_ID INTEGER := 0;
+DECLARE VAR_RESOURCE_CATEGORY NVARCHAR(20);
+
+SELECT T2.RESOURCE_CATEGORY INTO VAR_RESOURCE_CATEGORY
+FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2 on T1.FILTER_GROUP_ID = T2.ID
+WHERE T1.ID = :in_virtual_plan_id;
+
+--Get the location filter type for the virtual plan:
+SQL_LOCATION_FILTER = 
+SELECT T4.LOCATION_TYPE,T2.LOCATION_FILTER_ID, T3.EQUIPMENT_FILTER_ID,T1.PLAN_MODEL_TYPE_ID
+FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+INNER JOIN "sap.tm.trp.db.filter::t_filter_location_filter" T2 ON (T1.FILTER_GROUP_ID = T2.FILTER_GROUP_ID)
+INNER JOIN "sap.tm.trp.db.filter::t_filter_equipment_filter" T3 ON (T1.FILTER_GROUP_ID = T3.FILTER_GROUP_ID)
+INNER JOIN "sap.tm.trp.db.filter::t_location_filter" T4 ON (T2.LOCATION_FILTER_ID = T4.ID)
+WHERE T1.ID = :in_virtual_plan_id;
+
+SELECT COUNT(1) INTO I_COUNT FROM :SQL_LOCATION_FILTER;
+
+IF I_COUNT > 0 THEN
+   SELECT LOCATION_TYPE INTO VAR_LOCATION_TYPE FROM :SQL_LOCATION_FILTER;
+   SELECT LOCATION_FILTER_ID INTO VAR_LOCATION_FILTER_ID FROM :SQL_LOCATION_FILTER;
+   SELECT PLAN_MODEL_TYPE_ID INTO VAR_PLAN_TYPE_ID FROM :SQL_LOCATION_FILTER;
+     SELECT EQUIPMENT_FILTER_ID INTO VAR_EQUIPMENT_FILTER_ID FROM :SQL_LOCATION_FILTER;
+   
+   
+   IF :VAR_PLAN_TYPE_ID = :PLAN_TYPE_VIRTUAL_PLAN THEN
+     VAR_PLAN_TYPE_ID := :PLAN_TYPE_PERSISTED_PLAN;
+   ELSEIF :VAR_PLAN_TYPE_ID = :PLAN_TYPE_VIRTUAL_KPI_PLAN THEN
+       VAR_PLAN_TYPE_ID := :PLAN_TYPE_KPI_PERSISTED_PLAN ;
+   ELSE
+       out_status := :STATUS_INVALID;
+       UPDATE "sap.tm.trp.db.pipeline::t_plan_model" SET STATUS = :out_status
+       WHERE ID = :in_virtual_plan_id;
+       RETURN;
+   END IF;
+   
+     
+   IF :VAR_LOCATION_TYPE = :LOCATION_TYPE_LOCATION THEN
+        PP_LIST_ALLOWED_IN_VP = SELECT PLAN_MODEL_ID FROM "sap.tm.trp.db.pipeline::cv_persisted_plan_list_for_locationfilter_for_admin_without_timefilter"(
+	    placeholder."$$IN_VP_LOCATION_FILTER_ID$$"=>:VAR_LOCATION_FILTER_ID,placeholder."$$IN_PERSISTED_PLAN_IDS$$"=>'',placeholder."$$IN_VP_EQUIP_FILTER_ID$$"=>:VAR_EQUIPMENT_FILTER_ID,
+	    placeholder."$$IN_PLAN_TYPE_ID$$"=>:VAR_PLAN_TYPE_ID,placeholder."$$IN_RESOURCE_CATEGORY$$"=>:VAR_RESOURCE_CATEGORY);
+   ELSEIF :VAR_LOCATION_TYPE = :LOCATION_TYPE_LOCATION_GROUP THEN
+        PP_LIST_ALLOWED_IN_VP = SELECT PLAN_MODEL_ID FROM "sap.tm.trp.db.pipeline::cv_persisted_plan_list_for_locationgroupfilter_for_admin_without_timefilter"(
+	    placeholder."$$IN_VP_LOCATION_FILTER_ID$$"=>:VAR_LOCATION_FILTER_ID,placeholder."$$IN_PERSISTED_PLAN_IDS$$"=>'',placeholder."$$IN_VP_EQUIP_FILTER_ID$$"=>:VAR_EQUIPMENT_FILTER_ID,
+	    placeholder."$$IN_PLAN_TYPE_ID$$"=>:VAR_PLAN_TYPE_ID,placeholder."$$IN_RESOURCE_CATEGORY$$"=>:VAR_RESOURCE_CATEGORY);
+   ELSEIF :VAR_LOCATION_TYPE = :LOCATION_TYPE_REGION THEN
+        PP_LIST_ALLOWED_IN_VP = SELECT PLAN_MODEL_ID FROM "sap.tm.trp.db.pipeline::cv_persisted_plan_list_for_regionfilter_for_admin_without_timefilter"(
+	    placeholder."$$IN_VP_LOCATION_FILTER_ID$$"=>:VAR_LOCATION_FILTER_ID,placeholder."$$IN_PERSISTED_PLAN_IDS$$"=>'',placeholder."$$IN_VP_EQUIP_FILTER_ID$$"=>:VAR_EQUIPMENT_FILTER_ID,
+	    placeholder."$$IN_PLAN_TYPE_ID$$"=>:VAR_PLAN_TYPE_ID,placeholder."$$IN_RESOURCE_CATEGORY$$"=>:VAR_RESOURCE_CATEGORY);
+   ELSEIF :VAR_LOCATION_TYPE = :LOCATION_TYPE_REGION_GROUP THEN
+        PP_LIST_ALLOWED_IN_VP = SELECT PLAN_MODEL_ID FROM "sap.tm.trp.db.pipeline::cv_persisted_plan_list_for_regiongroupfilter_for_admin_without_timefilter"(
+	    placeholder."$$IN_VP_LOCATION_FILTER_ID$$"=>:VAR_LOCATION_FILTER_ID,placeholder."$$IN_PERSISTED_PLAN_IDS$$"=>'',placeholder."$$IN_VP_EQUIP_FILTER_ID$$"=>:VAR_EQUIPMENT_FILTER_ID,
+	    placeholder."$$IN_PLAN_TYPE_ID$$"=>:VAR_PLAN_TYPE_ID,placeholder."$$IN_RESOURCE_CATEGORY$$"=>:VAR_RESOURCE_CATEGORY);
+   ELSE
+      out_status := :STATUS_INVALID;
+      UPDATE "sap.tm.trp.db.pipeline::t_plan_model" SET STATUS = :out_status
+       WHERE ID = :in_virtual_plan_id;
+      RETURN;
+   END IF;
+   
+    --Get the persisted plan model id with the equip code set which is the supper set of the VP equip code set according to IN_VP_EQUIP_FILTER_ID:
+  PERSISTED_PLAN_IDS_OF_VP_EQUIP_FILTER = 
+  SELECT PLAN_MODEL_ID 
+  FROM "sap.tm.trp.db.pipeline::cv_get_persisted_plan_list_with_larger_equip_code_set"(placeholder."$$VP_EQUIP_FILTER_ID$$"=>:VAR_EQUIPMENT_FILTER_ID,placeholder."$$IN_PLAN_TYPE_ID$$"=>:VAR_PLAN_TYPE_ID,placeholder."$$IN_RESOURCE_CATEGORY$$"=>:VAR_RESOURCE_CATEGORY);
+  
+  PP_LIST_ALLOWED_IN_VP2 = SELECT DISTINCT T1.PLAN_MODEL_ID FROM :PP_LIST_ALLOWED_IN_VP T1
+  INNER JOIN :PERSISTED_PLAN_IDS_OF_VP_EQUIP_FILTER T2 ON (T1.PLAN_MODEL_ID = T2.PLAN_MODEL_ID);
+
+	 --Get the persited plan list for the virtual plan
+	PP_ID_LIST_OF_VP = SELECT PERSISTED_PLAN_MODEL_ID
+	FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" 
+	WHERE VIRTUAL_PLAN_MODEL_ID = :in_virtual_plan_id; 
+	
+	
+	--Check if the PP list of the VP is the subset of the PP_LIST_ALLOWED_IN_VP
+	/*SELECT SUM(NUM) INTO I_COUNT
+	FROM
+	(
+	   SELECT T1.PLAN_MODEL_ID , CASE WHEN T2.PERSISTED_PLAN_MODEL_ID IS NULL THEN 1 ELSE 0 END AS NUM
+	   FROM:PP_ID_LIST_OF_VP  T2
+	   --LEFT OUTER JOIN  :PP_LIST_ALLOWED_IN_VP T1 ON (T1.PLAN_MODEL_ID = T2.PERSISTED_PLAN_MODEL_ID)
+	   LEFT OUTER JOIN  :PP_LIST_ALLOWED_IN_VP2 T1 ON (T1.PLAN_MODEL_ID = T2.PERSISTED_PLAN_MODEL_ID)
+   );
+   */
+   
+   
+    SELECT COUNT(1)  INTO I_COUNT
+    FROM :PP_ID_LIST_OF_VP T1 WHERE NOT EXISTS(
+    SELECT 1 FROM :PP_LIST_ALLOWED_IN_VP2 T2 WHERE T1.PERSISTED_PLAN_MODEL_ID = T2.PLAN_MODEL_ID
+    );
+   
+   IF I_COUNT >0 THEN
+     out_status := :STATUS_INVALID;
+      UPDATE "sap.tm.trp.db.pipeline::t_plan_model" SET STATUS = :out_status
+       WHERE ID = :in_virtual_plan_id;
+     RETURN;
+   ELSE
+     out_status := :STATUS_VALID;
+      UPDATE "sap.tm.trp.db.pipeline::t_plan_model" SET STATUS = :out_status
+       WHERE ID = :in_virtual_plan_id;
+      CALL "sap.tm.trp.db.pipeline::p_delete_virtual_tree" (:in_virtual_plan_id);
+      CALL "sap.tm.trp.db.pipeline::p_save_virtual_tree" (:in_virtual_plan_id);
+   END IF;
+   
+   
+ELSE
+   out_status := :STATUS_INVALID;
+    UPDATE "sap.tm.trp.db.pipeline::t_plan_model" SET STATUS = :out_status
+    WHERE ID = :in_virtual_plan_id;
+   RETURN;
+END IF;
+
+END;

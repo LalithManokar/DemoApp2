@@ -1,0 +1,30 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "RULE_GROUP_ID"; sqlType = BIGINT;},
+    {name = "RUN_ID"; sqlType = VARCHAR; length = 200;nullable = true;},
+    {name = "RULE_ID"; sqlType = BIGINT; },
+    {name = "TU_ID"; sqlType = NVARCHAR; length = 20;},
+    {name = "USER"; sqlType = NVARCHAR; length = 60;},
+    {name = "EXECUTION_STATUS_CODE";sqlType = VARCHAR; length = 2;},
+    {name = "SHIPPER_ID";sqlType = VARCHAR; length = 10;},
+    {name = "CONSIGNEE_ID";sqlType = VARCHAR; length = 10;},
+    {name = "RESOURCE_TYPE";sqlType = VARCHAR; length = 10;},
+    {name = "QUANTITY";sqlType = INTEGER;},
+    {name = "SOURCE_LOCATION_ID";sqlType = VARCHAR; length = 22;},
+    {name = "DESTINATION_LOCATION_ID";sqlType = VARCHAR; length = 22;},
+    {name = "POL";sqlType = VARCHAR; length = 22;},
+    {name = "POD";sqlType = VARCHAR; length = 22;},
+    {name = "DATE";sqlType = TIMESTAMP;},
+    {name = "PRE_LOCATION_ID"; sqlType = VARCHAR; length = 22;},
+    {name = "CUR_LOCATION_ID"; sqlType = VARCHAR; length = 22;},
+    {name = "PRE_DATE";sqlType= TIMESTAMP;},
+    {name = "CUR_DATE"; sqlType = TIMESTAMP;},
+    {name = "STREETTURN_TU_ID";sqlType = VARCHAR; length = 22;},
+    {name = "FLAG"; sqlType = INTEGER;},
+    {name = "OP_SETTING_TYPE"; sqlType = INTEGER; comment="1:location 2:Opt 3:location+Opt";},
+    {name = "EXECUTION_TIME"; sqlType = TIMESTAMP;},
+    {name = "SCHEDULE_TIME_TYPE"; sqlType = INTEGER; comment="0:manual 1:automatic";},
+    {name = "EXECUTION_BY"; sqlType =BIGINT;} , 
+    {name = "ERROR_MMESSAGE";sqlType = VARCHAR; length = 2000;}
+    ];  

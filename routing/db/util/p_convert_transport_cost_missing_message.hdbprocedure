@@ -1,0 +1,38 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.util::p_convert_transport_cost_missing_message" (
+    IN path_conn TABLE (id NVARCHAR(50), sequence INTEGER, from_location NVARCHAR(50), to_location NVARCHAR(50), 
+        mtr NVARCHAR(10), category CHAR), 
+    OUT message "sap.tm.trp.routing.db.common::tt_message"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING
+   READS SQL DATA AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+	null_edge_cost_path_conn = 
+	SELECT TOP 20 TO_VARCHAR(id) || TO_VARCHAR(sequence) AS group_id, id, sequence, from_location, to_location, mtr, category
+	FROM :path_conn;
+	
+    msg_params = 
+    SELECT group_id, 0 AS placeholder, TO_VARCHAR(id) AS value
+    FROM :null_edge_cost_path_conn
+    UNION ALL
+    SELECT group_id, 1 AS placeholder, TO_VARCHAR(sequence) AS value
+    FROM :null_edge_cost_path_conn
+    UNION ALL
+    SELECT group_id, 2 AS placeholder, from_location AS value
+    FROM :null_edge_cost_path_conn
+    UNION ALL
+    SELECT group_id, 3 AS placeholder, to_location AS value
+    FROM :null_edge_cost_path_conn
+    UNION ALL
+    SELECT group_id, 4 AS placeholder, mtr AS value
+    FROM :null_edge_cost_path_conn
+    UNION ALL
+    SELECT group_id, 5 AS placeholder, category AS value
+    FROM :null_edge_cost_path_conn;
+
+    CALL "sap.tm.trp.routing.db.common::p_get_text_batch"('MSG_TRN_COST_NOT_FOUND', :msg_params, 'E', message);
+END

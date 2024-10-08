@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_resource_type" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_resource_type"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="ID" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="NAME" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="DESC" length="100"/>
+        <viewAttribute datatype="DECIMAL" id="HEIGHT" length="13" scale="3"/>
+        <viewAttribute datatype="DECIMAL" id="WIDTH" length="13" scale="3"/>
+        <viewAttribute datatype="DECIMAL" id="LENGTH" length="13" scale="3"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_CATEGORY" length="20"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition>
+ /********* Begin Procedure Script ************/
+ BEGIN
+ 	 var_out =  SELECT DISTINCT A.RESOURCE_TYPE_CODE AS ID,
+                       A.RESOURCE_TYPE_CODE AS NAME,
+                       A.RESOURCE_TYPE_DESC AS DESC,
+                       A.HEIGHT,
+                       A.WIDTH,
+                       A.LENGTH,
+                       A.RESOURCE_CATEGORY
+                 FROM  &quot;sap.tm.trp.db.semantic.resource::v_resource_type_with_category&quot; A
+      	         INNER JOIN  &quot;sap.tm.trp.db.systemmanagement.user::v_resource_auth&quot; B
+      			 ON  (A.RESOURCE_TYPE_CODE = B.RES_TYPE AND A.RESOURCE_CATEGORY = B.RESOURCE_CATEGORY);
+
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="NAME" order="2">
+        <descriptions defaultDescription="NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="DESC" order="3">
+        <descriptions defaultDescription="DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+      <attribute id="RESOURCE_CATEGORY" order="7">
+        <descriptions defaultDescription="TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_CATEGORY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="HEIGHT" order="4" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="HEIGHT"/>
+        <measureMapping columnObjectName="Script_View" columnName="HEIGHT"/>
+      </measure>
+      <measure id="WIDTH" order="5" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="WIDTH"/>
+        <measureMapping columnObjectName="Script_View" columnName="WIDTH"/>
+      </measure>
+      <measure id="LENGTH" order="6" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LENGTH"/>
+        <measureMapping columnObjectName="Script_View" columnName="LENGTH"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

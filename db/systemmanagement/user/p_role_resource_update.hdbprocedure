@@ -1,0 +1,13 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_role_resource_update" (
+  IN ROLE_ID BIGINT,
+  IN RESOURCE_ATT "sap.tm.trp.db.systemmanagement.user::tt_role_resource") 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+  
+    CALL "sap.tm.trp.db.systemmanagement.user::p_role_resource_delete"(:ROLE_ID);
+    CALL "sap.tm.trp.db.systemmanagement.user::p_role_resource_create"(:ROLE_ID, :RESOURCE_ATT);
+    
+END;

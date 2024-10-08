@@ -1,0 +1,79 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_distance_based_cost_validate"(
+    IN DISTANCE_BASED_COST "sap.tm.trp.db.costmodel::tt_distance_based_cost",
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),
+    OUT INVALID_ITEMS "sap.tm.trp.db.costmodel::tt_cost_model_invalid_item"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    
+    RESOURCE_TYPE = SELECT DISTINCT RESOURCE_TYPE_CODE, RESOURCE_CATEGORY
+                    FROM "sap.tm.trp.db.semantic.resource::v_resource_type_with_category";
+    
+    ITEMS = 
+        SELECT 
+               TRANSPORTATION_MODE_CODE,
+               CASE WHEN RESOURCE_TYPE = '*' THEN '*'
+                    ELSE REPLACE(RESOURCE_TYPE, '*', '%')
+                    END AS RESOURCE_TYPE,
+                CARRIER_ID,UOM_CODE,COST,
+               --ROW_NUMBER () OVER () AS ROW_INDEX
+               ROW_INDEX
+          FROM :DISTANCE_BASED_COST;
+    
+    
+    INVALID_ITEMS = 
+        
+         SELECT A.ROW_INDEX,
+               1 AS COL_INDEX,
+               'TRANSPORTATION_MODE_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A
+               LEFT OUTER JOIN "sap.tm.trp.db.semantic.common::v_transportation_means" AS B
+               ON A.TRANSPORTATION_MODE_CODE = B.CODE
+         WHERE B.CODE IS NULL AND A.TRANSPORTATION_MODE_CODE <> '*'
+         UNION
+         SELECT A.ROW_INDEX,
+               2 AS COL_INDEX,
+               'RESOURCE_TYPE_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A
+               LEFT OUTER JOIN :RESOURCE_TYPE AS B
+               ON B.RESOURCE_TYPE_CODE LIKE A.RESOURCE_TYPE and B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+         WHERE B.RESOURCE_TYPE_CODE IS NULL AND A.RESOURCE_TYPE <> '*'
+         UNION 
+         SELECT B.ROW_INDEX,
+               2 AS COL_INDEX,
+               'RESOURCE_TYPE_UOM_INVALID' AS REASON_CODE FROM
+               ( SELECT 
+            		CASE WHEN RESOURCE_TYPE = '*' THEN '*'
+                    ELSE REPLACE(RESOURCE_TYPE, '%', '*')
+                    END AS RESOURCE_TYPE,UOM_CODE,ROW_INDEX
+                    FROM :ITEMS AS A) B
+         WHERE (B.RESOURCE_TYPE NOT LIKE '%*%' AND B.UOM_CODE NOT IN ('PCS', 'PCS*KM'))
+         UNION
+         SELECT A.ROW_INDEX,
+               3 AS COL_INDEX,
+               'CARRIER_ID_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A
+               LEFT OUTER JOIN "sap.tm.trp.db.costmodel::v_carrier" AS B
+               ON A.CARRIER_ID = B.ID
+         WHERE B.ID IS NULL AND A.CARRIER_ID <> '*'
+         UNION
+         SELECT A.ROW_INDEX,
+               4 AS COL_INDEX,
+               'UOM_CODE_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A
+               LEFT OUTER JOIN "sap.tm.trp.db.costmodel::v_uom" AS B
+               ON A.UOM_CODE = B.CODE and B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+         WHERE B.CODE IS NULL --AND A.UOM_CODE <> '*' UOM should not be * according to doc
+         UNION
+         SELECT A.ROW_INDEX,
+               5 AS COL_INDEX,
+               'COST_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A
+         WHERE  A.COST IS NULL ;
+        
+          
+        
+END;

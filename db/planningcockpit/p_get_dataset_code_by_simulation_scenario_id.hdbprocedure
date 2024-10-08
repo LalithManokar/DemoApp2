@@ -1,0 +1,28 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_dataset_code_by_simulation_scenario_id"(
+    IN SIM_PLAN_ID BIGINT,
+    IN SCENARIO_ID BIGINT,
+    OUT DATASET_CODE VARCHAR(50),
+    OUT MESSAGE VARCHAR(50)     
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    READS SQL DATA
+    AS
+BEGIN
+   DECLARE NETWORK_CODE VARCHAR(50);   
+  
+   CALL "sap.tm.trp.db.planningcockpit::p_get_networkcode_by_simulation_scenario_id"(:SIM_PLAN_ID,:SCENARIO_ID,NETWORK_CODE);
+
+   SELECT IFNULL(MAX(T2.CODE),'') INTO DATASET_CODE
+   FROM "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::t_network_model" T1
+   INNER JOIN "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::t_dataset" T2 ON (T1.DATASET_ID = T2.ID)
+   WHERE T1.CODE = :NETWORK_CODE;   
+   
+   MESSAGE := 'MSG_SUCCESS_STATUS';
+   
+   IF DATASET_CODE = '' THEN    
+      MESSAGE := 'MSG_OBJECT_NOT_EXIST';
+   END IF;   
+END;
+

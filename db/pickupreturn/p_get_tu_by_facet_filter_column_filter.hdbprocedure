@@ -1,0 +1,521 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_get_tu_by_facet_filter_column_filter" (
+    IN FUZZYSEARCH_TEXT VARCHAR(500),
+    IN LOC_RULE_ID BIGINT,
+    IN RESOURCE_CATEGORY VARCHAR(50),
+    IN COLUMN_FILTER VARCHAR(5000),
+    IN EXEC_STATUS_LIST_INPUT CLOB, --"sap.tm.trp.db.pickupreturn::tt_str_list",
+    IN EQUIP_TYPE_LIST_INPUT CLOB, --"sap.tm.trp.db.pickupreturn::tt_str_list",
+    IN SHIPPER_LIST_INPUT CLOB, --"sap.tm.trp.db.pickupreturn::tt_str_list",
+    IN CONSIGNEE_LIST_INPUT CLOB, --"sap.tm.trp.db.pickupreturn::tt_str_list",
+    IN SHIPPER_LOC_LIST_INPUT CLOB, --"sap.tm.trp.db.pickupreturn::tt_str_list",
+    IN CONSIGNEE_LOC_LIST_INPUT CLOB, --"sap.tm.trp.db.pickupreturn::tt_str_list",
+    IN POL_LIST_INPUT CLOB, --"sap.tm.trp.db.pickupreturn::tt_str_list",
+    IN POD_LIST_INPUT CLOB, --"sap.tm.trp.db.pickupreturn::tt_str_list",
+    IN CURRENT_LOC_LIST_INPUT CLOB, -- "sap.tm.trp.db.pickupreturn::tt_str_list",
+    OUT FILTERED_OUTPUT "sap.tm.trp.db.pickupreturn::v_location_rule_assignment_draft",
+    OUT TU_BOOKING_LIST "sap.tm.trp.db.pickupreturn::tt_tu_booking_list",
+    OUT EXEC_STATUS_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT EQUIP_TYPE_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT SHIPPER_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT CONSIGNEE_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT SHIPPER_LOC_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT CONSIGNEE_LOC_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT POL_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT POD_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list",
+    OUT CURRENT_LOC_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list"
+)
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+    EXEC_STATUS_LIST_CNT INTEGER;
+    EQUIP_TYPE_LIST_CNT INTEGER;
+    SHIPPER_LIST_CNT INTEGER;
+    CONSIGNEE_LIST_CNT INTEGER;
+    POL_LIST_CNT INTEGER;
+    POD_LIST_CNT INTEGER;
+    CURRENT_LOC_LIST_CNT INTEGER;
+    
+    EXEC_STATUS_LIST_INPUT_P TABLE(
+    "STR" VARCHAR(200)
+    );
+    
+    EQUIP_TYPE_LIST_INPUT_P TABLE(
+    "STR" VARCHAR(200)
+    );
+    
+    SHIPPER_LIST_INPUT_P TABLE(
+    "STR" VARCHAR(200)
+    );
+    
+    CONSIGNEE_LIST_INPUT_P TABLE(
+    "STR" VARCHAR(200)
+    );
+    
+    SHIPPER_LOC_LIST_INPUT_P TABLE(
+    "STR" VARCHAR(200)
+    );
+    
+    CONSIGNEE_LOC_LIST_INPUT_P TABLE(
+    "STR" VARCHAR(200)
+    );
+    
+    POL_LIST_INPUT_P TABLE(
+    "STR" VARCHAR(200)
+    );
+    
+    POD_LIST_INPUT_P TABLE(
+    "STR" VARCHAR(200)
+    );
+    
+    CURRENT_LOC_LIST_INPUT_P TABLE(
+    "STR" VARCHAR(200)
+    );
+    
+BEGIN
+
+    DECLARE USER_NAME VARCHAR(60);
+    DECLARE TOTAL_COUNT INTEGER;
+    
+    DECLARE RULE_TYPE INTEGER;
+    
+   CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:EXEC_STATUS_LIST_INPUT,',',EXEC_STATUS_LIST_INPUT_STRING);
+   EXEC_STATUS_LIST_INPUT_P = SELECT string as STR FROM :EXEC_STATUS_LIST_INPUT_STRING;
+   
+    CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:EQUIP_TYPE_LIST_INPUT,',',EQUIP_TYPE_LIST_INPUT_STRING);
+   EQUIP_TYPE_LIST_INPUT_P = SELECT string as STR FROM :EQUIP_TYPE_LIST_INPUT_STRING;
+
+   CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:SHIPPER_LIST_INPUT,',',SHIPPER_LIST_INPUT_STRING);
+   SHIPPER_LIST_INPUT_P = SELECT string as STR FROM :SHIPPER_LIST_INPUT_STRING;
+    
+   CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:CONSIGNEE_LIST_INPUT,',',CONSIGNEE_LIST_INPUT_STRING);
+   CONSIGNEE_LIST_INPUT_P = SELECT string as STR FROM :CONSIGNEE_LIST_INPUT_STRING;
+
+   CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:SHIPPER_LOC_LIST_INPUT,',',SHIPPER_LOC_LIST_INPUT_STRING);
+   SHIPPER_LOC_LIST_INPUT_P = SELECT string as STR FROM :SHIPPER_LOC_LIST_INPUT_STRING;
+
+   CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:CONSIGNEE_LOC_LIST_INPUT,',',CONSIGNEE_LOC_LIST_INPUT_STRING);
+   CONSIGNEE_LOC_LIST_INPUT_P = SELECT string as STR FROM :CONSIGNEE_LOC_LIST_INPUT_STRING;
+    
+   CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:POL_LIST_INPUT,',',POL_LIST_INPUT_STRING);
+   POL_LIST_INPUT_P = SELECT string as STR FROM :POL_LIST_INPUT_STRING;
+
+   CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:POD_LIST_INPUT,',',POD_LIST_INPUT_STRING);
+   POD_LIST_INPUT_P = SELECT string as STR FROM :POD_LIST_INPUT_STRING;
+
+   CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:CURRENT_LOC_LIST_INPUT,',',CURRENT_LOC_LIST_INPUT_STRING);
+   CURRENT_LOC_LIST_INPUT_P = SELECT string as STR FROM :CURRENT_LOC_LIST_INPUT_STRING; 
+    
+    SELECT IFNULL(MAX(RULE_TYPE),0) INTO RULE_TYPE
+    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID = :LOC_RULE_ID;
+   
+    SELECT IFNULL (MAX (USERNAME),'') INTO USER_NAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+    
+    CALL "sap.tm.trp.db.pickupreturn::p_ext_get_tu_for_location_assignment" ( 
+      :LOC_RULE_ID,
+      :RESOURCE_CATEGORY,
+      :COLUMN_FILTER,
+      TU_INFO
+    );
+    
+    --GET TUS INFO BY FILTER
+    TU_LOC_ASSIGNMENT_DATA = SELECT *
+                             FROM :TU_INFO
+                             WHERE (LOWER(STATUS) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                    OR LOWER(CONSIGNEE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                    OR LOWER(SHIPPER) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'  
+                                    OR LOWER(RESOURCE_TYPE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'                                                                      
+                                    OR LOWER(DESTINATION_LOCATION) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                    OR LOWER(SOURCE_LOCATION) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                    OR LOWER(POL_NAME) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                    OR LOWER(POD_NAME) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                    OR LOWER(ORIGINAL_PICKUP_LOCATION) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                    OR LOWER(ORIGINAL_RETURN_LOCATION) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                    OR LOWER(BOOKING_REFERENCE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                   );
+                                   
+    SELECT COUNT(*) INTO EXEC_STATUS_LIST_CNT FROM :EXEC_STATUS_LIST_INPUT_P;
+    SELECT COUNT(*) INTO EQUIP_TYPE_LIST_CNT FROM :EQUIP_TYPE_LIST_INPUT_P;
+    SELECT COUNT(*) INTO SHIPPER_LIST_CNT FROM :SHIPPER_LIST_INPUT_P;
+    SELECT COUNT(*) INTO CONSIGNEE_LIST_CNT FROM :CONSIGNEE_LIST_INPUT_P;
+    SELECT COUNT(*) INTO POL_LIST_CNT FROM :POL_LIST_INPUT_P;
+    SELECT COUNT(*) INTO POD_LIST_CNT FROM :POD_LIST_INPUT_P;
+    SELECT COUNT(*) INTO CURRENT_LOC_LIST_CNT FROM :CURRENT_LOC_LIST_INPUT_P;
+
+    IF EXEC_STATUS_LIST_CNT = 0
+        THEN EXEC_STATUS_LIST_INPUT_P = SELECT DISTINCT STATUS AS STR FROM :TU_LOC_ASSIGNMENT_DATA;
+    END IF;
+    IF EQUIP_TYPE_LIST_CNT = 0
+        THEN EQUIP_TYPE_LIST_INPUT_P = SELECT DISTINCT RESOURCE_TYPE AS STR FROM :TU_LOC_ASSIGNMENT_DATA;
+    END IF;
+    IF SHIPPER_LIST_CNT = 0
+        THEN SHIPPER_LIST_INPUT_P = SELECT DISTINCT SHIPPER AS STR FROM :TU_LOC_ASSIGNMENT_DATA;
+    END IF;
+    IF CONSIGNEE_LIST_CNT = 0
+        THEN CONSIGNEE_LIST_INPUT_P = SELECT DISTINCT CONSIGNEE AS STR FROM :TU_LOC_ASSIGNMENT_DATA;
+    END IF;
+    IF POL_LIST_CNT = 0
+        THEN POL_LIST_INPUT_P = SELECT DISTINCT POL_NAME AS STR FROM :TU_LOC_ASSIGNMENT_DATA;
+    END IF;
+    IF POD_LIST_CNT = 0
+        THEN POD_LIST_INPUT_P = SELECT DISTINCT POD_NAME AS STR FROM :TU_LOC_ASSIGNMENT_DATA;
+    END IF;
+    IF CURRENT_LOC_LIST_CNT = 0
+        THEN CURRENT_LOC_LIST_INPUT_P = SELECT DISTINCT IFNULL (ORIGINAL_PICKUP_LOCATION,ORIGINAL_RETURN_LOCATION) AS STR FROM :TU_LOC_ASSIGNMENT_DATA;
+    END IF;
+
+ /*   FILTERED_OUTPUT = SELECT DISTINCT MASTER_TBL.RULE_ID,
+							MASTER_TBL.RULE_TYPE,
+							MASTER_TBL.TRANSPORTATION_ID,
+							MASTER_TBL.TU_TYPE_CODE,
+							MASTER_TBL.TU_TYPE,
+							MASTER_TBL.EXECUTION_STATUS_CODE,
+							MASTER_TBL.STATUS,
+							MASTER_TBL.LIFECYCLE_CODE,
+							MASTER_TBL.LIFECYCLE_STATUS,
+							MASTER_TBL.SHIPPER_ID,
+							MASTER_TBL.SHIPPER,
+							MASTER_TBL.CONSIGNEE_ID,
+							MASTER_TBL.CONSIGNEE,
+							MASTER_TBL.RESOURCE_TYPE,
+							MASTER_TBL.QUANTITY,
+							MASTER_TBL.ASSIGNED_CONTAINERS,
+							MASTER_TBL.RESOURCE_NUMBER,
+							MASTER_TBL.SOURCE_LOCATION_ID,
+							MASTER_TBL.SOURCE_LOCATION,
+							MASTER_TBL.DESTINATION_LOCATION_ID,
+							MASTER_TBL.DESTINATION_LOCATION,
+							MASTER_TBL.POL,
+							MASTER_TBL.POL_NAME,
+							MASTER_TBL.POD,
+							MASTER_TBL.POD_NAME,
+							MASTER_TBL.RELEVANT_PLANNING,
+							MASTER_TBL.CUSTOMER_CODE,
+							MASTER_TBL.CUSTOMER_NAME,
+							MASTER_TBL.BOOKING_DATE,
+							MASTER_TBL.BOOKING_REFERENCE,
+							MASTER_TBL.ORIGINAL_PICKUP_DATE,
+							MASTER_TBL.ORIGINAL_PICKUP_LOCATION_ID,
+							MASTER_TBL.ORIGINAL_PICKUP_LOCATION,
+							MASTER_TBL.PICKUP_DATE,
+							MASTER_TBL.PICKUP_LOCATION_ID,
+							MASTER_TBL.PICKUP_LOCATION,
+							MASTER_TBL.ORIGINAL_RETURN_DATE,
+							MASTER_TBL.ORIGINAL_RETURN_LOCATION_ID,
+							MASTER_TBL.ORIGINAL_RETURN_LOCATION,
+							MASTER_TBL.RETURN_DATE,
+							MASTER_TBL.RETURN_LOCATION_ID,
+							MASTER_TBL.RETURN_LOCATION,
+							MASTER_TBL.ASSIGN_STATUS,
+							MASTER_TBL.FLAG,
+							MASTER_TBL.ITE_KEY,
+							:USER_NAME AS USER,
+                            MASTER_TBL.MOT,
+                            MASTER_TBL.MEANS_OF_TRANSPORTATION,
+                            MASTER_TBL.CARRIER_POL,
+                            MASTER_TBL.CARRIER_POD,
+                            MASTER_TBL.VOYAGE_POL,
+                            MASTER_TBL.VOYAGE_POD,
+                            MASTER_TBL.SPECIAL_INSTRUCTION_CODE,
+                            MASTER_TBL.SPECIAL_INSTRUCTION_NAME,
+                            MASTER_TBL.LAST_LOCATION_ID,
+                            MASTER_TBL.LAST_LOCATION_NAME,
+                            MASTER_TBL.LEASE_AGREEMENT,
+                            MASTER_TBL.LEASE_TYPE_CODE,
+                            MASTER_TBL.LEASE_TYPE,
+                            MASTER_TBL.LEASE_CONTRACT_TYPE,
+                            MASTER_TBL.ASSIGNED_RESOURCE,
+                            MASTER_TBL.VESSEL_CUTOFF_TIME,
+                            MASTER_TBL.VESSEL_ARRIVAL_DATE,
+                            MASTER_TBL.VESSEL_POL,
+                            MASTER_TBL.VESSEL_POD,
+                            MASTER_TBL.STREETTURN_TU_ID,
+                            MASTER_TBL.PLAN_STATUS                            
+				        FROM :TU_LOC_ASSIGNMENT_DATA AS MASTER_TBL
+				        INNER JOIN :EXEC_STATUS_LIST_INPUT_P AS EXEC_STATUS_TBL
+				        ON IFNULL(MASTER_TBL.STATUS, '') = IFNULL(EXEC_STATUS_TBL.STR, '')
+				        INNER JOIN :EQUIP_TYPE_LIST_INPUT_P AS EQUIP_TYPE_TBL
+				        ON IFNULL(MASTER_TBL.RESOURCE_TYPE, '') = IFNULL(EQUIP_TYPE_TBL.STR, '')
+				        INNER JOIN :SHIPPER_LIST_INPUT_P AS SHIPPER_TBL
+				        ON IFNULL(MASTER_TBL.SHIPPER, '') = IFNULL(SHIPPER_TBL.STR, '')
+				        INNER JOIN :CONSIGNEE_LIST_INPUT_P AS CONSIGNEE_TBL
+				        ON IFNULL(MASTER_TBL.CONSIGNEE, '') = IFNULL(CONSIGNEE_TBL.STR, '')
+				        INNER JOIN :POL_LIST_INPUT_P AS POL_TBL
+				        ON IFNULL(MASTER_TBL.POL_NAME, '') = IFNULL(POL_TBL.STR, '')
+				        INNER JOIN :POD_LIST_INPUT_P AS POD_TBL
+				        ON IFNULL(MASTER_TBL.POD_NAME, '') = IFNULL(POD_TBL.STR, '')
+				        INNER JOIN :CURRENT_LOC_LIST_INPUT_P AS CURRENT_LOC_TBL
+				        ON (IFNULL(MASTER_TBL.ORIGINAL_RETURN_LOCATION,'') = IFNULL(CURRENT_LOC_TBL.STR,'') OR
+				            IFNULL(MASTER_TBL.ORIGINAL_PICKUP_LOCATION,'') = IFNULL(CURRENT_LOC_TBL.STR,'')
+				        );	*/
+				        
+	FILTERED_OUTPUT1 = SELECT DISTINCT MASTER_TBL.RULE_ID,
+							MASTER_TBL.RULE_TYPE,
+							MASTER_TBL.TRANSPORTATION_ID,
+							MASTER_TBL.TU_TYPE_CODE,
+							MASTER_TBL.TU_TYPE,
+							MASTER_TBL.EXECUTION_STATUS_CODE,
+							MASTER_TBL.STATUS,
+							MASTER_TBL.LIFECYCLE_CODE,
+							MASTER_TBL.LIFECYCLE_STATUS,
+							MASTER_TBL.SHIPPER_ID,
+							MASTER_TBL.SHIPPER,
+							MASTER_TBL.CONSIGNEE_ID,
+							MASTER_TBL.CONSIGNEE,
+							MASTER_TBL.RESOURCE_TYPE,
+							MASTER_TBL.QUANTITY,
+							MASTER_TBL.ASSIGNED_CONTAINERS,
+							MASTER_TBL.RESOURCE_NUMBER,
+							MASTER_TBL.SOURCE_LOCATION_ID,
+							MASTER_TBL.SOURCE_LOCATION,
+							MASTER_TBL.DESTINATION_LOCATION_ID,
+							MASTER_TBL.DESTINATION_LOCATION,
+							MASTER_TBL.POL,
+							MASTER_TBL.POL_NAME,
+							MASTER_TBL.POD,
+							MASTER_TBL.POD_NAME,
+							MASTER_TBL.RELEVANT_PLANNING,
+							MASTER_TBL.CUSTOMER_CODE,
+							MASTER_TBL.CUSTOMER_NAME,
+							MASTER_TBL.BOOKING_DATE,
+							MASTER_TBL.BOOKING_REFERENCE,
+							MASTER_TBL.ORIGINAL_PICKUP_DATE,
+							MASTER_TBL.ORIGINAL_PICKUP_LOCATION_ID,
+							MASTER_TBL.ORIGINAL_PICKUP_LOCATION,
+							MASTER_TBL.PICKUP_DATE,
+							MASTER_TBL.PICKUP_LOCATION_ID,
+							MASTER_TBL.PICKUP_LOCATION,
+							MASTER_TBL.ORIGINAL_RETURN_DATE,
+							MASTER_TBL.ORIGINAL_RETURN_LOCATION_ID,
+							MASTER_TBL.ORIGINAL_RETURN_LOCATION,
+							MASTER_TBL.RETURN_DATE,
+							MASTER_TBL.RETURN_LOCATION_ID,
+							MASTER_TBL.RETURN_LOCATION,
+							MASTER_TBL.ASSIGN_STATUS,
+							MASTER_TBL.FLAG,
+							MASTER_TBL.ITE_KEY,
+							:USER_NAME AS USER,
+                            MASTER_TBL.MOT,
+                            MASTER_TBL.MEANS_OF_TRANSPORTATION,
+                            MASTER_TBL.CARRIER_POL,
+                            MASTER_TBL.CARRIER_POD,
+                            MASTER_TBL.VOYAGE_POL,
+                            MASTER_TBL.VOYAGE_POD,
+                            MASTER_TBL.SPECIAL_INSTRUCTION_CODE,
+                            MASTER_TBL.SPECIAL_INSTRUCTION_NAME,
+                            MASTER_TBL.LAST_LOCATION_ID,
+                            MASTER_TBL.LAST_LOCATION_NAME,
+                            MASTER_TBL.LEASE_AGREEMENT,
+                            MASTER_TBL.LEASE_TYPE_CODE,
+                            MASTER_TBL.LEASE_TYPE,
+                            MASTER_TBL.LEASE_CONTRACT_TYPE,
+                            MASTER_TBL.ASSIGNED_RESOURCE,
+                            MASTER_TBL.VESSEL_CUTOFF_TIME,
+                            MASTER_TBL.VESSEL_ARRIVAL_DATE,
+                            MASTER_TBL.VESSEL_POL,
+                            MASTER_TBL.VESSEL_POD,
+                            MASTER_TBL.STREETTURN_TU_ID,
+                            MASTER_TBL.PLAN_STATUS                            
+				        FROM :TU_LOC_ASSIGNMENT_DATA AS MASTER_TBL
+				        INNER JOIN :EXEC_STATUS_LIST_INPUT_P AS EXEC_STATUS_TBL
+				        ON IFNULL(MASTER_TBL.STATUS, '') = IFNULL(EXEC_STATUS_TBL.STR, '')
+				        INNER JOIN :EQUIP_TYPE_LIST_INPUT_P AS EQUIP_TYPE_TBL
+				        ON IFNULL(MASTER_TBL.RESOURCE_TYPE, '') = IFNULL(EQUIP_TYPE_TBL.STR, '')
+				        INNER JOIN :SHIPPER_LIST_INPUT_P AS SHIPPER_TBL
+				        ON IFNULL(MASTER_TBL.SHIPPER, '') = IFNULL(SHIPPER_TBL.STR, '')
+				        INNER JOIN :CONSIGNEE_LIST_INPUT_P AS CONSIGNEE_TBL
+				        ON IFNULL(MASTER_TBL.CONSIGNEE, '') = IFNULL(CONSIGNEE_TBL.STR, '')
+				        INNER JOIN :POL_LIST_INPUT_P AS POL_TBL
+				        ON IFNULL(MASTER_TBL.POL_NAME, '') = IFNULL(POL_TBL.STR, '')
+				        INNER JOIN :POD_LIST_INPUT_P AS POD_TBL
+				        ON IFNULL(MASTER_TBL.POD_NAME, '') = IFNULL(POD_TBL.STR, '');
+						
+FILTERED_OUTPUT = SELECT DISTINCT TEMP.RULE_ID,
+							TEMP.RULE_TYPE,
+							TEMP.TRANSPORTATION_ID,
+							TEMP.TU_TYPE_CODE,
+							TEMP.TU_TYPE,
+							TEMP.EXECUTION_STATUS_CODE,
+							TEMP.STATUS,
+							TEMP.LIFECYCLE_CODE,
+							TEMP.LIFECYCLE_STATUS,
+							TEMP.SHIPPER_ID,
+							TEMP.SHIPPER,
+							TEMP.CONSIGNEE_ID,
+							TEMP.CONSIGNEE,
+							TEMP.RESOURCE_TYPE,
+							TEMP.QUANTITY,
+							TEMP.ASSIGNED_CONTAINERS,
+							TEMP.RESOURCE_NUMBER,
+							TEMP.SOURCE_LOCATION_ID,
+							TEMP.SOURCE_LOCATION,
+							TEMP.DESTINATION_LOCATION_ID,
+							TEMP.DESTINATION_LOCATION,
+							TEMP.POL,
+							TEMP.POL_NAME,
+							TEMP.POD,
+							TEMP.POD_NAME,
+							TEMP.RELEVANT_PLANNING,
+							TEMP.CUSTOMER_CODE,
+							TEMP.CUSTOMER_NAME,
+							TEMP.BOOKING_DATE,
+							TEMP.BOOKING_REFERENCE,
+							TEMP.ORIGINAL_PICKUP_DATE,
+							TEMP.ORIGINAL_PICKUP_LOCATION_ID,
+							TEMP.ORIGINAL_PICKUP_LOCATION,
+							TEMP.PICKUP_DATE,
+							TEMP.PICKUP_LOCATION_ID,
+							TEMP.PICKUP_LOCATION,
+							TEMP.ORIGINAL_RETURN_DATE,
+							TEMP.ORIGINAL_RETURN_LOCATION_ID,
+							TEMP.ORIGINAL_RETURN_LOCATION,
+							TEMP.RETURN_DATE,
+							TEMP.RETURN_LOCATION_ID,
+							TEMP.RETURN_LOCATION,
+							TEMP.ASSIGN_STATUS,
+							TEMP.FLAG,
+							TEMP.ITE_KEY,
+							:USER_NAME AS USER,
+                            TEMP.MOT,
+                            TEMP.MEANS_OF_TRANSPORTATION,
+                            TEMP.CARRIER_POL,
+                            TEMP.CARRIER_POD,
+                            TEMP.VOYAGE_POL,
+                            TEMP.VOYAGE_POD,
+                            TEMP.SPECIAL_INSTRUCTION_CODE,
+                            TEMP.SPECIAL_INSTRUCTION_NAME,
+                            TEMP.LAST_LOCATION_ID,
+                            TEMP.LAST_LOCATION_NAME,
+                            TEMP.LEASE_AGREEMENT,
+                            TEMP.LEASE_TYPE_CODE,
+                            TEMP.LEASE_TYPE,
+                            TEMP.LEASE_CONTRACT_TYPE,
+                            TEMP.ASSIGNED_RESOURCE,
+                            TEMP.VESSEL_CUTOFF_TIME,
+                            TEMP.VESSEL_ARRIVAL_DATE,
+                            TEMP.VESSEL_POL,
+                            TEMP.VESSEL_POD,
+                            TEMP.STREETTURN_TU_ID,
+                            TEMP.PLAN_STATUS FROM :FILTERED_OUTPUT1 AS TEMP
+								INNER JOIN :CURRENT_LOC_LIST_INPUT_P AS CURRENT_LOC_TBL
+								ON IFNULL(TEMP.ORIGINAL_RETURN_LOCATION,'') = IFNULL(CURRENT_LOC_TBL.STR,'')
+						   UNION
+					SELECT DISTINCT TEMP.RULE_ID,
+							TEMP.RULE_TYPE,
+							TEMP.TRANSPORTATION_ID,
+							TEMP.TU_TYPE_CODE,
+							TEMP.TU_TYPE,
+							TEMP.EXECUTION_STATUS_CODE,
+							TEMP.STATUS,
+							TEMP.LIFECYCLE_CODE,
+							TEMP.LIFECYCLE_STATUS,
+							TEMP.SHIPPER_ID,
+							TEMP.SHIPPER,
+							TEMP.CONSIGNEE_ID,
+							TEMP.CONSIGNEE,
+							TEMP.RESOURCE_TYPE,
+							TEMP.QUANTITY,
+							TEMP.ASSIGNED_CONTAINERS,
+							TEMP.RESOURCE_NUMBER,
+							TEMP.SOURCE_LOCATION_ID,
+							TEMP.SOURCE_LOCATION,
+							TEMP.DESTINATION_LOCATION_ID,
+							TEMP.DESTINATION_LOCATION,
+							TEMP.POL,
+							TEMP.POL_NAME,
+							TEMP.POD,
+							TEMP.POD_NAME,
+							TEMP.RELEVANT_PLANNING,
+							TEMP.CUSTOMER_CODE,
+							TEMP.CUSTOMER_NAME,
+							TEMP.BOOKING_DATE,
+							TEMP.BOOKING_REFERENCE,
+							TEMP.ORIGINAL_PICKUP_DATE,
+							TEMP.ORIGINAL_PICKUP_LOCATION_ID,
+							TEMP.ORIGINAL_PICKUP_LOCATION,
+							TEMP.PICKUP_DATE,
+							TEMP.PICKUP_LOCATION_ID,
+							TEMP.PICKUP_LOCATION,
+							TEMP.ORIGINAL_RETURN_DATE,
+							TEMP.ORIGINAL_RETURN_LOCATION_ID,
+							TEMP.ORIGINAL_RETURN_LOCATION,
+							TEMP.RETURN_DATE,
+							TEMP.RETURN_LOCATION_ID,
+							TEMP.RETURN_LOCATION,
+							TEMP.ASSIGN_STATUS,
+							TEMP.FLAG,
+							TEMP.ITE_KEY,
+							:USER_NAME AS USER,
+                            TEMP.MOT,
+                            TEMP.MEANS_OF_TRANSPORTATION,
+                            TEMP.CARRIER_POL,
+                            TEMP.CARRIER_POD,
+                            TEMP.VOYAGE_POL,
+                            TEMP.VOYAGE_POD,
+                            TEMP.SPECIAL_INSTRUCTION_CODE,
+                            TEMP.SPECIAL_INSTRUCTION_NAME,
+                            TEMP.LAST_LOCATION_ID,
+                            TEMP.LAST_LOCATION_NAME,
+                            TEMP.LEASE_AGREEMENT,
+                            TEMP.LEASE_TYPE_CODE,
+                            TEMP.LEASE_TYPE,
+                            TEMP.LEASE_CONTRACT_TYPE,
+                            TEMP.ASSIGNED_RESOURCE,
+                            TEMP.VESSEL_CUTOFF_TIME,
+                            TEMP.VESSEL_ARRIVAL_DATE,
+                            TEMP.VESSEL_POL,
+                            TEMP.VESSEL_POD,
+                            TEMP.STREETTURN_TU_ID,
+                            TEMP.PLAN_STATUS FROM :FILTERED_OUTPUT1 AS TEMP
+								INNER JOIN :CURRENT_LOC_LIST_INPUT_P AS CURRENT_LOC_TBL
+								ON IFNULL(TEMP.ORIGINAL_PICKUP_LOCATION,'') = IFNULL(CURRENT_LOC_TBL.STR,'');					
+				        
+	TU_BOOKING_LIST = SELECT TRANSPORTATION_ID AS TU_ID,
+							BOOKING_REFERENCE
+						FROM :FILTERED_OUTPUT;						
+						
+--------------------------Changes for facet filter--------------------------------
+     EXEC_STATUS_LIST_OUTPUT = SELECT DISTINCT STATUS AS KEY,
+                                     STATUS AS TEXT
+                              FROM :FILTERED_OUTPUT ORDER BY KEY;
+                              
+    EQUIP_TYPE_LIST_OUTPUT = SELECT DISTINCT RESOURCE_TYPE AS KEY,
+                                    RESOURCE_TYPE AS TEXT
+                             FROM :FILTERED_OUTPUT ORDER BY KEY;
+                             
+    SHIPPER_LIST_OUTPUT = SELECT DISTINCT SHIPPER AS KEY, 
+                                 SHIPPER AS TEXT 
+                          FROM :FILTERED_OUTPUT ORDER BY KEY;
+                          
+    CONSIGNEE_LIST_OUTPUT = SELECT DISTINCT CONSIGNEE AS KEY, 
+                                   CONSIGNEE AS TEXT 
+                            FROM :FILTERED_OUTPUT ORDER BY KEY;
+                            
+    SHIPPER_LOC_LIST_OUTPUT = SELECT DISTINCT DESTINATION_LOCATION AS KEY,
+                                     DESTINATION_LOCATION AS TEXT
+                              FROM :FILTERED_OUTPUT ORDER BY KEY;
+                              
+    CONSIGNEE_LOC_LIST_OUTPUT = SELECT DISTINCT SOURCE_LOCATION AS KEY,
+                                       SOURCE_LOCATION AS TEXT
+                                FROM :FILTERED_OUTPUT ORDER BY KEY;
+                                
+    POL_LIST_OUTPUT = SELECT DISTINCT POL_NAME AS KEY,
+                             POL_NAME AS TEXT
+                      FROM :FILTERED_OUTPUT ORDER BY KEY;
+                      
+    POD_LIST_OUTPUT = SELECT DISTINCT POD_NAME AS KEY,
+                             POD_NAME AS TEXT
+                      FROM :FILTERED_OUTPUT ORDER BY KEY;
+    
+    IF       :RULE_TYPE = 1 THEN                  
+                  CURRENT_LOC_LIST_OUTPUT = SELECT DISTINCT ORIGINAL_PICKUP_LOCATION AS KEY,
+                                                   ORIGINAL_PICKUP_LOCATION AS TEXT
+                                            FROM :FILTERED_OUTPUT ORDER BY KEY;
+    ELSE
+              CURRENT_LOC_LIST_OUTPUT = SELECT DISTINCT ORIGINAL_RETURN_LOCATION AS KEY,
+                                                   ORIGINAL_RETURN_LOCATION AS TEXT
+                                            FROM :FILTERED_OUTPUT ORDER BY KEY;
+    END IF;
+  
+END;

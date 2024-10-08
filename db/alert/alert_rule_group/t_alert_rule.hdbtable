@@ -1,0 +1,17 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "ALERT_RULE_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "NAME"; sqlType = VARCHAR; length = 50;},
+    {name = "DESC"; sqlType = VARCHAR; length = 200;},
+    {name = "ALERT_RULE_TYPE_ID"; sqlType = INTEGER; comment="1:STOCK_TODAY, 2:STOCK_TIME_WINDOW, 3:TOR_SUPPLY/FORECAST_SUPPLY, 4:TOR_DEMAND/FORECAST_DEMAND, 5:TOR_SUPPLY_DEMAND/FORECAST_SUPPLY_DEMAND";},
+    {name = "ALERT_RULE_TYPE_DESC"; sqlType = VARCHAR; length = 50; comment="1:STOCK_TODAY, 2:STOCK_TIME_WINDOW, 3:TOR_SUPPLY/FORECAST_SUPPLY, 4:TOR_DEMAND/FORECAST_DEMAND, 5:TOR_SUPPLY_DEMAND/FORECAST_SUPPLY_DEMAND";},
+    {name = "SP"; sqlType = VARCHAR; length = 200;},
+    {name = "SP_PARAM"; sqlType = VARCHAR; length = 200;},
+    {name = "CREATE_BY"; sqlType = BIGINT;},
+    {name = "CREATE_ON"; sqlType = TIMESTAMP;},
+    {name = "LAST_MODIFIED_BY"; sqlType = BIGINT;},
+    {name = "LAST_MODIFIED_ON"; sqlType = TIMESTAMP;},
+    {name = "CODE";sqlType = NVARCHAR; length = 20;unique = true;}
+    ];
+table.primaryKey.pkcolumns = ["ALERT_RULE_ID"];

@@ -1,0 +1,9 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "VIRTUAL_PLAN_MODEL_ID"; sqlType = BIGINT;},
+    {name = "PERSISTED_PLAN_MODEL_ID"; sqlType = BIGINT;},
+    {name = "EXECUTION_ID"; sqlType = BIGINT;},
+    {name = "EXECUTION_ON"; sqlType = BIGINT;}
+];
+table.primaryKey.pkcolumns = ["VIRTUAL_PLAN_MODEL_ID","PERSISTED_PLAN_MODEL_ID", "EXECUTION_ON"];

@@ -1,0 +1,9 @@
+schema="SAP_TM_TRP";
+query= "SELECT T1.CODE,T1.NOTATION,IFNULL(T2.DESC,T1.DESC) AS DESC
+    FROM \"sap.tm.trp.db.systemmanagement.user::t_weight_unit\" AS T1
+    LEFT OUTER JOIN  \"sap.tm.trp.db.systemmanagement.user::t_weight_unit_t\" AS T2
+    ON T1.CODE = T2.WEIGHT_UNIT_CODE
+    "; 
+
+ depends_on = ["sap.tm.trp.db.systemmanagement.user::t_weight_unit",
+ 				"sap.tm.trp.db.systemmanagement.user::t_weight_unit_t"];

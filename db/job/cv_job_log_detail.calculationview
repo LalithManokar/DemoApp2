@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_job_log_detail" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_job_log_detail"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/> 
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="JOB_TYPE" length="500"/>
+        <viewAttribute datatype="BIGINT" id="SCHEDULE_ID"/>
+        <viewAttribute datatype="BIGINT" id="MODEL_ID"/>
+        <viewAttribute datatype="VARCHAR" id="MODEL_NAME" length="200"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_TIME"/>
+        <viewAttribute datatype="VARCHAR" id="STATUS" length="16"/>
+        <viewAttribute datatype="NVARCHAR" id="COMMENT" length="2048"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition>BEGIN 
+        job_log = SELECT 
+               A.SCHEDULE_TYPE ,
+               A.SCHEDULE_ID,
+               A.MODEL_ID,
+               B.STARTED_AT as START_TIME,
+               B.FINISHED_AT as END_TIME,
+               CASE WHEN B.STATUS = NULL
+               then 'UNKNOWN'
+               else
+               B.STATUS
+               end as STATUS,
+               B.ERROR_MESSAGE as COMMENT
+        FROM &quot;sap.tm.trp.db.job::t_job_schedule&quot; A 
+        INNER JOIN &quot;_SYS_XS&quot;.&quot;JOB_LOG&quot; B 
+        ON A.SCHEDULE_ID = B.ID;
+        
+        var_out_plan = select A.*,B.NAME as MODEL_NAME from :job_log A inner join &quot;sap.tm.trp.db.pipeline::t_plan_model&quot; B
+                         on (A.MODEL_ID = B.ID and A.SCHEDULE_TYPE = 'PLAN');
+                  
+        var_out_archive = select A.*,B.RULE_NAME as MODEL_NAME from :job_log A inner join &quot;sap.tm.trp.db.archive::t_archive_rule&quot; B
+                            on (A.MODEL_ID = B.ID and A.SCHEDULE_TYPE = 'ARCHIVE');
+                            
+        var_out_rulegroup = select A.*,B.NAME as MODEL_NAME from :job_log A inner join &quot;sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group&quot; B
+                          on (A.MODEL_ID = B.ID);
+                         
+        var_out_consistency = select 'CONSISTENCY CHECK' AS JOB_TYPE, A.ID AS SCHEDULE_ID ,NULL AS MODEL_ID, '' AS MODEL_NAME, A.STARTED_AT AS START_TIME, A.FINISHED_AT AS END_TIME, 
+                              A.STATUS, A.ERROR_MESSAGE AS COMMENT from  &quot;_SYS_XS&quot;.&quot;JOB_LOG&quot; A where name like '%consistencycheck%';
+                            
+        var_out_pre = select A.* from :var_out_plan A 
+                  union
+                  select C.* from :var_out_archive C 
+                  union
+                  select D.* from :var_out_rulegroup D;
+                  
+        var_out =   
+                    SELECT SCHEDULE_TYPE as JOB_TYPE,SCHEDULE_ID, MODEL_ID,MODEL_NAME,START_TIME,END_TIME,STATUS,COMMENT 
+                    FROM :var_out_pre 
+                    UNION 
+                    SELECT * from :var_out_consistency 
+                    
+                    order by START_TIME desc;
+       
+END /********* End Procedure Script ************/
+</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="JOB_TYPE" order="1">
+        <descriptions defaultDescription="JOB_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="JOB_TYPE"/>
+      </attribute>
+      <attribute id="MODEL_NAME" order="4">
+        <descriptions defaultDescription="MODEL_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="MODEL_NAME"/>
+      </attribute>
+      <attribute id="STATUS" order="7">
+        <descriptions defaultDescription="STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="STATUS"/>
+      </attribute>
+      <attribute id="COMMENT" order="8">
+        <descriptions defaultDescription="COMMENT"/>
+        <keyMapping columnObjectName="Script_View" columnName="COMMENT"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="SCHEDULE_ID" order="2" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="SCHEDULE_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="SCHEDULE_ID"/>
+      </measure>
+      <measure id="MODEL_ID" order="3" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MODEL_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="MODEL_ID"/>
+      </measure>
+      <measure id="START_TIME" order="5" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="START_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </measure>
+      <measure id="END_TIME" order="6" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="END_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="END_TIME"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

@@ -1,0 +1,90 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.streetturn.algorithm::p_streetturn" (
+    in t_bookings "sap.tm.trp.db.streetturn.algorithm::tt_booking",
+    in t_depots "sap.tm.trp.db.streetturn.algorithm::tt_depot",
+    in t_transportation_costs "sap.tm.trp.db.streetturn.algorithm::tt_transportation_cost",
+    in t_location_equip_map "sap.tm.trp.db.streetturn.algorithm::tt_location_equip_type",
+    out t_st_result "sap.tm.trp.db.streetturn.algorithm::tt_streetturn_result" ) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+    er_booking_num integer;
+    ep_booking_num integer;
+BEGIN
+
+    t_equip_info = SELECT DISTINCT "EQUIPMENT_ID" 
+				   FROM :t_depots;
+    t_aug_location_equip_map = SELECT * 
+							   FROM :t_location_equip_map 
+							   WHERE "EQUI_CODE"<>'x'
+							   UNION 
+							   SELECT DISTINCT t1."LOCID", 
+											   t2."EQUIPMENT_ID" AS "EQUI_CODE" 
+							   FROM :t_location_equip_map AS t1, 
+									:t_equip_info AS t2 
+							   WHERE t1."EQUI_CODE"='x';
+    
+    t_depots = SELECT t1.* 
+			   FROM :t_depots AS t1 
+			   INNER JOIN :t_aug_location_equip_map AS t2 
+			   ON t1."LOCATION_ID"=t2."LOCID" AND t1."EQUIPMENT_ID"=t2."EQUI_CODE";
+    
+    t_ep_booking = SELECT ROW_NUMBER() OVER (order by "LOCATION_ID") AS "NODE_ID",
+						  "EQUIPMENT_ID",
+						  "PLANNED_DATE",
+						  "LOCATION_ID",
+						  "BOOKING_ID", 
+						  1 AS "SUPPLY_DEMAND"
+						  FROM :t_bookings 
+						  WHERE "STATUS"='EP';
+    SELECT COUNT(*) INTO ep_booking_num FROM :t_ep_booking;
+    
+    t_er_booking = SELECT ROW_NUMBER() OVER (order by "LOCATION_ID") + :ep_booking_num AS "NODE_ID",
+						  "EQUIPMENT_ID",
+						  "PLANNED_DATE", 
+						  "LOCATION_ID",
+						  "BOOKING_ID", 
+						  'B' AS "INDEX", 
+						  -1 AS "SUPPLY_DEMAND" 
+				   FROM :t_bookings WHERE "STATUS"='ER';    
+    SELECT COUNT(*) INTO er_booking_num FROM :t_er_booking;
+                
+    t_depot = SELECT ROW_NUMBER() OVER (order by "LOCATION_ID") + :ep_booking_num + :er_booking_num AS "NODE_ID",
+					 "EQUIPMENT_ID",
+					 "PLANNED_DATE",
+					 "LOCATION_ID",
+					 '' AS "BOOKING_ID", 
+					 'D' AS "INDEX", 
+					 "STOCK"+"SUPPLY"-"DEMAND"-"MAX_STOCK" AS "SUPPLY_DEMAND" 
+			  FROM :t_depots 
+			  WHERE "STOCK"+"SUPPLY"-"DEMAND"-"MAX_STOCK"<0;
+    t_des = SELECT * FROM :t_er_booking UNION SELECT * FROM :t_depot;
+    
+    t_node = SELECT "NODE_ID",
+	                "SUPPLY_DEMAND" 
+			 FROM :t_ep_booking 
+			 UNION 
+			 SELECT "NODE_ID","SUPPLY_DEMAND" 
+			 FROM :t_des;
+    t_arc = SELECT t1."NODE_ID" AS "FROM_ID", 
+				   t2."NODE_ID" AS "TO_ID", 
+				   0 AS "LOWER",
+				   1 AS "CAPACITY", 
+				   t3."COST" 
+			FROM :t_ep_booking t1
+			INNER JOIN :t_des t2 ON t1."EQUIPMENT_ID"=t2."EQUIPMENT_ID"
+			AND ABS(days_between(TO_DATE(t1."PLANNED_DATE"), TO_DATE(t2."PLANNED_DATE"))) < 2
+			INNER JOIN :t_transportation_costs t3 ON t3."FROM_LOCATION"=t1."LOCATION_ID" 
+			AND t3."TO_LOCATION"=t2."LOCATION_ID" AND t1."EQUIPMENT_ID"=t3."CONTAINER_TYPE";
+    
+    CALL "_SYS_AFL"."OFL_AREA_NETWORK_SIMPLEX_SOLVE_PROC"(:t_node, :t_arc, t_ofl_res);
+    
+    t_st_result = SELECT t1."BOOKING_ID" AS "FROM_TU",
+	                     t2."BOOKING_ID" AS "TO_TU",
+						 t1."EQUIPMENT_ID", 
+						 t1."PLANNED_DATE"
+				  FROM :t_ofl_res t0
+				  INNER JOIN :t_ep_booking t1 ON t0."FROM_ID"=t1."NODE_ID"
+				  INNER JOIN :t_des t2 ON t0."TO_ID"=t2."NODE_ID"
+				  WHERE t2."INDEX"='B';
+END;

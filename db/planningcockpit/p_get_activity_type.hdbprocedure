@@ -1,0 +1,41 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_activity_type" (
+    IN ID  BIGINT,
+    OUT TYPE INT,
+    OUT MESSAGE VARCHAR(200)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+DECLARE V_COUNT INT;
+
+      SELECT COUNT(*) INTO V_COUNT FROM "sap.tm.trp.db.planningcockpit::v_activity_ui"
+       WHERE ID=:ID ;
+
+
+     IF   V_COUNT=0 THEN
+          MESSAGE := 'MSG_ERROR_NODATA';
+
+     ELSE
+
+
+
+      SELECT TOP 1 CASE WHEN ACTIVITY_TYPE = 1 or ACTIVITY_TYPE = 2 THEN 1
+                        WHEN ACTIVITY_TYPE = 3 or ACTIVITY_TYPE = 4 THEN 3
+                        WHEN ACTIVITY_TYPE = 5 or ACTIVITY_TYPE = 6 THEN 5
+                        WHEN ACTIVITY_TYPE = 7 or ACTIVITY_TYPE = 8 THEN 7
+                                                                 ELSE 9
+                           END
+                                INTO TYPE
+
+        FROM "sap.tm.trp.db.planningcockpit::v_activity_ui"
+       WHERE ID=:ID ;
+
+      MESSAGE := 'MSG_SUCCESS_STATUS';
+
+     END IF;
+
+
+END;

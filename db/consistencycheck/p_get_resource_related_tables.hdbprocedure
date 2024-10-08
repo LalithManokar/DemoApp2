@@ -1,0 +1,21 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.consistencycheck::p_get_resource_related_tables"(
+    OUT TABLE_COL_INFO "sap.tm.trp.db.consistencycheck::tt_table_column_info"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    TABLE_COL_INFO = SELECT COL.SCHEMA_NAME, COL.TABLE_NAME, COL.COLUMN_NAME 
+        FROM "TABLE_COLUMNS" AS COL 
+        INNER JOIN "TABLES" AS TBL 
+            ON COL.TABLE_NAME = TBL.TABLE_NAME AND TBL.IS_USER_DEFINED_TYPE = 'FALSE'
+        WHERE 
+            COL.SCHEMA_NAME='SAP_TM_TRP' AND COL.TABLE_NAME LIKE 'sap.tm.trp.db%' 
+            AND (
+                COL.COLUMN_NAME LIKE 'EQUIP%GUID' 
+                OR COL.COLUMN_NAME LIKE 'RES%ID' 
+            )
+            AND DATA_TYPE_NAME LIKE '%CHAR%' 
+        ORDER BY TABLE_NAME;
+END;

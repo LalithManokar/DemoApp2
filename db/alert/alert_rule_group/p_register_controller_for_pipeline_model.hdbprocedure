@@ -1,0 +1,25 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert.alert_rule_group::p_register_controller_for_pipeline_model" ( 
+IN PIPELINE_MODEL_ID BIGINT--,
+--OUT SUCCESS_FLAG INTEGER 
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+DECLARE PIPELINE_MODEL_EXISTING INTEGER;
+DECLARE DEFAULT_ALERT_RULE_GROUP_ID BIGINT;
+DECLARE SUCESS_FLAG01 INTEGER;
+    DEFAULT_ALERT_RULE_GROUP_ID := '1';
+
+    select COUNT(T1.ID) into PIPELINE_MODEL_EXISTING 
+    from "sap.tm.trp.db.pipeline::t_pipeline_model" T1
+    where T1.ID = :PIPELINE_MODEL_ID;
+    
+    IF ( :PIPELINE_MODEL_EXISTING > 0)
+    THEN
+        TAB_PIPELINE_MODEL = SELECT DISTINCT ID FROM "sap.tm.trp.db.pipeline::t_pipeline_model" where ID = :PIPELINE_MODEL_ID ;
+        call "sap.tm.trp.db.alert.alert_rule_group::p_register_pipeline_model_available_alertRuleGroup" (:DEFAULT_ALERT_RULE_GROUP_ID,:TAB_PIPELINE_MODEL,:SUCESS_FLAG01);
+        call "sap.tm.trp.db.alert.alert_rule_group::p_register_pipeline_node_output_dataObject"(:PIPELINE_MODEL_ID);
+    END IF; 
+END;

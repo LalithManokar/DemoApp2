@@ -1,0 +1,11 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_geo_group_items_check"(
+    IN ITEMS "sap.tm.trp.db.pipeline::tt_geo_id",
+    OUT ERR_NUM INTEGER
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    SELECT COUNT(*) INTO ERR_NUM FROM :ITEMS;
+END;

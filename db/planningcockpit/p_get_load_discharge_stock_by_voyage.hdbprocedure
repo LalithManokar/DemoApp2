@@ -1,0 +1,118 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_load_discharge_stock_by_voyage" (
+  IN RESOURCE_TYPE VARCHAR(20),
+  IN RESOURCE_CATEGORY VARCHAR(20),
+  IN TRIP_ID "sap.tm.trp.db.planningcockpit::tt_trip_id",  
+  OUT ld_stock "sap.tm.trp.db.planningcockpit::tt_trip_location_load_discharge"
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP  
+  	READS SQL DATA 
+AS
+BEGIN
+   -- get all the departure locations for the given voyage
+   locs_stops = SELECT t0.TRIP_ID, t2.SCHEDULE, t1.VOYAGE, t3.LOC_SEQ, t3.LOCATION_ID, t3.LOCATION_NAME,                        
+                       CASE WHEN t3.ARRIVAL_UTC IS NULL THEN t3.DEPARTURE_UTC ELSE t3.ARRIVAL_UTC END AS ARRIVAL_UTC,
+                       CASE WHEN t3.DEPARTURE_UTC IS NULL THEN t3.ARRIVAL_UTC ELSE t3.DEPARTURE_UTC END AS DEPARTURE_UTC,
+                       t3.VESSEL, t4.DB_KEY AS STOP_KEY 
+		        FROM :TRIP_ID t0 
+		        INNER JOIN "sap.tm.trp.db.semantic.schedule::v_departure" t1 ON (t1.DB_KEY = t0.TRIP_ID)
+		        INNER JOIN "sap.tm.trp.db.semantic.schedule::v_schedule" t2 ON (t2.DB_KEY = t1.PARENT_KEY)
+		        INNER JOIN "sap.tm.trp.db.semantic.schedule::v_departure_location" t3 ON (t3.PARENT_KEY = t1.DB_KEY)
+		        INNER JOIN "sap.tm.trp.db.semantic.order::v_freight_order_stop" t4 ON (t4.SCHED_STOP_KEY = t3.DB_KEY);
+		        
+   -- get all the items whose source stops are the above calculated stops
+   -- these items are considered to load at the stops 
+   loads =      SELECT SCHEDULE, VOYAGE, LOC_SEQ, LOCATION_ID, SUM(QUANTITY) AS QUANTITY FROM
+                (
+                SELECT t1.*, t2.RESOURCE_TYPE, t2.QUA_PCS_VAL AS QUANTITY 
+                FROM :locs_stops t1
+                INNER JOIN "sap.tm.trp.db.semantic.order::v_freight_order_item" t2 ON (t2.FROM_STOP_KEY = t1.STOP_KEY AND t2.ITEM_CAT = 'TUR') 
+                INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t6  ON (t2.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :RESOURCE_CATEGORY)
+                INNER JOIN "sap.tm.trp.db.semantic.order::v_freight_order" t4 ON (t4.DB_KEY = t2.FREIGHT_ORDER_KEY)
+                WHERE t2.RESOURCE_TYPE = :RESOURCE_TYPE
+                )
+                GROUP BY SCHEDULE, VOYAGE, LOC_SEQ, LOCATION_ID;
+
+    -- get all the items whose destination stops are the above calculated stops
+    -- these items are considered to discharge at the stops 
+   unloads  =   SELECT SCHEDULE, VOYAGE, LOC_SEQ, LOCATION_ID,SUM(QUANTITY) AS QUANTITY FROM
+               (
+                SELECT t1.*, t2.RESOURCE_TYPE, t2.QUA_PCS_VAL AS QUANTITY
+                FROM :locs_stops t1
+                INNER JOIN "sap.tm.trp.db.semantic.order::v_freight_order_item" t2 ON (t2.TO_STOP_KEY = t1.STOP_KEY AND t2.ITEM_CAT = 'TUR')  
+                INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t6  ON (t2.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :RESOURCE_CATEGORY)
+                INNER JOIN "sap.tm.trp.db.semantic.order::v_freight_order" t4 ON (t4.DB_KEY = t2.FREIGHT_ORDER_KEY)
+                WHERE t2.RESOURCE_TYPE = :RESOURCE_TYPE
+                )
+                GROUP BY SCHEDULE, VOYAGE, LOC_SEQ, LOCATION_ID;
+
+   -- get all the related VOYAGE,TU,location,equip type combinations to be the data dimensions
+   dims = SELECT t0.TRIP_ID, t2.SCHEDULE, t1.VOYAGE, t3.LOC_SEQ,
+          row_number() over(partition by t0.trip_id order by t3.LOC_SEQ asc) - 1 AS SEQUENCE, 
+          t3.LOCATION_ID, t3.LOCATION_NAME, t3.ARRIVAL_UTC, t3.DEPARTURE_UTC, t3.VESSEL
+		  FROM :TRIP_ID t0 
+		  INNER JOIN "sap.tm.trp.db.semantic.schedule::v_departure" t1 ON (t1.DB_KEY = t0.TRIP_ID)
+		  INNER JOIN "sap.tm.trp.db.semantic.schedule::v_schedule" t2 ON (t2.DB_KEY = t1.PARENT_KEY)
+		  INNER JOIN "sap.tm.trp.db.semantic.schedule::v_departure_location" t3 ON (t3.PARENT_KEY = t1.DB_KEY)
+		  
+		  UNION ALL
+		  
+		  SELECT t0.TRIP_ID, TO_NVARCHAR(t1.PATH_ID) AS SCHEDULE, t0.TRIP_ID AS VOYAGE, 
+		  t2.SEQUENCE AS LOC_SEQ, t2.SEQUENCE AS SEQUENCE,
+		  t3.ID AS LOCATION_ID, t2.LOCATION AS LOCATION_NAME, t2.ARRIVAL_TIME AS ARRIVAL_UTC,
+		  t2.DEPARTURE_TIME AS DEPARTURE_UTC, NULL AS VESSEL  
+		  FROM :TRIP_ID t0
+		  INNER JOIN "sap.tm.trp.routing.db.dataset::t_trip" t1 ON (t0.TRIP_ID = TO_NVARCHAR(t1.ID))                  
+          INNER JOIN "sap.tm.trp.routing.db.dataset::t_trip_sequence" t2 ON (t1.ID = t2.TRIP_ID)
+          INNER JOIN "sap.tm.trp.db.semantic.location::v_all_location" t3 ON (t2.LOCATION = t3.NAME);
+          
+    -- compute the load/discharge quantity for the above data dimensions 
+    lus = SELECT t1.*,          
+          IFNULL(t3.QUANTITY,0) AS DISCHARGE_QUANTITY,
+          IFNULL(t2.QUANTITY,0) AS LOAD_QUANTITY          
+          FROM :dims t1
+          LEFT OUTER JOIN :loads t2 ON (t1.SCHEDULE = t2.SCHEDULE AND t1.VOYAGE = t2.VOYAGE AND t1.LOC_SEQ = t2.LOC_SEQ AND t1.LOCATION_ID = t2.LOCATION_ID)  
+          LEFT OUTER JOIN :unloads t3 ON (t1.SCHEDULE = t3.SCHEDULE AND t1.VOYAGE = t3.VOYAGE AND t1.LOC_SEQ = t3.LOC_SEQ AND t1.LOCATION_ID = t3.LOCATION_ID); 
+          
+     -- per voyage,tu,equip type  
+    -- assume the empty/laden load/discharge for the location sequence are as following
+    -- seq    load    unload
+    -- 10      L1      U1
+    -- 20      L2      U2
+    -- 30      L3      U3
+    -- 40      L4      U4
+    -- then the stock are as following
+    -- seq    load    unload   stock
+    -- 10      L1      U1     L1 - U1
+    -- 20      L2      U2     L1-U1 + L2-U2
+    -- 30      L3      U3     L1-U1 + L2-U2 + L3-U3
+    -- 40      L4      U4     L1-U1 + L2-U2 + L3-U3 + L4 -U4
+
+    -- we first compute 
+    -- seq    load    unload   sub
+    -- 10      L1      U1      L1-U1
+    -- 20      L2      U2      L2-U2
+    -- 30      L3      U3      L3-U3
+    -- 40      L4      U4      L4-U4
+
+    -- then aggregate the sub values for all the location sequnce that before current location sequnce, the result is the stock at the current location sequence 
+    lus_sub = SELECT t1.SCHEDULE, t1.VOYAGE,t1.LOC_SEQ,t1.LOCATION_ID, t1.LOCATION_NAME,
+              t1.LOAD_QUANTITY - t1.DISCHARGE_QUANTITY AS EMPTY_SUB 
+              FROM :lus t1
+              INNER JOIN :lus t2 ON (t1.SCHEDULE = t2.SCHEDULE AND t1.VOYAGE = t2.VOYAGE AND t1.LOC_SEQ = t2.LOC_SEQ AND t1.LOCATION_ID = t2.LOCATION_ID);                                         
+
+    
+    stocks = SELECT t1.SCHEDULE, t1.VOYAGE, t1.LOC_SEQ, t1.LOCATION_ID, 
+                    IFNULL(SUM(t2.EMPTY_SUB), 0) AS EMPTY_STOCK 
+             FROM :lus_sub t1
+             LEFT OUTER JOIN :lus_sub t2 ON (t1.SCHEDULE = t2.SCHEDULE AND t1.VOYAGE = t2.VOYAGE AND t1.LOC_SEQ >= t2.LOC_SEQ)
+             GROUP BY t1.SCHEDULE, t1.VOYAGE, t1.LOC_SEQ, t1.LOCATION_ID; 
+             
+	-- generate the output
+    ld_stock = SELECT t1.TRIP_ID, t1.SCHEDULE, t1.VOYAGE, t1.LOC_SEQ, t1.SEQUENCE, t1.LOCATION_ID,t1.LOCATION_NAME,t1.ARRIVAL_UTC,t1.DEPARTURE_UTC,
+                      t1.VESSEL, t1.LOAD_QUANTITY, t1.DISCHARGE_QUANTITY, t2.EMPTY_STOCK                                          
+              FROM :lus t1
+              INNER JOIN :stocks t2 ON (t1.SCHEDULE = t2.SCHEDULE AND t1.VOYAGE = t2.VOYAGE AND t1.LOC_SEQ = t2.LOC_SEQ AND t1.LOCATION_ID = t2.LOCATION_ID);
+             
+END;

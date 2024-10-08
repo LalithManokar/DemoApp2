@@ -1,0 +1,13 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT DISTINCT T1.ID,
+                 T4.ITEM_ID,
+                 T4.XPOS,
+                 T4.YPOS
+            FROM \"sap.tm.trp.db.pipeline::t_plan_model\" AS T1
+                 INNER JOIN \"sap.tm.trp.db.filter::t_filter_location_filter\" AS T3
+                 ON T1.FILTER_GROUP_ID = T3.FILTER_GROUP_ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.filter::v_location_filter_coordinate\" AS T4
+                 ON T3.LOCATION_FILTER_ID = T4.ID";
+
+depends_on_table = ["sap.tm.trp.db.filter::t_filter_location_filter","sap.tm.trp.db.pipeline::t_plan_model"];
+depends_on_view  = ["sap.tm.trp.db.filter::v_location_filter_coordinate"];

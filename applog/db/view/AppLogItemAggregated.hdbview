@@ -1,0 +1,44 @@
+// aggregated item information per header
+
+schema = "SAP_TM_TRP";
+query = "
+	select
+		items.\"_Header.ID\",
+		items.\"_Header.CreationDate\",
+		items.\"SystemAdministrativeData.CreationDateTime\",
+		items.\"SystemAdministrativeData.LastChangeDateTime\",
+		items.\"SuccessCounterValue\",		
+		items.\"InfoCounterValue\",	
+		items.\"WarningCounterValue\",
+		items.\"ErrorCounterValue\",
+		items.\"MaximumSeverityCode\" as \"MaximumSeverity.Code\",
+		severity.\"Description\" as \"MaximumSeverity.Description\",
+		items.\"CounterValue\"
+	from
+		(
+			select 
+				\"_Header.ID\",
+				\"_Header.CreationDate\",
+				max(\"SystemAdministrativeData.CreationDateTime\")              as \"SystemAdministrativeData.CreationDateTime\",
+				max(\"SystemAdministrativeData.LastChangeDateTime\")            as \"SystemAdministrativeData.LastChangeDateTime\",
+				sum( case when \"Message.SeverityCode\" = 1 then 1 else 0 end ) as \"SuccessCounterValue\",		
+				sum( case when \"Message.SeverityCode\" = 2 then 1 else 0 end ) as \"InfoCounterValue\",	
+				sum( case when \"Message.SeverityCode\" = 3 then 1 else 0 end ) as \"WarningCounterValue\",
+				sum( case when \"Message.SeverityCode\" = 4 then 1 else 0 end ) as \"ErrorCounterValue\",
+				max( \"Message.SeverityCode\" )                                 as \"MaximumSeverityCode\",
+				count(*)                                                        as \"CounterValue\"
+			from
+				\"sap.tm.trp.applog.db::AppLogItem\"
+			group by
+				\"_Header.ID\", \"_Header.CreationDate\"
+		) as items
+	join
+		\"HCO_BC_APPLOG\".\"sap.bc.applog.db.code::MessageSeverityCode\" as severity
+	on
+		items.\"MaximumSeverityCode\" = severity.\"Code\"
+";
+
+depends_on_table = [
+	"sap.tm.trp.applog.db::AppLogItem",
+	"sap.bc.applog.db.code::MessageSeverityCode"
+];

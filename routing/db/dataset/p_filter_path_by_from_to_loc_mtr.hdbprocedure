@@ -1,0 +1,86 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_filter_path_by_from_to_loc_mtr" (
+	IN path_data TABLE(id BIGINT, dataset_id BIGINT, from_location NVARCHAR(50), to_location NVARCHAR(50), mtr NVARCHAR(10), carrier NVARCHAR(50), action CHAR, source CHAR, hash VARBINARY(32)),
+	IN from_location NVARCHAR(50),
+	IN to_location NVARCHAR(50),
+	IN mtr NVARCHAR(10),
+	OUT path_signature TABLE(id BIGINT, dataset_id BIGINT, action CHAR, source CHAR, hash VARBINARY(32))
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING
+   READS SQL DATA AS
+BEGIN
+   /*************************************
+       Given the set of basic path(path_data), compute all basic path signature filtered by from_location, to_location, mtr
+       Filter Rule:
+       1. from_location is used to filter the basic path that at least exist one from location in all segments of some basic path matching the filter
+       2. to_location is used to filter the basic path that at least exist one to location in all segments of some basic path matching the filter
+       3. from_location and to_location can be NULL or empty string, in that case, it denote the filter has no use
+       4. if both from_location and to_location are specified, the matched from_location in some basic path must be before the matched to_location in some basic path
+       5. mtr is used to filter the mtr of basic path
+   *************************************/
+	-- Filtered by from_location, to_location and mtr
+	IF :mtr != '' AND :mtr IS NOT NULL THEN
+		path_data = 
+		SELECT *
+		FROM :path_data
+		WHERE mtr = :mtr;
+	END IF;
+
+	-- If at least from_location or to_location is not empty
+    IF (:from_location IS NOT NULL AND :from_location != '') OR (:to_location IS NOT NULL AND :to_location != '') THEN
+    	path_conn_data = 
+    	SELECT A.*
+    	FROM "sap.tm.trp.routing.db.dataset::t_path_connection" AS A INNER JOIN :path_data AS B ON A.path_id = B.id;
+    	
+    	-- if from_location is not empty
+    	IF :from_location IS NOT NULL AND :from_location != '' THEN
+        	from_list = 
+        	SELECT path_id, sequence - 1 AS sequence, from_location AS location -- map sequence on edge to sequence on location
+        	FROM :path_conn_data
+        	WHERE from_location = :from_location;
+        ELSE
+            from_list = 
+            SELECT 0 AS path_id, 0 AS sequence, '' AS location
+            FROM DUMMY
+            WHERE 1 != 1;
+        END IF;
+        
+    	-- if to_location is not empty
+    	IF :to_location IS NOT NULL AND :to_location != '' THEN
+        	to_list = 
+        	SELECT path_id, sequence, to_location AS location  -- the sequence on edge is the same sequence on location
+        	FROM :path_conn_data
+        	WHERE to_location = :to_location;
+        ELSE
+            to_list = 
+            SELECT 0 AS path_id, 0 AS sequence, '' AS location
+            FROM DUMMY
+            WHERE 1 != 1;
+        END IF;
+        
+        IF (:from_location IS NOT NULL AND :from_location != '') AND (:to_location IS NOT NULL AND :to_location != '') THEN
+            -- if both from_location and to_location are not empty the from_location sequence must less than to_location sequence
+            path_data = 
+            SELECT A.*
+            FROM :path_data AS A INNER JOIN (
+                SELECT DISTINCT A.path_id
+                FROM :from_list AS A INNER JOIN :to_list AS B ON A.path_id = B.path_id AND A.sequence < B.sequence
+            ) AS B ON A.id = B.path_id;
+        ELSE
+            path_data = 
+            SELECT A.*
+            FROM :path_data AS A INNER JOIN (
+                SELECT DISTINCT path_id 
+                FROM (
+                SELECT path_id FROM :from_list
+                UNION ALL
+                SELECT path_id FROM :to_list)
+            ) AS B ON A.id = B.path_id;
+        END IF;
+    END IF;
+    
+    path_signature = 
+    SELECT id, dataset_id, action, source, hash
+    FROM :path_data;
+END

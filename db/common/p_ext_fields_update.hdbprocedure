@@ -1,0 +1,32 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.common::p_ext_fields_update" (
+    IN EXT_FIELD_ID BIGINT,
+    IN DISPLAY_NAME NVARCHAR(128),
+    IN DESCRIPTION NVARCHAR(1028),
+    IN DATA_TYPE NVARCHAR(40),
+    IN LENGTH INTEGER,
+    IN SEARCHABLE TINYINT,
+    IN FILTERABLE TINYINT
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+EXISTS INTEGER;
+USER_ID BIGINT;
+BEGIN
+
+	CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+    SELECT "sap.tm.trp.db.common::s_extended_fields".NEXTVAL INTO EXT_FIELD_ID FROM DUMMY;
+
+    UPDATE "sap.tm.trp.db.common::t_extended_fields"
+    SET DISPLAY_NAME = :DISPLAY_NAME,
+        DESCRIPTION = :DESCRIPTION,
+        DATA_TYPE = :DATA_TYPE,
+        LENGTH = :LENGTH,
+        SEARCHABLE = :SEARCHABLE,
+        FILTERABLE = :FILTERABLE,
+        EDITED_BY = :USER_ID,
+        EDITED_ON = CURRENT_UTCTIMESTAMP
+    WHERE ID = :EXT_FIELD_ID;
+
+END;

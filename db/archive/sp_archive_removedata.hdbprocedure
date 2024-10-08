@@ -1,0 +1,140 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_archive_removedata"
+(IN RULE_ID BIGINT,
+ OUT STATUS_CODE INTEGER,
+ OUT RECORD_COUNT BIGINT,
+ OUT MESSAGE NVARCHAR(5000)
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP" 
+AS 
+BEGIN
+
+    DECLARE SUB_TAB_COUNT INT;
+    DECLARE SUB_TAB_NAME NVARCHAR(500);
+    DECLARE TABLE_ID BIGINT;
+    DECLARE TABLE_NAME NVARCHAR(500);
+    DECLARE SUB_TAB_ID BIGINT;
+    DECLARE ARR_TABLE_NAME NVARCHAR(500) ARRAY;
+    DECLARE DATE_COLUMN_NAME NVARCHAR(500);
+    DECLARE DATE_FROM TIMESTAMP;
+    DECLARE DATE_TO TIMESTAMP;
+    DECLARE ARR_IND INT;
+    DECLARE ROOT_TEMP_TAB NVARCHAR(500);
+    DECLARE ROOT_WARM_TAB NVARCHAR(500);
+    DECLARE SQL_STT NVARCHAR(5000);
+    DECLARE SCHEMA_NAME NVARCHAR(20) DEFAULT 'SAP_TM_TRP';
+    DECLARE COLUMN_STR NVARCHAR(1000);
+
+    DECLARE ARR_TRP_EXEID BIGINT ARRAY;
+    DECLARE ARR_TRP_EXEID_IND INT;
+    DECLARE TRP_EXEID BIGINT;
+    
+    DECLARE SUB_TAB_RECORD_COUNT BIGINT;
+
+    DECLARE CHILDTABERROR CONDITION FOR SQL_ERROR_CODE 10001;
+    DECLARE EXIT HANDLER FOR CHILDTABERROR
+    BEGIN
+        --nothing need to do
+        SELECT ::SQL_ERROR_MESSAGE INTO MESSAGE FROM DUMMY;
+    END;
+    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        STATUS_CODE := 1;
+        SELECT ::SQL_ERROR_MESSAGE INTO MESSAGE FROM DUMMY;
+    END;  
+
+    --initialize status code
+    STATUS_CODE := 0;
+    MESSAGE := 'Success';
+    RECORD_COUNT := 0;
+    SUB_TAB_RECORD_COUNT := 0;
+
+--get table details
+    SELECT A.TABLE_ID, A.DATE_FROM, A.DATE_TO, B.TABLE_NAME, B.DATE_COLUMN_NAME 
+    INTO TABLE_ID, DATE_FROM, DATE_TO, TABLE_NAME, DATE_COLUMN_NAME 
+    FROM "sap.tm.trp.db.archive::t_archive_rule" AS A 
+    INNER JOIN "sap.tm.trp.db.archive::t_archive_metadata" AS B
+    ON A.TABLE_ID = B.ID
+    WHERE A.ID = :RULE_ID;
+
+
+    --get execution id list
+    ROOT_WARM_TAB := :TABLE_NAME || '_warm';
+    SQL_STT :=
+    'INSERT INTO "sap.tm.trp.db.archive::t_archive_execution_id" (TRP_EXECUTION_ID) SELECT DISTINCT TRP_EXECUTION_ID FROM "' || :SCHEMA_NAME || '"."'
+    || :ROOT_WARM_TAB || '" WHERE ' || :DATE_COLUMN_NAME || 
+    ' BETWEEN ' || '''' || :DATE_FROM || '''' || ' AND ' || '''' || :DATE_TO || '''';
+    EXECUTE IMMEDIATE :SQL_STT;
+    ID_LIST = 
+    SELECT TRP_EXECUTION_ID FROM "sap.tm.trp.db.archive::t_archive_execution_id";
+    ARR_TRP_EXEID := ARRAY_AGG(:ID_LIST.TRP_EXECUTION_ID);
+    ARR_TRP_EXEID_IND := 1;
+    
+    -- loop trp execution list to do unarchive one by one
+    FOR ARR_TRP_EXEID_IND IN 1 .. CARDINALITY(:ARR_TRP_EXEID) DO
+    
+    TRP_EXEID := :ARR_TRP_EXEID[:ARR_TRP_EXEID_IND];
+
+
+--insert into root hot temp table from warm table
+    SELECT REPLACE(REPLACE(:TABLE_NAME,'.','_'),'::','_') || '_hot_temp' INTO ROOT_TEMP_TAB FROM DUMMY;
+    SELECT STRING_AGG(COLUMN_NAME,',') INTO COLUMN_STR FROM TABLE_COLUMNS WHERE SCHEMA_NAME = :SCHEMA_NAME AND TABLE_NAME = :TABLE_NAME;
+    SQL_STT := 'INSERT INTO "' || :SCHEMA_NAME || '"."' || :ROOT_TEMP_TAB || '" (' || COLUMN_STR || ') SELECT ' || :COLUMN_STR ||
+    ' FROM "' || :SCHEMA_NAME || '"."' || :ROOT_WARM_TAB || '" WHERE TRP_EXECUTION_ID = ' || :TRP_EXEID || ' AND '
+    || '( ' || :DATE_COLUMN_NAME || ' BETWEEN ' || '''' || :DATE_FROM || '''' || ' AND ' || '''' || :DATE_TO || '''' || ' )';
+    EXECUTE IMMEDIATE :SQL_STT;  --insert into temp table
+
+
+--check if root tempoary table is empty
+
+
+
+    
+--check if child table exists
+    SUB_TAB_COUNT := 0;
+    SELECT COUNT(*) INTO SUB_TAB_COUNT FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE ULTIMATE_PARENT_ID = :TABLE_ID; 
+    
+    
+    IF :SUB_TAB_COUNT > 0 
+    THEN
+--remove data from warm child tables
+        SUB_TABS =
+            SELECT TABLE_NAME FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE ULTIMATE_PARENT_ID = :TABLE_ID;
+        ARR_TABLE_NAME := ARRAY_AGG(:SUB_TABS.TABLE_NAME);
+        ARR_IND := 0;
+        FOR ARR_IND IN 1 .. CARDINALITY(:ARR_TABLE_NAME) DO
+            SUB_TAB_NAME := :ARR_TABLE_NAME[:ARR_IND];
+            ----remove data from warm child table
+            CALL "sap.tm.trp.db.archive::sp_archive_remove_sub_tab"(:RULE_ID, :TRP_EXEID, :SUB_TAB_NAME, :ROOT_TEMP_TAB, :STATUS_CODE, :SUB_TAB_RECORD_COUNT, :MESSAGE); 
+            RECORD_COUNT := :RECORD_COUNT + :SUB_TAB_RECORD_COUNT;
+            IF :STATUS_CODE != 0 THEN
+                SIGNAL CHILDTABERROR;  --Stop procedure
+            END IF;            
+
+        END FOR;
+        
+    END IF;
+
+
+
+--remove data from root warm table
+    SQL_STT :=
+    'DELETE FROM "' || :SCHEMA_NAME || '"."' || :ROOT_WARM_TAB || '" WHERE TRP_EXECUTION_ID = ' || :TRP_EXEID || ' AND '
+    || '( ' || :DATE_COLUMN_NAME || ' BETWEEN ' || '''' || :DATE_FROM || '''' || ' AND ' || '''' || :DATE_TO || '''' || ' )';
+    EXECUTE IMMEDIATE :SQL_STT;
+
+--clear root hot temp table
+    SQL_STT :=
+    'DELETE FROM "' || :SCHEMA_NAME || '"."' || :ROOT_TEMP_TAB || '"';
+    EXECUTE IMMEDIATE :SQL_STT;
+
+    RECORD_COUNT := :RECORD_COUNT + ::ROWCOUNT;
+    
+    END FOR;
+
+--clear execution id table
+    DELETE FROM "sap.tm.trp.db.archive::t_archive_execution_id";    
+
+END;

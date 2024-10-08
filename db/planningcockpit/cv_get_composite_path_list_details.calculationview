@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_composite_path_list_details" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_composite_path_list_head"/>
+  <localVariables>
+    <variable id="SIM_PLAN_ID" parameter="true">
+      <descriptions defaultDescription="SIM_PLAN_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="SCENARIO_ID" parameter="true">
+      <descriptions defaultDescription="SCENARIO_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="VIEW_TYPE" parameter="true">
+      <descriptions defaultDescription="VIEW_TYPE"/>
+      <variableProperties datatype="VARCHAR" length="1" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="FROM_LOCATION" parameter="true">
+      <descriptions defaultDescription="FROM_LOCATION"/>
+      <variableProperties datatype="NVARCHAR" length="100" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="TO_LOCATION" parameter="true">
+      <descriptions defaultDescription="TO_LOCATION"/>
+      <variableProperties datatype="NVARCHAR" length="100" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="MTR" parameter="true">
+      <descriptions defaultDescription="MTR"/>
+      <variableProperties datatype="NVARCHAR" length="10" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="PATH_ID" length="50"/>
+        <viewAttribute datatype="INTEGER" id="SEQUENCE"/>
+        <viewAttribute datatype="BIGINT" id="BASIC_PATH_ID"/>
+        <viewAttribute datatype="VARCHAR" id="PATH_TYPE" length="10"/>
+        <viewAttribute datatype="NVARCHAR" id="BASIC_PATH_FROM_LOCATION" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="BASIC_PATH_TO_LOCATION" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="FROM_LOCATION" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="TO_LOCATION" length="100"/>
+        <viewAttribute datatype="INTEGER" id="FROM_BP_SEQUENCE"/>
+        <viewAttribute datatype="INTEGER" id="TO_BP_SEQUENCE"/>
+        <viewAttribute datatype="VARCHAR" id="MTR" length="10"/>
+        <viewAttribute datatype="VARCHAR" id="MTR_DESC" length="100"/>
+        <viewAttribute datatype="DOUBLE" id="DISTANCE"/>
+        <viewAttribute datatype="INTEGER" id="TRANSPORT_DURATION"/>
+        <viewAttribute datatype="INTEGER" id="TRANSSHIP_DURATION"/>
+        <viewAttribute datatype="DOUBLE" id="TRANSPORT_COST"/>
+        <viewAttribute datatype="DOUBLE" id="TRANSSHIP_COST"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#SIM_PLAN_ID</localVariable>
+      <localVariable>#SCENARIO_ID</localVariable>
+      <localVariable>#VIEW_TYPE</localVariable>
+      <localVariable>#FROM_LOCATION</localVariable>
+      <localVariable>#TO_LOCATION</localVariable>
+      <localVariable>#MTR</localVariable>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+ BEGIN
+ DECLARE NETWORK_MODEL_ID BIGINT;
+ DECLARE NUM_AMOUNT_DECIMAL_POINT INTEGER := 2;
+  
+ 	CALL &quot;sap.tm.trp.db.planningcockpit::p_get_networkid_by_simulation_scenario_id&quot;(:SIM_PLAN_ID, :SCENARIO_ID, NETWORK_MODEL_ID);
+
+ 	IF :NETWORK_MODEL_ID = -1
+ 	THEN
+ 		var_out =
+		SELECT
+			NULL AS PATH_ID
+			,NULL AS SEQUENCE
+			,NULL AS BASIC_PATH_ID
+			,NULL AS PATH_TYPE
+			,NULL AS BASIC_PATH_FROM_LOCATION
+			,NULL AS BASIC_PATH_TO_LOCATION
+			,NULL AS FROM_LOCATION
+			,NULL AS TO_LOCATION
+			,NULL AS FROM_BP_SEQUENCE
+			,NULL AS TO_BP_SEQUENCE
+			,NULL AS MTR
+			,NULL AS MTR_DESC
+			,NULL AS DISTANCE
+			,NULL AS TRANSPORT_DURATION
+			,NULL AS TRANSSHIP_DURATION
+			,NULL AS TRANSPORT_COST
+			,NULL AS TRANSSHIP_COST
+		FROM DUMMY
+		;
+	ELSE
+		CALL &quot;sap.tm.trp.routing.db.path::p_query_composite_path&quot;(:NETWORK_MODEL_ID, :VIEW_TYPE, :FROM_LOCATION, :TO_LOCATION,MTR, PATH_HEAD, PATH_DETAILS);
+		
+		var_out =
+			SELECT
+				T0.PATH_ID
+				,T0.SEQUENCE
+				,T0.BASIC_PATH_ID
+				,T0.PATH_TYPE
+				,CASE WHEN T0.PATH_TYPE = 'P' THEN T1.FROM_LOCATION ELSE T2.FROM_LOCATION END AS BASIC_PATH_FROM_LOCATION
+				,CASE WHEN T0.PATH_TYPE = 'P' THEN T1.TO_LOCATION ELSE T2.TO_LOCATION END AS BASIC_PATH_TO_LOCATION
+				,T0.FROM_LOCATION
+				,T0.TO_LOCATION
+				,T0.FROM_BP_SEQUENCE
+				,T0.TO_BP_SEQUENCE
+				,T0.MTR
+				,T3.DESC AS MTR_DESC
+				,ROUND(T0.DISTANCE,:NUM_AMOUNT_DECIMAL_POINT) AS DISTANCE
+				,T0.TRANSPORT_DURATION
+				,T0.TRANSSHIP_DURATION
+				,ROUND(T0.TRANSPORT_COST,:NUM_AMOUNT_DECIMAL_POINT) AS TRANSPORT_COST
+				,ROUND(T0.TRANSSHIP_COST,:NUM_AMOUNT_DECIMAL_POINT) AS TRANSSHIP_COST
+			FROM :PATH_DETAILS T0
+			LEFT JOIN &quot;sap.tm.trp.routing.db.dataset::t_path&quot; T1 ON T1.ID = T0.BASIC_PATH_ID
+			LEFT JOIN &quot;sap.tm.trp.routing.db.dataset::t_connection&quot; T2 ON T2.ID = T0.BASIC_PATH_ID
+			LEFT JOIN &quot;sap.tm.trp.db.semantic.common::v_transportation_means&quot; T3 ON T3.CODE = T0.MTR
+		;
+	END IF;
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="PATH_ID" order="1">
+        <descriptions defaultDescription="PATH_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PATH_ID"/>
+      </attribute>
+      <attribute id="PATH_TYPE" order="4">
+        <descriptions defaultDescription="PATH_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="PATH_TYPE"/>
+      </attribute>
+      <attribute id="BASIC_PATH_FROM_LOCATION" order="5">
+        <descriptions defaultDescription="BASIC_PATH_FROM_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="BASIC_PATH_FROM_LOCATION"/>
+      </attribute>
+      <attribute id="BASIC_PATH_TO_LOCATION" order="6">
+        <descriptions defaultDescription="BASIC_PATH_TO_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="BASIC_PATH_TO_LOCATION"/>
+      </attribute>
+      <attribute id="FROM_LOCATION" order="7">
+        <descriptions defaultDescription="FROM_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="FROM_LOCATION"/>
+      </attribute>
+      <attribute id="TO_LOCATION" order="8">
+        <descriptions defaultDescription="TO_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="TO_LOCATION"/>
+      </attribute>
+      <attribute id="MTR" order="11">
+        <descriptions defaultDescription="MTR"/>
+        <keyMapping columnObjectName="Script_View" columnName="MTR"/>
+      </attribute>
+      <attribute id="MTR_DESC" order="12">
+        <descriptions defaultDescription="MTR_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="MTR_DESC"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="SEQUENCE" order="2" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="SEQUENCE"/>
+        <measureMapping columnObjectName="Script_View" columnName="SEQUENCE"/>
+      </measure>
+      <measure id="BASIC_PATH_ID" order="3" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="BASIC_PATH_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="BASIC_PATH_ID"/>
+      </measure>
+      <measure id="FROM_BP_SEQUENCE" order="9" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="FROM_BP_SEQUENCE"/>
+        <measureMapping columnObjectName="Script_View" columnName="FROM_BP_SEQUENCE"/>
+      </measure>
+      <measure id="TO_BP_SEQUENCE" order="10" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TO_BP_SEQUENCE"/>
+        <measureMapping columnObjectName="Script_View" columnName="TO_BP_SEQUENCE"/>
+      </measure>
+      <measure id="DISTANCE" order="13" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DISTANCE"/>
+        <measureMapping columnObjectName="Script_View" columnName="DISTANCE"/>
+      </measure>
+      <measure id="TRANSPORT_DURATION" order="14" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TRANSPORT_DURATION"/>
+        <measureMapping columnObjectName="Script_View" columnName="TRANSPORT_DURATION"/>
+      </measure>
+      <measure id="TRANSSHIP_DURATION" order="15" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TRANSSHIP_DURATION"/>
+        <measureMapping columnObjectName="Script_View" columnName="TRANSSHIP_DURATION"/>
+      </measure>
+      <measure id="TRANSPORT_COST" order="16" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TRANSPORT_COST"/>
+        <measureMapping columnObjectName="Script_View" columnName="TRANSPORT_COST"/>
+      </measure>
+      <measure id="TRANSSHIP_COST" order="17" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TRANSSHIP_COST"/>
+        <measureMapping columnObjectName="Script_View" columnName="TRANSSHIP_COST"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

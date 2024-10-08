@@ -1,0 +1,28 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.customization::p_get_general_parameter" (
+    IN NAME VARCHAR(50),
+    OUT VALUE VARCHAR(500)
+)
+ LANGUAGE SQLSCRIPT
+ SQL SECURITY INVOKER
+ DEFAULT SCHEMA SAP_TM_TRP
+ AS
+BEGIN
+
+    DECLARE TABLE_COUNT INTEGER;
+    DECLARE OPTION_DEFAULT VARCHAR(500);
+	
+	NAME := UPPER (:NAME);
+		
+    SELECT COUNT(*) INTO TABLE_COUNT FROM "sap.tm.trp.db.systemmanagement.customization::t_general_parameters" WHERE NAME = :NAME;
+
+    IF ( :TABLE_COUNT > 0 ) THEN
+    	SELECT TOP 1 VALUE INTO VALUE FROM "sap.tm.trp.db.systemmanagement.customization::t_general_parameters" WHERE NAME = :NAME;
+    ELSE
+	-- get default value
+	SELECT "DEFAULT" INTO OPTION_DEFAULT
+		FROM "sap.tm.trp.db.systemmanagement.customization::t_general_parameter_options" 
+		WHERE NAME = :NAME;
+	    VALUE := IFNULL (:OPTION_DEFAULT,'');
+    END IF;
+
+END;

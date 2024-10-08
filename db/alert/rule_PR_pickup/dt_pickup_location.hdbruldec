@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<dtmodel:decisionTableModel xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:alias="http://www.sap.com/ndb/Rules/Alias" xmlns:core="http://www.sap.com/ndb/Rules/Core" xmlns:dtmodel="http://www.sap.com/ndb/DecisionTableModel1.ecore" xmlns:table="http://www.sap.com/ndb/Rules/DecisionTable" schemaVersion="1.0" id="dt_idle_rate_alert" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" visibility="internal">
+  <descriptions defaultDescription="dt_idle_rate_alert"/>
+  <defaultSchema/>
+  <dataSources/>
+  <privateDataFoundation>
+    <tableProxies>
+      <tableProxy>
+        <table schemaName="SAP_TM_TRP" columnObjectName="sap.tm.trp.db.alert.dt_kpi_alert::tt_KPI_alert_rules"/>
+      </tableProxy>
+    </tableProxies>
+    <joins/>
+    <layout>
+      <shapes>
+        <shape modelObjectName="sap.tm.trp.db.alert.dt_kpi_alert::tt_KPI_alert_rules" modelObjectNameSpace="SAP_TM_TRP" modelObjectType="catalog">
+          <upperLeftCorner x="70" y="30"/>
+        </shape>
+      </shapes>
+    </layout>
+  </privateDataFoundation>
+  <dtmodel:variables>
+    <core:variable id="VAR149d16484f7xae84c" core:assignable="true" core:length="8" core:name="MESSAGE" core:scale="0" core:type="VARCHAR">
+      <descriptions defaultDescription="MESSAGE"/>
+      <core:simpleexp core:operator="" core:type="VARCHAR">
+        <core:primitive core:value="Nomal"/>
+      </core:simpleexp>
+      <core:valueDomain core:type="empty"/>
+      <core:selection core:isMultiLine="false" core:type=""/>
+    </core:variable>
+    <core:variable id="VAR149d1d0401cx21d8e" core:assignable="true" core:length="500" core:name="ALERT_REASON" core:scale="0" core:type="VARCHAR" core:vartype="Calculated">
+      <descriptions defaultDescription="ALERT_REASON"/>
+      <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+        <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+          <core:argument core:type="VARCHAR">
+            <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+              <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+                <core:argument core:type="VARCHAR">
+                  <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                    <core:primitive core:value="Average Idle Days of "/>
+                  </core:simpleexp>
+                </core:argument>
+                <core:argument core:type="VARCHAR">
+                  <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                    <core:abstractreference xsi:type="core:TableReference" core:columnName="EQUIP_TYPE_NAME" core:columnObjectName="sap.tm.trp.db.alert.dt_kpi_alert::tt_KPI_alert_rules" core:columnType="VARCHAR" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+                  </core:simpleexp>
+                </core:argument>
+              </core:abstractreference>
+            </core:simpleexp>
+          </core:argument>
+          <core:argument core:type="VARCHAR">
+            <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+              <core:primitive core:value=" is over 20 days"/>
+            </core:simpleexp>
+          </core:argument>
+        </core:abstractreference>
+      </core:simpleexp>
+      <core:valueDomain core:type=""/>
+      <core:selection core:isMultiLine="false" core:type=""/>
+    </core:variable>
+  </dtmodel:variables>
+  <alias:aliasset alias:guid="AS149d12f7ec0x66c6b">
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL149d144978fxda53a" alias:visible="true" alias:columnName="NODE_NAME" alias:columnObjectName="sap.tm.trp.db.alert.dt_kpi_alert::tt_KPI_alert_rules" alias:columntype="VARCHAR" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="NODE_NAME"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL149d144a02dx256e4" alias:visible="true" alias:columnName="LOCATION_NAME" alias:columnObjectName="sap.tm.trp.db.alert.dt_kpi_alert::tt_KPI_alert_rules" alias:columntype="VARCHAR" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="LOCATION_NAME"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL149d144a681xebd57" alias:visible="true" alias:columnName="EQUIP_TYPE_NAME" alias:columnObjectName="sap.tm.trp.db.alert.dt_kpi_alert::tt_KPI_alert_rules" alias:columntype="VARCHAR" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="EQUIP_TYPE_NAME"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL149d144b347xa1c90" alias:visible="true" alias:columnName="SEQUENCE" alias:columnObjectName="sap.tm.trp.db.alert.dt_kpi_alert::tt_KPI_alert_rules" alias:columntype="INTEGER" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="SEQUENCE"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL149d144cc0dx3176a" alias:visible="true" alias:columnName="AVERAGE_IDLE_DAYS" alias:columnObjectName="sap.tm.trp.db.alert.dt_kpi_alert::tt_KPI_alert_rules" alias:columntype="INTEGER" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="AVERAGE_IDLE_DAYS"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:Alias" id="VARAL149d16484f7x475f8y9" alias:visible="true">
+      <descriptions defaultDescription="MESSAGE"/>
+      <alias:member alias:returntype="VARCHAR" alias:varname="MESSAGE"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:Alias" id="VARAL149d1d0401cxbaca0yb" alias:visible="true">
+      <descriptions defaultDescription="ALERT_REASON"/>
+      <alias:member alias:returntype="VARCHAR" alias:varname="ALERT_REASON"/>
+    </alias:basealias>
+  </alias:aliasset>
+  <table:decisiontable table:guid="DT149d12f7ebbx185b0" table:name="dt_idle_rate_alert">
+    <table:conditionstub table:id="CS149d14fc3dax233ad" table:conditionstubtype="regular" table:type="VARCHAR">
+      <core:lvalue>
+        <core:simpleexp core:type="VARCHAR">
+          <core:abstractreference xsi:type="core:TableReference" core:columnName="LOCATION_NAME" core:columnObjectName="sap.tm.trp.db.alert.dt_kpi_alert::tt_KPI_alert_rules" core:columnType="VARCHAR" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+        </core:simpleexp>
+      </core:lvalue>
+      <table:cv table:id="CV149d1d09bfbx3a3cyf">
+        <core:rangeexpression xsi:type="core:SimpleRangeExpression" core:comparator="Equals">
+          <core:simpleexp core:type="VARCHAR">
+            <core:primitive core:value="*"/>
+          </core:simpleexp>
+        </core:rangeexpression>
+      </table:cv>
+    </table:conditionstub>
+    <table:conditionstub table:id="CS149d14fce7fx5eef5" table:conditionstubtype="regular" table:type="VARCHAR">
+      <core:lvalue>
+        <core:simpleexp core:type="VARCHAR">
+          <core:abstractreference xsi:type="core:TableReference" core:columnName="EQUIP_TYPE_NAME" core:columnObjectName="sap.tm.trp.db.alert.dt_kpi_alert::tt_KPI_alert_rules" core:columnType="VARCHAR" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+        </core:simpleexp>
+      </core:lvalue>
+      <table:cv table:id="CV149d1d0b2b3x2786ay13">
+        <core:rangeexpression xsi:type="core:SimpleRangeExpression" core:comparator="Equals">
+          <core:simpleexp core:type="VARCHAR">
+            <core:primitive core:value="*"/>
+          </core:simpleexp>
+        </core:rangeexpression>
+      </table:cv>
+    </table:conditionstub>
+    <table:conditionstub table:id="CS149d14fe1f3xb6b94" table:conditionstubtype="regular" table:type="INTEGER">
+      <core:lvalue>
+        <core:simpleexp core:type="INTEGER">
+          <core:abstractreference xsi:type="core:TableReference" core:columnName="SEQUENCE" core:columnObjectName="sap.tm.trp.db.alert.dt_kpi_alert::tt_KPI_alert_rules" core:columnType="INTEGER" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+        </core:simpleexp>
+      </core:lvalue>
+      <table:cv table:id="CV149d1d0de79x6f63ay17">
+        <core:rangeexpression xsi:type="core:SimpleRangeExpression" core:comparator="Equals">
+          <core:simpleexp core:type="INTEGER">
+            <core:primitive core:value="*"/>
+          </core:simpleexp>
+        </core:rangeexpression>
+      </table:cv>
+    </table:conditionstub>
+    <table:conditionstub table:id="CS149d14fe8c9x306db" table:conditionstubtype="regular" table:type="INTEGER">
+      <core:lvalue>
+        <core:simpleexp core:type="INTEGER">
+          <core:abstractreference xsi:type="core:TableReference" core:columnName="AVERAGE_IDLE_DAYS" core:columnObjectName="sap.tm.trp.db.alert.dt_kpi_alert::tt_KPI_alert_rules" core:columnType="INTEGER" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+        </core:simpleexp>
+      </core:lvalue>
+      <table:cv table:id="CV149d1d4286cxa343y21">
+        <core:rangeexpression xsi:type="core:SimpleRangeExpression" core:comparator="Greater Than">
+          <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="INTEGER">
+            <core:primitive core:value="20"/>
+          </core:simpleexp>
+        </core:rangeexpression>
+      </table:cv>
+      <table:cv table:id="CV149d1d6359cx8bcdy2c">
+        <core:rangeexpression xsi:type="core:SimpleRangeExpression" core:comparator="Less Than">
+          <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="INTEGER">
+            <core:primitive core:value="30"/>
+          </core:simpleexp>
+        </core:rangeexpression>
+      </table:cv>
+    </table:conditionstub>
+    <table:conditionstub table:id="CS149d1d2117cx70ed6" table:conditionstubtype="regular" table:type="VARCHAR">
+      <core:lvalue>
+        <core:simpleexp core:type="VARCHAR">
+          <core:abstractreference xsi:type="core:VariableReference" core:varname="ALERT_REASON"/>
+        </core:simpleexp>
+      </core:lvalue>
+      <table:cv table:id="CV149d1d25525x1c2f3y1d">
+        <core:rangeexpression xsi:type="core:SimpleRangeExpression" core:comparator="Not Like">
+          <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+            <core:primitive core:value="Abc*"/>
+          </core:simpleexp>
+        </core:rangeexpression>
+      </table:cv>
+    </table:conditionstub>
+    <table:actionstub table:id="AS149d164db25x1abbe" table:actionstubtype="regular">
+      <core:abstractaction xsi:type="core:Action" core:type="assign" core:varname="MESSAGE">
+        <core:assignmentvalue>
+          <core:simpleexp core:type="VARCHAR">
+            <core:abstractreference xsi:type="core:VariableReference" core:varname="MESSAGE"/>
+          </core:simpleexp>
+        </core:assignmentvalue>
+      </core:abstractaction>
+      <table:av table:ce-id-refs="CV149d1d09bfbx3a3cyf CV149d1d0b2b3x2786ay13 CV149d1d0de79x6f63ay17 CV149d1d4286cxa343y21 CV149d1d25525x1c2f3y1d" table:id="AV149d1d26bd7xdacd0">
+        <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+          <core:primitive core:value="Alert"/>
+        </core:simpleexp>
+      </table:av>
+      <table:av table:ce-id-refs="CV149d1d09bfbx3a3cyf CV149d1d0b2b3x2786ay13 CV149d1d0de79x6f63ay17 CV149d1d6359cx8bcdy2c CV149d1d25525x1c2f3y1d" table:id="AV149d1d6359cx63deby2d">
+        <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+          <core:primitive core:value="Alert"/>
+        </core:simpleexp>
+      </table:av>
+    </table:actionstub>
+    <table:tablelayout>
+      <table:conditionstub-layout table:stub-id="CS149d14fc3dax233ad" table:type="vertical">
+        <table:cell table:ref-id="CV149d1d09bfbx3a3cyf" table:span="2"/>
+        <table:cell table:span="-1"/>
+      </table:conditionstub-layout>
+      <table:conditionstub-layout table:stub-id="CS149d14fce7fx5eef5" table:type="vertical">
+        <table:cell table:ref-id="CV149d1d0b2b3x2786ay13" table:span="2"/>
+        <table:cell table:span="-1"/>
+      </table:conditionstub-layout>
+      <table:conditionstub-layout table:stub-id="CS149d14fe1f3xb6b94" table:type="vertical">
+        <table:cell table:ref-id="CV149d1d0de79x6f63ay17" table:span="2"/>
+        <table:cell table:span="-1"/>
+      </table:conditionstub-layout>
+      <table:conditionstub-layout table:width="196" table:stub-id="CS149d14fe8c9x306db" table:type="vertical">
+        <table:cell table:ref-id="CV149d1d4286cxa343y21" table:span="1"/>
+        <table:cell table:ref-id="CV149d1d6359cx8bcdy2c" table:span="1"/>
+      </table:conditionstub-layout>
+      <table:conditionstub-layout table:stub-id="CS149d1d2117cx70ed6" table:type="vertical">
+        <table:cell table:ref-id="CV149d1d25525x1c2f3y1d" table:span="1"/>
+        <table:cell table:ref-id="CV149d1d25525x1c2f3y1d" table:span="1"/>
+      </table:conditionstub-layout>
+      <table:actionstub-layout table:width="113" table:stub-id="AS149d164db25x1abbe"/>
+    </table:tablelayout>
+  </table:decisiontable>
+</dtmodel:decisionTableModel>

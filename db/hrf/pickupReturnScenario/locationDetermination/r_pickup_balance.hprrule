@@ -1,0 +1,97 @@
+{
+    "description":"r_pickup_depot_balance_cost",
+    "status":"Active",
+    
+    "ruleBody":{
+        "type":"decisionTable",
+        "hitPolicy":"allMatch",
+        "content":{
+            "headers":[
+                {
+                    "colID":"CS14aa9701456x43ef7",
+                    "expression":"booking_available_depots.QUANTITY",
+                    "alias":"QUANTITY",
+                    "type":"condition",
+                    "width":100
+                },
+                {
+                    "colID":"AS14aa97000c3xa1164",
+                    "name":"LOC_RANK",
+                    "type":"output",
+                    "width":100
+                }
+            ],
+            "rows":[
+                {
+                    "rowID":"0",
+                    "row":[
+                        {
+                            "colID":"CS14aa9701456x43ef7",
+                            "content":"<=booking_available_depots.STOCK+booking_available_depots.SUPPLY-booking_available_depots.DEMAND+booking_available_depots.IMPACTED_SUPPLY-booking_available_depots.IMPACTED_DEMAND",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"AS14aa97000c3xa1164",
+                            "content":"booking_available_depots.SUPPLY-booking_available_depots.DEMAND+booking_available_depots.STOCK-booking_available_depots.QUANTITY-booking_available_depots.MIN_SAFETY_STOCK"
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "vocabulary":"sap.tm.trp.db.hrf.pickupReturnScenario::voc_booking_available_depots_balance_cost",
+    "output":"LOCATION_RANK",
+    "embeddedServices":[
+        {
+            "readOnly":true,
+            "allowCalibration":false,
+            "executionContext":{
+                "dataObject":{
+                    "name":"booking_available_depots",
+                    "keys":[
+                        "TU_ID",
+                        "EQUIPMENT_ID",
+                        "LOCATION_ID",
+                        "PLANNED_DATE",
+                        "RULE_TYPE",
+                        "PLAN_EXECUTION_ID",
+                        "NODE_ID",
+                        "DEPOT_ID",
+                        "COST_MODEL_ID"
+                    ]
+                },
+		        "parameters": {
+		          "definition": [
+		             {
+		              "name": "pickup_return_type",
+		              "dataType": "INTEGER",
+		              "description": "pickup return type",
+		              "persist": false
+		            },
+		            {
+		              "name": "booking_available_depots",
+		              "dataType": "DataObject",
+		              "description": "booking depot balance info",
+		              "persist": false,
+		              "dataObject": {
+		                "name": "booking_available_depots",
+		                "identifiers": [
+                        "TU_ID",
+                        "EQUIPMENT_ID",
+                        "LOCATION_ID",
+                        "PLANNED_DATE",
+                        "RULE_TYPE",
+                        "PLAN_EXECUTION_ID",
+                        "NODE_ID",
+                        "DEPOT_ID",
+                        "COST_MODEL_ID"
+		                ]
+		              }
+		            }
+		          ]
+		        },
+		        "filter": "booking_available_depots.RULE_TYPE  is equal to :pickup_return_type"
+            }
+        }
+    ]
+}

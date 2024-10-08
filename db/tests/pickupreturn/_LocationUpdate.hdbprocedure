@@ -1,0 +1,19 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.tests.pickupreturn::_LocationUpdate"(
+    IN RULE_ID BIGINT,
+    IN TU_IDS "sap.tm.trp.db.pickupreturn::tt_tu_list",
+    IN LOCATION_NAME VARCHAR(20),
+    OUT MESSAGE VARCHAR(50),
+    OUT ASSIGN_STATUS_INVALID "sap.tm.trp.db.pickupreturn::tt_tu_assign_status",
+    OUT ASSIGN_STATUS_SUCCESS "sap.tm.trp.db.pickupreturn::tt_tu_assign_status"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    MESSAGE := 'SUCCESS';
+    ASSIGN_STATUS_INVALID = SELECT TOP 0 0 AS RULE_ID,'' AS TU_ID, 0 AS QUANTITY, 0 AS ASSIGN_STATUS,'' AS MESSAGE_KEY
+                                FROM DUMMY;
+    ASSIGN_STATUS_SUCCESS = SELECT TOP 0 0 AS RULE_ID,'' AS TU_ID, 0 AS QUANTITY, 0 AS ASSIGN_STATUS,'' AS MESSAGE_KEY
+                                FROM DUMMY;
+END;

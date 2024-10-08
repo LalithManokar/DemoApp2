@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_execution_result_by_planid_view_by_resource" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_execution_result_ by_planid_location"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="IN_SCENARIO_ID" parameter="true">
+      <descriptions defaultDescription="IN_SCENARIO_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_ID" parameter="true">
+      <descriptions defaultDescription="IN_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_TYPE_CODE" length="32"/>
+        <viewAttribute datatype="NVARCHAR" id="RESOURCE_TYPE_NAME" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="OUTPUT_KEY" length="30"/>
+        <viewAttribute datatype="DOUBLE" id="OUTPUT_VALUE"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_TIME"/>
+        <viewAttribute datatype="INTEGER" id="SEQUENCE"/>
+        <viewAttribute datatype="INTEGER" id="ALERT_STATUS"/>
+        <viewAttribute datatype="INTEGER" id="OUT_EXECUTION_ID"/>
+        <viewAttribute datatype="BIGINT" id="TIME_INTERVAL"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_SCENARIO_ID</localVariable>
+      <localVariable>#IN_ID</localVariable>
+      <definition> --by zxt 2016/07/13 17:00&#xD;
+  &#xD;
+ BEGIN &#xD;
+    &#xD;
+     DECLARE EXECUTION_ID BIGINT;&#xD;
+     DECLARE NODE_ID BIGINT;&#xD;
+     DECLARE IN_PLAN_MODEL_ID BIGINT;&#xD;
+     --DECLARE SIMULATION_SYNC_FLAG INTEGER;&#xD;
+     DECLARE NEW_ALERT_COUNT_NUM INTEGER;&#xD;
+     --DECLARE LOCATION_ID_LIST &quot;sap.tm.trp.db.supplydemand::tt_id_list&quot;;&#xD;
+     &#xD;
+     &#xD;
+     SELECT IFNULL(MAX(SD_PLAN_ID),0),IFNULL(MAX(EXCUTE_ID),0)  &#xD;
+     INTO IN_PLAN_MODEL_ID,EXECUTION_ID&#xD;
+       FROM   &quot;sap.tm.trp.db.planningcockpit::t_simulation_plan&quot;&#xD;
+      WHERE   ID=:IN_ID;&#xD;
+    &#xD;
+ &#xD;
+     CALL &quot;sap.tm.trp.db.pipeline::p_get_default_node_by_executionid&quot;(:EXECUTION_ID,NODE_ID);&#xD;
+     &#xD;
+      SELECT COUNT(1) INTO NEW_ALERT_COUNT_NUM&#xD;
+     FROM &quot;sap.tm.trp.db.planningcockpit::t_simulationModel_alert_forUI&quot; T1 &#xD;
+     WHERE T1.SCENARIO_ID = :IN_SCENARIO_ID &#xD;
+     AND T1.PLAN_EXECUTION_ID = :EXECUTION_ID;-- AND T1.NODE_ID = :NODE_ID;&#xD;
+     &#xD;
+     --GET LOCATION_ID_LIST--&#xD;
+	LOCATION_ID_LIST =&#xD;
+	SELECT DISTINCT LOCATION_ID AS ID&#xD;
+	FROM &quot;sap.tm.trp.db.pipeline::t_pipeline_output_dataset&quot; &#xD;
+	WHERE PLAN_EXECUTION_ID = :EXECUTION_ID AND NODE_ID = :NODE_ID;&#xD;
+     &#xD;
+     --IF :IN_SCENARIO_ID = 0 OR :SIMULATION_SYNC_FLAG = 0 THEN&#xD;
+     IF :IN_SCENARIO_ID = 0 OR :NEW_ALERT_COUNT_NUM = 0 THEN&#xD;
+     CALL &quot;sap.tm.trp.db.supplydemand::p_get_execution_result_resource_by_executionid&quot;(NULL,:EXECUTION_ID,NULL,:NODE_ID,:LOCATION_ID_LIST,TEMP_OUT);&#xD;
+	   var_out = SELECT RESOURCE_TYPE_CODE,&#xD;
+                     RESOURCE_TYPE_NAME,&#xD;
+                     OUTPUT_KEY,&#xD;
+                     OUTPUT_VALUE,&#xD;
+                     START_TIME,&#xD;
+                     END_TIME,&#xD;
+                     SEQUENCE,&#xD;
+                     ALERT_STATUS,&#xD;
+                     :EXECUTION_ID AS OUT_EXECUTION_ID,&#xD;
+                     TIME_INTERVAL&#xD;
+              FROM :TEMP_OUT;       &#xD;
+                  &#xD;
+     ELSE&#xD;
+       var_out = SELECT RESOURCE_TYPE_CODE,&#xD;
+                     RESOURCE_TYPE_NAME,&#xD;
+                     OUTPUT_KEY,&#xD;
+                     OUTPUT_VALUE,&#xD;
+                     START_TIME,&#xD;
+                     END_TIME,&#xD;
+                     SEQUENCE,&#xD;
+                     ALERT_STATUS,&#xD;
+                     :EXECUTION_ID AS OUT_EXECUTION_ID,&#xD;
+                     TIME_INTERVAL_ID AS TIME_INTERVAL&#xD;
+              FROM &quot;sap.tm.trp.db.planningcockpit::cv_get_execution_result_by_executionid_view_by_resource&quot;(placeholder.&quot;$$IN_EXECUTION_ID$$&quot;=>:EXECUTION_ID,placeholder.&quot;$$IN_SCENARIO_ID$$&quot;=>:IN_SCENARIO_ID);&#xD;
+&#xD;
+     END IF;&#xD;
+              &#xD;
+END  </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="RESOURCE_TYPE_CODE" order="1">
+        <descriptions defaultDescription="RESOURCE_TYPE_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE_CODE"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE_NAME" order="2">
+        <descriptions defaultDescription="RESOURCE_TYPE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE_NAME"/>
+      </attribute>
+      <attribute id="OUTPUT_KEY" order="3">
+        <descriptions defaultDescription="OUTPUT_KEY"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUTPUT_KEY"/>
+      </attribute>
+      <attribute id="OUTPUT_VALUE" order="4">
+        <descriptions defaultDescription="OUTPUT_VALUE"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUTPUT_VALUE"/>
+      </attribute>
+      <attribute id="START_TIME" order="5">
+        <descriptions defaultDescription="TIME_DURATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </attribute>
+      <attribute id="END_TIME" order="6">
+        <descriptions defaultDescription="TIME_DURATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="END_TIME"/>
+      </attribute>
+      <attribute id="SEQUENCE" order="7">
+        <descriptions defaultDescription="SEQUENCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SEQUENCE"/>
+      </attribute>
+      <attribute id="ALERT_STATUS" order="8">
+        <descriptions defaultDescription="ALERT_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="ALERT_STATUS"/>
+      </attribute>
+      <attribute id="OUT_EXECUTION_ID" order="9">
+        <descriptions defaultDescription="OUT_EXECUTION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUT_EXECUTION_ID"/>
+      </attribute>
+      <attribute id="TIME_INTERVAL" order="10">
+        <descriptions defaultDescription="TIME_INTERVAL"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_INTERVAL"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

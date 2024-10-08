@@ -1,0 +1,10 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT T1.ID AS SM_PLAN_ID,
+                 T2.XPOS,
+                 T2.YPOS
+            FROM \"sap.tm.trp.db.planningcockpit::t_simulation_plan\" AS T1
+                 LEFT OUTER JOIN \"sap.tm.trp.db.pipeline::v_plan_model_coordinate\" AS T2
+                 ON T1.SD_PLAN_ID = T2.ID";
+
+depends_on_table = ["sap.tm.trp.db.planningcockpit::t_simulation_plan"];
+depends_on_view  = ["sap.tm.trp.db.pipeline::v_plan_model_coordinate"];

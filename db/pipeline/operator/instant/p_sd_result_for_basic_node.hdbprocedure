@@ -1,0 +1,212 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline.operator.instant::p_sd_result_for_basic_node" (
+	IN LOCATION "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_location",
+	IN RESOURCE "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_resource",
+	IN TIME_PERIOD "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_time_period",
+	IN NODE_LIST "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_node",
+	IN SCALAR_INPUT "sap.tm.trp.db.supplydemand.instant::tt_sd_scalar_inputs",
+	OUT DATASET "sap.tm.trp.db.supplydemand.instant::tt_sd_output"
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA SAP_TM_TRP
+READS SQL DATA AS
+BEGIN
+ 
+     DECLARE Unit VARCHAR(3); 
+	 DECLARE FIRST_TIME_INTERVAL_ID BIGINT;
+     DECLARE FIRST_START_TIMESTAMP TIMESTAMP;
+     DECLARE FIRST_END_TIMESTAMP TIMESTAMP;
+     DECLARE FIRST_INTER_SECONDS BIGINT;
+ 	 DECLARE PIPELINE_NAME NVARCHAR(200);
+	 DECLARE RESOURCE_CATEGORY VARCHAR(20);
+	 DECLARE ATTRIBUTE_FILTER NVARCHAR(500);
+	 DECLARE DEFAULT INTEGER;
+	 DECLARE OVERDUE_TIMESTAMP TIMESTAMP DEFAULT '1900-12-31 23:59:59.9999999';
+	 
+	 --Get scalar inputs
+	 SELECT PIPELINE_NAME,RESOURCE_CATEGORY,ATTRIBUTE_FILTER INTO PIPELINE_NAME,RESOURCE_CATEGORY,ATTRIBUTE_FILTER FROM :SCALAR_INPUT; 
+     -- Get container piece unit 
+     SELECT TOP 1 IFNULL (MAX (UNIT_CODE),'') INTO Unit
+     FROM "sap.tm.trp.db.systemmanagement::v_unit"
+     WHERE UNIT_TYPE = 'CONTAINER_PC';  --need to change  
+     
+     -- Get resource group
+     RESOURCE_GROUP = SELECT MAPPING_CODE AS RESOURCE_GROUP FROM "sap.tm.trp.db.semantic.resource::v_resource_category" WHERE CODE = :RESOURCE_CATEGORY;
+     
+     -- Get overdue period
+     SELECT TOP 1 TIME_INTERVAL_ID, START_TIMESTAMP, END_TIMESTAMP, INTER_SECONDS 
+     INTO FIRST_TIME_INTERVAL_ID, FIRST_START_TIMESTAMP, FIRST_END_TIMESTAMP, FIRST_INTER_SECONDS FROM :TIME_PERIOD ORDER BY SEQUENCE ASC;
+ 
+	/* start load data from basic node*/
+	IF ATTRIBUTE_FILTER <> '' THEN
+	--apply multiple attribute filter
+	ATTRIBUTE_FILTER_RESULT = APPLY_FILTER("sap.tm.trp.db.supplydemand.instant::t_basic_node_attribute", :ATTRIBUTE_FILTER);
+	
+	BASIC_NODE = SELECT 
+	 T1.NODE AS NODE_ID,
+	 T2.GEO_GROUP_ID AS GEO_ID,
+	 T2.GEO_NAME,
+	 T2.GEO_FILTER_TYPE,
+	 T3.EQUIP_CODE AS EQUIP_TYPE,
+	 T3.EQUIP_NAME,
+	 T3.EQUIP_FILTER_TYPE,
+	 T1.OUTPUT_KEY,
+	 IFNULL (T1.QUANTITY,0) AS QUANTITY,
+	 IFNULL (T1.OCCURRED_TIME,:FIRST_START_TIMESTAMP) AS OCCURRED_TIME
+	 FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" T1
+	 	INNER JOIN :RESOURCE_GROUP T4 ON T1.RESOURCE_GROUP = T4.RESOURCE_GROUP
+		INNER JOIN :ATTRIBUTE_FILTER_RESULT AF ON T1.CLIENT = AF.CLIENT AND T1.COMPANY_CODE = AF.COMPANY_CODE AND T1.SOURCE_KEY = AF.SOURCE_KEY AND T1.SOURCE_TYPE = AF.SOURCE_TYPE
+		INNER JOIN :LOCATION T2 ON T1.LOCATION_ID = T2.GEO_GROUP_ID
+		INNER JOIN :RESOURCE T3 ON T1.RESOURCE_TYPE = T3.EQUIP_GROUP_ID
+		INNER JOIN :NODE_LIST T5 ON T1.NODE = T5.NODE
+		WHERE DELETE_FLAG = '' AND
+		      T1.NODE IN ( SELECT NODE FROM :NODE_LIST);
+	
+	ELSE
+	
+	BASIC_NODE = SELECT 
+	 T1.NODE AS NODE_ID,
+	 T2.GEO_GROUP_ID AS GEO_ID,
+	 T2.GEO_NAME,
+	 T2.GEO_FILTER_TYPE,
+	 T3.EQUIP_CODE AS EQUIP_TYPE,
+	 T3.EQUIP_NAME,
+	 T3.EQUIP_FILTER_TYPE,
+	 T1.OUTPUT_KEY,
+	 IFNULL (T1.QUANTITY,0) AS QUANTITY,
+	 IFNULL (T1.OCCURRED_TIME,:FIRST_START_TIMESTAMP) AS OCCURRED_TIME
+	 FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" T1
+	 	INNER JOIN :RESOURCE_GROUP T4 ON T1.RESOURCE_GROUP = T4.RESOURCE_GROUP
+		INNER JOIN :LOCATION T2 ON T1.LOCATION_ID = T2.GEO_GROUP_ID
+		INNER JOIN :RESOURCE T3 ON T1.RESOURCE_TYPE = T3.EQUIP_GROUP_ID
+		INNER JOIN :NODE_LIST T5 ON T1.NODE = T5.NODE
+		WHERE DELETE_FLAG = '' AND
+		      T1.NODE IN ( SELECT NODE FROM :NODE_LIST);
+		  
+	END IF;
+	
+	--Fetch basic node data for time period 
+	BASIC_NODE_FOR_PERIOD = SELECT T1.*, 
+	                               T2.TIME_INTERVAL_ID, 
+	                               T2.SEQUENCE, 
+	                               T2.START_TIMESTAMP AS START_TIME, 
+	                               T2.END_TIMESTAMP AS END_TIME, 
+	                               T2.INTER_SECONDS 
+	                         FROM  :BASIC_NODE T1               
+	                         INNER JOIN :TIME_PERIOD T2
+	                         ON (T1.OCCURRED_TIME >= T2.START_TIMESTAMP 
+	                         	 AND T1.OCCURRED_TIME < T2.END_TIMESTAMP) 
+	                         WITH HINT(NO_RANGE_JOIN);-- OR T1.OCCURRED_TIME IS NULL;  
+	
+	-- basic node details
+	BASIC_NODE_FOR_PERIOD_DATASET = SELECT NODE_ID,
+	                                       GEO_ID, 
+	                                       GEO_NAME, 
+	                                       GEO_FILTER_TYPE,
+	                                       EQUIP_TYPE, 
+	                                       EQUIP_NAME, 
+	                                       EQUIP_FILTER_TYPE,
+	                                       TIME_INTERVAL_ID, 
+	                                       SEQUENCE, 
+	                                       START_TIME, 
+	                                       END_TIME, 
+	                                       INTER_SECONDS,
+	                                       OUTPUT_KEY,
+	                                       QUANTITY AS OUTPUT_VALUE
+	                                       FROM :BASIC_NODE_FOR_PERIOD
+	                                       WHERE SEQUENCE<>0;
+		
+	--Fetch basic node data for overdue time period 
+	 SELECT DAYS_BETWEEN (CURRENT_DATE, TO_DATE('1900-12-31', 'YYYY-MM-DD')) INTO DEFAULT FROM DUMMY;
+	 
+	 /*t_pipeline_node_offset= SELECT 'OVERDUE_EMPTY_PICKUP' AS OVERDUE_NAME , -5 AS OVERDUE_OFFSET FROM DUMMY
+	 				         UNION ALL 
+	 				         SELECT 'OVERDUE_EMPTY_RETURN' AS OVERDUE_NAME , -10 AS OVERDUE_OFFSET FROM DUMMY;*/
+	 
+	 --TEMPLATE CONFIGURATION SAMPLE RECORD 
+	 t_pipeline_node_offset= SELECT 'SAMPLE' AS OVERDUE_NAME , -5 AS OVERDUE_OFFSET FROM DUMMY;
+	
+	 TIME_PERIOD_WITH_OVERDUE = SELECT T1.NODE, 
+	                                   T1.OVERDUE_NAME,
+	                                   0 AS TIME_INTERVAL_ID,
+	                                   0 AS SEQUENCE,
+	                                   ADD_DAYS(CURRENT_TIMESTAMP,IFNULL(T2.OVERDUE_OFFSET,:DEFAULT)) AS START_TIMESTAMP,
+	                                   :FIRST_START_TIMESTAMP AS END_TIMESTAMP,
+	                                   0 AS INTER_SECONDS
+		                         FROM :NODE_LIST T1 
+		                         LEFT JOIN :t_pipeline_node_offset T2
+		                         ON T1.OVERDUE_NAME=T2.OVERDUE_NAME
+		                         WHERE T1.OVERDUE_NAME <> '';
+		                         
+	 BASIC_NODE_FOR_PERIOD_OVERDUE = SELECT T1.*, 
+	                               T2.TIME_INTERVAL_ID, 
+	                               T2.SEQUENCE, 
+	                               T2.START_TIMESTAMP AS START_TIME, 
+	                               T2.END_TIMESTAMP AS END_TIME, 
+	                               T2.INTER_SECONDS 
+	                         FROM  :BASIC_NODE T1               
+	                         INNER JOIN :TIME_PERIOD_WITH_OVERDUE T2
+	                         ON (T1.OCCURRED_TIME >= T2.START_TIMESTAMP 
+	                         	 AND T1.OCCURRED_TIME < T2.END_TIMESTAMP) AND T1.NODE_ID=T2.NODE
+	                         WITH HINT(NO_RANGE_JOIN);-- OR T1.OCCURRED_TIME IS NULL;
+	                         
+	 -- calculation overdue node as first period
+	 OVERDUE_NODE_FOR_PERIOD_DATASET = SELECT T2.OVERDUE_NAME AS NODE_ID,
+	                                          GEO_ID, 
+	                                          GEO_NAME, 
+	                                          GEO_FILTER_TYPE,
+	                                          EQUIP_TYPE, 
+	                                          EQUIP_NAME, 
+	                                          EQUIP_FILTER_TYPE,
+	                                          :FIRST_TIME_INTERVAL_ID AS TIME_INTERVAL_ID, 
+	                                          1 AS SEQUENCE, 
+	                                          :FIRST_START_TIMESTAMP AS START_TIME, 
+	                                          :FIRST_END_TIMESTAMP AS END_TIME, 
+	                                          :FIRST_INTER_SECONDS AS INTER_SECONDS,
+	                                          OUTPUT_KEY,
+	                                          QUANTITY AS OUTPUT_VALUE
+	                                     FROM :BASIC_NODE_FOR_PERIOD_OVERDUE  T1
+	                                     INNER JOIN :NODE_LIST T2 
+	                                       ON T1.NODE_ID = T2.NODE AND T2.OVERDUE_NAME <> '';
+	
+		
+	-- add basic,overdue node then sum it    
+	BAISC_OVERDUE_AGGREGATION = 
+	SELECT NODE_ID,
+	 GEO_ID, GEO_NAME, GEO_FILTER_TYPE,
+	 EQUIP_TYPE, EQUIP_NAME, EQUIP_FILTER_TYPE,
+	 TIME_INTERVAL_ID, SEQUENCE, START_TIME, END_TIME, INTER_SECONDS,
+	 OUTPUT_KEY,
+	 SUM(OUTPUT_VALUE) AS OUTPUT_VALUE,
+	 :Unit AS UNIT
+		FROM 
+		(
+			SELECT * FROM :BASIC_NODE_FOR_PERIOD_DATASET
+			UNION ALL
+			SELECT * FROM :OVERDUE_NODE_FOR_PERIOD_DATASET
+		)
+	 WHERE (OUTPUT_KEY = 'STOCK' AND SEQUENCE = 1) OR OUTPUT_KEY = 'SUPPLY' OR OUTPUT_KEY = 'DEMAND'
+	 GROUP BY NODE_ID,
+	 GEO_ID, GEO_NAME, GEO_FILTER_TYPE,
+	 EQUIP_TYPE, EQUIP_NAME, EQUIP_FILTER_TYPE,
+	 TIME_INTERVAL_ID, SEQUENCE, START_TIME, END_TIME, INTER_SECONDS,
+	 OUTPUT_KEY,UNIT WITH HINT (MATERIALIZED_COLUMN_REMOVAL);
+	
+	 
+	 -- add time period details with custom node name
+	DATASET=
+	SELECT NODE_ID,
+	 		GEO_ID, GEO_NAME, GEO_FILTER_TYPE,
+	 		EQUIP_TYPE, EQUIP_NAME, EQUIP_FILTER_TYPE,
+	 		TIME_INTERVAL_ID, SEQUENCE, START_TIME, END_TIME, INTER_SECONDS,
+	 		OUTPUT_KEY,OUTPUT_VALUE,UNIT 
+	FROM :BAISC_OVERDUE_AGGREGATION
+	UNION ALL 
+	SELECT '$$SD_PLAN_TIME_INTERVAL$$' AS NODE_ID,
+	 		NULL AS GEO_ID, NULL AS GEO_NAME, NULL AS GEO_FILTER_TYPE,
+	 		NULL AS EQUIP_TYPE,NULL AS EQUIP_NAME, NULL AS EQUIP_FILTER_TYPE,
+	 		TIME_INTERVAL_ID, SEQUENCE, START_TIMESTAMP AS START_TIME, END_TIMESTAMP AS END_TIME, INTER_SECONDS,
+	 		NULL AS OUTPUT_KEY, 0 AS OUTPUT_VALUE,NULL AS  UNIT
+	 FROM :TIME_PERIOD WITH HINT (MATERIALIZED_COLUMN_REMOVAL);
+	 
+END;

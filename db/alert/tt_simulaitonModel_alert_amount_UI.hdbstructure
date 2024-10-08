@@ -1,0 +1,11 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "used for save alerts for a plan model";
+table.columns = [
+    {name = "SCENARIO_ID"; sqlType = BIGINT;},
+    {name = "PLAN_EXECUTION_ID"; sqlType = BIGINT; },
+    {name = "TIME"; sqlType = TIMESTAMP;},
+    {name = "LOCATION_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "LOCATION_NAME"; sqlType = VARCHAR; length = 50;},
+    {name = "ALERT_NUM"; sqlType = INTEGER; }
+];     

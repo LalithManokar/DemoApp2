@@ -1,0 +1,209 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.resourceStock::p_get_stock_alert_for_map" (
+    IN stocks "sap.tm.trp.db.hrf.resourceStock::t_location_stock",
+    IN RESOURCE_CATEGORY STRING,
+    OUT var_out "sap.tm.trp.db.hrf.resourceStock::tt_stock_alert_for_map"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+    stocks1 = select LOCATION_ID,
+                     LOCATION_NAME, 
+                     LOCATION_TYPE,
+                     EQUIP_TYPE_ID,
+                     EQUIP_TYPE_NAME,
+                     EQUIP_TYPE_CATEGORY,
+                     DATE,
+                     STOCK,
+                     MIN_SAFETY_STOCK,
+                     MAX_SAFETY_STOCK,
+                     MAX_CAPACITY,
+                     :RESOURCE_CATEGORY AS RESOURCE_CATEGORY
+    FROM :stocks;  
+              
+    CALL PUBLIC."sap.tm.trp.db.stock::p_get_stock_alert"(:stocks1, outputs, results);
+   
+    --resource_alerts =
+    --SELECT --DISTINCT
+     /*T1.MAX_CAPACITY,
+     T1.MAX_SAFETY_STOCK,
+     T1.MIN_SAFETY_STOCK,
+     T1.STOCK,
+     T1.DATE,
+     T1.EQUIP_TYPE_CATEGORY,
+     T1.EQUIP_TYPE_NAME,
+     T1.EQUIP_TYPE_ID,
+     T1.LOCATION_TYPE,
+     T1.LOCATION_NAME,
+     T1.LOCATION_ID,
+     T1.LOCATION_LEVEL,
+     T2.RULE_NAME,
+     T2.ROW_ID,*/
+     --T2.LOCATION_TYPE,
+     --T2.LOCATION_ID,
+    -- T2.EQUIP_TYPE_CATEGORY,
+    -- T2.EQUIP_TYPE_ID,
+     --T2.DATE,
+     --T2.MESSAGE,
+    -- T2.ALERT_REASON,
+    -- T2.ALERT_SCORE_EMER AS SURPLUS_DEFICIT_NUM
+   -- FROM :outputs T2;
+    
+   /* INNER JOIN :stocks T1
+    ON T1.LOCATION_TYPE = T2.LOCATION_TYPE AND
+       T1.LOCATION_ID = T2.LOCATION_ID AND
+       T1.EQUIP_TYPE_CATEGORY = T2.EQUIP_TYPE_CATEGORY AND
+       T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID AND
+       T1.DATE = T2.DATE;
+       */
+
+    --normalizing
+    alert_score =
+        SELECT DISTINCT
+          /*T1.MAX_CAPACITY,
+          T1.MAX_SAFETY_STOCK,
+          T1.MIN_SAFETY_STOCK,
+          T1.STOCK,*/
+          T1.DATE,
+          T1.EQUIP_TYPE_CATEGORY,
+          --T1.EQUIP_TYPE_NAME,
+          T1.EQUIP_TYPE_ID,
+          T1.LOCATION_TYPE,
+         -- T1.LOCATION_NAME,
+          T1.LOCATION_ID,
+         /*T1.LOCATION_LEVEL,
+          T1.RULE_NAME,
+          T1.ROW_ID,*/
+          T1.MESSAGE,
+         -- T1.ALERT_REASON,
+          T1.ALERT_SCORE_EMER AS SURPLUS_DEFICIT_NUM,
+          CASE 
+              WHEN T5.ALERT_SCORE_RANGE >0.0001 THEN T5.ALERT_SCORE_NORMALIZED
+              ELSE 50 
+          END AS ALERT_SCORE_NORMALIZED
+      --FROM :resource_alerts T1
+      FROM :outputs T1
+      INNER JOIN (
+      
+		              SELECT T41.LOCATION_TYPE,
+		               T41.LOCATION_ID,
+		               T41.EQUIP_TYPE_CATEGORY,
+		               T41.EQUIP_TYPE_ID,
+		               T41.DATE,
+		               T41.ALERT_SCORE,
+		               T42.ALERT_SCORE_RANGE,
+		               CEIL((T41.ALERT_SCORE - T42.ALERT_SCORE_MIN)/T42.ALERT_SCORE_RANGE*(100-1))+1 AS ALERT_SCORE_NORMALIZED
+		               FROM (
+		        
+			                   SELECT T1.LOCATION_TYPE,
+			                    T1.LOCATION_ID,
+			                    T1.EQUIP_TYPE_CATEGORY,
+			                    T1.EQUIP_TYPE_ID,
+			                    T1.DATE,
+			                    ABS(T1.ALERT_SCORE_EMER) AS ALERT_SCORE
+			                    --FROM :resource_alerts AS T1 
+			                    FROM :outputs T1
+		                 ) AS T41, 
+		                 (
+		             
+		                         SELECT (MAX(T4.ALERT_SCORE) - MIN(T4.ALERT_SCORE)) AS ALERT_SCORE_RANGE,
+		                         MIN(T4.ALERT_SCORE) AS ALERT_SCORE_MIN
+		                         FROM (
+		                                SELECT ABS(T1.ALERT_SCORE_EMER) as ALERT_SCORE
+		                                --FROM :resource_alerts T1
+		                                FROM :outputs T1
+                                      ) AS T4 
+                           ) AS T42 
+                     ) AS T5 
+        ON T1.LOCATION_TYPE = T5.LOCATION_TYPE 
+        AND T1.LOCATION_ID = T5.LOCATION_ID 
+        AND T1.EQUIP_TYPE_CATEGORY = T5.EQUIP_TYPE_CATEGORY
+        AND T1.EQUIP_TYPE_ID = T5.EQUIP_TYPE_ID 
+        AND T1.DATE = T5.DATE;
+
+    --normal and alert
+    /* remove: it seems following sql did nothing, so remove it;
+    normalized_alert =
+         SELECT 
+              T1.MAX_CAPACITY,
+              T1.MAX_SAFETY_STOCK,
+              T1.MIN_SAFETY_STOCK,
+              T1.STOCK,
+              T1.DATE,
+              T1.EQUIP_TYPE_CATEGORY,
+              T1.EQUIP_TYPE_NAME,
+              T1.EQUIP_TYPE_ID,
+              T1.LOCATION_TYPE,
+              T1.LOCATION_NAME,
+              T1.LOCATION_ID,
+              T1.LOCATION_LEVEL,
+              T2.RULE_NAME,
+              T2.ROW_ID,
+              T2.MESSAGE,
+              T2.ALERT_REASON,
+              T2.SURPLUS_DEFICIT_NUM,
+              T2.ALERT_SCORE_NORMALIZED
+          FROM :stocks AS T1
+          INNER JOIN :alert_score AS T2
+          ON T1.LOCATION_TYPE = T2.LOCATION_TYPE 
+          AND T1.LOCATION_ID = T2.LOCATION_ID 
+          AND T1.EQUIP_TYPE_CATEGORY = T2.EQUIP_TYPE_CATEGORY 
+          AND T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID 
+          AND T1.DATE = T2.DATE;
+     */
+     
+    --aggregate alert_num, alert_score
+    aggregated_score =
+    SELECT
+         T1.LOCATION_TYPE,
+         T1.LOCATION_ID,
+         T1.DATE,
+         SUM(CASE WHEN MESSAGE = 'Alert' THEN 1 ELSE 0 END) AS ALERT_NUM,
+         MAX(CASE WHEN MESSAGE = 'Alert' THEN ALERT_SCORE_NORMALIZED ELSE 0 END) AS ALERT_AGGREGATED_SCORE
+    --FROM :normalized_alert T1
+    FROM :alert_score T1
+    GROUP BY T1.LOCATION_TYPE, T1.LOCATION_ID, T1.DATE;
+ /*
+   var_out = 
+       SELECT
+          T1.MAX_CAPACITY,
+          T1.MAX_SAFETY_STOCK,
+          T1.MIN_SAFETY_STOCK,
+          T1.STOCK,
+          T1.DATE AS TIME,
+          T1.EQUIP_TYPE_CATEGORY AS RESOURCE_TYPE_CATEGORY,
+          T1.EQUIP_TYPE_NAME AS RESOURCE_TYPE_NAME,
+          T1.EQUIP_TYPE_ID AS RESOURCE_TYPE_ID,
+          T1.LOCATION_TYPE,
+          T1.LOCATION_NAME,
+          T1.LOCATION_ID,
+          T1.LOCATION_LEVEL,
+          T1.RULE_NAME,
+          T1.ROW_ID,
+          T1.MESSAGE,
+          T1.ALERT_REASON,
+          T1.SURPLUS_DEFICIT_NUM,
+          CASE WHEN SURPLUS_DEFICIT_NUM > 0 THEN ROUND(SURPLUS_DEFICIT_NUM/MAX_CAPACITY*100,2)
+               WHEN SURPLUS_DEFICIT_NUM < 0 THEN ROUND(ABS(SURPLUS_DEFICIT_NUM)/MIN_SAFETY_STOCK*100,2)
+               ELSE 0
+          END AS SURPLUS_DEFICIT_PERCENT,
+          T1.ALERT_SCORE_NORMALIZED,
+          T2.ALERT_NUM,
+          T2.ALERT_AGGREGATED_SCORE AS ALERT_SCORE
+  FROM :normalized_alert T1
+  INNER JOIN :aggregated_score T2
+  ON T1.LOCATION_TYPE = T2.LOCATION_TYPE 
+  AND T1.LOCATION_ID = T2.LOCATION_ID 
+  AND T1.DATE = T2.DATE;
+  */
+  
+   var_out = 
+   SELECT T1.LOCATION_ID,
+         T1.LOCATION_TYPE,
+         T1.DATE AS TIME,
+         T1.ALERT_NUM,
+         T1.ALERT_AGGREGATED_SCORE AS ALERT_SCORE
+   FROM :aggregated_score T1;
+  
+END;

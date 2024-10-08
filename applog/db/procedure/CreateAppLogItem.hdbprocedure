@@ -1,0 +1,94 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.applog.db.procedure::CreateAppLogItem" 
+(
+	IN LogItemID BIGINT,
+	IN LogHandleID BIGINT,
+	IN LogHandleCreationDate DATE,
+	IN MessagePackage NVARCHAR(256),
+	IN MessageBundle NVARCHAR(256),
+	IN MessageKey NVARCHAR(256),
+	IN MessageSeverityCode INTEGER,
+	IN Timestamp TIMESTAMP,
+	IN User NVARCHAR(256)
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY DEFINER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+	DECLARE invalid_header CONDITION FOR SQL_ERROR_CODE 10004;
+
+	DECLARE lv_count INTEGER;
+	
+	DECLARE EXIT HANDLER FOR invalid_header RESIGNAL;
+	
+	-- Check that header exists and is not closed;
+    SELECT 
+    	COUNT(*) INTO lv_count 
+	FROM 
+		"sap.tm.trp.applog.db::AppLogHeader"
+	WHERE
+       "LogHandle.ID" = :LogHandleID AND 
+	   "LogHandle.CreationDate" = :LogHandleCreationDate AND
+	   "ClosureStatus.Code" = 1; -- ClosureStatusCode 1 means "not closed"
+		
+	IF lv_count = 0 THEN
+		SIGNAL invalid_header SET message_text = 'Adding application log item not possible. Application log header does not exist or is already closed.';
+	END IF;			
+
+	-- Create item
+	INSERT INTO
+		"sap.tm.trp.applog.db::AppLogItem"
+		(
+		     "_ID",
+		     "_Header.ID",
+		     "_Header.CreationDate",
+		     "_Parent",
+		     "Message.Package",
+		     "Message.Bundle",
+		     "Message.Key",
+		     "Message.SeverityCode",
+		     "SystemAdministrativeData.CreationDateTime",
+		     "SystemAdministrativeData.CreationUserName"
+       	) 
+        VALUES
+        (
+	    	:LogItemID,
+	    	:LogHandleID,
+	    	:LogHandleCreationDate,
+	    	NULL,
+	    	:MessagePackage,
+	    	:MessageBundle,
+	    	:MessageKey,
+	    	:MessageSeverityCode,
+	    	:Timestamp,
+	    	:User
+    	); 
+    	
+    -- Create item message parameters
+	INSERT INTO
+	  	"sap.tm.trp.applog.db::AppLogItemMsgParam" 
+		(
+		    "_Header.ID",
+		    "_Header.CreationDate",
+		    "_Item",
+		    "OrdinalNumberValue",
+		    "ParameterType.Code",
+		    "ParameterValue.String",
+		    "ParameterValue.Amount.Content",
+		    "ParameterValue.Amount.CurrencyCode",
+		    "ParameterValue.Quantity.Content",
+		    "ParameterValue.Quantity.UnitCode",
+		    "ParameterValue.Date",
+		    "ParameterValue.Time",
+		    "ParameterValue.DateTime",
+		    "ParameterValue.Indicator",
+		    "ParameterValue.Duration",
+		    "ParameterValue.Decimal",
+		    "ParameterValue.Float",
+		    "ParameterValue.Integer"
+	    ) 
+	    SELECT
+	    	:LogHandleID AS "_Header.ID",
+	    	:LogHandleCreationDate AS "_Header.CreationDate",
+			* FROM "HCO_BC_APPLOG"."sap.bc.applog.db.temp::AppLogItemMsgParam";
+END;

@@ -1,0 +1,62 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_get_assigned_containers" (
+    IN RULE_ID BIGINT,
+    IN TU_ID VARCHAR(20),
+    OUT RESOURCE_INFO "sap.tm.trp.db.pickupreturn::tt_assigned_resources"
+ ) 
+	LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+    
+BEGIN
+DECLARE USER_NAME VARCHAR(60);
+DECLARE LANGUAGE_CODE VARCHAR(1);
+
+
+SELECT IFNULL(MAX(SPRAS),'E') INTO LANGUAGE_CODE FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+    
+    --GET USER NAME
+    SELECT IFNULL(MAX(USERNAME),'') INTO USER_NAME
+    FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+
+ 	RESOURCE_INFO =  
+    SELECT tb.* FROM 
+    ( SELECT t1.RESOURCE_NAME
+	  FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_item_resource" t1
+	  INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit" t2 ON(t1.TU_KEY = t2.DB_KEY)
+	  WHERE t2.TOR_ID = :TU_ID AND t1.RESOURCE_NAME <> '' AND t1.RESOURCE_NAME IS NOT NULL
+    ) ta 
+ 	INNER JOIN  
+ 	( SELECT DISTINCT
+ 			   T0.RESOURCE_ID,
+ 	           T0.RESOURCE_NAME,
+               T2.RESOURCE_TYPE_CODE AS RESOURCE_TYPE,
+               T2.RESOURCE_TYPE_DESC,
+               T1.CURRENT_LOCATION AS LAST_LOCATION,
+               T1.BLOCK_STATUS_DESC AS RESOURCE_STATUS,               
+               T1.MOVEMENT_STATUS_CODE AS MOVEMENT_STATUS,
+               T1.MOVEMENT_STATUS_DESC AS MOVEMENT_STATUS_DESCRIPTION,
+               T4.DESC AS OWNERSHIP,
+               T0.LEASE_CONTRACT_REF AS LEASING_ID,  
+               T0.MAX_GROSS_WEIGHT,
+               T5.DESC AS FOOD_GRADE,
+               TO_DATE (T0.BUILDDATE) AS BUILT_DATE,
+               T0.RESOURCE_CONDITION AS RESOURCE_CONDITION,
+               CASE WHEN T0.ON_HIRE_DT = 0 THEN NULL ELSE TO_TIMESTAMP (T0.ON_HIRE_DT) END AS ON_HIRE_DATE,
+               IFNULL(T7.SPECIAL_INSTRUCTION_CODE,T0.SPECIAL_INSTRUCTION) AS SPECIAL_INSTRUCTION_CODE,
+               IFNULL (T7.SPECIAL_INSTRUCTION_NAME,T6.DESC) AS SPECIAL_INSTRUCTION_NAME
+        FROM "sap.tm.trp.db.semantic.resource::v_resource_master" T0
+        LEFT JOIN "sap.tm.trp.db.semantic.resource::v_resource_status" T1 ON T1.RESOURCE_ID = T0.RESOURCE_ID
+        LEFT JOIN "sap.tm.trp.db.semantic.resource::v_resource_type" T2 
+        ON (T2.RESOURCE_TYPE_CODE = T0.RESOURCE_TYPE_CODE AND T2.EQUI_TYPE = T0.EQUITYPE)
+        LEFT JOIN "sap.tm.trp.db.semantic.resource::v_ownership_t" T4 ON T4.CODE = T0.OWNERSHIP_CODE
+        LEFT JOIN "sap.tm.trp.db.semantic.resource::v_food_grade_t" T5 ON T5.CODE = T0.FOOD_GRADE_IND
+		LEFT JOIN "sap.tm.trp.db.semantic.resource::v_special_instruction_t" T6 ON (T0.SPECIAL_INSTRUCTION = T6.CODE)
+		LEFT JOIN (SELECT A.RESOURCE_ID,A.SPECIAL_INSTRUCTION_CODE,B.DESC AS SPECIAL_INSTRUCTION_NAME
+                   FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction" A
+                   INNER JOIN "sap.tm.trp.db.semantic.resource::v_special_instruction_t" B
+                   ON (A.SPECIAL_INSTRUCTION_CODE = B.CODE AND A.RULE_ID = :RULE_ID AND A.TU_ID = :TU_ID AND A.USER = :USER_NAME)) T7
+        ON (T7.RESOURCE_ID = T0.RESOURCE_ID)               
+    ) tb ON (ta.RESOURCE_NAME = tb.RESOURCE_NAME);
+    
+END;

@@ -1,0 +1,12 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::p_basic_node_saver" (
+	IN DATASET "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::t_basic_node"
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+
+UPSERT "sap.tm.trp.db.supplydemand.instant::t_basic_node" SELECT * FROM :DATASET;
+
+END;

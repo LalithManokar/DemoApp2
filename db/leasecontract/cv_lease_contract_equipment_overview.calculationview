@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_lease_contract_equipment_overview" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_lease_contract_equipment_overview"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="LEASE_CONTRACT_ID" parameter="true">
+      <descriptions defaultDescription="LEASE_CONTRACT_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="EQUIPMENT_TYPE" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="EQUIPMENT_DESC" length="100"/>
+        <viewAttribute datatype="DECIMAL" id="AVERAGE_PER_DIEM" length="13" scale="3"/>
+        <viewAttribute datatype="NVARCHAR" id="CURRENCY" length="3"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#LEASE_CONTRACT_ID</localVariable>
+      <definition>BEGIN
+	DECLARE CURRENCY NVARCHAR(3);
+    DECLARE NAME VARCHAR(60);     
+	DECLARE PERDIEMAUTH INTEGER;
+    DECLARE AUTH SMALLINT;
+ 	DECLARE CUSTOMCONDITION CONDITION FOR SQL_ERROR_CODE 10001;/* Custom Error Code = 10001*/
+
+	/*User Defined exception handler */
+	
+	DECLARE EXIT HANDLER FOR CUSTOMCONDITION RESIGNAL ;
+	
+	CALL &quot;sap.tm.trp.db.leasecontract::p_check_lease_authorization&quot;(
+	  	:AUTH
+		);
+                     
+	IF AUTH = 0 THEN
+		/* Signaling Custom error and setting the Custom Error Message */
+		SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'USER IS NOT AUTHORIZED TO ACCESS LEASE VIEW';
+	END IF; 	
+
+--Check per diem authorizarion
+	SELECT IFNULL(USERNAME,'') INTO NAME
+	FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+	
+	SELECT COUNT(1) INTO PERDIEMAUTH FROM &quot;SYS&quot;.&quot;EFFECTIVE_APPLICATION_PRIVILEGES&quot;  T1	
+	WHERE  T1.PRIVILEGE = 'sap.tm.trp.service::DisplayPerdiem'
+	AND T1.USER_NAME=:NAME AND IS_VALID='TRUE';
+--Global Currency. 
+--TO DO: Need to discuss about logic with Jagan. 
+--Table is: &quot;sap.tm.trp.db.costmodel::t_currency&quot;
+--Conclusion: Do not look for Global Currency. Use the local currency only.
+
+RESOURCE_TYPES = SELECT DISTINCT T1.RESOURCE_TYPE_CODE, T1.RESOURCE_TYPE_DESC, T1.RESOURCE_CATEGORY
+                     FROM &quot;sap.tm.trp.db.semantic.resource::v_resource_type_with_category&quot; T1
+                     INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot; T2
+                     ON (T1.RESOURCE_CATEGORY = T2.RESOURCE_CATEGORY)
+                     WHERE T2.ID = :LEASE_CONTRACT_ID;
+
+--Local Currency
+SELECT IFNULL(CURRENCY_CODE,'EUR') INTO CURRENCY 
+FROM &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot;
+WHERE ID=:LEASE_CONTRACT_ID;
+
+HT_PER_DIEM = 
+SELECT * FROM &quot;sap.tm.trp.db.leasecontract::cv_lease_contract_per_diem_expansion&quot;(placeholder.&quot;$$LEASE_CONTRACT_ID_IN$$&quot;=>:LEASE_CONTRACT_ID)
+WHERE EQUIPMENT_CODE_TYPE IS NOT NULL AND EQUIPMENT_CODE IS NOT NULL;
+
+HT_PER_DIEM_NULL = 
+SELECT * FROM &quot;sap.tm.trp.db.leasecontract::cv_lease_contract_per_diem_expansion&quot;(placeholder.&quot;$$LEASE_CONTRACT_ID_IN$$&quot;=>:LEASE_CONTRACT_ID)
+WHERE EQUIPMENT_CODE_TYPE IS NULL;
+
+
+HT_PER_DIEM_DESC_EQ_GRP = 
+SELECT ET.RESOURCE_TYPE_CODE AS EQUIPMENT_CODE,
+	   ET.RESOURCE_TYPE_DESC AS EQUIPMENT_DESC,
+	   HT.PER_DIEM AS PER_DIEM 
+FROM   :HT_PER_DIEM HT	
+INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_equipment_group&quot; EG ON HT.EQUIPMENT_GROUP_NAME = EG.CODE
+INNER JOIN &quot;sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth&quot; EGI ON EG.ID=EGI.EQUIPMENT_GROUP_ID
+INNER JOIN :RESOURCE_TYPES ET ON (EGI.EQUI_CODE = ET.RESOURCE_TYPE_CODE)
+WHERE HT.EQUIPMENT_CODE_TYPE = 2;
+			
+HT_PER_DIEM_DESC = 
+SELECT ET.RESOURCE_TYPE_CODE AS EQUIPMENT_CODE,
+	   ET.RESOURCE_TYPE_DESC AS EQUIPMENT_DESC,
+	   HT.PER_DIEM AS PER_DIEM
+FROM 	:HT_PER_DIEM HT	
+INNER JOIN :RESOURCE_TYPES ET ON HT.EQUIPMENT_CODE = ET.RESOURCE_TYPE_CODE 
+INNER JOIN &quot;sap.tm.trp.db.systemmanagement.user::v_resource_auth&quot; T1 
+ON (ET.RESOURCE_TYPE_CODE = T1.RES_TYPE AND ET.RESOURCE_CATEGORY = T1.RESOURCE_CATEGORY)
+WHERE HT.EQUIPMENT_CODE_TYPE = 1;	
+
+HT_PER_DIEM_DESC_NULL = 
+SELECT NULL AS EQUIPMENT_CODE,
+	   NULL AS EQUIPMENT_DESC,
+	   PER_DIEM AS PER_DIEM
+FROM 	:HT_PER_DIEM_NULL;	
+			  
+HT_PER_DIEM_UNION = 
+SELECT * FROM :HT_PER_DIEM_DESC_EQ_GRP UNION 
+SELECT * FROM :HT_PER_DIEM_DESC UNION
+SELECT * FROM :HT_PER_DIEM_DESC_NULL;
+
+TMP =	
+SELECT  EQUIPMENT_CODE AS EQUIPMENT_TYPE,
+		EQUIPMENT_DESC,
+		AVG(PER_DIEM) AS AVERAGE_PER_DIEM,
+		:CURRENCY AS CURRENCY
+FROM (--resource authorization contorl
+		:HT_PER_DIEM_UNION A
+		INNER JOIN
+		&quot;sap.tm.trp.db.systemmanagement.user::v_resource_auth&quot; B
+		ON A.EQUIPMENT_CODE = B.res_type
+		INNER JOIN :RESOURCE_TYPES ET
+		ON ET.RESOURCE_CATEGORY = B.RESOURCE_CATEGORY
+		AND ET.RESOURCE_TYPE_CODE = b.res_type
+	 )
+GROUP BY EQUIPMENT_CODE,EQUIPMENT_DESC;
+
+IF :PERDIEMAUTH > 0 THEN
+  var_out = SELECT * FROM :TMP;
+ELSE
+  var_out = SELECT * FROM :TMP WHERE 1=0;
+END IF;
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="EQUIPMENT_TYPE" order="1">
+        <descriptions defaultDescription="EQUIPMENT_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_TYPE"/>
+      </attribute>
+      <attribute id="EQUIPMENT_DESC" order="2">
+        <descriptions defaultDescription="EQUIPMENT_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_DESC"/>
+      </attribute>
+      <attribute id="CURRENCY" order="4">
+        <descriptions defaultDescription="CURRENCY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CURRENCY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="AVERAGE_PER_DIEM" order="3" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="PER_DIEM"/>
+        <measureMapping columnObjectName="Script_View" columnName="AVERAGE_PER_DIEM"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

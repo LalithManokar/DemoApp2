@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_execution_result_by_executionid_location" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_execution_result_ by_planid_location"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="IN_LOCATION_ID" parameter="true">
+      <descriptions defaultDescription="IN_LOCATION_ID"/>
+      <variableProperties datatype="VARCHAR" length="32" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_EXECUTION_ID" parameter="true">
+      <descriptions defaultDescription="IN_EXECUTION_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_SCENARIO_ID" parameter="true">
+      <descriptions defaultDescription="IN_SCENARIO_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="GEO_ID" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="GEO_NAME" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_TYPE_CODE" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_TYPE_NAME" length="40"/>
+        <viewAttribute datatype="VARCHAR" id="OUTPUT_KEY" length="30"/>
+        <viewAttribute datatype="DOUBLE" id="OUTPUT_VALUE"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_TIME"/>
+        <viewAttribute datatype="INTEGER" id="SEQUENCE"/>
+        <viewAttribute datatype="BIGINT" id="TIME_INTERVAL_ID"/>
+        <viewAttribute datatype="INTEGER" id="ALERT_STATUS"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_LOCATION_ID</localVariable>
+      <localVariable>#IN_EXECUTION_ID</localVariable>
+      <localVariable>#IN_SCENARIO_ID</localVariable>
+      <definition> 
+  
+ BEGIN 
+ DECLARE TMP_NODE_ID BIGINT;
+ CALL &quot;sap.tm.trp.db.pipeline::p_get_default_node_by_executionid&quot;(:IN_EXECUTION_ID,TMP_NODE_ID);
+ 
+    SQL1 =  SELECT DISTINCT T1.LOCATION_ID,
+	                   T1.LOCATION_NAME,
+	                   T1.EQUIP_TYPE_ID,
+	                   T1.EQUIP_TYPE_NAME,
+                       T1.START_TIME,
+                       T1.END_TIME,
+                       T1.SEQUENCE,
+                       'SUPPLY' AS OUTPUT_KEY,
+                       TO_DOUBLE(T1.SUPPLY) AS OUTPUT_VALUE,
+                       CASE LOWER(T1.&quot;MESSAGE&quot;) WHEN 'alert' THEN 1 ELSE 0 END AS &quot;ALERT_STATUS&quot;,
+                       T1.TIME_INTERVAL_ID
+			    --FROM &quot;sap.tm.trp.db.planningcockpit::t_alert_output_alertScore_simulation&quot; T1
+			    FROM &quot;sap.tm.trp.db.planningcockpit::t_simulationModel_alert_forUI&quot; T1
+			    WHERE  T1.PLAN_EXECUTION_ID = :IN_EXECUTION_ID
+			           AND T1.SCENARIO_ID = :IN_SCENARIO_ID
+			           AND T1.LOCATION_ID = :IN_LOCATION_ID
+			           AND T1.NODE_ID = :TMP_NODE_ID
+			    UNION ALL
+			    SELECT DISTINCT T1.LOCATION_ID,
+			           T1.LOCATION_NAME,
+				       T1.EQUIP_TYPE_ID,
+	                   T1.EQUIP_TYPE_NAME,				       
+			           T1.START_TIME,
+			           T1.END_TIME,
+			           T1.SEQUENCE,
+			           'DEMAND' AS OUTPUT_KEY,
+			           TO_DOUBLE(T1.DEMAND) AS OUTPUT_VALUE,
+			           CASE LOWER(T1.&quot;MESSAGE&quot;) WHEN 'alert' THEN 1 ELSE 0 END AS &quot;ALERT_STATUS&quot;,
+			           T1.TIME_INTERVAL_ID
+			   -- FROM &quot;sap.tm.trp.db.planningcockpit::t_alert_output_alertScore_simulation&quot; T1
+               FROM &quot;sap.tm.trp.db.planningcockpit::t_simulationModel_alert_forUI&quot; T1
+			    WHERE  T1.PLAN_EXECUTION_ID = :IN_EXECUTION_ID
+			           AND T1.SCENARIO_ID = :IN_SCENARIO_ID
+   			           AND T1.LOCATION_ID = :IN_LOCATION_ID
+   			           AND T1.NODE_ID = :TMP_NODE_ID;
+   			           
+   	 -- there is only one supply/demand for each location&amp;equip&amp;time interval	
+     -- but there may be multiple alerts 	           
+     var_out = SELECT T1.LOCATION_ID AS GEO_ID, T1.LOCATION_NAME AS GEO_NAME,
+                      T1.EQUIP_TYPE_ID AS RESOURCE_TYPE_CODE, T1.EQUIP_TYPE_NAME AS RESOURCE_TYPE_NAME,
+                      T1.OUTPUT_KEY, T1.OUTPUT_VALUE,
+                      T1.START_TIME,  T1.END_TIME,T1.SEQUENCE, T1.TIME_INTERVAL_ID,
+                      SUM(T1.ALERT_STATUS) AS ALERT_STATUS
+               FROM :SQL1 T1
+ 		       GROUP BY T1.LOCATION_ID,T1.LOCATION_NAME,T1.EQUIP_TYPE_ID,T1.EQUIP_TYPE_NAME,T1.OUTPUT_KEY, 
+ 		                T1.OUTPUT_VALUE, T1.START_TIME,T1.END_TIME,T1.SEQUENCE,T1.TIME_INTERVAL_ID;
+      
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="GEO_ID" order="1">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="GEO_ID"/>
+      </attribute>
+      <attribute id="GEO_NAME" order="2">
+        <descriptions defaultDescription="GEO_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="GEO_NAME"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE_CODE" order="3">
+        <descriptions defaultDescription="EQUIP_TYPE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE_CODE"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE_NAME" order="4">
+        <descriptions defaultDescription="EQUIP_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE_NAME"/>
+      </attribute>
+      <attribute id="OUTPUT_KEY" order="5">
+        <descriptions defaultDescription="OUTPUT_KEY"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUTPUT_KEY"/>
+      </attribute>
+      <attribute id="OUTPUT_VALUE" order="6">
+        <descriptions defaultDescription="OUTPUT_VALUE"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUTPUT_VALUE"/>
+      </attribute>
+      <attribute id="START_TIME" order="7">
+        <descriptions defaultDescription="TIME_DURATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </attribute>
+      <attribute id="END_TIME" order="8">
+        <descriptions defaultDescription="TIME_DURATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="END_TIME"/>
+      </attribute>
+      <attribute id="SEQUENCE" order="9">
+        <descriptions defaultDescription="SEQUENCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SEQUENCE"/>
+      </attribute>
+      <attribute id="TIME_INTERVAL_ID" order="10">
+        <descriptions defaultDescription="TIME_INTERVAL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_INTERVAL_ID"/>
+      </attribute>
+      <attribute id="ALERT_STATUS" order="11">
+        <descriptions defaultDescription="ALERT_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="ALERT_STATUS"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

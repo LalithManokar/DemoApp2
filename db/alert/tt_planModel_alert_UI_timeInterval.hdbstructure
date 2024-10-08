@@ -1,0 +1,37 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "used for save alerts for a plan model";
+table.columns = [
+    {name = "ALERT_REASON"; sqlType = VARCHAR; length = 500; },
+    {name = "ALERT_SCORE"; sqlType = DOUBLE;},
+    
+    {name = "PLAN_EXECUTION_ID"; sqlType = BIGINT; },
+    {name = "FILTER_TYPE"; sqlType = INTEGER; },
+    {name = "PLAN_MODEL_ID"; sqlType = BIGINT; },
+    
+    {name = "PIPELINE_MODEL_ID"; sqlType = BIGINT; },
+    {name = "NODE_ID"; sqlType = BIGINT; },
+    {name = "NODE_NAME"; sqlType = VARCHAR; length = 32;},
+    
+    {name = "LOCATION_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "LOCATION_NAME"; sqlType = VARCHAR; length = 50;},
+    
+    {name = "LATITUDE"; sqlType = DOUBLE;},
+    {name = "LONGITUDE"; sqlType = DOUBLE;},
+    {name = "COUNTRY_CODE"; sqlType = VARCHAR; length = 3;},
+    {name = "STATE_CODE"; sqlType = VARCHAR; length = 3;},
+    {name = "CITY_CODE"; sqlType = VARCHAR; length = 12;},
+     
+    {name = "EQUIP_TYPE_ID"; sqlType = VARCHAR; length = 32;},
+    
+    {name = "TIME"; sqlType = TIMESTAMP;},
+    
+    {name = "STOCK"; sqlType = DOUBLE;},
+    {name = "SUPPLY"; sqlType = DOUBLE;},
+    {name = "DEMAND"; sqlType = DOUBLE;},
+    {name = "MIN_SAFETY_STOCK"; sqlType = DOUBLE;},
+    {name = "MAX_SAFETY_STOCK"; sqlType = DOUBLE;},
+    
+    {name = "MESSAGE"; sqlType = VARCHAR; length = 8;},
+    {name = "OWNER" ; sqlType = VARCHAR; length = 200;}
+];     

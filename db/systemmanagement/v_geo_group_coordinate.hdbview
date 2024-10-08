@@ -1,0 +1,92 @@
+schema = "SAP_TM_TRP";
+query = "SELECT GROUP_ID,
+                FILTER_TYPE,
+                XPOS,
+                YPOS
+           FROM (
+         SELECT T1.GROUP_ID,
+                T1.FILTER_TYPE,
+                SUM(T1.XPOS) / COUNT(T1.XPOS) AS XPOS,
+                SUM(T1.YPOS) / COUNT(T1.YPOS) AS YPOS
+           FROM (
+                    
+                    SELECT 5 AS FILTER_TYPE,
+                           T1.ID AS GROUP_ID,
+                           T3.XPOS,
+                           T3.YPOS
+                      FROM \"sap.tm.trp.db.systemmanagement::t_zone_group\" AS T1
+                           INNER JOIN \"sap.tm.trp.db.systemmanagement::t_zone_group_item\" AS T2
+                           ON T1.ID = T2.ZONE_GROUP_ID
+                           INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_zone_ui\" AS T3
+                           ON T2.ZONE_ID = T3.ID
+                     UNION
+                    SELECT 11 AS FILTER_TYPE,
+                           T1.ID AS GROUP_ID,
+                           T3.XPOS,
+                           T3.YPOS
+                      FROM \"sap.tm.trp.db.systemmanagement::t_zone_group\" AS T1
+                           INNER JOIN \"sap.tm.trp.db.systemmanagement::t_zone_group_item\" AS T2
+                           ON T1.ID = T2.ZONE_GROUP_ID
+                           INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_zone_ui\" AS T3
+                           ON T2.ZONE_ID = T3.ID
+                     UNION
+                    SELECT 6 AS FILTER_TYPE,
+                           T1.ID AS GROUP_ID,
+                           T3.XPOS,
+                           T3.YPOS
+                      FROM \"sap.tm.trp.db.systemmanagement::t_region_group\" AS T1
+                           INNER JOIN \"sap.tm.trp.db.systemmanagement::t_region_group_item\" AS T2
+                           ON T1.ID = T2.REGION_GROUP_ID
+                           INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_zone_ui\" AS T3
+                           ON T2.ZONE_ID = T3.ID
+                     UNION
+                    SELECT 12 AS FILTER_TYPE,
+                           T1.ID AS GROUP_ID,
+                           T3.XPOS,
+                           T3.YPOS
+                      FROM \"sap.tm.trp.db.systemmanagement::t_region_group\" AS T1
+                           INNER JOIN \"sap.tm.trp.db.systemmanagement::t_region_group_item\" AS T2
+                           ON T1.ID = T2.REGION_GROUP_ID
+                           INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_zone_ui\" AS T3
+                           ON T2.ZONE_ID = T3.ID
+                ) AS T1
+       GROUP BY T1.GROUP_ID, T1.FILTER_TYPE)
+       UNION
+       SELECT GROUP_ID,
+                FILTER_TYPE,
+                XPOS,
+                YPOS
+                FROM 
+                (SELECT   T2.GROUP_ID AS GROUP_ID,
+                T2.FILTER_TYPE AS FILTER_TYPE,
+                T2.XPOS AS XPOS,
+                T2.YPOS AS YPOS
+                FROM
+                (SELECT 4 AS FILTER_TYPE,
+                           T1.ID AS GROUP_ID,
+                           T4.XPOS,
+                           T4.YPOS
+                      FROM \"sap.tm.trp.db.systemmanagement::t_location_group\" AS T1
+                           INNER JOIN \"sap.tm.trp.db.systemmanagement::t_location_group_item\" AS T2
+                           ON T1.ID = T2.LOCATION_GROUP_ID
+                           INNER JOIN \"sap.tm.trp.db.semantic.location::v_location\" AS T3
+                           ON T2.LOCATION_ID = T3.ID
+                           INNER JOIN \"sap.tm.trp.db.semantic.location::v_location\" T4 
+                           on T1.PRIME_LOC_ID = T4.ID
+                     UNION
+                    SELECT 10 AS FILTER_TYPE,
+                           T1.ID AS GROUP_ID,
+                           T4.XPOS,
+                           T4.YPOS
+                      FROM \"sap.tm.trp.db.systemmanagement::t_location_group\" AS T1
+                           INNER JOIN \"sap.tm.trp.db.systemmanagement::t_location_group_item\" AS T2
+                           ON T1.ID = T2.LOCATION_GROUP_ID
+                           INNER JOIN \"sap.tm.trp.db.semantic.location::v_location\" AS T3
+                           ON T2.LOCATION_ID = T3.ID
+                           INNER JOIN \"sap.tm.trp.db.semantic.location::v_location\" T4 
+                           on T1.PRIME_LOC_ID = T4.ID
+                  ) AS T2 
+                  GROUP BY T2.GROUP_ID, T2.FILTER_TYPE,T2.XPOS,T2.YPOS)";
+          
+depends_on_view = ["sap.tm.trp.db.semantic.location::v_location", "sap.tm.trp.db.systemmanagement.location::v_zone_ui"];
+depends_on_table = ["sap.tm.trp.db.systemmanagement::t_location_group", "sap.tm.trp.db.systemmanagement::t_location_group_item", "sap.tm.trp.db.systemmanagement::t_zone_group", "sap.tm.trp.db.systemmanagement::t_zone_group_item", "sap.tm.trp.db.systemmanagement::t_region_group", "sap.tm.trp.db.systemmanagement::t_region_group_item"];          

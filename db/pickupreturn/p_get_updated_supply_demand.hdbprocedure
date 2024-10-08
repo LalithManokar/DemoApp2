@@ -1,0 +1,295 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_get_updated_supply_demand" (     
+    IN V_RULE_TYPE INTEGER,   
+    IN V_SD_PLAN_ID BIGINT,
+    IN V_SD_LF_ID BIGINT,
+    IN V_SD_EF_ID BIGINT,
+    IN V_IN_DATE TIMESTAMP,
+    IN V_RESOURCE_TYPE VARCHAR(20),
+    IN t_updated_tu "sap.tm.trp.db.pickupreturn::tt_location_assignment_tu",
+    IN t_paired_tu "sap.tm.trp.db.pickupreturn::tt_streetturn_pair_tu_info",
+ 	IN t_original_sd "sap.tm.trp.db.pickupreturn::tt_supply_demand_stock",
+    OUT t_impacted_supply_demand "sap.tm.trp.db.pickupreturn::tt_impacted_supply_demand"          
+   ) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP" 
+    AS
+BEGIN
+
+    --supply_demand info    
+    DECLARE V_PROV_STOCK_NODE_FLAG INTEGER;    
+    DECLARE V_DATE_OFFSET INTEGER;
+    DECLARE CUR_TIME TIMESTAMP;
+    DECLARE COUNT_RES INTEGER;
+    DECLARE RESOURCE_IN_SD INTEGER;
+    DECLARE DATE_IN_SD INTEGER;
+    DECLARE COUNT_IMPACTED_SD INTEGER;
+
+    -- Get date offset
+    SELECT IFNULL(MAX (DATE_OFFSET), 0) INTO V_DATE_OFFSET 
+    FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+    WHERE USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");   
+
+    SELECT ADD_DAYS(CURRENT_UTCTIMESTAMP, :V_DATE_OFFSET) INTO CUR_TIME FROM DUMMY; 
+    
+    --check stock flag
+    SELECT COUNT(*) INTO V_PROV_STOCK_NODE_FLAG
+    FROM "sap.tm.trp.db.pipeline::t_plan_model" AS A
+    INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" B
+    ON (A.PIPELINE_MODEL_ID = B.PIPELINE_MODEL_ID AND B.NAME='PROVISIONAL_STOCK')
+    WHERE B.RESULT_VISIBLE = 1 AND A.ID = :V_SD_PLAN_ID;
+    
+    
+    ----EVALUATE CURRENT STOCK------**START**
+	filtered_locations = SELECT LOCATION_ID AS GEO_ID, LOCATION_ID, 1 AS TYPE, LOCATION_ID AS GEO_GROUP_ID 
+                         FROM "sap.tm.trp.db.filter::t_location_filter_location" 
+                         WHERE LOCATION_FILTER_ID = :V_SD_LF_ID; 
+                         
+     filtered_equiptypes = 
+      SELECT * FROM ((SELECT EQUIP_CODE AS EQUIP_CODE, EQUIP_CODE AS EQUIP_GROUP_ID,RESOURCE_CATEGORY
+      FROM "sap.tm.trp.db.booking::cv_auth_equip_code_by_equip_filter_id"(PLACEHOLDER."$$IV_EQUIPMENT_FILTER_ID$$"=> :V_SD_EF_ID) T1
+            WHERE EQUIP_FILTER_ID = :V_SD_EF_ID AND EQUIP_CODE IS NOT NULL)
+                    UNION 
+                    (SELECT EG1.EQUI_CODE AS EQUIP_CODE, EG1.EQUIPMENT_GROUP_ID AS EQUIP_GROUP_ID, EG1.RESOURCE_CATEGORY
+                    FROM "sap.tm.trp.db.systemmanagement::t_equipment_group_item"  EG1 
+            INNER JOIN (SELECT * FROM "sap.tm.trp.db.booking::cv_auth_equip_code_by_equip_filter_id"
+                        (PLACEHOLDER."$$IV_EQUIPMENT_FILTER_ID$$"=> :V_SD_EF_ID)) EF1
+            ON (EF1.EQUIP_GROUP_ID=EG1.EQUIPMENT_GROUP_ID AND EG1.RESOURCE_CATEGORY = EF1.RESOURCE_CATEGORY)
+            WHERE EF1.EQUIP_FILTER_ID = :V_SD_EF_ID and EG1.EQUIPMENT_GROUP_ID IS NOT NULL));
+    
+    resource_out = 
+       SELECT T1.RESOURCE_ID AS RESID,D.GEO_GROUP_ID,E.EQUIP_GROUP_ID 
+       FROM "sap.tm.trp.db.semantic.resource::v_stock_resource_last_status" T1
+       INNER JOIN  "sap.tm.trp.db.semantic.resource::t_resource_category" t6 ON (t1.RESOURCE_CATEGORY = t6.MAPPING_CODE)
+       INNER JOIN :filtered_equiptypes AS E ON (E.EQUIP_CODE = T1.RESOURCE_TYPE AND E.RESOURCE_CATEGORY = T6.CODE)
+       INNER JOIN :filtered_locations AS D ON (D.LOCATION_ID = T1.LOCATION_ID);
+
+    --Calculate stock group by location, equipment type and status
+    stock_out = SELECT GEO_GROUP_ID,
+                       EQUIP_GROUP_ID,
+                       COUNT(1) AS OUTPUT_VALUE
+                FROM :resource_out 
+                 GROUP BY GEO_GROUP_ID,EQUIP_GROUP_ID;
+
+     --Loaction and equipment group
+     car_out =  SELECT DISTINCT A.GEO_GROUP_ID,B.EQUIP_GROUP_ID
+               FROM :filtered_locations A, :filtered_equiptypes B;
+
+     --Output stock by location and equipment
+     pre_out = SELECT A.GEO_GROUP_ID AS LOCATION_ID, 
+                     A.EQUIP_GROUP_ID AS RESOURCE_TYPE,
+                     IFNULL(B.OUTPUT_VALUE,0) AS CURRENT_STOCK
+              FROM :car_out A 
+              LEFT OUTER JOIN :stock_out B ON 
+              (A.GEO_GROUP_ID = B.GEO_GROUP_ID and A.EQUIP_GROUP_ID = B.EQUIP_GROUP_ID);
+              
+    current_stock_data = SELECT A.LOCATION_ID, 
+                     A.RESOURCE_TYPE,
+                     A.CURRENT_STOCK,
+                     C.UNIT_CODE AS UNIT
+              FROM :pre_out A, "sap.tm.trp.db.systemmanagement.user::t_unit_configuration" C;
+    
+    ----EVALUATE CURRENT STOCK------**END**
+    
+    -- Get old supply demand values, only interest in the interval that the TU pre_date fall into 
+    original_sd = SELECT T1.LOCATION_ID,
+	  	                 T1.LOCATION_NAME,
+		                 T1.EQUIP_TYPE_ID,
+		                 T1.EQUIP_TYPE_NAME,
+		                 ADD_DAYS(T1.START_TIME, :V_DATE_OFFSET) AS START_TIME,
+		                 ADD_DAYS(T1.END_TIME, :V_DATE_OFFSET) AS END_TIME,
+		                 T1.SUPPLY,                      
+		                 T1.DEMAND,
+                         T1.BALANCE_SUPPLY_DEMAND,
+                         T1.BALANCE_STOCK_SUPPLY_DEMAND,
+                         IFNULL(T4.CURRENT_STOCK, 0) AS STOCK,
+                         T1.MIN_SAFETY_STOCK,
+                         T1.MAX_SAFETY_STOCK,
+                         T1.MAX_CAPACITY,
+                         T1.MIN_SAFETY_STOCK_HEADER,
+                         T1.MAX_SAFETY_STOCK_HEADER,
+                         T1.MAX_CAPACITY_HEADER,
+                         T1.STOCK_BALANCE_HEADER
+                         FROM :t_original_sd T1
+                         LEFT OUTER JOIN :current_stock_data T4 
+                         ON (T1.EQUIP_TYPE_ID = T4.RESOURCE_TYPE
+		                      AND T1.LOCATION_ID   = T4.LOCATION_ID);
+		                                
+  SELECT COUNT(1) INTO COUNT_RES FROM :original_sd;
+  SELECT COUNT(1) INTO RESOURCE_IN_SD FROM :original_sd WHERE EQUIP_TYPE_ID = :V_RESOURCE_TYPE;	
+  SELECT COUNT(1) INTO DATE_IN_SD FROM :original_sd WHERE START_TIME <= :V_IN_DATE AND END_TIME > :V_IN_DATE; 	
+  
+  -- Return if no execution result or rule type is not correct
+  IF :COUNT_RES = 0 OR (:V_RULE_TYPE <> 1 AND :V_RULE_TYPE <> 2 ) THEN 
+    RETURN ;
+  END IF; 
+ 
+  -- If the time interval could be found by the give time, then return the data of the time interval
+  -- same resource type  
+  IF :DATE_IN_SD > 0  AND :RESOURCE_IN_SD > 0 THEN    
+               	                   		                 
+  -- Pickup 		                 
+  IF :V_RULE_TYPE = 1 THEN    
+                                             
+    -- the original pickup location/date demand -1 * QUANTITY, the new pickup location/date demand +QUANTITY                
+    updated_sd = SELECT * FROM 
+                 (
+                   SELECT LOCATION_ID, RESOURCE_TYPE, DATE, SUM(IMPACTED_SUPPLY) AS IMPACTED_SUPPLY, SUM(IMPACTED_DEMAND) AS IMPACTED_DEMAND FROM
+                   ( 
+                     SELECT ORIGINAL_PICKUP_LOCATION_ID AS LOCATION_ID, RESOURCE_TYPE, ORIGINAL_PICKUP_DATE AS DATE, 0 AS IMPACTED_SUPPLY, -1 * QUANTITY AS IMPACTED_DEMAND    
+                     FROM :t_updated_tu  
+                     UNION ALL
+                     SELECT PICKUP_LOCATION_ID AS LOCATION_ID, RESOURCE_TYPE, PICKUP_DATE AS "DATE", 0 AS IMPACTED_SUPPLY, QUANTITY AS IMPACTED_DEMAND
+                     FROM :t_updated_tu
+                     UNION ALL
+                     SELECT ORIGINAL_RETURN_LOCATION_ID AS LOCATION_ID, RESOURCE_TYPE, ORIGINAL_RETURN_DATE AS "DATE", -1 * QUANTITY AS IMPACTED_SUPPLY, 0 AS IMPACTED_DEMAND
+                     FROM :t_paired_tu
+                   )
+                   GROUP BY LOCATION_ID, RESOURCE_TYPE, "DATE"
+                 ) 
+                 WHERE IMPACTED_SUPPLY <> 0 OR IMPACTED_DEMAND <> 0;                 
+    -- Return 
+   ELSEIF :V_RULE_TYPE = 2 THEN    
+                
+    -- the original return location/date supply -1, the new return location/date supply + 1                
+    updated_sd = SELECT * FROM 
+                 (
+                   SELECT LOCATION_ID, RESOURCE_TYPE, DATE, SUM(IMPACTED_SUPPLY) AS IMPACTED_SUPPLY, SUM(IMPACTED_DEMAND) AS IMPACTED_DEMAND FROM
+                   ( 
+                     SELECT ORIGINAL_RETURN_LOCATION_ID AS LOCATION_ID, RESOURCE_TYPE, ORIGINAL_RETURN_DATE AS DATE, -1 * QUANTITY AS IMPACTED_SUPPLY, 0 AS IMPACTED_DEMAND   
+                     FROM :t_updated_tu  
+                     UNION ALL
+                     SELECT RETURN_LOCATION_ID AS LOCATION_ID, RESOURCE_TYPE, RETURN_DATE AS "DATE", QUANTITY AS IMPACTED_SUPPLY, 0 AS IMPACTED_DEMAND
+                     FROM :t_updated_tu
+                     UNION ALL
+                     SELECT ORIGINAL_PICKUP_LOCATION_ID AS LOCATION_ID, RESOURCE_TYPE, ORIGINAL_PICKUP_DATE AS "DATE", 0 AS IMPACTED_SUPPLY, -1 * QUANTITY AS IMPACTED_DEMAND
+                     FROM :t_paired_tu
+                   )
+                   GROUP BY LOCATION_ID, RESOURCE_TYPE, "DATE"
+                 ) 
+                 WHERE IMPACTED_SUPPLY <> 0 OR IMPACTED_DEMAND <> 0;   
+    END IF;
+                    
+    IF :V_PROV_STOCK_NODE_FLAG = 0 THEN 
+                   
+      t_impacted_supply_demand_pre = 
+                 SELECT T0.*, T3.IMPACTED_SUPPLY, T3.IMPACTED_DEMAND
+                 FROM :original_sd T0 
+                 INNER JOIN 
+                 (
+                 SELECT T1.LOCATION_ID, T1.EQUIP_TYPE_ID, T1.START_TIME,
+                 SUM(IFNULL(T2.IMPACTED_SUPPLY,0)) AS IMPACTED_SUPPLY,
+		         SUM(IFNULL(T2.IMPACTED_DEMAND,0)) AS IMPACTED_DEMAND	 
+		         FROM 
+		         ( SELECT * FROM :original_sd
+		           WHERE START_TIME <= :V_IN_DATE AND END_TIME > :V_IN_DATE AND EQUIP_TYPE_ID = :V_RESOURCE_TYPE 
+		         )T1
+		         LEFT OUTER JOIN :updated_sd  T2 
+		         ON (T1.EQUIP_TYPE_ID = T2.RESOURCE_TYPE
+		             AND T1.LOCATION_ID   = T2.LOCATION_ID  
+		             AND T1.END_TIME > T2.DATE
+		             AND T1.START_TIME <= T2."DATE")
+		         GROUP BY T1.LOCATION_ID, T1.EQUIP_TYPE_ID, T1.START_TIME
+		         ) T3 ON (T0.LOCATION_ID = T3.LOCATION_ID AND T0.EQUIP_TYPE_ID = T3.EQUIP_TYPE_ID AND T0.START_TIME = T3.START_TIME); 
+		             
+	 ELSE 
+      t_impacted_supply_demand_pre = 
+                 SELECT T0.*, T3.IMPACTED_SUPPLY, T3.IMPACTED_DEMAND
+                 FROM :original_sd T0 
+                 INNER JOIN 
+                 (SELECT T1.LOCATION_ID, T1.EQUIP_TYPE_ID, T1.START_TIME,
+                  SUM(IFNULL(T2.IMPACTED_SUPPLY,0)) AS IMPACTED_SUPPLY,
+		          SUM(IFNULL(T2.IMPACTED_DEMAND,0)) AS IMPACTED_DEMAND	 
+		          FROM :original_sd T1
+		          LEFT OUTER JOIN :updated_sd  T2 
+		          ON (T1.EQUIP_TYPE_ID = T2.RESOURCE_TYPE
+		              AND T1.LOCATION_ID   = T2.LOCATION_ID
+		              AND T1.END_TIME > T2.DATE AND T2."DATE" > :CUR_TIME) -- only care about future sd
+		          GROUP BY T1.LOCATION_ID, T1.EQUIP_TYPE_ID, T1.START_TIME
+		         ) T3 ON (T0.LOCATION_ID = T3.LOCATION_ID AND T0.EQUIP_TYPE_ID = T3.EQUIP_TYPE_ID AND T0.START_TIME = T3.START_TIME)
+		         WHERE T0.START_TIME <= :V_IN_DATE AND T0.END_TIME > :V_IN_DATE
+		         AND T0.EQUIP_TYPE_ID = :V_RESOURCE_TYPE;	   
+	 END IF;             
+  
+  -- even if no time interval can be found, the location and equip info,stock should still be returned 
+  ELSEIF :DATE_IN_SD = 0 AND :RESOURCE_IN_SD > 0 THEN
+  
+    t_impacted_supply_demand_pre = 
+                 SELECT DISTINCT LOCATION_ID,
+	  	                LOCATION_NAME,
+		                EQUIP_TYPE_ID AS EQUIP_TYPE_ID,
+		                EQUIP_TYPE_NAME AS EQUIP_TYPE_NAME,
+		                NULL AS START_TIME,
+		                NULL AS END_TIME,
+		                NULL AS SUPPLY,                      
+		                NULL AS DEMAND,
+                        NULL AS BALANCE_SUPPLY_DEMAND,
+                        NULL AS BALANCE_STOCK_SUPPLY_DEMAND,
+                        STOCK,
+                        MIN_SAFETY_STOCK,
+                        MAX_SAFETY_STOCK,
+                        MAX_CAPACITY,
+                        MIN_SAFETY_STOCK_HEADER,
+                        MAX_SAFETY_STOCK_HEADER,
+                        MAX_CAPACITY_HEADER,
+                        NULL AS STOCK_BALANCE_HEADER,
+                        NULL AS IMPACTED_SUPPLY,
+                        NULL AS IMPACTED_DEMAND
+                        FROM :original_sd
+                        WHERE EQUIP_TYPE_ID = :V_RESOURCE_TYPE;
+                        
+  -- both time intereval and resource can't be found, return the location info
+  ELSE
+      t_impacted_supply_demand_pre = 
+                 SELECT DISTINCT LOCATION_ID,
+	  	                LOCATION_NAME,
+		                :V_RESOURCE_TYPE AS EQUIP_TYPE_ID,
+		                :V_RESOURCE_TYPE AS EQUIP_TYPE_NAME,
+		                NULL AS START_TIME,
+		                NULL AS END_TIME,
+		                NULL AS SUPPLY,                      
+		                NULL AS DEMAND,
+                        NULL AS BALANCE_SUPPLY_DEMAND,
+                        NULL AS BALANCE_STOCK_SUPPLY_DEMAND,
+                        NULL AS STOCK,
+                        NULL AS MIN_SAFETY_STOCK,
+                        NULL AS MAX_SAFETY_STOCK,
+                        NULL AS MAX_CAPACITY,
+                        NULL AS MIN_SAFETY_STOCK_HEADER,
+                        NULL AS MAX_SAFETY_STOCK_HEADER,
+                        NULL AS MAX_CAPACITY_HEADER,
+                        NULL AS STOCK_BALANCE_HEADER,
+                        NULL AS IMPACTED_SUPPLY,
+                        NULL AS IMPACTED_DEMAND
+                        FROM :original_sd;                        
+  END IF; 
+  
+  SELECT COUNT (*) INTO COUNT_IMPACTED_SD FROM :t_impacted_supply_demand_pre;
+  IF :COUNT_IMPACTED_SD	> 0 THEN
+  	t_impacted_supply_demand = SELECT * FROM :t_impacted_supply_demand_pre;
+  ELSE
+  	t_impacted_supply_demand = 
+                 SELECT DISTINCT LOCATION_ID,
+	  	                LOCATION_NAME,
+		                :V_RESOURCE_TYPE AS EQUIP_TYPE_ID,
+		                :V_RESOURCE_TYPE AS EQUIP_TYPE_NAME,
+		                NULL AS START_TIME,
+		                NULL AS END_TIME,
+		                NULL AS SUPPLY,                      
+		                NULL AS DEMAND,
+                        NULL AS BALANCE_SUPPLY_DEMAND,
+                        NULL AS BALANCE_STOCK_SUPPLY_DEMAND,
+                        NULL AS STOCK,
+                        NULL AS MIN_SAFETY_STOCK,
+                        NULL AS MAX_SAFETY_STOCK,
+                        NULL AS MAX_CAPACITY,
+                        NULL AS MIN_SAFETY_STOCK_HEADER,
+                        NULL AS MAX_SAFETY_STOCK_HEADER,
+                        NULL AS MAX_CAPACITY_HEADER,
+                        NULL AS STOCK_BALANCE_HEADER,
+                        NULL AS IMPACTED_SUPPLY,
+                        NULL AS IMPACTED_DEMAND 
+                        FROM :original_sd;
+  END IF ;
+  	             		                 
+END;

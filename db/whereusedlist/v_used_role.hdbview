@@ -1,0 +1,23 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT T3.CODE AS OBJECT_CODE
+                 ,T1.USER_ID AS USED_OBJECT_ID
+                 ,T2.USERNAME AS NAME
+                 ,T2.CODE AS CODE
+                 ,'USER' AS CATEGORY
+                 ,T2.USERNAME AS DESC
+                 ,NULL AS VISIBILITY
+                 ,T4.USERNAME AS CREATED_BY
+                 ,T5.USERNAME AS MODIFIED_BY
+                 ,IFNULL(T3.LAST_MODIFIED_AT, T3.CREATE_AT) AS MODIFIED_TIME
+                 ,NULL AS RESOURCE_CATEGORY
+            FROM \"sap.tm.trp.db.systemmanagement.user::v_user_role\" T1
+            INNER JOIN \"sap.tm.trp.db.systemmanagement.user::t_user\" T2 ON T1.USER_ID = T2.ID
+            INNER JOIN \"sap.tm.trp.db.systemmanagement.user::t_role\" T3 ON T3.ID = T1.ID
+             LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_user\" T4 ON T4.ID = T3.CREATE_BY
+             LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_user\" T5 ON T5.ID = T3.LAST_MODIFIED_BY
+";
+
+depends_on_view = ["sap.tm.trp.db.systemmanagement.user::v_user_role"];
+                   
+depends_on_table = ["sap.tm.trp.db.systemmanagement.user::t_role",
+                    "sap.tm.trp.db.systemmanagement.user::t_user"];

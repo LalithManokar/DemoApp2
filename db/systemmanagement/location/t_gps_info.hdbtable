@@ -1,0 +1,20 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+
+
+table.columns =
+[
+    {name = "FROM_LOC";  sqlType = VARCHAR;  length = 200; nullable = false; },
+    {name = "TO_LOC";  sqlType = VARCHAR;  length = 200; nullable = false;},
+    {name = "MTR";  sqlType = VARCHAR; length = 10;},
+    {name = "GPS";  sqlType = TEXT;}
+];
+
+
+table.indexes = 
+[
+	{name = "IDX_GPS_INFO_FROM_TO_LOC"; order = ASC; indexColumns = ["FROM_LOC", "TO_LOC"];}
+];	
+	
+
+table.primaryKey.pkcolumns = ["FROM_LOC", "TO_LOC", "MTR"];

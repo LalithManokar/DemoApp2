@@ -1,0 +1,49 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_check_pipeline_model_procedure" (
+	IN SCHEMA_NAME NVARCHAR(256),
+    IN PROCEDURE_NAME NVARCHAR(256),
+    OUT ERROR_MSG NVARCHAR(256),
+    OUT IS_VALID SMALLINT
+)
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+-- DEFAULT SCHEMA ""
+READS SQL DATA
+AS
+BEGIN
+	DECLARE ROW_COUNT SMALLINT;
+	DECLARE ROW_COUNT_2 SMALLINT;
+	DECLARE TT_SCHEMA NVARCHAR(256);
+	DECLARE TT_NAME NVARCHAR(256);
+	-- standard table type which can be used to compare
+	DECLARE S_SCHEMA NVARCHAR (10) := 'SAP_TM_TRP'; 
+	DECLARE S_TT_NAME NVARCHAR(100):= 'sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets';
+	 
+	IS_VALID := 1; -- default value is true
+   	-- 1. check whether the procedure exists
+   	SELECT COUNT(1) INTO ROW_COUNT FROM PROCEDURES WHERE SCHEMA_NAME = :SCHEMA_NAME AND PROCEDURE_NAME = :PROCEDURE_NAME;
+   	
+  	IF (:ROW_COUNT = 1) THEN
+  	 	
+		-- 2. check whether the procedure interface match the API specification
+		PARAMETERS = SELECT POSITION, PARAMETER_NAME, PARAMETER_TYPE, TABLE_TYPE_SCHEMA, TABLE_TYPE_NAME FROM PROCEDURE_PARAMETERS WHERE SCHEMA_NAME = :SCHEMA_NAME AND PROCEDURE_NAME = :PROCEDURE_NAME;
+  			
+		-- 2.1 check whether procedure has and only has one output parameter
+  		SELECT COUNT(1) INTO ROW_COUNT FROM :PARAMETERS;
+  		SELECT COUNT(1) INTO ROW_COUNT_2 FROM :PARAMETERS WHERE PARAMETER_TYPE = 'OUT';
+  		IF(:ROW_COUNT = 1 AND :ROW_COUNT_2 = 1) THEN 
+  			-- 2.2 check whether the procedure parameter matches the specification
+  			SELECT TABLE_TYPE_SCHEMA, TABLE_TYPE_NAME INTO TT_SCHEMA, TT_NAME FROM :PARAMETERS;
+  			call "sap.tm.trp.db.pipeline::p_equals_table_signature"(:TT_SCHEMA, :TT_NAME, :S_SCHEMA, :S_TT_NAME, IS_VALID);
+  			IF (:IS_VALID = 0) THEN
+  					ERROR_MSG := 'MSG_ERROR_PROCEDURE_SIGNATURE_MISMATCH_SPECIFICATION';
+  			END IF;
+  		ELSE
+  			--IS_VALID := 0;
+  			--ERROR_MSG := 'MSG_ERROR_PROCEDURE_SHOULD_ONLY_HAS_ONE_OUT_PARAMETER';
+  		END IF;
+  	ELSE
+  		IS_VALID := 0;
+  	 	ERROR_MSG := 'MSG_ERR_PROCEDURE_NOT_AVAILIBLE';
+  	END IF;
+
+END;

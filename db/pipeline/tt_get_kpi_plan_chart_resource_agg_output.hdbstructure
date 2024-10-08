@@ -1,0 +1,13 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "used for kpi plan chart displayed by resources";
+table.columns = [
+  {name = "RESOURCE_TYPE_CODE"; sqlType = VARCHAR; length = 32;},
+  {name = "RESOURCE_TYPE_NAME"; sqlType = NVARCHAR; length = 200;},
+  {name = "START_TIME"; sqlType = TIMESTAMP;},
+  {name = "END_TIME"; sqlType = TIMESTAMP;},
+  {name = "SEQUENCE"; sqlType = INTEGER;},
+  {name = "OUTPUT_KEY"; sqlType = VARCHAR; length = 200;},
+  {name = "OUTPUT_VALUE"; sqlType = DECIMAL; length = 20; scale = 4;},
+  {name = "OUTPUT_NODE_NAME"; sqlType = VARCHAR; length = 255;}
+];

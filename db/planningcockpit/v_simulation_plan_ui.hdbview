@@ -1,0 +1,52 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT T1.ID,
+                 T1.CODE,
+                 T1.NAME AS SIMULATION_PLAN_NAME,
+                 T2.DESC AS SIMULATION_PLAN_DESC,
+                 T1.SD_PLAN_ID AS SUPPLY_DEMAND_PLAN_ID,
+                 T1.EXCUTE_ID,
+                 T8.EXECUTE_ON AS EXECUTION_TIME,
+                 T3.NAME AS SUPPLY_DEMAND_PLAN_NAME,
+                 T3.VISIBILITY_FLAG AS SUPPLY_DEMAND_PLAN_VISIBILITY_FLAG, 
+                 T3.CREATE_BY AS SUPPLY_DEMAND_PLAN_CREATE_BY,
+                 T1.PLAN_STATUS AS STATUS_CODE,
+                 T7.CURRENCY_CODE AS CURRENCY,
+                 T4.DESC AS STATUS,
+                 T1.NETWORK_SETTING_GROUP_ID,
+                 T7.NAME AS NETWORK_SETTING_GROUP_NAME,
+                 USER_TBL_CREATE.USERNAME AS CREATED_BY,
+                 T1.CREATED_ON AS CREATED_ON,
+                 USER_TBL_MODIFY.USERNAME AS MODIFIED_BY,
+                 T1.MODIFIED_ON AS MODIFIED_ON,
+                 IFNULL(T1.MODIFIED_ON, T1.CREATED_ON) AS LAST_MODIFIED_TIME,
+                 T1.RESOURCE_CATEGORY  
+            FROM \"sap.tm.trp.db.planningcockpit::t_simulation_plan\" AS T1
+            LEFT OUTER JOIN (SELECT TEXT.ID,TEXT.DESC
+                             FROM \"sap.tm.trp.db.planningcockpit::t_simulation_plan_t\" AS TEXT
+                             INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE
+                             ON TEXT.SPRAS = LANGUAGE.SPRAS)  AS T2
+            ON T1.ID = T2.ID            
+            INNER JOIN \"sap.tm.trp.db.pipeline::t_plan_model\" AS T3
+            ON T1.SD_PLAN_ID = T3.ID
+            LEFT OUTER JOIN \"sap.tm.trp.db.pipeline::t_plan_execution\" AS T8
+            ON (T1.EXCUTE_ID = T8.ID)
+            LEFT OUTER JOIN \"sap.tm.trp.db.planningcockpit::t_status\" AS T4
+            ON T1.PLAN_STATUS = T4.STATUS AND T4.CATEGORY = '01'
+            INNER JOIN \"sap.tm.trp.db.filter::t_filter_location_filter\" AS T5
+            ON T3.FILTER_GROUP_ID = T5.FILTER_GROUP_ID
+            INNER JOIN \"sap.tm.trp.db.filter::t_location_filter\" AS T6
+            ON T5.LOCATION_FILTER_ID = T6.ID
+            LEFT OUTER JOIN \"sap.tm.trp.db.planningcockpit::v_network_setting_group\" AS T7
+            ON T1.NETWORK_SETTING_GROUP_ID = T7.ID
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS USER_TBL_CREATE
+            ON T1.CREATED_BY = USER_TBL_CREATE.ID
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS USER_TBL_MODIFY
+            ON T1.MODIFIED_BY = USER_TBL_MODIFY.ID
+            ";
+
+depends_on_table = ["sap.tm.trp.db.filter::t_location_filter",
+                    "sap.tm.trp.db.filter::t_filter_location_filter", "sap.tm.trp.db.planningcockpit::t_simulation_plan", 
+                    "sap.tm.trp.db.planningcockpit::t_simulation_plan_t", "sap.tm.trp.db.pipeline::t_plan_model", 
+                    "sap.tm.trp.db.planningcockpit::t_status","sap.tm.trp.db.pipeline::t_plan_execution"];
+depends_on_view  = ["sap.tm.trp.db.semantic.common::v_lang_code","sap.tm.trp.db.planningcockpit::v_network_setting_group",
+                    "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

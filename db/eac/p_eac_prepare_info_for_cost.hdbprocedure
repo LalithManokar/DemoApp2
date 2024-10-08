@@ -1,0 +1,111 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.eac::p_eac_prepare_info_for_cost" (
+    IN RULE_ID BIGINT,
+    IN BK_ITEM   "sap.tm.trp.db.eac::tt_booking_item_eac_req",
+    IN LANE_LIST "sap.tm.trp.db.pickupreturn::tt_lane_list",
+    IN CARRIER   "sap.tm.trp.db.pickupreturn::tt_carrier_list",
+    OUT DATASET_CONNECTION_INFO "sap.tm.trp.db.costmodel::tt_cost_dataset_connection_info_new",
+    OUT MISSING_COST TABLE (from_location_name VARCHAR(200),  to_location_name VARCHAR(200),
+    transportation_mode_code NVARCHAR(20), resource_type NVARCHAR(20), resource_category NVARCHAR(20),
+    carrier_id NVARCHAR(20), cost_dataset_id VARCHAR(500)),
+    OUT MISSING_FILTER_MESSAGE "sap.tm.trp.routing.db.common::tt_message",
+    OUT LANE_OUTPUT "sap.tm.trp.db.pickupreturn::tt_location_based_cost_info"
+   )
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+
+    DECLARE TOTAL_COUNT INTEGER;
+    DECLARE COUNT INTEGER;
+    
+    --Rule INFO
+    DECLARE V_RULE_TYPE INTEGER;
+    DECLARE V_COST_MODEL_ID BIGINT;
+    
+    DECLARE USERNAME VARCHAR(50);
+    
+    SELECT USERNAME INTO USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+    
+    --Get realted location rule info
+    SELECT IFNULL (MAX (MANDATORY_COST_MODEL_ID),0) INTO V_COST_MODEL_ID
+    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" t1
+    LEFT JOIN "sap.tm.trp.db.planningcockpit::v_network_setting_group" t2
+    ON t1.NETWORK_SETTING_GROUP_ID = t2.ID
+    WHERE t1.ID = :RULE_ID;
+    
+    SELECT IFNULL (MAX (RULE_TYPE),0) INTO V_RULE_TYPE
+    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID = :RULE_ID;
+                             
+    TU_INFO     = SELECT EP_SRC_LOC_ID  AS SOURCE_LOCATION,
+                         EP_DEST_LOC_ID AS DESTINATION_LOCATION,
+                         POL            AS POL_NAME,
+                         RESOURCE_TYPE
+        FROM :BK_ITEM;
+        
+    QUERY_LIST = SELECT DISTINCT T1.FROM_LOCATION AS FROM_LOCATION_NAME,
+                        T1.TO_LOCATION AS TO_LOCATION_NAME,
+                        T1.MTR AS TRANSPORTATION_MODE_CODE,
+                        IFNULL(T2.CARRIER_ID,'') AS CARRIER_ID,
+                        T1.DISTANCE,
+                        T1.DURATION
+                 FROM :LANE_LIST T1
+                 LEFT OUTER JOIN :CARRIER T2
+                 ON (T1.ID = T2.CONNECTION_ID);
+    
+        
+      to_location_list = SELECT DISTINCT RESOURCE_TYPE,
+                                (CASE IFNULL(DESTINATION_LOCATION, '') 
+                                   WHEN '' THEN POL_NAME ELSE DESTINATION_LOCATION END) AS LOCATION
+                         FROM :TU_INFO;
+                                   
+      lane_info = SELECT DISTINCT T1.FROM_LOCATION_NAME,
+                          T1.TO_LOCATION_NAME,
+                          T1.TRANSPORTATION_MODE_CODE,
+                          T2.RESOURCE_TYPE,
+                          T1.CARRIER_ID,
+                          T1.DISTANCE,
+                          T1.DURATION
+                   FROM :QUERY_LIST T1
+                   INNER JOIN :to_location_list T2
+                   ON (T1.TO_LOCATION_NAME = T2.LOCATION);
+                   
+      lane_info1 = SELECT DISTINCT T1.FROM_LOCATION_NAME,
+                          T1.TO_LOCATION_NAME,
+                          T1.TRANSPORTATION_MODE_CODE,
+                          T1.RESOURCE_TYPE,
+                          T1.CARRIER_ID
+                   FROM :lane_info T1;
+
+    
+    --Cost output
+    CALL "sap.tm.trp.db.costmodel::sp_query_missing_cost"(
+        :v_cost_model_id, 
+        :lane_info1, 
+        missing_filter,
+        dataset_connection_info,
+        missing_cost
+    );
+        
+    MSG_PARAMS = SELECT DISTINCT TRANSPORTATION_MODE_CODE || CARRIER_ID AS GROUP_ID, 
+                        0 AS PLACEHOLDER, TRANSPORTATION_MODE_CODE AS VALUE
+                 FROM :MISSING_FILTER
+                 UNION ALL
+                 SELECT DISTINCT TRANSPORTATION_MODE_CODE || CARRIER_ID AS GROUP_ID, 
+                        1 AS PLACEHOLDER, CARRIER_ID AS VALUE 
+                 FROM :MISSING_FILTER;
+ 
+	CALL "sap.tm.trp.routing.db.common::p_get_text_batch"
+        ('MSG_COST_MODEL_FILTER_NOT_FOUND', :MSG_PARAMS, 'E', MISSING_FILTER_MESSAGE);
+
+                      
+   LANE_OUTPUT = SELECT DISTINCT t1.FROM_LOCATION_NAME AS FROM_LOCATION,
+                           t1.TO_LOCATION_NAME AS TO_LOCATION,
+                           t1.TRANSPORTATION_MODE_CODE AS MTR,
+                           t1.RESOURCE_TYPE,
+                           t1.CARRIER_ID AS CARRIER,
+                           t1.DISTANCE,
+                           t1.DURATION
+                    FROM :lane_info t1;                          
+END;

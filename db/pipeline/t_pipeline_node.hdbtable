@@ -1,0 +1,12 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "RESULT_VISIBLE"; sqlType = SMALLINT;},
+    {name = "PIPELINE_MODEL_ID"; sqlType = BIGINT;},
+    {name = "NODE_INDEX"; sqlType = INTEGER; } ,
+    {name = "NAME"; sqlType = VARCHAR; length = 255; },
+    {name = "METADATA_NODE_ID"; sqlType = VARCHAR; length = 500; nullable = true;}
+];
+table.primaryKey.pkcolumns = ["ID"];
+       

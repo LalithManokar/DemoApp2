@@ -1,0 +1,15 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.location::p_zone_primary_location_delete" (
+	IN ZONE_ID VARCHAR(22)
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	--DEFAULT SCHEMA <default_schema_name>
+	--READS SQL DATA 
+AS
+BEGIN
+
+DELETE FROM "sap.tm.trp.db.systemmanagement.location::t_zone_primary_location"
+WHERE ZONE_NAME IN (SELECT NAME FROM "sap.tm.trp.db.systemmanagement.location::v_all_zone_ui" WHERE ID = :ZONE_ID)
+;
+
+END;

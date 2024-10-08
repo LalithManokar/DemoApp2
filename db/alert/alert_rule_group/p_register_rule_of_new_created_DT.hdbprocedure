@@ -1,0 +1,79 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert.alert_rule_group::p_register_rule_of_new_created_DT" (
+    IN ALERT_NAME VARCHAR(50),
+    IN ALERT_DESC VARCHAR(200),
+    IN ALERT_RULE_TYPE_ID INTEGER,
+    IN SP VARCHAR(200),
+    OUT OUT_ALERT_RULE_ID BIGINT
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	AS
+BEGIN
+    DECLARE ALERT_RULE_ID BIGINT;
+    DECLARE PARAM_KEY VARCHAR(50);
+    DECLARE ALERT_RULE_TYPE_DESC VARCHAR(50);
+    DECLARE USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+    
+    PARAM_KEY := 'THRESHOLD';
+    
+    --select MAX(T1.ALERT_RULE_ID) + 1 into ALERT_RULE_ID 
+    --from "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule" T1;
+    
+    SELECT "sap.tm.trp.db.pipeline::s_pipeline_model".NEXTVAL INTO ALERT_RULE_ID
+    FROM DUMMY;
+    
+    OUT_ALERT_RULE_ID := ALERT_RULE_ID;
+    
+    select IFNULL(MAX(T1.ALERT_RULE_TYPE_DESC),'') into ALERT_RULE_TYPE_DESC 
+    from "sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_map_node_metaData" T1
+    where T1.ALERT_RULE_TYPE_ID = :ALERT_RULE_TYPE_ID;
+    
+    select IFNULL(MAX(T1.ID),0) into USER_ID
+    from "sap.tm.trp.db.systemmanagement.user::t_user" T1
+    where T1.USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username"());
+    
+    SELECT SPRAS INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+    
+    /*insert into "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule" 
+    values(ALERT_RULE_ID,
+           ALERT_NAME,
+           ALERT_DESC,
+           ALERT_RULE_TYPE_ID,
+           ALERT_RULE_TYPE_DESC,
+           SP,
+           :PARAM_KEY,
+           USER_ID,
+           -- CURRENT_TIMESTAMP,
+           CURRENT_UTCTIMESTAMP,
+           USER_ID,
+           CREAT_TIME);
+     */
+     
+    insert into "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule" 
+    (
+      ALERT_RULE_ID,
+      CODE,
+      NAME,
+      DESC, 
+      ALERT_RULE_TYPE_ID,
+      ALERT_RULE_TYPE_DESC,
+      SP,
+      SP_PARAM,
+      CREATE_BY,
+      CREATE_ON
+    )
+    values(:ALERT_RULE_ID,
+           :ALERT_NAME,
+           :ALERT_NAME,
+           :ALERT_DESC,
+           :ALERT_RULE_TYPE_ID,
+           :ALERT_RULE_TYPE_DESC,
+           :SP,
+           :PARAM_KEY,
+           :USER_ID,
+           CURRENT_UTCTIMESTAMP);
+    
+    INSERT INTO "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_t"(ID, SPRAS, DESC)
+    VALUES(:ALERT_RULE_ID, :SPRAS, :ALERT_DESC);
+END;

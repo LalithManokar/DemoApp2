@@ -1,0 +1,17 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::p_sd_parameter_time_period_by_plan" (
+	IN TIME_FILTER_ID BIGINT,
+	IN TIMEZONE NVARCHAR(50),
+	OUT ET_TIME_PERIOD "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_time_period"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+		
+	CALL "sap.tm.trp.db.filter::p_time_filter_interval_4_timezone"(:TIME_FILTER_ID,:TIMEZONE,TIME_INTERVAL);
+	
+	ET_TIME_PERIOD = SELECT TIME_INTERVAL_ID, SEQUENCE, START_TIME AS START_TIMESTAMP, END_TIME AS END_TIMESTAMP,
+     				  INTERVAL AS INTER_SECONDS
+                 FROM :TIME_INTERVAL;
+END;

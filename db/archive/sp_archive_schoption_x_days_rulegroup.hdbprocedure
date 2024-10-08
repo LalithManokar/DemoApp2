@@ -1,0 +1,244 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_archive_schoption_x_days_rulegroup"
+(IN RULE_ID BIGINT,
+ IN EXECUTION_ID BIGINT,
+ IN SCH_OPTION TINYINT,
+ IN NUM_DAYS BIGINT,
+ OUT STATUS_CODE INTEGER,
+ OUT RECORD_COUNT BIGINT,
+ OUT MESSAGE NVARCHAR(5000) 
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP" 
+AS 
+BEGIN
+    
+    DECLARE SUB_TAB_COUNT INT;
+    DECLARE SUB_TAB_NAME NVARCHAR(500);
+    DECLARE SUB_TAB_ID BIGINT;
+    DECLARE ARR_TABLE_NAME NVARCHAR(500) ARRAY;
+    DECLARE DATE_TO TIMESTAMP;
+    DECLARE DATE_TODAY TIMESTAMP;
+    DECLARE ARR_IND INT;
+    DECLARE ROOT_TEMP_TAB NVARCHAR(500);
+    DECLARE ROOT_WARM_TAB NVARCHAR(500);
+    DECLARE RECORDS_COUNT BIGINT;
+    DECLARE SQL_STT NVARCHAR(5000);
+    DECLARE SCHEMA_NAME NVARCHAR(20) DEFAULT 'SAP_TM_TRP';
+    DECLARE COLUMN_STR NVARCHAR(1000);
+    DECLARE KEY_COLUMN_STR NVARCHAR(1000);
+    DECLARE COLUMN_STR_TEMP NVARCHAR(1000);
+    DECLARE SUB_TAB_RECORD_COUNT BIGINT;
+    DECLARE CHILDTABERROR CONDITION FOR SQL_ERROR_CODE 10001;
+    DECLARE CHILD_TAB1_NAME NVARCHAR(500);
+    DECLARE TABLE_NAME NVARCHAR(500);
+    DECLARE CHILD_TAB2_NAME NVARCHAR(500);
+    DECLARE CHILD_TEMP_TAB1 NVARCHAR(500);
+    DECLARE CHILD_TEMP_TAB2 NVARCHAR(500);
+    DECLARE CHILD_WARM_TAB1 NVARCHAR(500);
+    DECLARE CHILD_WARM_TAB2 NVARCHAR(500);
+    DECLARE PROCESS_TIMES BIGINT;
+	DECLARE DATA_PACKET_SIZE BIGINT;
+    DECLARE EXIT HANDLER FOR CHILDTABERROR
+    BEGIN
+		--DO NOTHING
+    END;
+    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        STATUS_CODE := 1;
+        SELECT ::SQL_ERROR_MESSAGE INTO MESSAGE FROM DUMMY;
+    END;  
+  
+    --initialize status code
+    STATUS_CODE := 0;
+    MESSAGE := 'Success';
+    RECORD_COUNT := 0;
+    SUB_TAB_RECORD_COUNT := 0;
+    
+	TABLE_NAME = 'sap.tm.trp.db.pickupreturn::t_location_rule_running_log';
+    CHILD_TAB1_NAME = 'sap.tm.trp.db.pickupreturn::t_location_rule_assign_result';
+    CHILD_TAB2_NAME = 'sap.tm.trp.db.pickupreturn::t_location_rule_assign_error';
+	
+	 --move archived rows of child table into temporary table
+    CHILD_WARM_TAB1 := :CHILD_TAB1_NAME || '_warm';
+    SELECT REPLACE(REPLACE(:CHILD_TAB1_NAME,'.','_'),'::','_') || '_warm_temp' INTO CHILD_TEMP_TAB1 FROM DUMMY;
+	
+	CHILD_WARM_TAB2 := :CHILD_TAB2_NAME || '_warm';
+    SELECT REPLACE(REPLACE(:CHILD_TAB2_NAME,'.','_'),'::','_') || '_warm_temp' INTO CHILD_TEMP_TAB2 FROM DUMMY;
+    SELECT CURRENT_UTCTIMESTAMP INTO DATE_TODAY FROM DUMMY;
+    
+    DATE_TO = ADD_DAYS( DATE_TODAY, -NUM_DAYS);
+    
+    	 --get data packet size 
+    SELECT PACKET_SIZE INTO DATA_PACKET_SIZE FROM "sap.tm.trp.db.archive::t_archive_exec_run_metadata" AS T1
+    INNER JOIN "sap.tm.trp.db.archive::t_archive_metadata" AS T2
+    ON T1.TABLE_ID = T2.ID WHERE T2.TABLE_NAME = :TABLE_NAME;
+    
+    --move archived rows of root table into temporary table
+    ROOT_WARM_TAB := :TABLE_NAME || '_warm';
+    SELECT REPLACE(REPLACE(:TABLE_NAME,'.','_'),'::','_') || '_warm_temp' INTO ROOT_TEMP_TAB FROM DUMMY;
+    SELECT STRING_AGG(COLUMN_NAME,',') INTO COLUMN_STR FROM TABLE_COLUMNS WHERE SCHEMA_NAME = :SCHEMA_NAME AND TABLE_NAME = :TABLE_NAME;
+    
+    SQL_STT =  'INSERT INTO "'|| :SCHEMA_NAME||'"."'||:ROOT_TEMP_TAB||
+    '"
+    (
+     ID,
+	 RUN_ID,
+	 RULE_ID,
+	 LOCATION_FILTER_ID ,
+	 EXECUTION_STATUS,
+	 ERROR_MSG,
+	 EXECUTION_START_TIME,
+	 EXECUTION_END_TIME
+    )
+    SELECT 
+     ID,
+	 RUN_ID,
+	 RULE_ID,
+	 LOCATION_FILTER_ID ,
+	 EXECUTION_STATUS,
+	 ERROR_MSG,
+	 EXECUTION_START_TIME,
+	 EXECUTION_END_TIME
+    FROM "sap.tm.trp.db.pickupreturn::t_location_rule_running_log"
+    WHERE RUN_ID IN 
+    (   
+    SELECT RUN_ID FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_location_rule_assign_result"
+    WHERE EXECUTION_TIME < ' || '''' || :DATE_TO || ''''||'
+    UNION
+    SELECT RUN_ID FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_location_rule_assign_error"
+    WHERE EXECUTION_TIME < '|| '''' || :DATE_TO || ''''||
+    ')';
+    EXECUTE IMMEDIATE :SQL_STT;
+    
+    create local temporary table "#t_record_count" (num_records BIGINT);
+	
+	INSERT INTO "#t_record_count" SELECT COUNT(*) FROM  "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_location_rule_assign_error"
+	WHERE EXECUTION_TIME < :DATE_TO;
+
+	SELECT TOP 1 num_records INTO RECORDS_COUNT FROM "#t_record_count";
+	
+	DROP TABLE "#t_record_count";
+	
+	PROCESS_TIMES = CEIL(RECORDS_COUNT/:DATA_PACKET_SIZE);	
+	
+    SELECT STRING_AGG(COLUMN_NAME,',') INTO COLUMN_STR FROM TABLE_COLUMNS WHERE SCHEMA_NAME = :SCHEMA_NAME AND TABLE_NAME = :CHILD_TAB2_NAME;
+    
+	SELECT 'RUN_ID, RULE_ID, TU_ID' INTO KEY_COLUMN_STR FROM dummy;
+
+	WHILE :PROCESS_TIMES > 0 DO
+    
+    SQL_STT =  
+    'INSERT INTO "'|| :SCHEMA_NAME||'"."'||:CHILD_TEMP_TAB2||
+    '"
+     (
+     ' || :COLUMN_STR || '
+     )
+    SELECT TOP ' || :DATA_PACKET_SIZE || ' ' || :COLUMN_STR || '
+    FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_location_rule_assign_error"
+    WHERE EXECUTION_TIME < ' || '''' || :DATE_TO || '''';
+    
+    EXECUTE IMMEDIATE :SQL_STT;
+    
+    SQL_STT=
+    'DELETE FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_location_rule_assign_error" WHERE ( ' || :KEY_COLUMN_STR || ' ) IN 
+    (SELECT TOP ' || :DATA_PACKET_SIZE || ' ' || :KEY_COLUMN_STR || ' FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_location_rule_assign_error"
+    WHERE EXECUTION_TIME < ' || '''' || :DATE_TO || ''''||')';
+    EXECUTE IMMEDIATE :SQL_STT;
+    
+    SQL_STT := 'UPDATE "' || :SCHEMA_NAME || '"."' || :CHILD_TEMP_TAB2 || '" SET TRP_RULE_ID = ' || :RULE_ID || ', TRP_EXECUTION_ID = ' || :EXECUTION_ID;
+    EXECUTE IMMEDIATE :SQL_STT;
+    
+	COLUMN_STR_TEMP  := :COLUMN_STR || ',TRP_RULE_ID,TRP_EXECUTION_ID';
+	
+	SQL_STT := 'INSERT INTO "' || :SCHEMA_NAME || '"."' || :CHILD_WARM_TAB2 || '"  (' || :COLUMN_STR_TEMP || ') SELECT '
+	|| :COLUMN_STR_TEMP || '  FROM ' ||:SCHEMA_NAME||'"."'||:CHILD_TEMP_TAB2||'"';
+	EXECUTE IMMEDIATE :SQL_STT;   	
+	
+	SQL_STT = 'DELETE FROM  "' || :SCHEMA_NAME || '"."' || :CHILD_TEMP_TAB2||'"';
+	EXECUTE IMMEDIATE :SQL_STT;   
+	
+	PROCESS_TIMES = :PROCESS_TIMES - 1;
+	
+	END WHILE;
+	
+	create local temporary table "#t_record_count" (num_records BIGINT);
+	
+	INSERT INTO "#t_record_count" SELECT COUNT(*) FROM  "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_location_rule_assign_result"
+	WHERE EXECUTION_TIME < :DATE_TO;
+	
+	SELECT TOP 1 num_records INTO RECORDS_COUNT FROM "#t_record_count";
+	
+    SELECT STRING_AGG(COLUMN_NAME,',') INTO COLUMN_STR FROM TABLE_COLUMNS WHERE SCHEMA_NAME = :SCHEMA_NAME AND TABLE_NAME = :CHILD_TAB1_NAME;
+    
+	SELECT STRING_AGG(COLUMN_NAME,',') INTO KEY_COLUMN_STR FROM "SYS"."CONSTRAINTS" WHERE SCHEMA_NAME = :SCHEMA_NAME AND TABLE_NAME = :CHILD_TAB1_NAME;
+
+	DROP TABLE "#t_record_count";
+	
+	PROCESS_TIMES = CEIL(RECORDS_COUNT/:DATA_PACKET_SIZE);	
+	
+	SELECT STRING_AGG(COLUMN_NAME,',') INTO COLUMN_STR FROM TABLE_COLUMNS WHERE SCHEMA_NAME = :SCHEMA_NAME AND TABLE_NAME = :CHILD_TAB1_NAME;
+	 
+	WHILE :PROCESS_TIMES > 0 DO
+	
+    SQL_STT=
+    'INSERT INTO "'|| :SCHEMA_NAME||'"."'||:CHILD_TEMP_TAB1||
+    '"
+    (' || :COLUMN_STR || ' 
+	)
+    SELECT TOP ' || :DATA_PACKET_SIZE || ' ' || :COLUMN_STR || '
+	FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_location_rule_assign_result"
+    WHERE EXECUTION_TIME < ' || '''' || :DATE_TO || '''';
+    EXECUTE IMMEDIATE :SQL_STT;
+   
+    SQL_STT=
+    'DELETE FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_location_rule_assign_result" WHERE ( ' || :KEY_COLUMN_STR || ' ) IN 
+    (SELECT TOP ' || :DATA_PACKET_SIZE || ' ' || :KEY_COLUMN_STR || ' FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_location_rule_assign_result"
+    WHERE EXECUTION_TIME < ' || '''' || :DATE_TO || ''''||')';
+    EXECUTE IMMEDIATE :SQL_STT; 
+    
+    SQL_STT := 'UPDATE "' || :SCHEMA_NAME || '"."' || :CHILD_TEMP_TAB1 || '" SET TRP_RULE_ID = ' || :RULE_ID || ', TRP_EXECUTION_ID = ' || :EXECUTION_ID;
+    EXECUTE IMMEDIATE :SQL_STT;
+    
+    COLUMN_STR_TEMP  := :COLUMN_STR || ',TRP_RULE_ID,TRP_EXECUTION_ID';
+	
+	SQL_STT := 'INSERT INTO  "' || :SCHEMA_NAME || '"."' || :CHILD_WARM_TAB1 || '"  (' || :COLUMN_STR_TEMP || ') SELECT '
+	|| :COLUMN_STR_TEMP || ' FROM ' ||:SCHEMA_NAME||'"."'||:CHILD_TEMP_TAB1||'"';
+	EXECUTE IMMEDIATE :SQL_STT;
+	
+    SQL_STT = 'DELETE FROM  "' || :SCHEMA_NAME || '"."' || :CHILD_TEMP_TAB1||'"';
+	EXECUTE IMMEDIATE :SQL_STT;   
+	
+	PROCESS_TIMES = :PROCESS_TIMES - 1;
+		
+	END WHILE; 
+	
+    RECORD_COUNT := :RECORD_COUNT + :SUB_TAB_RECORD_COUNT;
+           
+    ---archive root table
+    DELETE FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_location_rule_running_log"
+    WHERE RUN_ID NOT IN 
+    (SELECT RUN_ID FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_location_rule_assign_result"
+    UNION
+    SELECT RUN_ID FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_location_rule_assign_error"
+    );
+    
+   SQL_STT := 'UPDATE "' || :SCHEMA_NAME || '"."' || :ROOT_TEMP_TAB || '" SET TRP_RULE_ID = ' || :RULE_ID || ', TRP_EXECUTION_ID = ' || :EXECUTION_ID;
+   EXECUTE IMMEDIATE :SQL_STT;
+   
+    SELECT STRING_AGG(COLUMN_NAME,',') INTO COLUMN_STR FROM TABLE_COLUMNS WHERE SCHEMA_NAME = :SCHEMA_NAME AND TABLE_NAME = :TABLE_NAME;
+    
+    COLUMN_STR := :COLUMN_STR || ',TRP_RULE_ID,TRP_EXECUTION_ID';
+    SQL_STT := 'INSERT INTO "' || :SCHEMA_NAME || '"."' || :ROOT_WARM_TAB || '"  (' || :COLUMN_STR || ') SELECT '
+    || :COLUMN_STR || ' FROM "' || :SCHEMA_NAME || '"."' || :ROOT_TEMP_TAB || '"';
+    EXECUTE IMMEDIATE :SQL_STT;
+    
+    --clear root temporary table   
+    SQL_STT := 'DELETE FROM "' || :SCHEMA_NAME || '"."' || :ROOT_TEMP_TAB || '"';
+    EXECUTE IMMEDIATE :SQL_STT;
+        
+    --get count
+    RECORD_COUNT := :RECORD_COUNT + :SUB_TAB_RECORD_COUNT;
+    
+END;

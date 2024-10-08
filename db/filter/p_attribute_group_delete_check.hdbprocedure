@@ -1,0 +1,39 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_attribute_group_delete_check" (
+	IN GROUP_ID BIGINT,
+	OUT WHEREUSED "sap.tm.trp.db.whereusedlist::v_used_attribute_group" 
+   ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	--READS SQL DATA 
+AS
+BEGIN
+ 
+DECLARE OBJECT_CODE VARCHAR(40);
+  
+--get code by id
+SELECT IFNULL (MAX (CODE),'') 
+INTO OBJECT_CODE 
+FROM "sap.tm.trp.db.filter::t_attribute_group"
+WHERE ID = :GROUP_ID
+;
+  
+--get used list by code
+WHEREUSED = 
+	SELECT
+		OBJECT_CODE
+		,USED_OBJECT_ID
+		,NAME
+		,CODE
+		,CATEGORY
+		,DESC
+		,VISIBILITY
+		,CREATED_BY
+		,MODIFIED_BY
+		,MODIFIED_TIME
+		,RESOURCE_CATEGORY
+	FROM "sap.tm.trp.db.whereusedlist::v_used_attribute_group"
+	WHERE OBJECT_CODE = :OBJECT_CODE
+;
+
+END;

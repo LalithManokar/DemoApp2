@@ -1,0 +1,10 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "DATA_OBJECT_ID"; sqlType = INTEGER;comment="1:STOCK_TODAY, 2:STOCK_TIME_WINDOW, 3:TOR_SUPPLY/FORECAST_SUPPLY, 4:TOR_DEMAND/FORECAST_DEMAND, 5:TOR_SUPPLY_DEMAND/FORECAST_SUPPLY_DEMAND";},
+    {name = "DATA_OBJECT_FORMAT"; sqlType = VARCHAR; length = 200;comment="1:STOCK, 2:STOCK_SUPPLY_DEMAND, 3:SUPPLY, 4:DEMAND, 5:SUPPLY_DEMAND";},
+    {name = "NODE_OUTPUT_KEYS"; sqlType = VARCHAR; length = 200;},
+    {name = "METADATA_NODE_ID"; sqlType = VARCHAR; length = 500;},
+    {name = "PIPELINE_MODEL_ID"; sqlType = BIGINT;}    
+    ];
+table.primaryKey.pkcolumns = ["DATA_OBJECT_ID","METADATA_NODE_ID","PIPELINE_MODEL_ID"];

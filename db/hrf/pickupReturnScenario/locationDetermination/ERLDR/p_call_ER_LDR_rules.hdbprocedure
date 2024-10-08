@@ -1,0 +1,104 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::p_call_ER_LDR_rules" ( 
+in IN_PICK_RETURN_TYPE  VARCHAR(2),
+in IN_LDR_NAME VARCHAR(50),
+out OUT_ER_LDR "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_trp_hrf_ER_LDR_output_base"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    DECLARE SCRIPT VARCHAR(5000);
+    DECLARE RULE_SP VARCHAR(200);
+
+  select ifnull(max(T1.SP),'') into RULE_SP
+  from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule" T1
+  where T1.NAME = :IN_LDR_NAME;
+
+  truncate table "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_hrf_ER_LDR_outputGlobalTemp";
+
+  SCRIPT := 'call '|| escape_single_quotes(:RULE_SP) ||'('''|| escape_single_quotes(:IN_PICK_RETURN_TYPE) || 
+  ''', "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_hrf_ER_LDR_outputGlobalTemp",
+  "sap.tm.trp.db.hrf.ruleManage::t_hrf_actions_results") with overview'; 
+
+  select :SCRIPT from dummy;
+    execute immediate(:SCRIPT); 
+  --  insert into "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_trp_hrf_ER_LDR_output_base"
+  --  (
+  OUT_ER_LDR =  select 	distinct
+    T1.PR_RULE_ID,
+    
+    T1.TU_ID,
+    T1.EQUIPMENT_ID,
+    T1.EQUIP_TYPE_NAME, 
+    T1.QUANTITY,
+    T1.LOCATION_ID,
+    T1.LOCATION_NAME,
+    T1.PLANNED_DATE,
+    T1.TU_TYPE,
+    
+    T1.ITE_KEY,
+    
+    T1.SHIPPER_ID,
+    T1.SHIPPER_NAME, 
+    T1.POL,
+    T1.POL_NAME, 
+    T1.POD,
+    T1.POD_NAME, 
+    T1.CONSIGNEE_ID,    
+    T1.CONSIGNEE_NAME,   
+    T1.CUSTOMER_NAME,  
+    T1.PLANNING_RELEVANT,   
+    
+    T1.EXECUTION_STATUS, 
+	T1.LIFECYCLE_STATUS, 
+	T1.BOOKING_DATE,
+            
+    T1.PLAN_EXECUTION_ID,
+    T1.PLAN_MODEL_ID, 
+    T1.NODE_ID,
+    T1.DEPOT_ID,
+    T1.DEPOT_NAME,
+    
+    T1.STOCK,
+    T1.SUPPLY,
+    T1.DEMAND,
+    
+    T1.IMPACTED_SUPPLY,
+    T1.IMPACTED_DEMAND,
+    
+    T1.BALANCE_SUPPLY_DEMAND,
+    T1.BALANCE_STOCK_SUPPLY_DEMAND,
+    T1.MIN_SAFETY_STOCK,
+    T1.MAX_CAPACITY,
+    
+    T1.COST_MODEL_ID,
+    T1.TR_COST,
+    T1.HANDLE_COST,
+    T1.FREE_DAYS,
+    T1.STORAGE_COST,
+    
+    T2.RULE_NAME, 
+    T2.ROW_ID,  
+    T2.EXCLUSION_FLAG,     
+    T2.LOC_RANK,
+    CASE WHEN  T2.ER_LDR is null
+    THEN 'NUL'
+    ELSE T2.ER_LDR
+    END AS ER_LDR,
+    T1.FREE_AMOUNT
+    from "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_hrf_ER_LDR_outputGlobalTemp" T2
+    inner join "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_booking_ER_LDR_balance_cost_base_inputGlobalTemp" T1
+    on T1.PR_RULE_ID = T2.PR_RULE_ID and 
+       T1.TU_ID = T2.TU_ID and 
+       T1.EQUIPMENT_ID = T2.EQUIPMENT_ID and 
+       T1.LOCATION_ID = T2.LOCATION_ID and 
+       T1.PLANNED_DATE = T2.PLANNED_DATE and 
+       T1.TU_TYPE = T2.TU_TYPE and 
+       T1.PLAN_EXECUTION_ID = T2.PLAN_EXECUTION_ID and 
+       T1.NODE_ID = T2.NODE_ID and 
+       T1.DEPOT_ID = T2.DEPOT_ID and 
+       T1.COST_MODEL_ID = T2.COST_MODEL_ID;
+   -- );
+    
+END;

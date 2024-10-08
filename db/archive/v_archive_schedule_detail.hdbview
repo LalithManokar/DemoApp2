@@ -1,0 +1,14 @@
+schema = "SAP_TM_TRP";
+query  ="SELECT 
+                RULE_ID AS ID,
+                ID AS ARCHIVE_SCHEDULE_ID,
+                RECURRENCE_TYPE, 
+                RECURRENCE_INTERVAL,
+                RECURRENCE_DAY, 
+                START_TIME,
+                EXPIRY_TIME
+         from \"sap.tm.trp.db.job::t_archive_schedule_detail\"
+         WHERE SCHEDULE_TYPE = 'ARCHIVE'
+         ";
+
+depends_on_table = ["sap.tm.trp.db.job::t_archive_schedule_detail"];

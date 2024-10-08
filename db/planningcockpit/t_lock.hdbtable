@@ -1,0 +1,9 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "SESSION_ID"; sqlType = VARCHAR; length = 200; nullable = false;},
+    {name = "USER_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "SIMULATION_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "LAST_MODIFYED_ON"; sqlType = TIMESTAMP;  nullable = true;}        
+];
+table.primaryKey.pkcolumns = ["SESSION_ID","USER_ID","SIMULATION_ID"];

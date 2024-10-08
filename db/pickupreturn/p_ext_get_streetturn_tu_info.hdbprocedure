@@ -1,0 +1,74 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_get_streetturn_tu_info" (
+    IN IN_RESOURCE_CATEGORY VARCHAR(50),
+    IN V_RULE_TYPE INTEGER,
+    IN TU_IDS "sap.tm.trp.db.pickupreturn::tt_tu_list",     
+    OUT TU_INFO "sap.tm.trp.db.pickupreturn::tt_streetturn_pair_tu_info"
+) 
+	LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+/***************************** 
+	Write your procedure logic 
+ *****************************/
+     DECLARE VAL_ITEM_CAT VARCHAR(200);
+     DECLARE VAL_MOT_CAT VARCHAR(200);    
+  
+      SELECT  IFNULL (MAX (VALUE),'') INTO VAL_ITEM_CAT 
+        FROM  "sap.tm.trp.db.systemmanagement::t_config_cust"
+       WHERE  code =:IN_RESOURCE_CATEGORY
+         AND  KEY  = 'ITEM_CAT';
+                 
+     IF :V_RULE_TYPE = 1 THEN     
+	    
+     orders_with_locations = SELECT DISTINCT t1.TU_KEY,
+     		                                 t1.TU_ID AS TOR_ID,
+     	                                     t1.TU_TYPE_CODE AS MOVEMENT_CAT,
+     	                                     '' AS ORIGINAL_PICKUP_LOCATION_ID,
+     	                                     '' AS ORIGINAL_PICKUP_LOCATION,
+      	                                     NULL AS ORIGINAL_PICKUP_DATE,
+       	                                     t1.LAST_STOP_LOC_ID AS ORIGINAL_RETURN_LOCATION_ID,
+                                             t1.LAST_STOP_LOC_NAME AS ORIGINAL_RETURN_LOCATION,
+                                             TO_TIMESTAMP(LAST_STOP_SEL_TIME) AS ORIGINAL_RETURN_DATE
+                             FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::t_pr_harmonized_tu_list" t1
+                             INNER JOIN :tu_ids TU_LIST ON T1.TU_ID = TU_LIST.TU_ID
+                             WHERE t1.TU_TYPE_CODE = 'ER' AND  t1.CD_DELETE_FLAG = '';
+					         
+				                 
+	ELSE 
+
+     orders_with_locations = SELECT DISTINCT t1.TU_KEY,
+     	                                     t1.TU_ID AS TOR_ID,
+     	                                     t1.TU_TYPE_CODE AS MOVEMENT_CAT,
+     	                                     t1.FIRST_STOP_LOC_ID AS ORIGINAL_PICKUP_LOCATION_ID,
+                                             t1.FIRST_STOP_LOC_NAME AS ORIGINAL_PICKUP_LOCATION,
+                                             TO_TIMESTAMP(t1.FIRST_STOP_SEL_TIME) AS ORIGINAL_PICKUP_DATE,
+                                             '' AS ORIGINAL_RETURN_LOCATION_ID,
+                                             '' AS ORIGINAL_RETURN_LOCATION,
+                                             NULL AS ORIGINAL_RETURN_DATE
+                             FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::t_pr_harmonized_tu_list" t1
+                             INNER JOIN :tu_ids TU_LIST ON t1.TU_ID = TU_LIST.TU_ID
+                             WHERE t1.TU_TYPE_CODE = 'EP' AND  t1.CD_DELETE_FLAG = '';
+     END IF;
+	 
+	 			
+	 TU_INFO = SELECT DISTINCT t1.TOR_ID as TRANSPORTATION_ID,
+                      MAX(t2.RESOURCE_TYPE) AS RESOURCE_TYPE, 
+                      SUM(t2.QUA_PCS_VAL) AS QUANTITY, 
+                      t1.ORIGINAL_PICKUP_DATE,
+                      t1.ORIGINAL_PICKUP_LOCATION_ID,
+                      t1.ORIGINAL_PICKUP_LOCATION, 
+                      t1.ORIGINAL_RETURN_DATE,
+                      t1.ORIGINAL_RETURN_LOCATION_ID,
+                      t1.ORIGINAL_RETURN_LOCATION                     
+                FROM :orders_with_locations t1
+                INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item_resource" t2
+                            ON (t2.TU_KEY = t1.TU_KEY AND t2.ITEM_CAT = :VAL_ITEM_CAT )
+                INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t6
+			    ON (t2.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :IN_RESOURCE_CATEGORY)            
+			           GROUP BY t1.TOR_ID, t1.ORIGINAL_PICKUP_DATE, t1.ORIGINAL_PICKUP_LOCATION_ID, t1.ORIGINAL_PICKUP_LOCATION, 
+			                               t1.ORIGINAL_RETURN_DATE, t1.ORIGINAL_RETURN_LOCATION_ID, t1.ORIGINAL_RETURN_LOCATION;
+			                  
+			                  
+END;

@@ -1,0 +1,27 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_persisted_plans_time_filter_check" (
+	IN IN_PLAN_MODEL_ID "sap.tm.trp.db.pipeline::tt_plan_id_list",
+	OUT time_filter_inconsistent_error_flag SMALLINT
+	) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+
+
+ DECLARE I_COUNT INTEGER :=0 ;
+ 
+ --default, no error: have intersection:
+ time_filter_inconsistent_error_flag :=0;
+ 
+ SELECT COUNT(DISTINCT T3.TIME_FILTER_ID) AS NUM INTO I_COUNT
+  FROM :IN_PLAN_MODEL_ID T1
+ INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T2 ON (T1.ID = T2.ID)
+ INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T3 ON (T2.FILTER_GROUP_ID = T3.ID);
+ 
+ IF I_COUNT >1 THEN
+ 	 time_filter_inconsistent_error_flag :=1;
+ END IF;
+ 
+ 
+END;

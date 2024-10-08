@@ -1,0 +1,152 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_location_rule_update" (
+    IN RULE_ID    BIGINT,
+    IN RULE_NAME  VARCHAR(200),
+    IN DESP VARCHAR(500),
+    IN TIME_RANGE INTEGER,-- comment="Transfer to seconds"
+    IN TIME_RANGE_UINT INTEGER, -- comment="1:hours 2:days 3:weeks"
+    IN EQUIP_FILTER_ID  BIGINT,
+    IN LOCATION_FILTER_ID BIGINT,
+    IN SD_PLAN_ID BIGINT,
+    IN NETWORK_SETTING_GROUP_ID BIGINT,
+    IN SCHEDULE_TIME_TYPE INTEGER, -- comment="0:manual 1:automatic"
+    IN EXECUTE_INTERVAL INTEGER,
+    IN EXECUTE_TIME_UINT VARCHAR(50),
+    IN EXECUTE_DAY INTEGER,
+    IN START_DATETIME TIMESTAMP,
+    IN END_DATETIME TIMESTAMP,
+    IN OP_SETTING_TYPE INTEGER, --comment="1:location 2:Opt 3:location+Opt"
+    IN LOCATION_DETERMIN_ID BIGINT,
+    IN OPTIMIZATION INTEGER, --comment="1:cost based :balancing based 3:cost+balancing"
+    IN ALLOWED_USAGE VARCHAR(3),
+    IN FILTER_EXECUTION SMALLINT,
+    IN EXCLUSIVE_RULE_ID BIGINT,
+    IN TIME_WINDOW_SECONDS BIGINT,  --unit is seconds
+    IN RANK_NUMBER INTEGER,
+    IN SEL_DATE VARCHAR(200),
+    IN KEEP_EXECUTION_RUNS BIGINT,
+    IN EXECUTE_WORKING_HOUR VARCHAR(1),
+    IN START_WORKING_HOUR_TIME TIMESTAMP,
+    IN END_WORKING_HOUR_TIME TIMESTAMP,
+    IN TIMEZONES VARCHAR(40),
+    OUT STATUS INTEGER,  --0 error  1 success
+    OUT MESSAGE VARCHAR(200)
+   )
+	 LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+    DECLARE V_USER_ID BIGINT;
+    DECLARE V_USERNAME VARCHAR(200);
+    DECLARE V_SPRAS VARCHAR(10);
+    DECLARE V_TIMESTAMP_START  DATETIME  := CURRENT_UTCTIMESTAMP;
+    DECLARE V_CNT INT;
+    DECLARE V_TIME_RANGE INT;
+    DECLARE CM_LOC_INCONSISTENCY_COUNT INTEGER;
+    DECLARE V_USER_TYPE INTEGER;
+    DECLARE V_CREATE_BY INTEGER;
+    DECLARE V_ALLOWED_USAGE VARCHAR(3);
+    ---DECLARE PIPELINE_MODEL_COUNT INTEGER;
+    DECLARE V_STATUS INTEGER; --0 error  1 success
+    DECLARE V_MESSAGE VARCHAR(200);
+
+    SELECT USERNAME INTO V_USERNAME
+    FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+
+    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(V_USER_ID);
+    SELECT IFNULL (MAX (SPRAS),'') INTO V_SPRAS
+    FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+
+    SELECT IFNULL (MAX (USER_TYPE_ID),0) INTO V_USER_TYPE
+    FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE ID = :V_USER_ID;
+
+    SELECT COUNT(*) INTO V_CNT
+    FROM  "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID=:RULE_ID;
+
+    SELECT IFNULL (MAX (ALLOWED_USAGE),'') INTO V_ALLOWED_USAGE
+    FROM  "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID=:RULE_ID;
+
+    SELECT IFNULL (MAX (CREATE_BY),0) INTO V_CREATE_BY
+    FROM  "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID=:RULE_ID;
+
+    --Must have both supply and demand data flag
+    /*SELECT COUNT(*) INTO PIPELINE_MODEL_COUNT
+    FROM "sap.tm.trp.db.pipeline::t_plan_model" AS A
+    INNER JOIN "sap.tm.trp.db.pipeline::v_pipeline_has_supply_demand" AS B
+    ON A.PIPELINE_MODEL_ID = B.PIPELINE_MODEL_ID
+    WHERE B.HAS_SUPPLY_DEMAND = 0 AND A.ID = :SD_PLAN_ID;*/
+    CALL "sap.tm.trp.db.pickupreturn::p_check_supply_demand_flag"(:SD_PLAN_ID, V_STATUS, V_MESSAGE);
+
+    IF :V_CNT=0 THEN
+      STATUS :=0;
+  	  MESSAGE :='MSG_ERROR_NO_LOCATION_RULE';
+
+  	ELSE
+      IF :V_USER_ID <> :V_CREATE_BY AND :V_USER_TYPE <> 99 AND :ALLOWED_USAGE <> :V_ALLOWED_USAGE THEN
+        STATUS :=0;
+  	    MESSAGE :='MSG_ERROR_NO_AUTHORIZATION_CHANGE_VISIBILITY';
+  	  ELSEIF V_STATUS = 0 THEN
+        STATUS := 0;
+        MESSAGE := :V_MESSAGE;
+  	  ELSE
+  	    IF :SCHEDULE_TIME_TYPE = 1 AND :OPTIMIZATION = 2 AND :OP_SETTING_TYPE <> 1 THEN
+  	      STATUS :=0;
+  	      MESSAGE :='MSG_ERROR_SCHEDULE_OPTIMIZATION_CONFLICT';
+  	    ELSE
+  	      IF  :TIME_RANGE_UINT=1 THEN
+	  	        V_TIME_RANGE:=:TIME_RANGE*3600;
+	  	      ELSEIF :TIME_RANGE_UINT=2 THEN
+	  	        V_TIME_RANGE:=:TIME_RANGE*3600*24;
+	  	      ELSE
+	  	        V_TIME_RANGE:=:TIME_RANGE*3600*24*7;
+	          END IF;
+
+		      UPDATE "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+		      SET  TIME_RANGE =:V_TIME_RANGE,
+		           TIME_RANGE_UINT =:TIME_RANGE_UINT,
+		           EQUIP_FILTER_ID =:EQUIP_FILTER_ID,
+		           LOCATION_FILTER_ID =:LOCATION_FILTER_ID,
+		           SD_PLAN_ID =:SD_PLAN_ID,
+		           COST_MODEL_ID =0,
+		           SCHEDULE_TIME_TYPE =:SCHEDULE_TIME_TYPE,
+		           EXECUTE_INTERVAL =:EXECUTE_INTERVAL,
+		           EXECUTE_TIME_UINT =:EXECUTE_TIME_UINT,
+		           EXECUTE_DAY =:EXECUTE_DAY,
+		           START_DATETIME =:START_DATETIME,
+		           END_DATETIME =:END_DATETIME,
+		           MODIFIED_BY =:V_USER_ID,
+		           MODIFIED_ON =:V_TIMESTAMP_START,
+		           ALLOWED_USAGE = :ALLOWED_USAGE,
+		           OP_SETTING_TYPE = :OP_SETTING_TYPE,
+		           LOCATION_DETERMIN_ID = :LOCATION_DETERMIN_ID,
+		           OPTIMIZATION = :OPTIMIZATION,
+		           FILTER_EXECUTION = :FILTER_EXECUTION,
+		           EXCLUSIVE_RULE_ID = :EXCLUSIVE_RULE_ID,
+		           NETWORK_SETTING_GROUP_ID = :NETWORK_SETTING_GROUP_ID,
+		           TIME_WINDOW_SECONDS =:TIME_WINDOW_SECONDS,
+		           RANK_NUMBER =:RANK_NUMBER,
+		           SELECTION_DATE = :SEL_DATE,
+		           KEEP_EXECUTION_RUNS = :KEEP_EXECUTION_RUNS,
+		           EXECUTE_WORKING_HOUR = :EXECUTE_WORKING_HOUR,
+		           START_WORKING_HOUR_TIME = :START_WORKING_HOUR_TIME,
+		           END_WORKING_HOUR_TIME = :END_WORKING_HOUR_TIME,
+		           TIMEZONES = :TIMEZONES
+		      WHERE  ID=:RULE_ID;
+
+			  UPDATE "sap.tm.trp.db.pickupreturn::t_location_rule_t"
+			  SET DESC  =:DESP
+			  WHERE ID    =:RULE_ID
+			  AND SPRAS =:V_SPRAS ;
+
+		  	  STATUS :=1;
+		  	  MESSAGE :='MSG_SUCCESS_STATUS';
+      END IF ;
+    END IF;
+  END IF ;
+
+END

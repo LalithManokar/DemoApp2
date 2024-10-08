@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_route_head" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_route_by_location_time"/>
+  <localVariables>
+    <variable id="SIM_PLAN_ID" parameter="true">
+      <descriptions defaultDescription="SIM_PLAN_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="SCENARIO_ID" parameter="true">
+      <descriptions defaultDescription="SCENARIO_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_FROM_LOCATION" parameter="true">
+      <descriptions defaultDescription="IN_FROM_LOCATION"/>
+      <variableProperties datatype="NVARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_TO_LOCATION" parameter="true">
+      <descriptions defaultDescription="IN_TO_LOCATION"/>
+      <variableProperties datatype="NVARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_DEPARTURE_TIME" parameter="true">
+      <descriptions defaultDescription="IN_DEPARTURE_TIME"/>
+      <variableProperties datatype="TIMESTAMP" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_ARRIVAL_TIME" parameter="true">
+      <descriptions defaultDescription="IN_ARRIVAL_TIME"/>
+      <variableProperties datatype="TIMESTAMP" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="ROUTE_ID" parameter="true">
+      <descriptions defaultDescription="ROUTE_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="NVARCHAR" id="FROM_LOCATION" length="50"/>
+        <viewAttribute datatype="NVARCHAR" id="TO_LOCATION" length="50"/>
+        <viewAttribute datatype="TIMESTAMP" id="DEPARTURE_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="ARRIVAL_TIME"/>
+        <viewAttribute datatype="INTEGER" id="DURATION"/>
+        <viewAttribute datatype="DOUBLE" id="DISTANCE"/>
+        <viewAttribute datatype="DOUBLE" id="TOTAL_COST"/>
+        <viewAttribute datatype="VARCHAR" id="CURRENCY" length="10"/>
+        <viewAttribute datatype="DECIMAL" id="CAPACITY" length="18" scale="3"/>
+        <viewAttribute datatype="VARCHAR" id="CAPACITY_UOM" length="10"/>
+        <viewAttribute datatype="INTEGER" id="TRANSSHIP_LOCATION"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#SIM_PLAN_ID</localVariable>
+      <localVariable>#SCENARIO_ID</localVariable>
+      <localVariable>#IN_FROM_LOCATION</localVariable>
+      <localVariable>#IN_TO_LOCATION</localVariable>
+      <localVariable>#IN_DEPARTURE_TIME</localVariable>
+      <localVariable>#IN_ARRIVAL_TIME</localVariable>
+      <localVariable>#ROUTE_ID</localVariable>
+      <definition> 
+ BEGIN
+   DECLARE UOM VARCHAR(10);
+   DECLARE NUM_AMOUNT_DECIMAL_POINT INTEGER := 2;
+    
+   CALL &quot;sap.tm.trp.db.planningcockpit::p_get_uom_by_simulation_id&quot;(:SIM_PLAN_ID,UOM);
+
+IF :ROUTE_ID = -1
+THEN
+   DECLARE ROUTE_HEAD_MESSAGE VARCHAR(500) := '';
+   CALL &quot;sap.tm.trp.db.planningcockpit::p_get_route_head_info&quot;(:SIM_PLAN_ID,:SCENARIO_ID,:IN_FROM_LOCATION,:IN_TO_LOCATION,:IN_DEPARTURE_TIME,:IN_ARRIVAL_TIME,TEMP_ROUTES,ROUTE_HEAD_MESSAGE);
+	
+	IF :ROUTE_HEAD_MESSAGE &lt;> 'MSG_NETWORK_NOT_EXIST' THEN
+	  
+	  TRP_ID_LIST = SELECT DISTINCT T1.TRIP_ID
+	  FROM &quot;sap.tm.trp.routing.db.path::v_route_sequence&quot; T1
+	  INNER JOIN :TEMP_ROUTES T2 ON (T1.ROUTE_ID = T2.ROUTE_ID)
+	  WHERE T1.TRIP_ID IS NOT NULL;
+	  
+	  CALL &quot;sap.tm.trp.db.planningcockpit::p_calculate_voyage_location_capcities&quot; (:SIM_PLAN_ID,:SCENARIO_ID,:TRP_ID_LIST,TRIP_CAPACITY_INFO);
+      
+    
+	  VAR_OUT = SELECT T1.ROUTE_ID AS ID,T1.FROM_LOCATION,T1.TO_LOCATION,
+	  T1.DEPARTURE_TIME,T1.ARRIVAL_TIME,
+	  SECONDS_BETWEEN(T1.DEPARTURE_TIME,T1.ARRIVAL_TIME) AS DURATION,
+	  ROUND(SUM(T2.DISTANCE),:NUM_AMOUNT_DECIMAL_POINT) AS DISTANCE,
+	  ROUND(SUM(T2.STORAGE_COST+T2.HANDLING_COST+T2.TRANSPORT_COST),:NUM_AMOUNT_DECIMAL_POINT) AS TOTAL_COST,
+	  MIN(T2.COST_CURRENCY) AS CURRENCY,
+      MIN(T4.REMAIN_CAPACITY) AS CAPACITY,
+      MIN (T4.CAPACITY_UOM) AS CAPACITY_UOM,
+	  COUNT(T2.LOCATION) -2 AS TRANSSHIP_LOCATION
+	  FROM :TEMP_ROUTES T1
+	  LEFT JOIN &quot;sap.tm.trp.routing.db.path::v_route_sequence&quot; T2 ON T2.ROUTE_ID = T1.ROUTE_ID
+	  --LEFT JOIN &quot;sap.tm.trp.routing.db.path::t_route_sequence_capacity&quot; T3 ON T2.ROUTE_ID =T3.ROUTE_ID AND T2.SEQUENCE=T3.SEQUENCE AND T3.CAPACITY_UOM=:UOM
+	  LEFT OUTER JOIN :TRIP_CAPACITY_INFO T4 ON (T2.TRIP_ID = T4.TRIP_ID )
+	  GROUP BY T1.ROUTE_ID,T1.FROM_LOCATION,T1.TO_LOCATION,T1.DEPARTURE_TIME,T1.ARRIVAL_TIME;
+	   
+	ELSE
+	    -- just generate similar table format but no record, other wise Odata bind would generate
+        -- one weired row
+	    VAR_OUT = SELECT NULL AS ID,NULL AS FROM_LOCATION,NULL AS TO_LOCATION,
+	    NULL AS DEPARTURE_TIME,NULL AS ARRIVAL_TIME, NULL AS DURATION,
+	    NULL AS DISTANCE,NULL AS TOTAL_COST,NULL AS CURRENCY,NULL AS CAPACITY,
+	    NULL AS CAPACITY_UOM,NULL AS TRANSSHIP_LOCATION
+	    FROM DUMMY WHERE 1 = 0;
+	    
+	END IF;
+ELSE
+      TRP_ID_LIST = SELECT DISTINCT TRIP_ID
+      FROM &quot;sap.tm.trp.routing.db.path::v_route_sequence&quot; T1
+      WHERE T1.ROUTE_ID = :ROUTE_ID AND T1.TRIP_ID IS NOT NULL;
+      
+      CALL &quot;sap.tm.trp.db.planningcockpit::p_calculate_voyage_location_capcities&quot; (:SIM_PLAN_ID,:SCENARIO_ID,:TRP_ID_LIST,TRIP_CAPACITY_INFO);
+      
+	VAR_OUT = 
+		SELECT 
+			T1.ID AS ID
+			,T1.FROM_LOCATION
+			,T1.TO_LOCATION
+			,T1.DEPARTURE_TIME
+			,T1.ARRIVAL_TIME
+			,SECONDS_BETWEEN(T1.DEPARTURE_TIME,T1.ARRIVAL_TIME) AS DURATION
+			,ROUND(SUM(T2.DISTANCE),:NUM_AMOUNT_DECIMAL_POINT) AS DISTANCE
+			,ROUND(SUM(T2.STORAGE_COST+T2.HANDLING_COST+T2.TRANSPORT_COST),:NUM_AMOUNT_DECIMAL_POINT) AS TOTAL_COST
+	  		,MIN(T2.COST_CURRENCY) AS CURRENCY
+            ,MIN(T4.REMAIN_CAPACITY) AS CAPACITY
+            ,MIN (T4.CAPACITY_UOM) AS CAPACITY_UOM
+	  		,COUNT(T2.LOCATION) -2 AS TRANSSHIP_LOCATION
+	  	FROM &quot;sap.tm.trp.routing.db.path::t_route&quot; T1
+		LEFT JOIN &quot;sap.tm.trp.routing.db.path::v_route_sequence&quot; T2 ON T2.ROUTE_ID = T1.ID
+		--LEFT JOIN &quot;sap.tm.trp.routing.db.path::t_route_sequence_capacity&quot; T3 ON T2.ROUTE_ID =T3.ROUTE_ID AND T2.SEQUENCE=T3.SEQUENCE AND T3.CAPACITY_UOM=:UOM
+        LEFT OUTER JOIN :TRIP_CAPACITY_INFO T4 ON (T2.TRIP_ID = T4.TRIP_ID )
+		WHERE T1.ID = :ROUTE_ID
+		GROUP BY T1.ID,T1.FROM_LOCATION,T1.TO_LOCATION,T1.DEPARTURE_TIME,T1.ARRIVAL_TIME;
+END IF;
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="FROM_LOCATION" order="2">
+        <descriptions defaultDescription="FROM_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="FROM_LOCATION"/>
+      </attribute>
+      <attribute id="TO_LOCATION" order="3">
+        <descriptions defaultDescription="TO_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="TO_LOCATION"/>
+      </attribute>
+      <attribute id="CURRENCY" order="9">
+        <descriptions defaultDescription="CURRENCY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CURRENCY"/>
+      </attribute>
+      <attribute id="CAPACITY_UOM" order="11">
+        <descriptions defaultDescription="CAPACITY_UOM"/>
+        <keyMapping columnObjectName="Script_View" columnName="CAPACITY_UOM"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="ID"/>
+      </measure>
+      <measure id="DEPARTURE_TIME" order="4" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="DEPARTURE_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="DEPARTURE_TIME"/>
+      </measure>
+      <measure id="ARRIVAL_TIME" order="5" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="ARRIVAL_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="ARRIVAL_TIME"/>
+      </measure>
+      <measure id="DURATION" order="6" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DURATION"/>
+        <measureMapping columnObjectName="Script_View" columnName="DURATION"/>
+      </measure>
+      <measure id="DISTANCE" order="7" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DISTANCE"/>
+        <measureMapping columnObjectName="Script_View" columnName="DISTANCE"/>
+      </measure>
+      <measure id="TOTAL_COST" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TOTAL_COST"/>
+        <measureMapping columnObjectName="Script_View" columnName="TOTAL_COST"/>
+      </measure>
+      <measure id="CAPACITY" order="10" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="CAPACITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="CAPACITY"/>
+      </measure>
+      <measure id="TRANSSHIP_LOCATION" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TRANSSHIP_LOCATION"/>
+        <measureMapping columnObjectName="Script_View" columnName="TRANSSHIP_LOCATION"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

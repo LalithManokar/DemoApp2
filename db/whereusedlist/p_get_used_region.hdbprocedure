@@ -1,0 +1,34 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.whereusedlist::p_get_used_region"(
+    IN IN_CODE VARCHAR(50),
+    OUT USED_LIST "sap.tm.trp.db.whereusedlist::tt_get_where_used_list_result"
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    READS SQL DATA AS
+BEGIN
+USED_LIST =
+    SELECT
+        NAME
+        ,CODE
+        ,CATEGORY
+        ,DESC
+        ,VISIBILITY
+        ,CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+              WHEN (A.CREATED_BY <> '' AND A.CREATED_BY IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+			  WHEN A.CREATED_BY = '' OR A.CREATED_BY IS NULL THEN ''
+			  ELSE '***' END AS CREATED_BY
+		,CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+		      WHEN (A.MODIFIED_BY <> '' AND A.MODIFIED_BY IS NOT NULL) AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+			  WHEN A.MODIFIED_BY = '' OR A.MODIFIED_BY IS NULL THEN ''
+			  ELSE '***' END AS MODIFIED_BY
+        ,MODIFIED_TIME
+		,RESOURCE_CATEGORY
+	FROM "sap.tm.trp.db.whereusedlist::v_used_region" A
+	LEFT OUTER JOIN "sap.tm.trp.db.dataprotectionprivacy::v_unblock_users"  T9  ON A.CREATED_BY = T9.USERNAME
+    LEFT OUTER JOIN "sap.tm.trp.db.dataprotectionprivacy::v_unblock_users"  T10  ON A.MODIFIED_BY = T10.USERNAME
+    CROSS JOIN "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege" PRIVILEGE
+	WHERE OBJECT_CODE = :IN_CODE
+	;
+
+END;

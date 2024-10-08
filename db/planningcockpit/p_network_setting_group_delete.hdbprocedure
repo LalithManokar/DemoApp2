@@ -1,0 +1,30 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_network_setting_group_delete" (
+	IN ID BIGINT
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	--READS SQL DATA 
+AS
+BEGIN
+DECLARE RETURN_CODE TINYINT;
+
+-- SET INVALID FLAG IN RELATED NETWORK MODLE
+NETWORK_SETTING_GROUP_ID_LIST =	SELECT :ID AS ID FROM DUMMY;
+CALL "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_invalidate_network_by_setting_group"(:NETWORK_SETTING_GROUP_ID_LIST,'P',RETURN_CODE,MESSAGE,LOG); 
+
+
+-- DELETE PARAMETER GROUP METADATA
+DELETE FROM  "sap.tm.trp.db.planningcockpit::t_network_setting_group"
+WHERE ID = :ID
+;
+
+--DELETE PARAMETER GROUP & VALUES
+DELETE FROM "sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_group"
+WHERE NETWORK_SETTING_GROUP_ID = :ID
+;
+DELETE FROM "sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_value"
+WHERE NETWORK_SETTING_GROUP_ID = :ID
+;
+
+END;

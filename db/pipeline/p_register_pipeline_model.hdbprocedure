@@ -1,0 +1,65 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_register_pipeline_model" ( 
+    IN SCHEMA_NAME VARCHAR(20), 
+    IN PROCEDURE_NAME VARCHAR(200),
+    IN TABLE_NAME VARCHAR(200),
+    IN PROCEDURE_DESC VARCHAR(500),
+    IN PIPELINE_NAME VARCHAR(200),
+    IN PIPELINE_DESC VARCHAR(500),
+    IN PIPELINE_TYPE_ID INTEGER,
+    IN COST_MODEL_ID BIGINT,
+    IN INSTANT_ENABLED CHAR(1),
+    OUT ENTRY_ID BIGINT,
+    OUT PIPELINE_MODEL_ID BIGINT
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+    DECLARE OBJ_NAME VARCHAR(300);
+    DECLARE USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE CREATE_TIME TIMESTAMP;
+    DECLARE SQL_STRING NCLOB;
+    
+    SELECT IFNULL(MAX(ID),-1) INTO USER_ID
+    FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    SELECT IFNULL(MAX(SPRAS),'') INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+    
+    -- TODO: check whether the cost model has been assigned to the storage cost ? 
+    
+    OBJ_NAME := '"' || :SCHEMA_NAME||'"."'||:TABLE_NAME||'"';
+
+    --INSERT PIPELINE ENTRY POINT
+    SELECT "sap.tm.trp.db.pipeline::s_pipeline_entry_point".NEXTVAL INTO ENTRY_ID FROM DUMMY;
+    INSERT INTO "sap.tm.trp.db.pipeline::t_pipeline_entry_point"(ID, DESC, ENTRY_POINT_TYPE, SCHEMA_NAME, OBJECT_NAME, META_TABLE_NAME, CREATE_BY, CREATE_ON)
+    VALUES ( :ENTRY_ID, IFNULL(:PROCEDURE_DESC,:PIPELINE_NAME), 'PROCEDURE', :SCHEMA_NAME, :PROCEDURE_NAME, :TABLE_NAME, :USER_ID, CURRENT_UTCTIMESTAMP);
+    
+    --CREATE THE CREATE_TIME
+    SELECT CURRENT_UTCTIMESTAMP INTO CREATE_TIME FROM DUMMY;
+    --INSERT PIPELINE MODEL 
+    SELECT "sap.tm.trp.db.pipeline::s_pipeline_model".NEXTVAL INTO PIPELINE_MODEL_ID FROM DUMMY;
+    INSERT INTO "sap.tm.trp.db.pipeline::t_pipeline_model"(ID,NAME,LAYOUT_ID,ENTRY_POINT_ID, PIPELINE_MODEL_TYPE_ID, DESC, CREATE_BY, CREATE_ON, CODE, RESOURCE_CATEGORY,INSTANT_ENABLED, LAST_MODIFIED_BY, LAST_MODIFIED_ON)
+    VALUES ( :PIPELINE_MODEL_ID, :PIPELINE_NAME, NULL, :ENTRY_ID, :PIPELINE_TYPE_ID, :PIPELINE_DESC, :USER_ID, :CREATE_TIME, :PIPELINE_NAME, '', :INSTANT_ENABLED, :USER_ID, :CREATE_TIME );
+    
+    INSERT INTO "sap.tm.trp.db.pipeline::t_pipeline_model_t"(ID, SPRAS, DESC)
+    VALUES(:PIPELINE_MODEL_ID, :SPRAS, IFNULL(:PROCEDURE_DESC,:PIPELINE_NAME));
+
+    --Insert Pipeline Node Information, Dynamic SQL
+    EXEC 'CALL "sap.tm.trp.db.pipeline::p_register_pipeline_nodes"(' || :PIPELINE_MODEL_ID || ', ' || escape_single_quotes(:OBJ_NAME) || ')';
+
+    --Build Metadata Information, Dynamic SQL
+    EXEC 'CALL "sap.tm.trp.db.pipeline::p_build_metadata"(' || :PIPELINE_MODEL_ID || ', ' || escape_single_quotes(:OBJ_NAME) || ')';
+    
+    IF :COST_MODEL_ID IS NOT NULL THEN         
+      
+       INSERT INTO "sap.tm.trp.db.pipeline::t_pipeline_model_cost_model" VALUES (:PIPELINE_MODEL_ID, :COST_MODEL_ID);      
+       
+    END IF;   
+    
+    --alter the wrapper procedure once new CM has been created
+    --CALL "sap.tm.trp.db.supplydemand.instant::p_pipeline_procedure_wrapper_generator"(SQL_STRING);    
+  
+END;

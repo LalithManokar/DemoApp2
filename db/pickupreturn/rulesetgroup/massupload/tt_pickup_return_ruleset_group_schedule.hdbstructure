@@ -1,0 +1,15 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "JOB_ACTION"; sqlType = VARCHAR; length = 50;},
+    {name = "RULE_GROUP_NAME"; sqlType = VARCHAR; length = 200;nullable = false;},
+    {name = "EXECUTE_INTERVAL"; sqlType = INTEGER;},
+    {name = "EXECUTE_TIME_UNIT"; sqlType = VARCHAR; length = 50;},
+    {name = "START_DATE_TIME"; sqlType = VARCHAR; length = 30;},
+    {name = "END_DATE_TIME"; sqlType = VARCHAR; length = 30;},
+    {name = "EXECUTE_IN_WORKING_HOUR"; sqlType = VARCHAR; length = 1;} ,
+    {name = "START_WORKING_TIME"; sqlType = VARCHAR; length = 8;},
+    {name = "END_WORKING_TIME"; sqlType = VARCHAR; length = 8;},
+    {name = "TIMEZONES"; sqlType = VARCHAR; length = 40;}
+];

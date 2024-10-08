@@ -1,0 +1,51 @@
+table.schemaName = "SAP_TM_TRP";
+table.temporary = true;
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "TIME_INTERVAL_ID"; sqlType = BIGINT;},
+ 
+    {name = "EQUIP_TYPE_TYPE"; sqlType = INTEGER;  },   
+    {name = "EQUIP_TYPE_NAME"; sqlType = VARCHAR; length = 50;},    
+    {name = "EQUIP_TYPE_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "LOCATION_TYPE"; sqlType = INTEGER;},
+    {name = "LOCATION_NAME"; sqlType = VARCHAR; length = 50;},
+    {name = "LOCATION_ID"; sqlType = VARCHAR; length = 32;}, 
+ 
+    {name = "DATA_OBJECT_FORMAT"; sqlType = VARCHAR; length = 200;},      
+    {name = "METADATA_NODE_ID"; sqlType = VARCHAR; length = 500;},
+    {name = "NODE_OUTPUT_KEYS"; sqlType = VARCHAR; length = 200;},
+    {name = "NODE_VISIBLE"; sqlType = SMALLINT;},  
+    {name = "NODE_NAME"; sqlType = VARCHAR; length = 255;},    
+    {name = "NODE_ID"; sqlType = BIGINT;},   
+          
+    {name = "PIPELINE_MODEL_ID"; sqlType = BIGINT;},      
+    {name = "FILTER_GROUP_ID"; sqlType = BIGINT;},         
+    {name = "FILTER_TYPE"; sqlType = INTEGER;}, 
+      
+    {name = "PLAN_EXECUTION_ID"; sqlType = BIGINT;},
+    {name = "PLAN_MODEL_ID"; sqlType = BIGINT;},
+    {name = "PLAN_MODEL_TYPE_ID"; sqlType = INTEGER;},
+    {name = "PLAN_MODEL_CATEGORY_ID"; sqlType = INTEGER;},           
+     
+    {name = "UNIT"; sqlType = VARCHAR; length = 32;},
+    
+    {name = "MAX_CAPACITY"; sqlType = DOUBLE; },
+    {name = "MAX_SAFETY_STOCK"; sqlType = DOUBLE; },    
+    {name = "MIN_SAFETY_STOCK"; sqlType = DOUBLE; },
+    {name = "BALANCE_STOCK_SUPPLY_DEMAND"; sqlType = DOUBLE; }, 
+    {name = "BALANCE_SUPPLY_DEMAND"; sqlType = DOUBLE; },    
+    {name = "DEMAND"; sqlType = DOUBLE; },
+    {name = "SUPPLY"; sqlType = DOUBLE; },     
+    {name = "STOCK"; sqlType = DOUBLE; },
+           
+    {name = "TIME_STEP"; sqlType = DECIMAL; },  
+    {name = "START_TIME"; sqlType = TIMESTAMP;},
+    {name = "SEQUENCE"; sqlType = INTEGER;},   
+    {name = "TIME_FILTER_DESC"; sqlType = VARCHAR; length = 50;},
+    
+    {name = "ROW_ID"; sqlType = CHAR; length = 32;}, 
+    {name = "MESSAGE"; sqlType = VARCHAR; length = 8; }, 
+    {name = "ALERT_REASON"; sqlType = VARCHAR; length = 500; }, 
+    {name = "ALERT_SCORE_IMP"; sqlType = DOUBLE;}, 
+    {name = "ALERT_SCORE_EMER"; sqlType = DOUBLE; }
+    ];

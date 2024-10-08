@@ -1,0 +1,8 @@
+schema="SAP_TM_TRP";
+query="select username
+       from  \"sap.tm.trp.db.dataprotectionprivacy::t_user_consent\"
+       where  enabled_flag = 1
+       and  valid_from <= CURRENT_UTCTIMESTAMP
+       and  valid_to >= CURRENT_UTCTIMESTAMP";
+             
+depends_on_table = ["sap.tm.trp.db.dataprotectionprivacy::t_user_consent"];

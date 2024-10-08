@@ -1,0 +1,5 @@
+schema = "SAP_TM_TRP";
+query = "SELECT T1.CODE AS TRP_MTR
+FROM \"sap.tm.trp.db.semantic.common::v_transportation_means\" AS T1;";
+
+depends_on_view = ["sap.tm.trp.db.semantic.common::v_transportation_means"];   

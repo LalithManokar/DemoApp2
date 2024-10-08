@@ -1,0 +1,7 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "OBJECT_CODE";sqlType = NVARCHAR; length = 20; nullable = true; unique = true;},
+    {name = "DISPLAY_FLAG"; sqlType = INTEGER;comment="0:not display when create object 1:display when create object";}
+    ];
+table.primaryKey.pkcolumns = ["OBJECT_CODE"];

@@ -1,0 +1,492 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.streetturn::p_streetturn_get_ranking" (
+IN iv_RESOURCE_CATEGORY VARCHAR(50),
+IN iv_tuid VARCHAR(50), -- selected tu id
+IN iv_rule_id BIGINT,
+IN it_lane_list "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_lane_list",
+IN it_carrier "sap.tm.trp.db.pickupreturn::tt_carrier_list", 
+OUT ot_suggest "SAP_TM_TRP"."sap.tm.trp.db.streetturn::tt_tu_streetturn_suggest", -- output pairs with ranking
+OUT ov_flag VARCHAR(50)
+) 
+              LANGUAGE SQLSCRIPT
+              SQL SECURITY INVOKER 
+              DEFAULT SCHEMA SAP_TM_TRP
+              READS SQL DATA AS
+BEGIN
+
+              DECLARE lv_row_count integer DEFAULT 0;
+              DECLARE lv_no_tu string DEFAULT 'NO TUs Found';
+              DECLARE lv_sucess string DEFAULT 'SUCCESS';   
+              DECLARE lv_invalid string DEFAULT 'INVALID TYPE';
+              DECLARE lv_max_num BIGINT DEFAULT 999999999;
+              DECLARE lv_LOCATION_FILTER_ID BIGINT;
+              DECLARE lv_TIME_RANGE_ID BIGINT;
+              DECLARE lv_time_window_seconds BIGINT;
+              DECLARE lv_rank_number BIGINT;
+              DECLARE lv_ITEM_CAT VARCHAR(200);
+              DECLARE lv_MOT_CAT VARCHAR(200);
+              DECLARE lv_rule_type VARCHAR(10);
+              DECLARE LV_TYPE VARCHAR(10);  
+              DECLARE V_RESOURCE_CATEGORY_TYPE VARCHAR(10);   
+              ov_flag := :lv_sucess;
+              
+              
+              
+              
+    SELECT  IFNULL ( RESOURCE_CATEGORY_TYPE ,'RC') INTO  V_RESOURCE_CATEGORY_TYPE
+      FROM  "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings"
+     WHERE  CODE = :iv_RESOURCE_CATEGORY;
+
+              if :iv_rule_id is null then
+                                          
+                            ov_flag := :lv_no_tu;
+                                          
+              else
+              
+                            --get location filter and equipment filter
+                            SELECT  IFNULL (MAX (TIME_RANGE),0)
+                                                        ,IFNULL (MAX (LOCATION_FILTER_ID),0)
+                                                        ,IFNULL (MAX (TIME_WINDOW_SECONDS),0)
+                                                        ,IFNULL (MAX (RANK_NUMBER),0)
+                                                        ,IFNULL(MAX (RULE_TYPE),0) 
+                                                        INTO 
+                                                         lv_TIME_RANGE_ID
+                                                        ,Lv_LOCATION_FILTER_ID
+                                                        ,lv_time_window_seconds
+                                                        ,lv_rank_number,
+                                                        lv_rule_type
+                              FROM  "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+                              WHERE ID = :iv_rule_id;
+
+                              if :lv_time_window_seconds <= 0 then lv_time_window_seconds := 0; end if;
+                              if :lv_rank_number <= 0 then lv_rank_number := :lv_max_num; end if;
+                           
+                            SELECT  IFNULL (MAX (VALUE),'') INTO lv_ITEM_CAT 
+                                FROM  "sap.tm.trp.db.systemmanagement::t_config_cust"
+                               WHERE  code =:iv_RESOURCE_CATEGORY
+                                 AND  KEY  = 'ITEM_CAT';
+                            
+                             SELECT  IFNULL (MAX (VALUE),'') INTO lv_MOT_CAT 
+                                FROM  "sap.tm.trp.db.systemmanagement::t_config_cust"
+                               WHERE  code =:iv_RESOURCE_CATEGORY
+                                 AND  KEY  = 'MOT_CAT';  
+                              
+                            if :lv_rule_type = 1 then lv_type := 'PICKUP'; elseif :lv_rule_type = 2 then lv_type := 'RETURN'; end if;           
+              
+                            --select by TU ID
+                            if :lv_type = 'PICKUP' then
+                            
+                                          lt_tu_sel =   select T5.RESOURCE_TYPE,                
+                                                               T5.RESOURCE_CATEGORY,                                                                         
+                                                                                                                 TO_TIMESTAMP (t3.sel_time) as DEP_TIME,
+                                                                                                                TO_TIMESTAMP (t4.sel_time) as ARR_TIME  
+                                                          FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                                                          INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                                                          ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')  
+                                                          INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                                                          ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')       
+                                                          INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T5 
+                                                          ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :LV_ITEM_CAT )
+                            INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t6
+                            ON (t5.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :iv_RESOURCE_CATEGORY)
+                                                          WHERE t1.TOR_CAT = 'TU' 
+                                                          AND t1.MOVEMENT_CAT = 'EP'                                                                                        
+                                                          AND t3.DEPARTURED = 0 AND t3.STOP_FIX = ''
+                                                                                        AND T1.TOR_ID = :iv_tuid and T5.qua_pcs_val = 1 and PLAN_STATUS = '01';--pickup tu must be unplanned   
+              
+                            elseif  :lv_type = 'RETURN' then
+                                                                          
+                                          lt_tu_sel =   select T5.RESOURCE_TYPE,
+                                                              T5.RESOURCE_CATEGORY,                                                                                                     
+                                                                                                                 TO_TIMESTAMP (t3.sel_time) as DEP_TIME,
+                                                                                                                TO_TIMESTAMP (t4.sel_time) as ARR_TIME  
+                                             FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                                             INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                                             ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')  
+                                             INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                                             ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')       
+                                             INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T5 
+                                             ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :LV_ITEM_CAT )
+                         INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t6
+                         ON (t5.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :iv_RESOURCE_CATEGORY)           
+                                             WHERE t1.TOR_CAT = 'TU' 
+                                             AND t1.MOVEMENT_CAT = 'ER' AND t1.LIFECYCLE NOT IN ('00', '05', '10')
+                                             AND t4.UNLOADED = 0 AND t4.STOP_FIX = ''                                                                        
+                                                                 AND T1.TOR_ID = :iv_tuid and T5.qua_pcs_val = 1;
+                                                               
+                            else
+                                                        
+                                          ov_flag := :lv_invalid;
+                                          
+                            end if;   
+              
+              end if;
+
+              if ov_flag = :lv_sucess then
+              
+                            select count(*) into lv_row_count from :lt_tu_sel;              
+                            
+                            if :lv_row_count = 0 then
+                            
+                                          ov_flag := :lv_no_tu;
+                            
+                            end if;
+              
+              end if;
+              
+              if ov_flag = :lv_sucess then
+
+                   -- find locations by the location filter id   
+                   CALL "sap.tm.trp.db.filter::p_get_locations_by_locfilterid"(:lv_LOCATION_FILTER_ID, lt_filtered_locs);
+                   
+     --Due in time setting
+     IF :lv_TIME_RANGE_ID > 0 THEN
+                   LT_TIME_RANGE = SELECT ADD_DAYS(CURRENT_UTCTIMESTAMP, IFNULL(MAX (DATE_OFFSET), 0)) AS START_TIME, 
+                                     ADD_SECONDS (ADD_DAYS(CURRENT_UTCTIMESTAMP, IFNULL(MAX (DATE_OFFSET), 0)), :lv_TIME_RANGE_ID) AS END_TIME
+                              FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+                              WHERE USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+                             
+               ELSE
+                   LT_TIME_RANGE = SELECT ADD_DAYS(CURRENT_UTCTIMESTAMP, IFNULL(MAX (DATE_OFFSET), 0)) AS START_TIME, 
+                                     ADD_SECONDS (ADD_DAYS(CURRENT_UTCTIMESTAMP, IFNULL(MAX (DATE_OFFSET), 0)), 220752000000) AS END_TIME
+                              FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+                              WHERE USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+     END IF ;
+                            
+                            if :lv_type = 'PICKUP' then
+                            
+                                                                  /*    
+                                                                           lt_tu = SELECT DISTINCT t1.TOR_ID as TU_ID,
+                                                                                                                t3.LOCATION_ID as         CUSTOMER_LOCATION,
+                                                                                                                TO_TIMESTAMP (t3.SEL_TIME)  as PLANNED_TIME,
+                                                                                                                T5.RESOURCE_TYPE as CONTAINER_TYPE,
+                                                                                                                T5.qua_pcs_val as QUANTITY,                                                                                                               
+                                                                                                                'RETURN' as MODE
+                                                                         FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                                                                         INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                                                                         ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')  
+                                                                         INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                                                                         ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')       
+                                                                         INNER JOIN :lt_filtered_locs FL ON (t3.LOCATION_ID=FL.LOCATION_ID OR t3.LOCATION_ID IS NULL)
+                                                                         INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T5 
+                                                                         ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :LV_ITEM_CAT )
+                                                                         CROSS JOIN :LT_TIME_RANGE           TIME_RANGE                                                                                                                    
+                                                                         INNER JOIN :lt_tu_sel tu_sel 
+                                                                         ON (T5.RESOURCE_TYPE = tu_sel.RESOURCE_TYPE AND t5.RESOURCE_CATEGORY = tu_sel.RESOURCE_CATEGORY )
+                                                                         WHERE t1.TOR_CAT = 'TU' 
+                                                                         AND t1.MOVEMENT_CAT = 'ER' 
+                                                                         AND t3.SEL_TIME BETWEEN TIME_RANGE.START_TIME AND TIME_RANGE.END_TIME
+                                                                         AND t4.UNLOADED = 0 AND t4.STOP_FIX = ''
+                                                                        AND qua_pcs_val = 1*/
+                                                                                                                      
+													           lt_tu  = SELECT DISTINCT t1.TOR_ID as TU_ID,
+															                    	t3.LOCATION_ID as         CUSTOMER_LOCATION,
+																                    TO_TIMESTAMP (t3.SEL_TIME)  as PLANNED_TIME,
+																                    T5.RESOURCE_TYPE as CONTAINER_TYPE,
+																                    T5.qua_pcs_val as QUANTITY,                                                                                                               
+																                    'RETURN' as MODE
+																                     FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+																                     INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+																                     ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')  
+																                     INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+																                     ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')       
+																                    -- INNER JOIN :lt_filtered_locs FL ON (t3.LOCATION_ID=FL.LOCATION_ID OR t3.LOCATION_ID IS NULL)
+																                    --Disjunctive join changes
+																                     INNER JOIN :lt_filtered_locs FL ON (t3.LOCATION_ID=FL.LOCATION_ID)
+																                     INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T5 
+																                     ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :LV_ITEM_CAT )
+																                     CROSS JOIN :LT_TIME_RANGE           TIME_RANGE                                                                                                                    
+																                     INNER JOIN :lt_tu_sel tu_sel 
+																                     ON (T5.RESOURCE_TYPE = tu_sel.RESOURCE_TYPE AND t5.RESOURCE_CATEGORY = tu_sel.RESOURCE_CATEGORY )
+																                     WHERE t1.TOR_CAT = 'TU' 
+																                     AND t1.MOVEMENT_CAT = 'ER' 
+																                     AND t3.SEL_TIME BETWEEN TIME_RANGE.START_TIME AND TIME_RANGE.END_TIME
+																                     AND t4.UNLOADED = 0 AND t4.STOP_FIX = ''
+																                     AND qua_pcs_val = 1
+														                     UNION ALL
+													                 			SELECT DISTINCT t1.TOR_ID as TU_ID,
+															                    	t3.LOCATION_ID as         CUSTOMER_LOCATION,
+																                    TO_TIMESTAMP (t3.SEL_TIME)  as PLANNED_TIME,
+																                    T5.RESOURCE_TYPE as CONTAINER_TYPE,
+																                    T5.qua_pcs_val as QUANTITY,                                                                                                               
+																                    'RETURN' as MODE
+																                     FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+																                     INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+																                     ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')  
+																                     INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+																                     ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')       
+																                     -- INNER JOIN :lt_filtered_locs FL ON (t3.LOCATION_ID=FL.LOCATION_ID OR t3.LOCATION_ID IS NULL)
+																                     --Disjunctive join changes
+																                     INNER JOIN :lt_filtered_locs FL ON (t3.LOCATION_ID IS NULL)
+																                     INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T5 
+																                     ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :LV_ITEM_CAT )
+																                     CROSS JOIN :LT_TIME_RANGE           TIME_RANGE                                                                                                                    
+																                     INNER JOIN :lt_tu_sel tu_sel 
+																                     ON (T5.RESOURCE_TYPE = tu_sel.RESOURCE_TYPE AND t5.RESOURCE_CATEGORY = tu_sel.RESOURCE_CATEGORY )
+																                     WHERE t1.TOR_CAT = 'TU' 
+																                     AND t1.MOVEMENT_CAT = 'ER' 
+																                     AND t3.SEL_TIME BETWEEN TIME_RANGE.START_TIME AND TIME_RANGE.END_TIME
+																                     AND t4.UNLOADED = 0 AND t4.STOP_FIX = ''
+													                     AND qua_pcs_val = 1
+                                                                        UNION ALL
+                                                                        SELECT DISTINCT t1.TOR_ID as TU_ID,
+                                                                                                                t4.LOCATION_ID as         CUSTOMER_LOCATION,
+                                                                                                                TO_TIMESTAMP (t4.SEL_TIME)  as PLANNED_TIME,
+                                                                                                                T5.RESOURCE_TYPE as CONTAINER_TYPE,
+                                                                                                                T5.qua_pcs_val as QUANTITY,                                                                                                               
+                                                                                                                'PICKUP' as MODE
+                                                                         FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                                                                         INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                                                                         ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')  
+                                                                         INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                                                                         ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')
+                                                                         INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T5 
+                                                                         ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :LV_ITEM_CAT )                                                                                                    
+                                                                         INNER JOIN :lt_tu_sel tu_sel 
+                                                                         ON (T5.RESOURCE_TYPE = tu_sel.RESOURCE_TYPE AND t5.RESOURCE_CATEGORY = tu_sel.RESOURCE_CATEGORY )
+                                                                         WHERE t1.TOR_CAT = 'TU'                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
+                                                                                                                 AND T1.TOR_ID = :iv_tuid;
+
+                            elseif :lv_type = 'RETURN' then
+                                          
+                                                                                  /*  lt_tu =  SELECT DISTINCT t1.TOR_ID as TU_ID,
+                                                                                                                              t4.LOCATION_ID  as        CUSTOMER_LOCATION,
+                                                                                                                              t4.SEL_TIME  as PLANNED_TIME,
+                                                                                                                              T5.RESOURCE_TYPE as CONTAINER_TYPE,
+                                                                                                                              T5.qua_pcs_val as QUANTITY,                                                                                                               
+                                                                                                                              'PICKUP' as "MODE"
+                                                                                       FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                                                                                       INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                                                                                       ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')  
+                                                                                       INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                                                                                       ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')       
+                                                                                       INNER JOIN :lt_filtered_locs FL ON (t4.LOCATION_ID=FL.LOCATION_ID OR t4.LOCATION_ID IS NULL)                                                                                     
+                                                                                       INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T5 
+                                                                                       ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :LV_ITEM_CAT )
+                                                                                       CROSS JOIN :LT_TIME_RANGE           TIME_RANGE                                                                                                                                  
+                                                                                       INNER JOIN :lt_tu_sel tu_sel 
+                                                                                       ON  (T5.RESOURCE_TYPE = tu_sel.RESOURCE_TYPE AND t5.RESOURCE_CATEGORY = tu_sel.RESOURCE_CATEGORY )                                                                                  
+                                                                                       WHERE t1.TOR_CAT = 'TU' 
+                                                                                       AND t1.MOVEMENT_CAT = 'EP'                                                                                   
+                                                                                       AND t3.DEPARTURED = 0 AND t3.STOP_FIX = ''
+                                                                                       AND t4.SEL_TIME BETWEEN TIME_RANGE.START_TIME AND TIME_RANGE.END_TIME                                                                          
+                                                                                       AND qua_pcs_val = 1
+                                                                                      AND t1.PLAN_STATUS = '01'*/
+                                                           lt_tu =   SELECT DISTINCT t1.TOR_ID as TU_ID,
+															                          t4.LOCATION_ID  as        CUSTOMER_LOCATION,
+															                          t4.SEL_TIME  as PLANNED_TIME,
+															                          T5.RESOURCE_TYPE as CONTAINER_TYPE,
+															                          T5.qua_pcs_val as QUANTITY,                                                                                                               
+															                          'PICKUP' as "MODE"
+																	                   FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+																	                   INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+																	                   ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')  
+																	                   INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+																	                   ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')       
+																	                   --INNER JOIN :lt_filtered_locs FL ON (t4.LOCATION_ID=FL.LOCATION_ID OR t4.LOCATION_ID IS NULL)
+																	                   --disjunctive joins changes
+																	                   INNER JOIN :lt_filtered_locs FL ON (t4.LOCATION_ID=FL.LOCATION_ID )                                                                                        
+																	                   INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T5 
+																	                   ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :LV_ITEM_CAT )
+																	                   CROSS JOIN :LT_TIME_RANGE           TIME_RANGE                                                                                                                                  
+																	                   INNER JOIN :lt_tu_sel tu_sel 
+																	                   ON  (T5.RESOURCE_TYPE = tu_sel.RESOURCE_TYPE AND t5.RESOURCE_CATEGORY = tu_sel.RESOURCE_CATEGORY )                                                                                  
+																	                   WHERE t1.TOR_CAT = 'TU' 
+																	                   AND t1.MOVEMENT_CAT = 'EP'                                                                                   
+																	                   AND t3.DEPARTURED = 0 AND t3.STOP_FIX = ''
+																	                   AND t4.SEL_TIME BETWEEN TIME_RANGE.START_TIME AND TIME_RANGE.END_TIME                                                                          
+																	                   AND qua_pcs_val = 1
+																	                  AND t1.PLAN_STATUS = '01'
+																                  UNION ALL
+																                  		SELECT DISTINCT t1.TOR_ID as TU_ID,
+															                          t4.LOCATION_ID  as        CUSTOMER_LOCATION,
+															                          t4.SEL_TIME  as PLANNED_TIME,
+															                          T5.RESOURCE_TYPE as CONTAINER_TYPE,
+															                          T5.qua_pcs_val as QUANTITY,                                                                                                               
+															                          'PICKUP' as "MODE"
+																	                   FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+																	                   INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+																	                   ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')  
+																	                   INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+																	                   ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL') 
+																	                   --INNER JOIN :lt_filtered_locs FL ON (t4.LOCATION_ID=FL.LOCATION_ID OR t4.LOCATION_ID IS NULL)
+																	                   --disjunctive joins changes  
+																	                   INNER JOIN :lt_filtered_locs FL ON ( t4.LOCATION_ID IS NULL)                                                                                     
+																	                   INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T5 
+																	                   ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :LV_ITEM_CAT )
+																	                   CROSS JOIN :LT_TIME_RANGE           TIME_RANGE                                                                                                                                  
+																	                   INNER JOIN :lt_tu_sel tu_sel 
+																	                   ON  (T5.RESOURCE_TYPE = tu_sel.RESOURCE_TYPE AND t5.RESOURCE_CATEGORY = tu_sel.RESOURCE_CATEGORY )                                                                                  
+																	                   WHERE t1.TOR_CAT = 'TU' 
+																	                   AND t1.MOVEMENT_CAT = 'EP'                                                                                   
+																	                   AND t3.DEPARTURED = 0 AND t3.STOP_FIX = ''
+																	                   AND t4.SEL_TIME BETWEEN TIME_RANGE.START_TIME AND TIME_RANGE.END_TIME                                                                          
+																	                   AND qua_pcs_val = 1
+																	                  AND t1.PLAN_STATUS = '01'
+                                                                                      UNION ALL
+                                                                                      SELECT DISTINCT t1.TOR_ID as TU_ID,
+                                                                                                                              t3.LOCATION_ID  as        CUSTOMER_LOCATION,
+                                                                                                                              t3.SEL_TIME  as PLANNED_TIME,
+                                                                                                                              T5.RESOURCE_TYPE as CONTAINER_TYPE,
+                                                                                                                              T5.qua_pcs_val as QUANTITY,                                                                                                               
+                                                                                                                              'RETURN' as "MODE"
+                                                                                       FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                                                                                       INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                                                                                       ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')  
+                                                                                       INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                                                                                       ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')                                                                 
+                                                                                       INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T5 
+                                                                                       ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :LV_ITEM_CAT )                                                                                                                                
+                                                                                       INNER JOIN :lt_tu_sel tu_sel 
+                                                                                       ON  (T5.RESOURCE_TYPE = tu_sel.RESOURCE_TYPE AND t5.RESOURCE_CATEGORY = tu_sel.RESOURCE_CATEGORY )                                                                                  
+                                                                                       WHERE T1.TOR_CAT = 'TU'
+                                                                                      AND T1.TOR_ID = :iv_tuid;               
+
+
+                            else
+                            
+                                          ov_flag := :lv_invalid;
+
+                            end if;                 
+                                                        
+                            
+              end if;
+                                                                      
+              if :ov_flag = :lv_sucess then
+                            
+  
+                            it_conf = select 'RANK_NUMBER' as "NAME",TO_VARCHAR (:lv_rank_number) as "VALUE" from dummy
+                                                          UNION
+                                                          select 'AHEAD_TIME' as "NAME",TO_VARCHAR (:lv_time_window_seconds) as "VALUE" from dummy
+                                                          ; 
+                            
+                            
+                            call "sap.tm.trp.db.streetturn::p_streeturn_get_lane_cost" ( :iv_rule_id,
+                                                                               :it_lane_list,
+                                                                     :it_carrier,
+                                                                     :lt_tu,
+                                                                                                                                                                                                                lt_trans 
+                                                                                                                                                                                                                                               );
+                                                                                                                                                                                                                                              
+                              if :V_RESOURCE_CATEGORY_TYPE = 'RC'            
+                            then 
+                                          --rail may have more then one mtr too
+                  lt_trans = SELECT DISTINCT 
+                                    FROM_LOCATION,
+                                    TO_LOCATION,
+                                    MTR,
+                                    DURATION,
+                                    COST
+                             FROM
+                                            (                         SELECT  A.FROM_LOCATION,
+                                             A.TO_LOCATION,
+                                             A.MTR, 
+                                             A.DURATION,
+                                             MIN (A.COST) OVER (PARTITION BY A.FROM_LOCATION,A.TO_LOCATION,A.MTR ) AS MIN_COST,
+                                             A.COST 
+                                             FROM :lt_trans A
+                                       INNER JOIN "sap.tm.trp.db.semantic.common::v_mtr_map" B
+                                               ON A.MTR=B.MTR
+                                       INNER JOIN "sap.tm.trp.db.planningcockpit.railcarmtr::v_transportation_means_railcar" C
+                                                           ON B.TRP_MTR = C.CODE
+                              )
+                              WHERE  MIN_COST=COST;
+                                 
+                  else
+                  
+                  lt_trans = SELECT DISTINCT 
+                                    FROM_LOCATION,
+                                    TO_LOCATION,
+                                    MTR,
+                                    DURATION,
+                                    COST
+                             FROM
+                             (SELECT  A.FROM_LOCATION,
+                               A.TO_LOCATION,
+                               A.MTR, 
+                               A.DURATION,
+                               MIN (A.COST) OVER (PARTITION BY A.FROM_LOCATION,A.TO_LOCATION,A.MTR ) AS MIN_COST,
+                               A.COST
+                         FROM  :lt_trans A
+                         INNER JOIN "sap.tm.trp.db.semantic.common::v_mtr_map" B
+                                               ON A.MTR=B.MTR
+                                       )
+                        WHERE  MIN_COST=COST;
+                       
+        end if;                 
+                  
+                               
+              
+                            
+                            
+              
+                            call "sap.tm.trp.db.streetturn.algorithm::p_streetturn20"(   :iv_tuid, -- selected tu id
+                                                                                                                                                                                                                                              :lv_type, -- selected tu's category 'PICKUP'/'RETURN'
+                                                                                                                                                                                                                                              :it_conf, -- configure table, could be empty
+                                                                                                                                                                                                                                              :lt_trans, -- lanes
+                                                                                                                                                                                                                                              :lt_tu, -- to be suggested tu set including selected tu
+                                                                                                                                                                                                                                              lt_suggest_tmp, -- output pairs with ranking
+                                                                                                                                                                                                                                              ov_flag
+                                                                                                                                                                                                                                );
+                                                                                                                                                                                                    
+                                                 
+              end if;                                             
+              
+              if :ov_flag = :lv_sucess then
+              
+              --to distinct
+                            lt_suggest = 
+                                                 SELECT TU_ID,
+                                                                 ROW_NUMBER() OVER(ORDER BY DURATION,COST,AHEAD_TIME) AS "RANK",
+                                                                 DURATION,
+                                                                 COST,
+                                                                 AHEAD_TIME
+                                                                 FROM
+                                                                 (
+                                                                     SELECT TU_ID, DURATION,COST,AHEAD_TIME
+                                           FROM (
+                                                         SELECT TU_ID, DURATION,COST,AHEAD_TIME, ROW_NUMBER() OVER(PARTITION BY TU_ID ORDER BY DURATION,COST,AHEAD_TIME) AS ROW_1
+                                                         FROM :lt_suggest_tmp
+                                                     )
+                                                     WHERE ROW_1 = 1
+                                                                 );
+                            
+                                          ot_suggest =      SELECT DISTINCT
+                                                                                                                              sug."RANK" as RANK,
+                                                                                                                              t1.TOR_ID as TU_ID, 
+                                                                  t3.LOCATION_NAME AS SRC_LOC,
+                                                                  t4.LOCATION_NAME AS DES_LOC,
+                                                                  '' as SRC_UN_LOCODE,
+                                                                  '' as DES_UN_LOCODE, 
+                                                                  TRQ.SHIPPER_ID AS SHIPPER,
+                                                                  TRQ.CONSIGNEE_ID AS CONSIGNEE,
+                                                                  '' as DANG_GOODS,
+                                                                  TOR_TYPE as DOC_TYPE,
+                                                                  T5.RESOURCE_TYPE as EQUI_TYPE,
+                                                                  T5.RESOURCE_CATEGORY as EQUI_GROUP,
+                                                                                                                              sug.cost as EST_COST,
+                                                                                                                              case 
+                                                                                                                                            when draft.STREETTURN_TU_ID is null
+                                                                                                                                            then 0
+                                                                                                                                            else 1
+                                                                                                                              end as assigned
+                                                           FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                                                           INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                                                           ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')  
+                                                           INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                                                           ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')       
+                                                           INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T5 
+                                                           ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :LV_ITEM_CAT )
+                                                           INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_category" t6 
+                                                           ON (t5.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :iv_RESOURCE_CATEGORY)
+                                                           LEFT JOIN "sap.tm.trp.db.semantic.order::v_customer_order" TRQ ON t5.TRQ_KEY = TRQ.DB_KEY                                                                                                                                       
+                                                           INNER JOIN :lt_suggest sug on T1."TOR_ID" = sug.TU_ID
+                                                           LEFT JOIN "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft" as draft 
+                                                           ON draft."STREETTURN_TU_ID" = sug.TU_ID and draft.RULE_ID = :iv_rule_id
+                                                           order by sug.RANK;   
+              
+
+                                          
+              end if;
+
+END;
+   

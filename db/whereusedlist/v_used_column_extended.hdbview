@@ -1,0 +1,24 @@
+schema = "SAP_TM_TRP";
+query  ="
+SELECT 
+	T1.DISPLAY_NAME AS OBJECT_CODE
+	,T3.ID
+	,T3.NAME
+	,T3.NAME AS CODE
+	,'Resource Category' AS CATEGORY
+	,T3.DESC
+	,NULL AS VISIBILITY
+	,T3.CREATED_BY
+	,T3.LAST_CHANGED_BY AS MODIFIED_BY
+	,T3.LAST_CHANGED_ON AS MODIFIED_TIME 
+FROM \"sap.tm.trp.db.common::t_extended_fields\" T1
+INNER JOIN \"sap.tm.trp.db.systemmanagement.customization::v_resource_category_extended_columns\" T2
+ON (T1.ID = T2.COLUMN_ID)
+INNER JOIN \"sap.tm.trp.db.systemmanagement.customization::v_resource_category\" T3
+ON (T2.RESOURCE_CATEGORY_ID = T3.ID)
+";
+
+depends_on_table = ["sap.tm.trp.db.common::t_extended_fields"];
+                    
+depends_on_table = ["sap.tm.trp.db.systemmanagement.customization::v_resource_category_extended_columns",
+                    "sap.tm.trp.db.systemmanagement.customization::v_resource_category"];

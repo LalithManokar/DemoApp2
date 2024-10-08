@@ -1,0 +1,23 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.customization::p_ext_resource_category_get_extended_columns"(
+    IN RESOURCE_CATEGORY_ID BIGINT,
+    OUT EXTENDED_COLUMNS "sap.tm.trp.db.systemmanagement.customization::tt_resource_category_extended_columns_info"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    EXTENDED_COLUMNS = 
+        SELECT T2.ID,
+               T2.PAGE_ID,
+               T2.NAME,
+               T2.DISPLAY_NAME,
+               T2.DESCRIPTION,
+               T2.SEARCHABLE,
+               T2.FILTERABLE
+          FROM "sap.tm.trp.db.systemmanagement.customization::t_resource_category_extended_columns" T1
+          LEFT OUTER JOIN "sap.tm.trp.db.common::t_extended_fields" T2
+            ON T1.EXTENDED_COLUMN_ID = T2.ID
+         WHERE T1.RESOURCE_CATEGORY_ID = :RESOURCE_CATEGORY_ID;
+    
+END;

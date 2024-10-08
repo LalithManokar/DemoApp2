@@ -1,0 +1,49 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT T1.NAME AS OBJECT_CODE
+                 ,T2.ID AS USED_OBJECT_ID
+                 ,T2.NAME AS NAME
+                 ,T2.CODE
+                 ,'Resource Balancing' AS CATEGORY
+                 ,T3.DESC AS DESC
+                 ,NULL AS VISIBILITY
+                 ,T5.USERNAME AS CREATED_BY
+                 ,T6.USERNAME AS MODIFIED_BY
+                 ,IFNULL(T2.MODIFIED_ON, T2.CREATED_ON) AS MODIFIED_TIME
+                 ,NULL AS RESOURCE_CATEGORY
+            FROM \"sap.tm.trp.db.planningcockpit::v_network_setting_group\" T1
+            INNER JOIN \"sap.tm.trp.db.planningcockpit::t_simulation_plan\" T2 
+            ON (T1.ID = T2.NETWORK_SETTING_GROUP_ID)
+            LEFT OUTER JOIN (SELECT TEXT.ID,TEXT.DESC
+                             FROM \"sap.tm.trp.db.planningcockpit::t_simulation_plan_t\" AS TEXT
+                             INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE
+                             ON TEXT.SPRAS = LANGUAGE.SPRAS)  AS T3
+            ON T2.ID = T3.ID
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T5 ON T5.ID = T2.CREATED_BY
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T6 ON T6.ID = T2.MODIFIED_BY
+            UNION
+            SELECT T1.NAME AS OBJECT_CODE
+                 ,T2.ID AS USED_OBJECT_ID
+                 ,T2.RULE_NAME AS NAME
+                 ,T2.CODE
+                 ,'Pick-up & Return Rule' AS CATEGORY
+                 ,T3.DESC AS DESC
+                 ,NULL AS VISIBILITY
+                 ,T5.USERNAME AS CREATED_BY
+                 ,T6.USERNAME AS MODIFIED_BY
+                 ,IFNULL(T2.MODIFIED_ON, T2.CREATE_ON) AS MODIFIED_TIME
+                 ,NULL AS RESOURCE_CATEGORY
+            FROM \"sap.tm.trp.db.planningcockpit::v_network_setting_group\" T1
+            INNER JOIN \"sap.tm.trp.db.pickupreturn::t_location_assignment_rule\" T2 ON T2.NETWORK_SETTING_GROUP_ID = T1.ID
+            LEFT OUTER JOIN \"sap.tm.trp.db.pickupreturn::t_location_rule_t\" T3 ON T3.ID = T2.ID
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T5 ON T5.ID = T2.CREATE_BY
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T6 ON T6.ID = T2.MODIFIED_BY";
+                   
+depends_on_view = ["sap.tm.trp.db.planningcockpit::v_network_setting_group",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join",
+                   "sap.tm.trp.db.semantic.common::v_lang_code"];
+                   
+depends_on_table = ["sap.tm.trp.db.pickupreturn::t_location_assignment_rule", 
+                    "sap.tm.trp.db.pickupreturn::t_location_rule_t",
+                    "sap.tm.trp.db.planningcockpit::t_simulation_plan",
+                    "sap.tm.trp.db.planningcockpit::t_simulation_plan_t"];
+                    

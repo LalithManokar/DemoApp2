@@ -1,0 +1,14 @@
+//To define the HDB view file use the following syntax: 
+
+schema="SAP_TM_TRP";
+query="select PLAN_EXECUTION_ID,
+LOCATION_ID,
+EQUIP_TYPE_ID,
+OUTPUT_KEY,
+OUTPUT_VALUE,
+NODE_ID,
+add_seconds(b.execute_on,c.start_offset) as \"TIME\"  from \"sap.tm.trp.db.pipeline::t_pipeline_output_dataset\" as a 
+inner join \"sap.tm.trp.db.pipeline::t_plan_execution\" as b on a.plan_execution_id = b.id
+left join \"sap.tm.trp.db.filter::t_time_filter_interval\" as c on a.time_interval_id = c.id
+where b.id >= 1010";
+depends_on_table = ["sap.tm.trp.db.pipeline::t_pipeline_output_dataset","sap.tm.trp.db.pipeline::t_plan_execution", "sap.tm.trp.db.filter::t_time_filter_interval"];

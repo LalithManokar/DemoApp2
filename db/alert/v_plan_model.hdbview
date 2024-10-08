@@ -1,0 +1,30 @@
+//To define the HDB view file use the following syntax: 
+schema = "SAP_TM_TRP";
+query = "
+  select T1.EXECUTION_ID,
+         T1.PIPELINE_MODEL_ID,
+         IFNULL(T2.ALERT_RULE_GROUP_ID,1) AS ALERT_RULE_GROUP_ID,
+         T3.FILTER_GROUP_ID,
+         T4.PLAN_MODEL_TYPE_ID
+   from 
+   (select 
+           EXECUTION_ID,                        
+           VALUE as PIPELINE_MODEL_ID
+    from  \"sap.tm.trp.db.pipeline::t_execution_context\" where KEY = 'PIPELINE_MODEL_ID' ) as T1
+    inner join
+   (select EXECUTION_ID,
+           VALUE as ALERT_RULE_GROUP_ID
+    from \"sap.tm.trp.db.pipeline::t_execution_context\" where KEY = 'ALERT_RULE_GROUP_ID' ) as T2
+    on T1.EXECUTION_ID = T2.EXECUTION_ID 
+    inner join 
+   (select EXECUTION_ID,
+           VALUE as FILTER_GROUP_ID
+    from \"sap.tm.trp.db.pipeline::t_execution_context\" where KEY = 'FILTER_GROUP_ID' ) as T3
+    on T1.EXECUTION_ID = T3.EXECUTION_ID 
+    inner join 
+   (select EXECUTION_ID,
+           VALUE as PLAN_MODEL_TYPE_ID
+    from \"sap.tm.trp.db.pipeline::t_execution_context\" where KEY = 'PLAN_MODEL_TYPE_ID' ) as T4
+    on T1.EXECUTION_ID = T4.EXECUTION_ID 
+";
+depends_on_table = ["sap.tm.trp.db.pipeline::t_execution_context"];

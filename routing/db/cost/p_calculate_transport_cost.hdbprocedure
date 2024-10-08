@@ -1,0 +1,38 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.cost::p_calculate_transport_cost" (
+    IN transport_cost_rate TABLE (
+        priority INTEGER, from_location_name NVARCHAR(200), to_location_name NVARCHAR(200), 
+        transportation_mode_code NVARCHAR(20), resource_type NVARCHAR(20), carrier_id NVARCHAR(20), 
+        uom_code NVARCHAR(20), cost DECIMAL(13, 3), wild_star_count INTEGER),
+    IN connection TABLE (id NVARCHAR(50), sequence INTEGER, from_location NVARCHAR(50), to_location NVARCHAR(50), 
+        mtr NVARCHAR(10), carrier NVARCHAR(50), resource_type NVARCHAR(20), distance DOUBLE, duration INTEGER), 
+    OUT cost TABLE(id NVARCHAR(50), sequence INTEGER, carrier NVARCHAR(50), cost DOUBLE)
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING"
+   READS SQL DATA AS
+BEGIN
+
+    cost =
+    SELECT A.id, sequence, carrier,
+        FIRST_VALUE(
+            CASE WHEN B.from_location_name = '*' OR B.to_location_name = '*' THEN B.cost * A.distance 
+            ELSE B.cost 
+            END 
+            ORDER BY B.priority, B.wild_star_count, 
+    		CASE 
+    			WHEN B.from_location_name != '*' THEN 1
+    			WHEN B.to_location_name != '*' THEN 2
+    			WHEN B.transportation_mode_code != '*' THEN 3
+    			WHEN B.carrier_id != '*' THEN 4
+    			ELSE 5
+    		END
+            ) AS cost
+    FROM :connection AS A LEFT OUTER JOIN :transport_cost_rate AS B
+    ON (B.from_location_name = '*' OR A.from_location = B.from_location_name) AND 
+        (B.to_location_name = '*' OR A.to_location = B.to_location_name) AND
+        (B.transportation_mode_code = '*' OR A.mtr = B.transportation_mode_code) AND
+        (B.carrier_id = '*' OR A.carrier = B.carrier_id) AND
+        (B.resource_type = '*' OR A.resource_type = B.resource_type)
+    GROUP BY A.id, sequence, carrier;
+END

@@ -1,0 +1,101 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination::p_call_loc_determination_rules" ( 
+in IN_PICK_RETURN_TYPE INTEGER,
+in IN_LDR_NAME VARCHAR(50),
+in IN_TBL "sap.tm.trp.db.hrf.pickupReturnScenario::t_test_depot_balance_cost"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    DECLARE SCRIPT VARCHAR(5000);
+    DECLARE RULE_SP VARCHAR(200);
+
+  select T1.SP into RULE_SP
+  from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule" T1
+  where T1.NAME = :IN_LDR_NAME;
+      
+  truncate table "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination::t_hrf_locDetermin_inputGlobalTemp";
+  truncate table "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination::t_hrf_locDetermin_outputGlobalTemp";
+  insert into "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination::t_hrf_locDetermin_inputGlobalTemp"
+    (select 
+     "SUPPLY",
+     "DEMAND",
+     "IMPACTED_SUPPLY",
+     "IMPACTED_DEMAND",
+     "BALANCE_SUPPLY_DEMAND",
+     "BALANCE_STOCK_SUPPLY_DEMAND",
+     "MIN_SAFETY_STOCK",
+     "MAX_CAPACITY",
+     "COST_MODEL_ID",
+     "TR_COST",
+     "HANDLE_COST",
+     "FREE_DAYS",
+     "STORAGE_COST",
+     "STOCK",
+     "DEPOT_NAME",
+     "DEPOT_ID",
+     "NODE_ID",
+     "PLAN_MODEL_ID",  
+     "PLAN_EXECUTION_ID",
+     "RULE_TYPE",
+     "PLANNED_DATE",      
+     "LOCATION_ID", 
+     "QUANTITY",  
+     "EQUIP_TYPE_NAME",    
+     "EQUIPMENT_ID",    
+     "TU_ID",     
+ 	 "RULE_ID"                    
+     from :IN_TBL);
+
+  SCRIPT := 'call '|| escape_single_quotes(:RULE_SP) ||'('|| :IN_PICK_RETURN_TYPE || ',"sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination::t_hrf_locDetermin_inputGlobalTemp" ,"sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination::t_hrf_locDetermin_outputGlobalTemp","sap.tm.trp.db.hrf.pickupReturnScenario::t_hrf_actions_results") with overview'; 
+  --  select :SCRIPT from dummy;
+
+
+    execute immediate(:SCRIPT); 
+    insert into "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination::t_trp_hrf_locDetermin_output"
+    (
+    select 	distinct
+     T1."SUPPLY",
+     T1."DEMAND",
+     T1."IMPACTED_SUPPLY",
+     T1."IMPACTED_DEMAND",
+     T1."BALANCE_SUPPLY_DEMAND",
+     T1."BALANCE_STOCK_SUPPLY_DEMAND",
+     T1."MIN_SAFETY_STOCK",
+     T1."MAX_CAPACITY",
+     T1."COST_MODEL_ID",
+     T1."TR_COST",
+     T1."HANDLE_COST",
+     T1."FREE_DAYS",
+     T1."STORAGE_COST",
+     T1."STOCK",
+     T1."DEPOT_NAME",
+     T1."DEPOT_ID",
+     T1."NODE_ID",
+     T1."PLAN_MODEL_ID",  
+     T1."PLAN_EXECUTION_ID",
+     T1."RULE_TYPE",
+     T1."PLANNED_DATE",      
+     T1."LOCATION_ID", 
+     T1."QUANTITY",  
+     T1."EQUIP_TYPE_NAME",    
+     T1."EQUIPMENT_ID",    
+     T1."TU_ID",     
+ 	 T1."RULE_ID",
+     T2.RULE_NAME,
+     T2.ROW_ID,
+     T2."LOCATION_RANK"
+    from "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination::t_hrf_locDetermin_outputGlobalTemp" T2
+    inner join "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination::t_hrf_locDetermin_inputGlobalTemp" T1
+    on T1.TU_ID = T2.TU_ID and 
+       T1.EQUIPMENT_ID = T2.EQUIPMENT_ID and 
+       T1.LOCATION_ID = T2.LOCATION_ID and 
+       T1.PLANNED_DATE = T2.PLANNED_DATE and 
+       T1.RULE_TYPE = T2.RULE_TYPE and 
+       T1.PLAN_EXECUTION_ID = T2.PLAN_EXECUTION_ID and 
+       T1.NODE_ID = T2.NODE_ID and 
+       T1.DEPOT_ID = T2.DEPOT_ID
+    );
+    
+END;

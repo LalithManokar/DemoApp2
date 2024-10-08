@@ -1,0 +1,44 @@
+//To define the HDB view file use the following syntax: 
+schema = "SAP_TM_TRP";
+query = "
+select T11.EXECUTION_ID,
+       T11.PIPELINE_MODEL_ID,
+       T11.ALERT_RULE_GROUP_ID,
+       T2.NAME as ALERT_RULE_GROUP_NAME,
+       T4.ALERT_RULE_ID,
+       T4.NAME as ALERT_RULE_NAME,
+       T4.SP,
+       T6.ALERT_RULE_PARAM_VALUE,
+       T5.ALERT_RULE_TYPE_ID,
+       T5.ALERT_RULE_TYPE_DESC,
+       T5.DATA_OBJECT_ID,
+       T5.DATA_OBJECT_FORMAT
+from 
+(
+  select T1.EXECUTION_ID,
+         T1.PIPELINE_MODEL_ID,
+         IFNULL(T2.ALERT_RULE_GROUP_ID,1) AS ALERT_RULE_GROUP_ID
+   from 
+   (select 
+           EXECUTION_ID,                        
+           VALUE as PIPELINE_MODEL_ID
+    from  \"sap.tm.trp.db.pipeline::t_execution_context\" where KEY = 'PIPELINE_MODEL_ID' ) as T1
+    inner join
+   (select EXECUTION_ID,
+           VALUE as ALERT_RULE_GROUP_ID
+    from \"sap.tm.trp.db.pipeline::t_execution_context\" where KEY = 'ALERT_RULE_GROUP_ID' ) as T2
+    on T1.EXECUTION_ID = T2.EXECUTION_ID 
+) T11
+INNER JOIN \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group\" T2
+ON (T11.ALERT_RULE_GROUP_ID = T2.ALERT_RULE_GROUP_ID) 
+INNER JOIN \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_items\" T3
+          ON (T11.ALERT_RULE_GROUP_ID = T3.ALERT_RULE_GROUP_ID)
+          INNER JOIN  \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule\" T4
+          ON (T3.ALERT_RULE_ID = T4.ALERT_RULE_ID)
+          INNER JOIN  \"sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_map_node_metaData\" T5
+          ON (T4.ALERT_RULE_TYPE_ID = T5.ALERT_RULE_TYPE_ID)
+          INNER JOIN  \"sap.tm.trp.db.alert.alert_rule_group::t_DT_params\" T6
+          ON (T4.ALERT_RULE_ID = T6.ALERT_RULE_ID)
+          ORDER BY T11.PIPELINE_MODEL_ID, T11.EXECUTION_ID desc
+";
+depends_on_table = ["sap.tm.trp.db.pipeline::t_execution_context","sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group","sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_items","sap.tm.trp.db.alert.alert_rule_group::t_alert_rule","sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_map_node_metaData","sap.tm.trp.db.alert.alert_rule_group::t_DT_params"];

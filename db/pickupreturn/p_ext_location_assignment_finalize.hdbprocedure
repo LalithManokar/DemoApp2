@@ -1,0 +1,294 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_location_assignment_finalize" (
+    IN RULE_ID BIGINT,
+    IN LOC_ASSIGNMENT_FINALIZE_TU_IDS CLOB,
+    IN RUN_ID VARCHAR(200),
+    OUT STATUS VARCHAR(100)
+)
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+
+  DECLARE USER_NAME NVARCHAR(60); 
+  DECLARE USER_ID INTEGER; 
+  DECLARE COUNT_TU INTEGER;
+  DECLARE LV_OP_SETTING_TYPE INTEGER;
+  DECLARE TOTAL_COUNT INTEGER;
+  DECLARE V_SCHEDULE_TIME_TYPE INTEGER;
+  DECLARE LOC_ASSIGNMENT_FINALIZE_TU_IDS_P TABLE(
+    "TU_ID" VARCHAR(20)
+    );
+  CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:LOC_ASSIGNMENT_FINALIZE_TU_IDS,',',TU_IDS_STRING);
+  LOC_ASSIGNMENT_FINALIZE_TU_IDS_P = SELECT string as TU_ID FROM :TU_IDS_STRING;
+  
+  SELECT IFNULL (MAX (USERNAME),'') INTO USER_NAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+
+  CALL "sap.tm.trp.db.pickupreturn::p_ext_get_staging_tu"(:RULE_ID, TU_INFO);
+
+
+  SELECT T1.ID INTO USER_ID
+  FROM "sap.tm.trp.db.systemmanagement.user::t_user" T1
+  INNER JOIN "sap.tm.trp.db.systemmanagement.user::cv_get_username" T2
+  ON (T1.USERNAME = T2.USERNAME);
+
+
+  SELECT IFNULL (MAX(OP_SETTING_TYPE),0) INTO LV_OP_SETTING_TYPE
+  FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+  WHERE ID = :RULE_ID;
+
+  SELECT IFNULL (MAX (SCHEDULE_TIME_TYPE),0) INTO V_SCHEDULE_TIME_TYPE
+  FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+  WHERE ID = :RULE_ID;
+ -- confirm  :LOC_ASSIGNMENT_FINALIZE_TU_IDS  must be  have value
+ 
+ -- SELECT COUNT(*) INTO COUNT_TU FROM :LOC_ASSIGNMENT_FINALIZE_TU_IDS;
+  
+ -- IF :COUNT_TU > 0 THEN
+
+	IF :V_SCHEDULE_TIME_TYPE = 1 THEN  
+	
+	INSERT  INTO "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result"
+       (RULE_ID,
+        TU_ID,
+        USER,
+        EXECUTION_STATUS_CODE,
+        SHIPPER_ID,
+        CONSIGNEE_ID,
+        RESOURCE_TYPE,
+        QUANTITY,
+        SOURCE_LOCATION_ID,
+        DESTINATION_LOCATION_ID,
+        STREETTURN_TU_ID,
+        POL,
+        POD,
+        DATE,
+        PRE_LOCATION_ID,
+        CUR_LOCATION_ID,
+        PRE_DATE,
+        CUR_DATE,
+        FLAG,
+        AYSNC_TM_UPD,
+        OP_SETTING_TYPE,
+        EXECUTION_TIME,
+        SCHEDULE_TIME_TYPE,
+        EXECUTION_BY,
+        RUN_ID)
+   
+    SELECT  AFFECTED_TBL.RULE_ID,
+	        AFFECTED_TBL.TU_ID,
+	        :USER_NAME,
+	        AFFECTED_TBL.EXECUTION_STATUS_CODE,
+	        AFFECTED_TBL.SHIPPER_ID,
+	        AFFECTED_TBL.CONSIGNEE_ID,
+	        AFFECTED_TBL.RESOURCE_TYPE,
+	        AFFECTED_TBL.QUANTITY,
+	        AFFECTED_TBL.SOURCE_LOCATION_ID,
+	        AFFECTED_TBL.DESTINATION_LOCATION_ID,
+	        AFFECTED_TBL.STREETTURN_TU_ID,
+	        AFFECTED_TBL.POL,
+	        AFFECTED_TBL.POD,
+	        CASE AFFECTED_TBL.TU_TYPE_CODE WHEN 'EP' THEN AFFECTED_TBL.VESSEL_CUTOFF_TIME
+	          WHEN 'ER' THEN AFFECTED_TBL.VESSEL_ARRIVAL_DATE END AS DATE,
+	        AFFECTED_TBL.PRE_LOCATION_ID,
+	        AFFECTED_TBL.CUR_LOCATION_ID,
+	        AFFECTED_TBL.PRE_DATE,
+	        AFFECTED_TBL.CUR_DATE,
+	        AFFECTED_TBL.FLAG,
+	        1, --Async Processing in TM
+	        AFFECTED_TBL.OP_SETTING_TYPE,
+	        AFFECTED_TBL.SAVE_TIME,
+	        AFFECTED_TBL.SCHEDULE_TIME_TYPE,
+	        :USER_ID,
+	        :RUN_ID
+     FROM   "sap.tm.trp.db.pickupreturn::t_pickupreturn_global_draft" AS AFFECTED_TBL
+    WHERE   TU_ID IN (SELECT TU_ID FROM :LOC_ASSIGNMENT_FINALIZE_TU_IDS_P)
+      AND   RULE_ID = :RULE_ID
+      AND   USER = :USER_NAME
+;
+	/*STREET_TURN_TU_LIST = SELECT  TU_ID  
+                            FROM  "sap.tm.trp.db.pickupreturn::t_pickupreturn_global_draft" 
+                           WHERE  TU_ID IN (SELECT TU_ID FROM :LOC_ASSIGNMENT_FINALIZE_TU_IDS)
+                             AND  RULE_ID = :RULE_ID
+                             AND  USER = :USER_NAME
+                             AND  STREETTURN_TU_ID <>'' 
+                             AND  STREETTURN_TU_ID is not null
+                           UNION
+                          SELECT  STREETTURN_TU_ID  
+                            FROM  "sap.tm.trp.db.pickupreturn::t_pickupreturn_global_draft" 
+                           WHERE  TU_ID IN (SELECT TU_ID FROM :LOC_ASSIGNMENT_FINALIZE_TU_IDS)
+                             AND  RULE_ID = :RULE_ID
+                             AND  USER = :USER_NAME
+                             AND  STREETTURN_TU_ID <>'' 
+                             AND  STREETTURN_TU_ID is not null;
+                             
+                             
+    MANU_RULE_LIST = SELECT  DISTINCT RULE_ID  
+                       FROM "sap.tm.trp.db.pickupreturn::t_pickupreturn_global_draft" A              
+                      WHERE A.SCHEDULE_TIME_TYPE=0
+                        AND A.RULE_ID <>:RULE_ID;
+                        
+   update "sap.tm.trp.db.pickupreturn::t_pickupreturn_global_draft"  A 
+       set A.INVALID = 1
+     where A.RULE_ID  in (SELECT RULE_ID FROM :MANU_RULE_LIST )
+       and (A.TU_ID in (SELECT TU_ID  from :STREET_TURN_TU_LIST) or STREETTURN_TU_ID in (SELECT TU_ID  from :STREET_TURN_TU_LIST) );
+  */  
+                                          
+	ELSE
+	
+    INSERT  INTO "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result"
+       (RULE_ID,
+        TU_ID,
+        USER,
+        EXECUTION_STATUS_CODE,
+        SHIPPER_ID,
+        CONSIGNEE_ID,
+        RESOURCE_TYPE,
+        QUANTITY,
+        SOURCE_LOCATION_ID,
+        DESTINATION_LOCATION_ID,
+        STREETTURN_TU_ID,
+        POL,
+        POD,
+        DATE,
+        PRE_LOCATION_ID,
+        CUR_LOCATION_ID,
+        PRE_DATE,
+        CUR_DATE,
+        FLAG,
+        AYSNC_TM_UPD,
+        OP_SETTING_TYPE,
+        EXECUTION_TIME,
+        SCHEDULE_TIME_TYPE,
+        EXECUTION_BY,
+        RUN_ID)
+   
+    SELECT  AFFECTED_TBL.RULE_ID,
+	        AFFECTED_TBL.TU_ID,
+	        :USER_NAME,
+	        AFFECTED_TBL.EXECUTION_STATUS_CODE,
+	        AFFECTED_TBL.SHIPPER_ID,
+	        AFFECTED_TBL.CONSIGNEE_ID,
+	        AFFECTED_TBL.RESOURCE_TYPE,
+	        AFFECTED_TBL.QUANTITY,
+	        AFFECTED_TBL.SOURCE_LOCATION_ID,
+	        AFFECTED_TBL.DESTINATION_LOCATION_ID,
+	        AFFECTED_TBL.STREETTURN_TU_ID,
+	        AFFECTED_TBL.POL,
+	        AFFECTED_TBL.POD,
+	        CASE AFFECTED_TBL.TU_TYPE_CODE WHEN 'EP' THEN AFFECTED_TBL.VESSEL_CUTOFF_TIME
+	          WHEN 'ER' THEN AFFECTED_TBL.VESSEL_ARRIVAL_DATE END AS DATE,
+	        AFFECTED_TBL.PRE_LOCATION_ID,
+	        AFFECTED_TBL.CUR_LOCATION_ID,
+	        AFFECTED_TBL.PRE_DATE,
+	        AFFECTED_TBL.CUR_DATE,
+	        AFFECTED_TBL.FLAG,
+	        1, --Async Processing in TM
+	        AFFECTED_TBL.OP_SETTING_TYPE,
+	        AFFECTED_TBL.SAVE_TIME,
+	        AFFECTED_TBL.SCHEDULE_TIME_TYPE,
+	        :USER_ID,
+	        :RUN_ID
+     FROM   "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft" AS AFFECTED_TBL
+    WHERE   TU_ID IN (SELECT TU_ID FROM :LOC_ASSIGNMENT_FINALIZE_TU_IDS_P)
+      AND   RULE_ID = :RULE_ID
+      AND   USER = :USER_NAME
+;
+   
+    
+    
+    STREET_TURN_TU_LIST = SELECT  TU_ID  
+                            FROM  "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft" 
+                           WHERE  TU_ID IN (SELECT TU_ID FROM :LOC_ASSIGNMENT_FINALIZE_TU_IDS_P)
+                             AND  RULE_ID = :RULE_ID
+                             AND  USER = :USER_NAME
+                             AND  STREETTURN_TU_ID <>'' 
+                             AND  STREETTURN_TU_ID is not null
+                           UNION
+                          SELECT  STREETTURN_TU_ID  
+                            FROM  "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft" 
+                           WHERE  TU_ID IN (SELECT TU_ID FROM :LOC_ASSIGNMENT_FINALIZE_TU_IDS_P)
+                             AND  RULE_ID = :RULE_ID
+                             AND  USER = :USER_NAME
+                             AND  STREETTURN_TU_ID <>'' 
+                             AND  STREETTURN_TU_ID is not null;
+                             
+                             
+    MANU_RULE_LIST = SELECT  DISTINCT RULE_ID  
+                       FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft" A              
+                      WHERE A.SCHEDULE_TIME_TYPE=0
+                        AND A.RULE_ID <>:RULE_ID;  
+                                          
+                              
+    -- update TU STATUS　in draft table for other rule ,when other user finalized related TU ,they will get warn message : the TU is updated                         
+    
+    update "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft"  A 
+       set A.INVALID = 1
+     where A.RULE_ID  in (SELECT RULE_ID FROM :MANU_RULE_LIST )
+       and (A.TU_ID in (SELECT TU_ID  from :STREET_TURN_TU_LIST) or STREETTURN_TU_ID in (SELECT TU_ID  from :STREET_TURN_TU_LIST) );
+    
+    END IF;
+
+--  ELSE
+  /*  SELECT AFFECTED_TBL.RULE_ID,
+        AFFECTED_TBL.TRANSPORTATION_ID,
+        :USER_NAME,
+        AFFECTED_TBL.EXECUTION_STATUS_CODE,
+        AFFECTED_TBL.SHIPPER_ID,
+        AFFECTED_TBL.CONSIGNEE_ID,
+        AFFECTED_TBL.RESOURCE_TYPE,
+        AFFECTED_TBL.QUANTITY,
+        AFFECTED_TBL.SOURCE_LOCATION_ID,
+        AFFECTED_TBL.DESTINATION_LOCATION_ID,
+        AFFECTED_TBL.STREETTURN_TU_ID,
+        AFFECTED_TBL.POL,
+        AFFECTED_TBL.POD,
+        CASE AFFECTED_TBL.TU_TYPE_CODE WHEN 'EP' THEN AFFECTED_TBL.VESSEL_CUTOFF_TIME
+          WHEN 'ER' THEN AFFECTED_TBL.VESSEL_ARRIVAL_DATE END AS DATE,
+        CASE AFFECTED_TBL.RULE_TYPE WHEN 1 THEN AFFECTED_TBL.PICKUP_LOCATION_ID ELSE AFFECTED_TBL.RETURN_LOCATION_ID END AS PRE_LOCATION_ID,
+        CASE AFFECTED_TBL.RULE_TYPE WHEN 1 THEN AFFECTED_TBL.ORIGINAL_PICKUP_LOCATION_ID ELSE AFFECTED_TBL.ORIGINAL_RETURN_LOCATION_ID END AS CUR_LOCATION_ID,
+        CASE AFFECTED_TBL.RULE_TYPE WHEN 1 THEN AFFECTED_TBL.PICKUP_DATE ELSE AFFECTED_TBL.RETURN_DATE END AS PRE_DATE,
+        CASE AFFECTED_TBL.RULE_TYPE WHEN 1 THEN AFFECTED_TBL.ORIGINAL_PICKUP_DATE ELSE AFFECTED_TBL.ORIGINAL_RETURN_DATE END AS CUR_DATE,
+        AFFECTED_TBL.FLAG,
+        :LV_OP_SETTING_TYPE,
+        CURRENT_UTCTIMESTAMP,
+        1 AS SCHEDULE_TIME_TYPE,
+        :USER_ID AS USER,
+        :RUN_ID
+    FROM :TU_INFO AS AFFECTED_TBL
+    WHERE AFFECTED_TBL.TRANSPORTATION_ID IN (SELECT TU_ID FROM :LOC_ASSIGNMENT_FINALIZE_TU_IDS)
+    INTO "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result" (
+        RULE_ID,
+        TU_ID,
+        USER,
+        EXECUTION_STATUS_CODE,
+        SHIPPER_ID,
+        CONSIGNEE_ID,
+        RESOURCE_TYPE,
+        QUANTITY,
+        SOURCE_LOCATION_ID,
+        DESTINATION_LOCATION_ID,
+        STREETTURN_TU_ID,
+        POL,
+        POD,
+        DATE,
+        PRE_LOCATION_ID,
+        CUR_LOCATION_ID,
+        PRE_DATE,
+        CUR_DATE,
+        FLAG,
+        OP_SETTING_TYPE,
+        EXECUTION_TIME,
+        SCHEDULE_TIME_TYPE,
+        EXECUTION_BY,
+        RUN_ID
+    );
+  END IF ;
+  
+  */
+
+    --No need to delete it from the tmp table, because tmp table will be refreshed later
+
+    STATUS := 'SUCCESS';
+
+END;

@@ -1,0 +1,13 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "used for solver handling capacity prepare";
+table.columns = [
+  {name = "LOCATION_ID"; sqlType = VARCHAR; length = 50;},
+  {name = "LOCATION_NAME"; sqlType = VARCHAR; length = 100;},   
+  {name = "TIME_INTERVAL_ID"; sqlType = BIGINT;},
+  {name = "START_TIME"; sqlType = TIMESTAMP;},
+  {name = "END_TIME"; sqlType = TIMESTAMP;},
+  {name = "SUPPLY"; sqlType = BIGINT;},
+  {name = "DEMAND"; sqlType = BIGINT;},
+  {name = "HANDLING_CAPACITY"; sqlType = BIGINT;}
+];

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_equipment_filter_optimized" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_equipment_filter"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition>
+
+ BEGIN
+     DECLARE NAME VARCHAR(60);
+     DECLARE IS_SUPERUSER INTEGER;
+	 DECLARE LANGUAGE_CODE VARCHAR(1);
+ 	 SELECT USERNAME INTO NAME FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+
+	SELECT
+		 count(distinct USER_NAME) into IS_SUPERUSER
+	FROM &quot;SYS&quot;.&quot;EFFECTIVE_APPLICATION_PRIVILEGES&quot; T1
+	INNER JOIN &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot; T2
+	on T1.USER_NAME = T2.USERNAME
+	WHERE T1.PRIVILEGE = 'sap.tm.trp.service::UnrestrictedRead'
+	AND T1.USER_NAME = :NAME
+	and T1.IS_VALID ='TRUE'
+	or (T1.USER_NAME = :NAME and T2.USER_TYPE_ID = 99);
+
+	SELECT IFNULL(MAX(SPRAS),'E') INTO LANGUAGE_CODE FROM &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot;;
+
+     IF :IS_SUPERUSER = 1 THEN
+
+         var_out = SELECT A.ID
+                          FROM &quot;sap.tm.trp.db.filter::t_equipment_filter&quot; AS A
+		                  INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_visibility_type&quot; T3 ON T3.CODE = A.VISIBLE_FLAG
+		                  INNER JOIN &quot;sap.tm.trp.db.filter::t_resource_filter_type&quot; T5 on T5.ID = A.FILTER_TYPE
+                          INNER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege&quot; PRIVILEGE ON 1=1;
+
+     ELSE
+
+         var_out = SELECT A.ID
+                          FROM &quot;sap.tm.trp.db.filter::t_equipment_filter&quot; AS A
+		                  INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_visibility_type&quot; T3 ON T3.CODE = A.VISIBLE_FLAG
+		                  INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_visibility_type_t&quot; T4 ON T4.ID = T3.ID AND T4.SPRAS = :LANGUAGE_CODE
+		                  INNER JOIN &quot;sap.tm.trp.db.filter::t_resource_filter_type&quot; T5 on T5.ID = A.FILTER_TYPE
+		                  INNER JOIN &quot;sap.tm.trp.db.filter::t_resource_filter_type_t&quot; T6 on T6.ID = T5.ID AND T6.SPRAS = :LANGUAGE_CODE
+		                  LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; AS C
+                          ON A.CREATE_BY = C.ID
+                          INNER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege&quot; PRIVILEGE ON 1=1
+                          WHERE (A.VISIBLE_FLAG = 'G' OR (A.VISIBLE_FLAG = 'P' AND C.USERNAME = :NAME))
+                          ;
+
+     END IF;
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

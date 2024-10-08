@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.2" id="cv_get_location_type_of_location_filter" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_anna_privilege_check"/>
+  <localVariables>
+    <variable id="IN_VP_LOCATION_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="IN_VP_LOCATION_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <viewAttributes>
+        <viewAttribute datatype="INTEGER" id="LOCATION_TYPE"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_VP_LOCATION_FILTER_ID</localVariable>
+      <definition> 
+  
+ BEGIN 
+ 
+ 
+    
+ 
+     var_out =  SELECT LOCATION_TYPE 
+ FROM &quot;sap.tm.trp.db.filter::t_location_filter&quot;  
+ WHERE id = :IN_VP_LOCATION_FILTER_ID;
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <attributes>
+      <attribute id="LOCATION_TYPE" order="1">
+        <descriptions defaultDescription="LOCATION_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_TYPE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

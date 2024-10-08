@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_user_roles" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_user_roels"/>
+  <localVariables>
+    <variable id="USER_NAME" parameter="true">
+      <descriptions defaultDescription="user name"/>
+      <variableProperties datatype="NVARCHAR" defaultValue="" length="60" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="USERNAME" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="ROLE_NAME" length="50"/>
+        <viewAttribute datatype="NVARCHAR" id="ROLE_TYPE" length="50"/>
+        <viewAttribute datatype="NVARCHAR" id="ROLE_DESCRIPTION" length="50"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#USER_NAME</localVariable>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+ BEGIN 
+ 	 var_out = 	SELECT T2.USERNAME AS USERNAME,
+ 	                   T1.NAME AS ROLE_NAME,
+ 	                   T1.ROLE_GROUP_NAME AS ROLE_TYPE,
+ 	                   T1.DESC AS ROLE_DESCRIPTION
+ 	             FROM &quot;sap.tm.trp.db.systemmanagement.user::v_role_user&quot; T1
+ 	             INNER JOIN &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot; T2
+ 	             ON (T1.USER_ID = T2.ID)
+ 	             WHERE T2.USERNAME = :USER_NAME;
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="USERNAME" order="1">
+        <descriptions defaultDescription="USERNAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="USERNAME"/>
+      </attribute>
+      <attribute id="ROLE_TYPE" order="3">
+        <descriptions defaultDescription="VALID_FROM"/>
+        <keyMapping columnObjectName="Script_View" columnName="ROLE_TYPE"/>
+      </attribute>
+      <attribute id="ROLE_DESCRIPTION" order="4">
+        <descriptions defaultDescription="VALID_TO"/>
+        <keyMapping columnObjectName="Script_View" columnName="ROLE_DESCRIPTION"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="ROLE_NAME" order="2" aggregationType="max" measureType="simple">
+        <descriptions defaultDescription="USERNAME"/>
+        <measureMapping columnObjectName="Script_View" columnName="ROLE_NAME"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

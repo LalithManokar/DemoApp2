@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_location_cost_model_resource_type_explode" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_location_cost_model_resource_type_explode"/>
+  <localVariables>
+    <variable id="IP_COST_DATASET_ID" parameter="true">
+      <descriptions defaultDescription="IP_COST_DATASET_ID"/>
+      <variableProperties datatype="BIGINT" defaultValue="0" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IP_COST_MODEL_ID" parameter="true">
+      <descriptions defaultDescription="IP_COST_MODEL_ID"/>
+      <variableProperties datatype="BIGINT" defaultValue="0" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="COST_DATASET_ID"/>
+        <viewAttribute datatype="VARCHAR" id="FROM_LOCATION_NAME" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="TO_LOCATION_NAME" length="200"/>
+        <viewAttribute datatype="NVARCHAR" id="RESOURCE_TYPE" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="TRANSPORTATION_MODE_CODE" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="UOM_CODE" length="20"/>
+        <viewAttribute datatype="DECIMAL" id="COST" length="13" scale="3"/>
+        <viewAttribute datatype="NVARCHAR" id="DATA_SOURCE_CODE" length="20"/>
+        <viewAttribute datatype="INTEGER" id="WILD_STAR_COUNT"/>
+        <viewAttribute datatype="NVARCHAR" id="CARRIER_ID" length="20"/>
+        <viewAttribute datatype="TIMESTAMP" id="LAST_MODIFIED_ON"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IP_COST_DATASET_ID</localVariable>
+      <localVariable>#IP_COST_MODEL_ID</localVariable>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+ BEGIN 
+ 
+ 	IF(:IP_COST_DATASET_ID &lt;> 0) THEN
+ 	    
+ 	    LOCATION_COST_RESOURCE_TYPES = 	   
+ 	           SELECT   COST_DATASET_ID, 
+ 	                 	FROM_LOCATION_NAME,
+ 	                 	TO_LOCATION_NAME, 	
+                 		CASE WHEN T1.RESOURCE_TYPE = '*'
+                         	 THEN T1.RESOURCE_TYPE
+                      	ELSE T2.RESOURCE_TYPE_CODE
+                 		END  AS RESOURCE_TYPE,
+                 		TRANSPORTATION_MODE_CODE,
+                 		UOM_CODE,                 		
+                 		COST,
+                 		DATA_SOURCE_CODE,
+                 		WILD_STAR_COUNT,
+                 		CARRIER_ID,
+                 		LAST_MODIFIED_ON
+				FROM (  SELECT  COST_DATASET_ID,
+				                FROM_LOCATION_NAME,
+ 	                 	        TO_LOCATION_NAME,              					
+             					CASE WHEN RESOURCE_TYPE = '*' 
+             					 		THEN '*'
+                					 ELSE REPLACE(RESOURCE_TYPE, '*', '%')
+             					END AS RESOURCE_TYPE,
+             					TRANSPORTATION_MODE_CODE,
+                 				UOM_CODE,                 		
+                 				COST,
+                 				DATA_SOURCE_CODE,
+                 				WILD_STAR_COUNT,
+                 				CARRIER_ID,
+                 				LAST_MODIFIED_ON 
+      					FROM &quot;sap.tm.trp.db.costmodel::t_location_based_cost&quot;
+      					WHERE COST_DATASET_ID = :IP_COST_DATASET_ID) T1     					  
+				LEFT OUTER JOIN (SELECT DISTINCT  RESOURCE_TYPE_CODE 
+				                 FROM &quot;sap.tm.trp.db.semantic.resource::v_resource_type&quot;) T2
+    				   ON T2.RESOURCE_TYPE_CODE LIKE T1.RESOURCE_TYPE; 
+ 	
+ 	ELSEIF (:IP_COST_MODEL_ID &lt;> 0) THEN 
+ 	
+ 	   LOCATION_COST_RESOURCE_TYPES = 	   
+ 	           SELECT   T2.COST_DATASET_ID, 
+ 	                 	T2.FROM_LOCATION_NAME,
+ 	                 	T2.TO_LOCATION_NAME, 	
+                 		CASE WHEN T2.RESOURCE_TYPE = '*'
+                         	 THEN T2.RESOURCE_TYPE
+                      	ELSE T3.RESOURCE_TYPE_CODE
+                 		END  AS RESOURCE_TYPE,
+                 		T2.TRANSPORTATION_MODE_CODE,
+                 		T2.UOM_CODE,                 		
+                 		T2.COST,
+                 		T2.DATA_SOURCE_CODE,
+                 		T2.WILD_STAR_COUNT,
+                 		T2.CARRIER_ID,
+                 		T2.LAST_MODIFIED_ON
+                FROM  &quot;sap.tm.trp.db.costmodel::t_cost_model_dataset&quot; T1
+                INNER JOIN (SELECT  COST_DATASET_ID,
+				                FROM_LOCATION_NAME,
+ 	                 	        TO_LOCATION_NAME,              					
+             					CASE WHEN RESOURCE_TYPE = '*' 
+             					 		THEN '*'
+                					 ELSE REPLACE(RESOURCE_TYPE, '*', '%')
+             					END AS RESOURCE_TYPE,
+             					TRANSPORTATION_MODE_CODE,
+                 				UOM_CODE,                 		
+                 				COST,
+                 				DATA_SOURCE_CODE,
+                 				WILD_STAR_COUNT,
+                 				CARRIER_ID,
+                 				LAST_MODIFIED_ON  
+      					FROM &quot;sap.tm.trp.db.costmodel::t_location_based_cost&quot;) T2
+      			ON T1.COST_DATASET_ID = T2.COST_DATASET_ID AND 
+      			   T1.COST_MODEL_ID = :IP_COST_MODEL_ID		     					  
+				LEFT OUTER JOIN (SELECT DISTINCT  RESOURCE_TYPE_CODE 
+				                 FROM &quot;sap.tm.trp.db.semantic.resource::v_resource_type&quot;) T3
+    				   ON T3.RESOURCE_TYPE_CODE LIKE T2.RESOURCE_TYPE; 
+ 	    
+ 	END IF; 
+ 	
+ 	VAR_OUT = SELECT * FROM :LOCATION_COST_RESOURCE_TYPES; 	 
+ 
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="FROM_LOCATION_NAME" order="2">
+        <descriptions defaultDescription="FROM_LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="FROM_LOCATION_NAME"/>
+      </attribute>
+      <attribute id="TO_LOCATION_NAME" order="3">
+        <descriptions defaultDescription="TO_LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="TO_LOCATION_NAME"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE" order="4">
+        <descriptions defaultDescription="RESOURCE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE"/>
+      </attribute>
+      <attribute id="TRANSPORTATION_MODE_CODE" order="5">
+        <descriptions defaultDescription="TRANSPORTATION_MODE_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="TRANSPORTATION_MODE_CODE"/>
+      </attribute>
+      <attribute id="UOM_CODE" order="6">
+        <descriptions defaultDescription="UOM_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="UOM_CODE"/>
+      </attribute>
+      <attribute id="DATA_SOURCE_CODE" order="8">
+        <descriptions defaultDescription="DATA_SOURCE_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="DATA_SOURCE_CODE"/>
+      </attribute>
+      <attribute id="CARRIER_ID" order="10">
+        <descriptions defaultDescription="CARRIER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="CARRIER_ID"/>
+      </attribute>
+      <attribute id="LAST_MODIFIED_ON" order="11">
+        <descriptions defaultDescription="LAST_MODIFIED_ON"/>
+        <keyMapping columnObjectName="Script_View" columnName="LAST_MODIFIED_ON"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="COST_DATASET_ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="COST_DATASET_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="COST_DATASET_ID"/>
+      </measure>
+      <measure id="COST" order="7" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="COST"/>
+        <measureMapping columnObjectName="Script_View" columnName="COST"/>
+      </measure>
+      <measure id="WILD_STAR_COUNT" order="9" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="WILD_STAR_COUNT"/>
+        <measureMapping columnObjectName="Script_View" columnName="WILD_STAR_COUNT"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

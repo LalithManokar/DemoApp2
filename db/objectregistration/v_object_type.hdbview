@@ -1,0 +1,16 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT T1.ID AS ID,
+				 T1.CODE,
+				 T1.RESOURCE_CATEGORY,
+				 T1.TYPE,
+                 T2.DESC AS NAME
+          FROM \"sap.tm.trp.db.objectregistration::t_object_type\" AS T1
+          LEFT JOIN \"sap.tm.trp.db.objectregistration::t_object_type_t\" AS T2
+          ON (T1.ID = T2.ID)
+          LEFT JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE_T
+          ON (T2.SPRAS = LANGUAGE_T.SPRAS)
+          ";
+
+depends_on_table = ["sap.tm.trp.db.objectregistration::t_object_type",
+                    "sap.tm.trp.db.objectregistration::t_object_type_t"];
+depends_on_view  = ["sap.tm.trp.db.semantic.common::v_lang_code"];

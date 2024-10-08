@@ -1,0 +1,105 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_lease_contract_hire_term_save" (
+	IN CONNECTION_ID VARCHAR(100),
+    OUT EXECUTION_RESULTS "sap.tm.trp.db.massupload::tt_massupload_execution_result"
+    ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+	CURRENT_USER_ID BIGINT;
+BEGIN
+
+	--Declarations
+	DECLARE CRTD_REC_CNT integer;
+	DECLARE UPDT_REC_CNT integer := 0;
+	DECLARE TOTAL_REC_CNT integer;
+	DECLARE OUTPUT integer;
+	
+	-- Get User Id
+	SELECT IFNULL(MAX(ID),0) INTO CURRENT_USER_ID
+	FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+	WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+	
+	
+	SOURCE_ALL = SELECT DISTINCT
+				HIRE_ID,LEASE_CONTRACT_REFERENCE,HIRE_TYPE,START_TIME,END_TIME,LOCATION_TYPE,LOCATION,EQUIPMENT,MIN_HIRE_QUANTITY,
+     	        MAX_HIRE_QUANTITY,FEE,PENALTY_FEE,REMARK,ACTIVE
+     			FROM "sap.tm.trp.db.massupload::t_lease_contract_hire_term_temporary"    			 
+     			WHERE CONNECTION_ID = :CONNECTION_ID;
+  
+     			
+    SOURCE =  SELECT
+		    	 "sap.tm.trp.db.leasecontract::s_lease_contract_hire_term".NEXTVAL AS ID,
+		    	 LC.ID AS LEASE_CONTRACT_ID,
+		    	 S.START_TIME,
+		    	 S.END_TIME,
+		    	 S.LOCATION,
+		    	 S.LOCATION_TYPE,
+		    	 CASE WHEN S.EQUIPMENT =  EQ1.RESOURCE_TYPE_CODE THEN '1'
+		    	      WHEN S.EQUIPMENT = EQ2.CODE THEN '2' END AS EQUIPMENT_CODE_TYPE,
+		    	 S.EQUIPMENT,
+		    	 S.MIN_HIRE_QUANTITY,
+		    	 S.MAX_HIRE_QUANTITY,
+		    	 S.FEE,
+		    	 S.PENALTY_FEE,
+		    	 S.REMARK,
+		    	 CURRENT_UTCTIMESTAMP AS CREATION_DATE,
+		    	 CURRENT_UTCTIMESTAMP AS MODIFIED_DATE,
+		    	 :CURRENT_USER_ID AS CREATED_BY,
+		    	 :CURRENT_USER_ID AS MODIFIED_BY,
+		    	 S.HIRE_TYPE,
+		    	 S.ACTIVE,
+		    	 "sap.tm.trp.db.leasecontract::s_lease_contract_hire_term".NEXTVAL AS CODE,
+		    	 LC.CODE AS CONTRACT_CODE
+		       	FROM :SOURCE_ALL S
+		       	INNER JOIN "sap.tm.trp.db.leasecontract::t_lease_contract" AS LC
+		        ON S.LEASE_CONTRACT_REFERENCE = LC.LEASE_CONTRACT_REFERENCE
+		        LEFT JOIN (SELECT DISTINCT RESOURCE_TYPE_CODE FROM "sap.tm.trp.db.semantic.resource::v_resource_type") EQ1
+		        ON S.EQUIPMENT = EQ1.RESOURCE_TYPE_CODE
+		        LEFT JOIN (SELECT DISTINCT CODE FROM "sap.tm.trp.db.systemmanagement::t_equipment_group") EQ2
+		        ON S.EQUIPMENT = EQ2.CODE;
+     			
+    
+     			
+    --Delete existing Lease Contract ID from the t_lease_contract_hire_term
+    DELETE FROM "sap.tm.trp.db.leasecontract::t_lease_contract_hire_term"
+    WHERE LEASE_CONTRACT_ID IN (SELECT LC.ID FROM :SOURCE_ALL HTI
+    	                               INNER JOIN "sap.tm.trp.db.leasecontract::t_lease_contract" AS LC
+                                       ON HTI.LEASE_CONTRACT_REFERENCE = LC.LEASE_CONTRACT_REFERENCE);
+
+                                 
+    INSERT INTO "sap.tm.trp.db.leasecontract::t_lease_contract_hire_term"
+	(ID,LEASE_CONTRACT_ID,START_TIME,END_TIME,LOCATION_ID,LOCATION_TYPE,EQUIPMENT_CODE_TYPE,EQUIPMENT_CODE,MIN_HIRE_QUANTITY,
+     MAX_HIRE_QUANTITY,FEE,PENALTY_FEE,REMARK,CREATION_DATE,MODIFIED_DATE,CREATED_BY,MODIFIED_BY,HIRE_TYPE,ACTIVE,CODE,CONTRACT_CODE)
+   
+    SELECT
+    	 ID,LEASE_CONTRACT_ID,START_TIME,END_TIME,LOCATION,LOCATION_TYPE,EQUIPMENT_CODE_TYPE,EQUIPMENT,MIN_HIRE_QUANTITY,
+         MAX_HIRE_QUANTITY,FEE,PENALTY_FEE,REMARK,CREATION_DATE,MODIFIED_DATE,CREATED_BY,MODIFIED_BY,HIRE_TYPE,ACTIVE,CODE,CONTRACT_CODE
+       	FROM :SOURCE;
+
+ 
+     --Get records inserted/updated
+	SELECT COUNT(LEASE_CONTRACT_REFERENCE) INTO CRTD_REC_CNT FROM :SOURCE_ALL;
+           
+    
+    --Get total records
+    SELECT COUNT(LEASE_CONTRACT_REFERENCE) INTO TOTAL_REC_CNT FROM :SOURCE_ALL;
+     
+     
+	--Delete the records in temporary table.
+ 	DELETE FROM "sap.tm.trp.db.massupload::t_lease_contract_hire_term_temporary" 
+    WHERE CONNECTION_ID = :CONNECTION_ID;
+    
+   
+    --Update Mass Upload Execution History table
+    EXECUTION_RESULTS = 
+		SELECT 
+			:CRTD_REC_CNT AS REC_CRTD,
+			:UPDT_REC_CNT AS REC_upd,
+			:TOTAL_REC_CNT AS RECORD_CNT from dummy;
+		
+			
+    CALL "sap.tm.trp.db.leasecontract::sp_lease_contract_hire_term_materialized_full"(:OUTPUT);
+    
+
+END;

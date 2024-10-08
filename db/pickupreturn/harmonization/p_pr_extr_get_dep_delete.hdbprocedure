@@ -1,0 +1,77 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::p_pr_extr_get_dep_delete" ( 
+	IN  iv_from_tmstmp decimal(15, 0),
+	IN  iv_to_tmstmp   decimal(15, 0),
+	OUT OUTPUT "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::tt_pr_extr_dependent_out_str"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	--DEFAULT SCHEMA <default_schema_name>
+	READS SQL DATA AS
+BEGIN
+
+ -- Get list of Item Categories 
+     lt_tu_item_cat_all = SELECT DISTINCT A.VALUE 
+        	     		  FROM  "sap.tm.trp.db.systemmanagement::t_config_cust" A
+        	              WHERE A.KEY  = 'ITEM_CAT'; 
+    
+    -- Check for the TUs if they are Departured / Unloaded (these TUs need to updated with Delete Flag as 'X')
+     lt_main_tu_list  =      SELECT DISTINCT t1.DB_KEY AS TU_KEY                                              
+                                             --t1.MOVEMENT_CAT, 
+                                             --t1.CHANGED_ON
+	 				                 FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+					                 	ON (t3.TU_KEY = t1.DB_KEY AND t1.TOR_CAT = 'TU' AND t1.MOVEMENT_CAT = 'EP')  
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+					                	 ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')       					                
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T5 
+					                 	ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT IN (select VALUE from  :lt_tu_item_cat_all) )
+					                 WHERE T3.STOP_ROLE = 'TF' AND t3.DEPARTURED = 1 AND t3.STOP_FIX = '' 
+					         --If a TU will be updated during the status change Eg. Departured/Unloaded status change, 
+					         --then changed_on filter must be applied, so that volume is reduced
+							UNION ALL                       
+
+                             SELECT DISTINCT t1.DB_KEY AS TU_KEY                                        
+                                             --t1.MOVEMENT_CAT,
+                                             --t1.CHANGED_ON                    
+	 				                 FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+					                 	ON (t4.TU_KEY = t1.DB_KEY AND t1.TOR_CAT = 'TU' AND t1.MOVEMENT_CAT = 'ER'	)
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3
+					                 	ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')
+					                 INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T5
+					                 	ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT IN (select VALUE from  :lt_tu_item_cat_all) )
+					                 WHERE t4.STOP_ROLE = 'TL' AND t4.UNLOADED = 1 AND t4.STOP_FIX = '';			                 
+					                 
+	-- Output to be filtered on only existing TUs in Harmonized table
+	OUTPUT =  select tu_existing.tu_key, 
+			         tu_existing.tu_type_code as MOVEMENT_CAT, 
+					 tu_existing.cd_change_date_ep_er_tu as changed_on,
+					 'DELETE_TU' as "NODE"
+			    from "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::t_pr_harmonized_tu_list" tu_existing
+			    where exists (select * from :lt_main_tu_list tu_tobe_deleted 
+						    where tu_tobe_deleted.tu_key = tu_existing.tu_key)
+				  AND tu_existing.cd_delete_flag = ''
+				UNION
+				-- LIFECYCLE COMPLETE TU'S SHOULD BE CONSIDERED FOR DELETE 
+				SELECT tu_existing.tu_key, 
+					tu_existing.tu_type_code as MOVEMENT_CAT, 
+					tu_existing.cd_change_date_ep_er_tu as changed_on,
+				'DELETE_TU' as "NODE"
+				FROM "sap.tm.trp.db.pickupreturn.harmonization::t_pr_harmonized_tu_list" tu_existing
+				WHERE tu_existing.cd_delete_flag = '' AND tu_existing.TU_ID NOT IN (
+				SELECT TOR_ID FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1 
+				where t1.MOVEMENT_CAT in ('EP','ER')
+				)
+				UNION
+				select tu_existing.tu_key, 
+					tu_existing.tu_type_code as MOVEMENT_CAT, 
+					tu_existing.cd_change_date_ep_er_tu as changed_on,
+					'DELETE_TU' as "NODE"
+					from "sap.tm.trp.db.pickupreturn.harmonization::t_pr_harmonized_tu_list" tu_existing
+					WHERE tu_existing.cd_delete_flag = '' AND tu_existing.TU_TYPE_CODE= 'ER' AND tu_existing.TU_ID IN 
+					(
+						SELECT TOR_ID FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1                                        
+						where t1.MOVEMENT_CAT in ('TR')
+					);
+              	
+END;

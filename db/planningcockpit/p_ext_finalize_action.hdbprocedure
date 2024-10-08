@@ -1,0 +1,109 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_ext_finalize_action"(
+    IN  SCENARIO_ID  BIGINT,
+    IN  RESPONSE_DATA "sap.tm.trp.db.planningcockpit::tt_write_trq_response_data", 
+    OUT MESSAGE VARCHAR(200),
+    OUT MODIFIED_BY VARCHAR(60)
+    )
+  LANGUAGE SQLSCRIPT
+  SQL SECURITY INVOKER 
+  DEFAULT SCHEMA "SAP_TM_TRP"
+  AS 
+BEGIN 
+   DECLARE PLAN_STATUS INTEGER;
+   DECLARE WRITE_SUCCESS INTEGER;
+   
+   DECLARE TOTAL_NUM_ACTIVITY INTEGER;
+   DECLARE FAIL_NUM_ACTIVITY INTEGER;
+   
+  DECLARE TM_STATUS_UNPROCESSED VARCHAR(1) := '0';
+  DECLARE TM_STATUS_SUCCESS VARCHAR(1) := '1';
+  DECLARE TM_STATUS_FAILED VARCHAR(1) := '2';
+  
+  DECLARE ACTIVITY_STATUS_FINALIZED TINYINT := 4;
+  DECLARE ACTIVITY_STATUS_FINALIZING_FINALIZED TINYINT :=5;
+  DECLARE ACTIVITY_STATUS_FINALIZING_UNPROCESSED TINYINT :=6;
+  
+  DECLARE SCENARIO_ACTIVITY_STATUS_FINALIZED TINYINT :=2;
+  DECLARE SCENARIO_ACTIVITY_STATUS_FINALIZING_PARTLY_FAILED TINYINT :=3; 
+  DECLARE SCENARIO_ACTIVITY_STATUS_FINALIZING_FAILED TINYINT :=4;  
+  
+  DECLARE SIMULATION_PLAN_STATUS_DRAFT TINYINT := 0;
+  DECLARE SIMULATION_PLAN_STATUS_FINALIZED TINYINT := 1;
+   -- no need to check lock in this proceduce as the checking has been done in previous procedure 
+   -- p_ext_tudata_prepare
+    
+   SELECT IFNULL(MAX(a.PLAN_STATUS), 0) INTO PLAN_STATUS
+   FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" a
+   INNER JOIN  "sap.tm.trp.db.planningcockpit::t_scenario" b ON (a.ID=b.Rel_sm_plan_id)
+   WHERE b.ID = :SCENARIO_ID;
+
+   IF :PLAN_STATUS = 1 THEN 
+     MESSAGE := 'MSG_ERROR_FINALIZED';
+     MODIFIED_BY := '';
+   ELSE
+ 
+     -- write the trq log table
+     CALL "sap.tm.trp.db.planningcockpit::p_write_trq_creation_log"(:SCENARIO_ID, :RESPONSE_DATA, WRITE_SUCCESS); 
+     
+     FAIL_ACTIVITIES = SELECT ACTIVITY_ID FROM :RESPONSE_DATA WHERE STATUS='E';
+     FINALIZE_ACTIVITIES = SELECT ACTIVITY_ID FROM :RESPONSE_DATA WHERE STATUS='S';
+     
+      UPDATE T1
+     SET T1.STATUS = ACTIVITY_STATUS
+     FROM "sap.tm.trp.db.planningcockpit::t_activity" T1
+     INNER JOIN (
+	     SELECT DISTINCT T0.ACTIVITY_ID, CASE WHEN T0.TM_STATUS = :TM_STATUS_SUCCESS THEN :ACTIVITY_STATUS_FINALIZED 
+	     WHEN T0.TM_STATUS = :TM_STATUS_FAILED THEN :ACTIVITY_STATUS_FINALIZING_FINALIZED 
+	     ELSE :ACTIVITY_STATUS_FINALIZING_UNPROCESSED END AS ACTIVITY_STATUS
+	     FROM :RESPONSE_DATA T0
+     ) T2 ON (T1.ID = T2.ACTIVITY_ID)
+     WHERE T1.REL_SCENARIO_ID = :SCENARIO_ID;
+     
+     UPDATE T1
+     SET T1.ACTIVITY_STATUS = T5.SCENARIO_ACTIVITY_STATUS,
+     T1.STATUS = T5.STATUS,
+     T1.FRESH_FLAG = -1
+     FROM "sap.tm.trp.db.planningcockpit::t_scenario" T1
+     INNER JOIN 
+     (   --Note:if there is a unprocessed TM_STATUS, there must be a failed TM_STATUS(according to wilson's comments), so for a scenario, 
+       -- there is no unprocessed TM_STATUS
+         SELECT CASE WHEN T2.SUCCESS_COUNT = 1 AND T3.FAILED_COUNT = 0 THEN  :SCENARIO_ACTIVITY_STATUS_FINALIZED  
+         WHEN  T2.SUCCESS_COUNT = 1 AND T3.FAILED_COUNT = 1 THEN :SCENARIO_ACTIVITY_STATUS_FINALIZING_PARTLY_FAILED
+         ELSE :SCENARIO_ACTIVITY_STATUS_FINALIZING_FAILED END AS SCENARIO_ACTIVITY_STATUS,
+         CASE WHEN  T2.SUCCESS_COUNT = 0 THEN :SIMULATION_PLAN_STATUS_DRAFT ELSE 1 END AS STATUS
+	     FROM
+	        ( 
+		         SELECT COUNT(DISTINCT TM_STATUS) AS SUCCESS_COUNT
+			     FROM :RESPONSE_DATA T1
+			     WHERE T1.TM_STATUS = :TM_STATUS_SUCCESS
+		     )T2,
+		     (
+			     SELECT COUNT(DISTINCT TM_STATUS) AS FAILED_COUNT
+			     FROM :RESPONSE_DATA T2
+			     WHERE T2.TM_STATUS = :TM_STATUS_FAILED
+		     )T3
+     ) T5 ON (1=1)
+     WHERE T1.ID = :SCENARIO_ID;
+     
+      UPDATE T1
+       SET PLAN_STATUS = T2.STATUS
+      FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" T1
+      INNER JOIN  "sap.tm.trp.db.planningcockpit::t_scenario" T2 ON (T1.ID = T2.REL_SM_PLAN_ID)
+      WHERE T2.ID = :SCENARIO_ID AND T1.PLAN_STATUS <> T2.STATUS;
+     
+      UPDATE T1
+      SET T1.FINALIZE_FLAG = T2.STATUS
+      FROM "sap.tm.trp.db.planningcockpit::t_used_lease_quota" T1
+      INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" T2 ON (T1.SCENARIO_ID = T2.ID)
+      WHERE T2.ID = :SCENARIO_ID AND T1.FINALIZE_FLAG <> T2.STATUS;
+     
+    
+     
+     MESSAGE := 'MSG_SUCCESS_STATUS';
+     
+     SELECT USERNAME INTO MODIFIED_BY
+     FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+     
+  
+   END IF;             
+END;

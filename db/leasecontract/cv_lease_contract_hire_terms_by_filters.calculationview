@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_lease_contract_hire_terms_by_filters" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_lease_contract_hire_terms_by_filters"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="LOCATION_IN" parameter="true">
+      <descriptions defaultDescription="LOCATION_IN"/>
+      <variableProperties datatype="NVARCHAR" length="22" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="RESOURCE_TYPE" parameter="true">
+      <descriptions defaultDescription="RESOURCE_TYPE"/>
+      <variableProperties datatype="NVARCHAR" length="22" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="DATE" parameter="true">
+      <descriptions defaultDescription="DATE"/>
+      <variableProperties datatype="TIMESTAMP" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="HIRE_TYPE" parameter="true">
+      <descriptions defaultDescription="HIRE_TYPE"/>
+      <variableProperties datatype="INTEGER" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="BIGINT" id="LEASE_CONTRACT_ID"/>
+        <viewAttribute datatype="NVARCHAR" id="LEASE_CONTRACT_REFERENCE" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="LESSOR" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="LEASE_CONTRACT_TYPE" length="100"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_TIME"/>
+        <viewAttribute datatype="TINYINT" id="LOCATION_TYPE"/>
+        <viewAttribute datatype="NVARCHAR" id="LOCATION_GROUP_NAME" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="LOCATION" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="LOCATION_GUID" length="32"/>
+        <viewAttribute datatype="TINYINT" id="EQUIPMENT_CODE_TYPE"/>
+        <viewAttribute datatype="NVARCHAR" id="EQUIPMENT_CODE" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="EQUIPMENT_GROUP_NAME" length="22"/>
+        <viewAttribute datatype="INTEGER" id="CONSOLIDATED_MIN_HIRE_QUANTITY"/>
+        <viewAttribute datatype="INTEGER" id="TERM_MIN_HIRE_QUANTITY"/>
+        <viewAttribute datatype="INTEGER" id="TERM_MAX_HIRE_QUANTITY"/>
+        <viewAttribute datatype="INTEGER" id="COND_MAX_HIRE_QUANTITY_EL"/>
+        <viewAttribute datatype="INTEGER" id="COND_MAX_HIRE_QUANTITY_E"/>
+        <viewAttribute datatype="INTEGER" id="COND_MAX_HIRE_QUANTITY_L"/>
+        <viewAttribute datatype="BIGINT" id="COND_EL_ID"/>
+        <viewAttribute datatype="BIGINT" id="COND_E_ID"/>
+        <viewAttribute datatype="BIGINT" id="COND_L_ID"/>
+        <viewAttribute datatype="INTEGER" id="CONTRACT_MAX_HIRE_QUANTITY"/>
+        <viewAttribute datatype="INTEGER" id="CONTRACT_MIN_HIRE_QUANTITY"/>
+        <viewAttribute datatype="DECIMAL" id="HIRE_FEE" length="13" scale="3"/>
+        <viewAttribute datatype="NVARCHAR" id="CURRENCY" length="3"/>
+        <viewAttribute datatype="NVARCHAR" id="UNIT" length="3"/>
+        <viewAttribute datatype="NVARCHAR" id="RESOURCE_CATEGORY" length="50"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#LOCATION_IN</localVariable>
+      <localVariable>#RESOURCE_TYPE</localVariable>
+      <localVariable>#DATE</localVariable>
+      <localVariable>#HIRE_TYPE</localVariable>
+      <definition> 
+BEGIN
+DECLARE V_COUNT INTEGER;
+
+--GET ALL THE ON HIRE TERMS WITHIN THE DATE RANGE
+HIRE_TERMS_EXPANDED = 
+SELECT *	   
+FROM &quot;sap.tm.trp.db.leasecontract::t_lease_contract_hire_term_materialized&quot;	
+WHERE :DATE BETWEEN START_TIME AND END_TIME AND HIRE_TYPE= :HIRE_TYPE AND ACTIVE=1;
+
+ 
+	
+--STEP 1: GET THE TERMS THAT SATISFY THE INPUT CONDITIONS
+HIER_TERMS_ELD = 	
+	SELECT HT.*	FROM :HIRE_TERMS_EXPANDED HT
+ 	INNER JOIN (SELECT DISTINCT ID FROM :HIRE_TERMS_EXPANDED
+				WHERE EQUIPMENT_CODE=:RESOURCE_TYPE AND LOCATION_GUID=:LOCATION_IN) HTID
+		ON HT.ID=HTID.ID;
+	
+HIER_TERMS_ED = 	
+	SELECT HT.* 
+	FROM :HIRE_TERMS_EXPANDED HT
+ 	INNER JOIN (SELECT DISTINCT ID FROM :HIRE_TERMS_EXPANDED
+				WHERE EQUIPMENT_CODE=:RESOURCE_TYPE  AND LOCATION_GUID IS NULL AND LOCATION_TYPE IS NULL) HTID
+		ON HT.ID = HTID.ID;
+
+HIER_TERMS_LD = 	
+	SELECT HT.*
+	FROM :HIRE_TERMS_EXPANDED HT
+ 	INNER JOIN (SELECT DISTINCT ID FROM :HIRE_TERMS_EXPANDED
+				WHERE EQUIPMENT_CODE IS NULL AND LOCATION_GUID=:LOCATION_IN) HTID
+		ON HT.ID = HTID.ID;
+
+
+HIRE_TERMS_BY_FILTERS=
+SELECT * FROM :HIER_TERMS_ELD;
+SELECT * FROM :HIER_TERMS_ED UNION
+SELECT * FROM :HIER_TERMS_LD;
+
+hire_term = 
+	SELECT 
+		HF.ID AS ID,
+		HF.LEASE_CONTRACT_ID,
+		LC.LEASE_CONTRACT_REFERENCE,
+		L.NAME AS LESSOR,
+		LCT.TYPE AS LEASE_CONTRACT_TYPE,
+		HF.START_TIME,
+		HF.END_TIME,
+		HF.LOCATION_TYPE,
+		HF.LOCATION_GROUP_NAME,
+		HF.LOCATION_CODE as LOCATION,
+		HF.LOCATION_GUID,
+		HF.EQUIPMENT_CODE_TYPE,
+		HF.EQUIPMENT_CODE,
+		HF.EQUIPMENT_GROUP_NAME,
+		IFNULL(HF.CONSOLIDATED_MIN_HIRE_QUANTITY,0) AS CONSOLIDATED_MIN_HIRE_QUANTITY,		
+		IFNULL(HF.TERM_MIN_HIRE_QUANTITY,0) AS TERM_MIN_HIRE_QUANTITY,
+		IFNULL(HF.TERM_MAX_HIRE_QUANTITY,0) AS TERM_MAX_HIRE_QUANTITY,
+		IFNULL(HF.COND_MAX_HIRE_QUANTITY_EL,0) AS COND_MAX_HIRE_QUANTITY_EL,
+		IFNULL(HF.COND_MAX_HIRE_QUANTITY_E,0) AS COND_MAX_HIRE_QUANTITY_E,
+		IFNULL(HF.COND_MAX_HIRE_QUANTITY_L,0) AS COND_MAX_HIRE_QUANTITY_L,
+		COND_EL_ID,
+		COND_E_ID,
+		COND_L_ID,	
+		IFNULL(LC.MAX_HIRE_QUANTITY,0) AS CONTRACT_MAX_HIRE_QUANTITY,
+		IFNULL(LC.MIN_HIRE_QUANTITY,0) AS CONTRACT_MIN_HIRE_QUANTITY,		
+		IFNULL(HF.TERM_FEE,0) AS HIRE_FEE,
+		IFNULL(LC.CURRENCY_CODE,'EUR') AS CURRENCY,
+		LC.UNIT AS UNIT,
+		LC.RESOURCE_CATEGORY AS RESOURCE_CATEGORY
+	FROM :HIRE_TERMS_BY_FILTERS HF
+	INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot; LC ON LC.ID=HF.LEASE_CONTRACT_ID
+	INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lessor&quot; L ON L.ID = LC.LESSOR_ID
+	INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lease_contract_type&quot; LCT ON LC.LEASE_TYPE = LCT.ID;
+
+var_out = SELECT HF.ID,
+				 HF.LEASE_CONTRACT_ID,
+				 HF.LEASE_CONTRACT_REFERENCE,
+				 HF.LESSOR,
+				 HF.LEASE_CONTRACT_TYPE,
+				 HF.START_TIME,
+				 HF.END_TIME,
+				 HF.LOCATION_TYPE,
+				 HF.LOCATION_GROUP_NAME,
+				 HF.LOCATION,
+				 HF.LOCATION_GUID,
+				 HF.EQUIPMENT_CODE_TYPE,
+				 HF.EQUIPMENT_CODE,
+				 HF.EQUIPMENT_GROUP_NAME,
+				 HF.CONSOLIDATED_MIN_HIRE_QUANTITY,		
+				 HF.TERM_MIN_HIRE_QUANTITY,
+				 HF.TERM_MAX_HIRE_QUANTITY,
+				 HF.COND_MAX_HIRE_QUANTITY_EL,
+				 HF.COND_MAX_HIRE_QUANTITY_E,
+				 HF.COND_MAX_HIRE_QUANTITY_L,
+				 HF.COND_EL_ID,
+				 HF.COND_E_ID,
+				 HF.COND_L_ID,	
+				 HF.CONTRACT_MAX_HIRE_QUANTITY,
+				 HF.CONTRACT_MIN_HIRE_QUANTITY,		
+				 HF.HIRE_FEE,
+				 HF.CURRENCY,
+				 IFNULL(HF.UNIT,C.UNIT_CODE) AS UNIT,
+				 HF.RESOURCE_CATEGORY
+		  FROM :hire_term HF, &quot;sap.tm.trp.db.systemmanagement::v_container_unit&quot; C;
+END</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="LEASE_CONTRACT_REFERENCE" order="3">
+        <descriptions defaultDescription="LEASE_CONTRACT_REFERENCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASE_CONTRACT_REFERENCE"/>
+      </attribute>
+      <attribute id="LESSOR" order="4">
+        <descriptions defaultDescription="LESSOR"/>
+        <keyMapping columnObjectName="Script_View" columnName="LESSOR"/>
+      </attribute>
+      <attribute id="LEASE_CONTRACT_TYPE" order="5">
+        <descriptions defaultDescription="LEASE_CONTRACT_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASE_CONTRACT_TYPE"/>
+      </attribute>
+      <attribute id="LOCATION_GROUP_NAME" order="9">
+        <descriptions defaultDescription="LOCATION_GROUP_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_GROUP_NAME"/>
+      </attribute>
+      <attribute id="LOCATION" order="10">
+        <descriptions defaultDescription="LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION"/>
+      </attribute>
+      <attribute id="LOCATION_GUID" order="11">
+        <descriptions defaultDescription="LOCATION_GUID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_GUID"/>
+      </attribute>
+      <attribute id="EQUIPMENT_CODE" order="13">
+        <descriptions defaultDescription="EQUIPMENT_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_CODE"/>
+      </attribute>
+      <attribute id="EQUIPMENT_GROUP_NAME" order="14">
+        <descriptions defaultDescription="EQUIPMENT_GROUP_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_GROUP_NAME"/>
+      </attribute>
+      <attribute id="CURRENCY" order="27">
+        <descriptions defaultDescription="CURRENCY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CURRENCY"/>
+      </attribute>
+      <attribute id="UNIT" order="28">
+        <descriptions defaultDescription="UNIT"/>
+        <keyMapping columnObjectName="Script_View" columnName="UNIT"/>
+      </attribute>
+      <attribute id="RESOURCE_CATEGORY" order="29">
+        <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_CATEGORY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="ID"/>
+      </measure>
+      <measure id="LEASE_CONTRACT_ID" order="2" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LEASE_CONTRACT_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="LEASE_CONTRACT_ID"/>
+      </measure>
+      <measure id="START_TIME" order="6" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="START_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </measure>
+      <measure id="END_TIME" order="7" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="END_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="END_TIME"/>
+      </measure>
+      <measure id="LOCATION_TYPE" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LOCATION_TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="LOCATION_TYPE"/>
+      </measure>
+      <measure id="EQUIPMENT_CODE_TYPE" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="EQUIPMENT_CODE_TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="EQUIPMENT_CODE_TYPE"/>
+      </measure>
+      <measure id="CONSOLIDATED_MIN_HIRE_QUANTITY" order="15" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="CONSOLIDATED_MIN_HIRE_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="CONSOLIDATED_MIN_HIRE_QUANTITY"/>
+      </measure>
+      <measure id="TERM_MIN_HIRE_QUANTITY" order="16" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TERM_MIN_HIRE_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="TERM_MIN_HIRE_QUANTITY"/>
+      </measure>
+      <measure id="TERM_MAX_HIRE_QUANTITY" order="17" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TERM_MAX_HIRE_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="TERM_MAX_HIRE_QUANTITY"/>
+      </measure>
+      <measure id="COND_MAX_HIRE_QUANTITY_EL" order="18" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="COND_MAX_HIRE_QUANTITY_EL"/>
+        <measureMapping columnObjectName="Script_View" columnName="COND_MAX_HIRE_QUANTITY_EL"/>
+      </measure>
+      <measure id="COND_MAX_HIRE_QUANTITY_E" order="19" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="COND_MAX_HIRE_QUANTITY_E"/>
+        <measureMapping columnObjectName="Script_View" columnName="COND_MAX_HIRE_QUANTITY_E"/>
+      </measure>
+      <measure id="COND_MAX_HIRE_QUANTITY_L" order="20" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="COND_MAX_HIRE_QUANTITY_L"/>
+        <measureMapping columnObjectName="Script_View" columnName="COND_MAX_HIRE_QUANTITY_L"/>
+      </measure>
+      <measure id="COND_EL_ID" order="21" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="COND_EL_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="COND_EL_ID"/>
+      </measure>
+      <measure id="COND_E_ID" order="22" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="COND_E_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="COND_E_ID"/>
+      </measure>
+      <measure id="COND_L_ID" order="23" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="COND_L_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="COND_L_ID"/>
+      </measure>
+      <measure id="CONTRACT_MAX_HIRE_QUANTITY" order="24" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="CONTRACT_MAX_HIRE_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="CONTRACT_MAX_HIRE_QUANTITY"/>
+      </measure>
+      <measure id="CONTRACT_MIN_HIRE_QUANTITY" order="25" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="CONTRACT_MIN_HIRE_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="CONTRACT_MIN_HIRE_QUANTITY"/>
+      </measure>
+      <measure id="HIRE_FEE" order="26" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ON_HIRE_FEE"/>
+        <measureMapping columnObjectName="Script_View" columnName="HIRE_FEE"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

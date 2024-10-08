@@ -1,0 +1,20 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_plan_model_last_selection_by_user"(
+    IN PLAN_MODEL_ID BIGINT
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE USER_ID BIGINT;
+    
+    SELECT IFNULL(MAX(ID),-100) INTO USER_ID FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    DELETE FROM "sap.tm.trp.db.pipeline::t_plan_model_selection"
+    WHERE USER_ID = :USER_ID;
+    
+    INSERT INTO "sap.tm.trp.db.pipeline::t_plan_model_selection"(USER_ID, PLAN_MODEL_ID, LAST_SELECTION_TIME)
+    -- VALUES(:USER_ID, :PLAN_MODEL_ID, CURRENT_TIMESTAMP);
+    VALUES(:USER_ID, :PLAN_MODEL_ID, CURRENT_UTCTIMESTAMP);
+END;

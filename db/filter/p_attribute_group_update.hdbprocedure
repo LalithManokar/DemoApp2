@@ -1,0 +1,90 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_attribute_group_update" (
+	IN GROUP_ID BIGINT,
+	IN NAME VARCHAR(200),
+	IN DESC VARCHAR(500),
+	IN CATEGORY INTEGER,
+	IN VISIBILITY CHAR(1),
+	IN ITEM_LIST "sap.tm.trp.db.filter::tt_attribute_group_item_node_list",
+	IN VALUE_LIST "sap.tm.trp.db.filter::tt_attribute_group_item_node_value_list"
+	) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	--READS SQL DATA 
+AS
+USER_ID BIGINT;
+NODE_ID BIGINT;
+BEGIN
+ 
+
+
+T_ITEMS =
+SELECT 
+	T0.ITEM_ID
+	,T0.SEQUENCE
+	,T0.LOGIC_OPERATOR
+	,T0.ATTRIBUTE_ID
+	,T1.ID AS OPERATOR_ID
+	,CASE WHEN LOGIC_OPERATOR IS NULL THEN "sap.tm.trp.db.filter::s_attribute_group_item_node".NEXTVAL ELSE NULL END AS NODE_ID  
+FROM :ITEM_LIST T0
+LEFT JOIN "sap.tm.trp.db.filter::t_attribute_group_attribute_operator" T1 ON T1.CODE = T0.OPERATOR_CODE
+;
+-- GET CURRENT USER_ID
+T_USER =
+SELECT IFNULL(MAX(ID),-1) AS USER_ID
+FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+-- UPDATE ATTRIBUTE GROUP METADATA
+UPDATE "sap.tm.trp.db.filter::t_attribute_group"
+SET	NAME = :NAME,
+	DESC = :DESC,
+	CATEGORY = :CATEGORY,
+	VISIBILITY = :VISIBILITY,
+	MODIFIED_BY = (SELECT TOP 1 USER_ID FROM :T_USER),
+	MODIFIED_TIME = CURRENT_UTCTIMESTAMP
+WHERE ID = :GROUP_ID
+;
+
+-- DELETE OLD ATTRIBUTE GROUP ITEMS
+DELETE FROM "sap.tm.trp.db.filter::t_attribute_group_item"
+WHERE GROUP_ID = :GROUP_ID
+;
+DELETE FROM "sap.tm.trp.db.filter::t_attribute_group_item_node_values"
+WHERE GROUP_ID = :GROUP_ID
+;
+DELETE FROM "sap.tm.trp.db.filter::t_attribute_group_item_node"
+WHERE GROUP_ID = :GROUP_ID
+;
+
+-- INSERT NEW ATTRIBUTE GROUP ITEMS
+	-- INSERT ITEM
+	INSERT INTO "sap.tm.trp.db.filter::t_attribute_group_item"
+	SELECT
+		:GROUP_ID
+		,SEQUENCE
+		,LOGIC_OPERATOR
+		,NODE_ID
+	FROM :T_ITEMS
+	;
+	--INSERT ITEM NODE & VALUES
+	INSERT INTO "sap.tm.trp.db.filter::t_attribute_group_item_node"
+	SELECT
+		NODE_ID
+		,:GROUP_ID
+		,ATTRIBUTE_ID
+		,OPERATOR_ID
+	FROM :T_ITEMS
+	WHERE LOGIC_OPERATOR IS NULL
+	;
+	INSERT INTO "sap.tm.trp.db.filter::t_attribute_group_item_node_values"
+	SELECT
+		T0.NODE_ID
+		,:GROUP_ID
+		,T1.VALUE
+	FROM :T_ITEMS T0
+	INNER JOIN :VALUE_LIST T1 ON T1.ATTRIBUTE_ID = T0.ATTRIBUTE_ID AND T1.ITEM_ID = T0.ITEM_ID
+	WHERE LOGIC_OPERATOR IS NULL
+	;
+
+END;

@@ -1,0 +1,23 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_ext_geo_group_update"(
+    IN ID VARCHAR(22),
+    IN NAME VARCHAR(50),
+    IN DESC VARCHAR(500),
+    IN ITEMS "sap.tm.trp.db.pipeline::tt_geo_id",
+    IN PRIME_LOC_ID VARCHAR(22),
+    IN VISIBLE_FLAG VARCHAR(3),
+    IN TYPE INTEGER
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN 
+    IF :TYPE = 1 THEN
+        CALL "sap.tm.trp.db.systemmanagement::p_ext_location_group_update"(:ID, :NAME, :DESC, :ITEMS, :PRIME_LOC_ID, :VISIBLE_FLAG);
+    ELSEIF :TYPE = 2 THEN
+        CALL "sap.tm.trp.db.systemmanagement::p_ext_zone_group_update"(:ID, :NAME, :DESC, :ITEMS, :VISIBLE_FLAG);
+    ELSEIF :TYPE = 3 THEN
+        CALL "sap.tm.trp.db.systemmanagement::p_ext_region_group_update"(:ID, :NAME, :DESC, :ITEMS, :PRIME_LOC_ID, :VISIBLE_FLAG);
+    END IF;
+    SELECT 1 FROM DUMMY;
+END;

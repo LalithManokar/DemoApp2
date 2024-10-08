@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_planned_activity_detail_data" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_planned_activity_detail_data"/>
+  <localVariables>
+    <variable id="IP_ACTIVITY_ID" parameter="true">
+      <descriptions defaultDescription="IP_ACTIVITY_ID"/>
+      <variableProperties datatype="INTEGER" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ACTIVITY_ID"/>
+        <viewAttribute datatype="VARCHAR" id="TYPE" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="ACTIVITY_STATUS" length="500"/>
+        <viewAttribute datatype="VARCHAR" id="DESCRIPTION" length="500"/>
+        <viewAttribute datatype="VARCHAR" id="VOYAGE" length="10"/>
+        <viewAttribute datatype="VARCHAR" id="VESSEL" length="10"/>
+        <viewAttribute datatype="BIGINT" id="QUANTITY"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_TYPE" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="FROM" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="TO" length="20"/>
+        <viewAttribute datatype="DECIMAL" id="COST" length="20" scale="3"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_TIME"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IP_ACTIVITY_ID</localVariable>
+      <definition>BEGIN &#xD;
+ 	 var_out = &#xD;
+ 	 SELECT&#xD;
+	 &quot;ID&quot; AS &quot;ACTIVITY_ID&quot;,&#xD;
+	 &quot;TYPE&quot; AS &quot;TYPE&quot;,&#xD;
+	 &quot;ACTIVITY_STATUS_NAME&quot; AS &quot;ACTIVITY_STATUS&quot;,&#xD;
+	 IFNULL(&quot;ACTIVITY_DESC&quot;,'') AS &quot;DESCRIPTION&quot;,&#xD;
+	 IFNULL(&quot;VOYAGE&quot;,'')  AS &quot;VOYAGE&quot;,&#xD;
+	 IFNULL(&quot;VEHICLE_TYPE&quot;,'') AS &quot;VESSEL&quot;,&#xD;
+	 &quot;QUANTITY&quot;,&#xD;
+	 IFNULL(&quot;EQUIP_TYPE&quot;,'') AS &quot;RESOURCE_TYPE&quot;,&#xD;
+	 IFNULL(&quot;FROM_LOC_NAME&quot;,'') AS &quot;FROM&quot;,&#xD;
+	 IFNULL(&quot;TO_LOC_NAME&quot;,'') AS &quot;TO&quot;,&#xD;
+	 &quot;COST&quot; AS &quot;COST&quot;,&#xD;
+	 &quot;START_DATE&quot; AS &quot;START_TIME&quot;,&#xD;
+	 &quot;END_DATE&quot; AS &quot;END_TIME&quot;&#xD;
+FROM &quot;SAP_TM_TRP&quot;.&quot;sap.tm.trp.db.planningcockpit::v_activity_ui&quot;&#xD;
+WHERE REL_SCENARIO_ID = :IP_ACTIVITY_ID&#xD;
+ORDER BY ID;&#xD;
+&#xD;
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="TYPE" order="2">
+        <descriptions defaultDescription="TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="TYPE"/>
+      </attribute>
+      <attribute id="ACTIVITY_STATUS" order="3">
+        <descriptions defaultDescription="ACTIVITY_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="ACTIVITY_STATUS"/>
+      </attribute>
+      <attribute id="DESCRIPTION" order="4">
+        <descriptions defaultDescription="ACTIVITY_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESCRIPTION"/>
+      </attribute>
+      <attribute id="VOYAGE" order="5">
+        <descriptions defaultDescription="VOYAGE"/>
+        <keyMapping columnObjectName="Script_View" columnName="VOYAGE"/>
+      </attribute>
+      <attribute id="VESSEL" order="6">
+        <descriptions defaultDescription="VESSEL"/>
+        <keyMapping columnObjectName="Script_View" columnName="VESSEL"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE" order="8">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE"/>
+      </attribute>
+      <attribute id="FROM" order="9">
+        <descriptions defaultDescription="FROM_LOC_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="FROM"/>
+      </attribute>
+      <attribute id="TO" order="10">
+        <descriptions defaultDescription="TO_LOC_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="TO"/>
+      </attribute>
+      <attribute id="START_TIME" order="12">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </attribute>
+      <attribute id="END_TIME" order="13">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="END_TIME"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="ACTIVITY_ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions/>
+        <measureMapping columnObjectName="Script_View" columnName="ACTIVITY_ID"/>
+      </measure>
+      <measure id="QUANTITY" order="7" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="QUANTITY"/>
+      </measure>
+      <measure id="COST" order="11" aggregationType="sum" measureType="simple">
+        <descriptions/>
+        <measureMapping columnObjectName="Script_View" columnName="COST"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

@@ -1,0 +1,574 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<dtmodel:decisionTableModel xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:alias="http://www.sap.com/ndb/Rules/Alias" xmlns:core="http://www.sap.com/ndb/Rules/Core" xmlns:dtmodel="http://www.sap.com/ndb/DecisionTableModel1.ecore" xmlns:table="http://www.sap.com/ndb/Rules/DecisionTable" schemaVersion="1.0" id="dt_stock_minSafetyStock_maxSafetyStock_timeInterval_default" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" visibility="internal">
+  <descriptions defaultDescription="dt_stock_minSafetyStock_maxSafetyStock_timeInterval_default"/>
+  <defaultSchema/>
+  <dataSources/>
+  <privateDataFoundation>
+    <tableProxies>
+      <tableProxy>
+        <table schemaName="SAP_TM_TRP" columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval"/>
+      </tableProxy>
+    </tableProxies>
+    <joins/>
+    <layout>
+      <shapes>
+        <shape modelObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" modelObjectNameSpace="SAP_TM_TRP" modelObjectType="catalog">
+          <upperLeftCorner x="70" y="30"/>
+        </shape>
+      </shapes>
+    </layout>
+  </privateDataFoundation>
+  <dtmodel:variables>
+    <core:variable id="VAR146fa4e7002x1b59b" core:assignable="true" core:length="500" core:name="ALERT_REASON" core:scale="0" core:type="VARCHAR" core:vartype="Calculated">
+      <descriptions defaultDescription="ALERT_REASON"/>
+      <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+        <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+          <core:argument core:type="VARCHAR">
+            <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+              <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+                <core:argument core:type="VARCHAR">
+                  <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                    <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+                      <core:argument core:type="VARCHAR">
+                        <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                          <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+                            <core:argument core:type="VARCHAR">
+                              <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+                                  <core:argument core:type="VARCHAR">
+                                    <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                      <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+                                        <core:argument core:type="VARCHAR">
+                                          <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                            <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+                                              <core:argument core:type="VARCHAR">
+                                                <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                  <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+                                                    <core:argument core:type="VARCHAR">
+                                                      <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                        <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+                                                          <core:argument core:type="VARCHAR">
+                                                            <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                              <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+                                                                <core:argument core:type="VARCHAR">
+                                                                  <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                                    <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+                                                                      <core:argument core:type="VARCHAR">
+                                                                        <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                                          <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+                                                                            <core:argument core:type="VARCHAR">
+                                                                              <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                                                <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+                                                                                  <core:argument core:type="VARCHAR">
+                                                                                    <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                                                      <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+                                                                                        <core:argument core:type="VARCHAR">
+                                                                                          <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                                                            <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+                                                                                              <core:argument core:type="VARCHAR">
+                                                                                                <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                                                                  <core:abstractreference xsi:type="core:Reference" core:method="CONCAT">
+                                                                                                    <core:argument core:type="VARCHAR">
+                                                                                                      <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                                                                        <core:primitive core:value="Location "/>
+                                                                                                      </core:simpleexp>
+                                                                                                    </core:argument>
+                                                                                                    <core:argument core:type="VARCHAR">
+                                                                                                      <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                                                                        <core:abstractreference xsi:type="core:TableReference" core:columnName="LOCATION_NAME" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="VARCHAR" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+                                                                                                      </core:simpleexp>
+                                                                                                    </core:argument>
+                                                                                                  </core:abstractreference>
+                                                                                                </core:simpleexp>
+                                                                                              </core:argument>
+                                                                                              <core:argument core:type="VARCHAR">
+                                                                                                <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                                                                  <core:primitive core:value=", equipment "/>
+                                                                                                </core:simpleexp>
+                                                                                              </core:argument>
+                                                                                            </core:abstractreference>
+                                                                                          </core:simpleexp>
+                                                                                        </core:argument>
+                                                                                        <core:argument core:type="VARCHAR">
+                                                                                          <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                                                            <core:abstractreference xsi:type="core:TableReference" core:columnName="EQUIP_TYPE_NAME" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="VARCHAR" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+                                                                                          </core:simpleexp>
+                                                                                        </core:argument>
+                                                                                      </core:abstractreference>
+                                                                                    </core:simpleexp>
+                                                                                  </core:argument>
+                                                                                  <core:argument core:type="VARCHAR">
+                                                                                    <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                                                      <core:primitive core:value=", in "/>
+                                                                                    </core:simpleexp>
+                                                                                  </core:argument>
+                                                                                </core:abstractreference>
+                                                                              </core:simpleexp>
+                                                                            </core:argument>
+                                                                            <core:argument core:type="VARCHAR">
+                                                                              <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                                                <core:primitive core:value="{TIME}"/>
+                                                                              </core:simpleexp>
+                                                                            </core:argument>
+                                                                          </core:abstractreference>
+                                                                        </core:simpleexp>
+                                                                      </core:argument>
+                                                                      <core:argument core:type="VARCHAR">
+                                                                        <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                                          <core:primitive core:value=", stock("/>
+                                                                        </core:simpleexp>
+                                                                      </core:argument>
+                                                                    </core:abstractreference>
+                                                                  </core:simpleexp>
+                                                                </core:argument>
+                                                                <core:argument core:type="VARCHAR">
+                                                                  <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="DOUBLE">
+                                                                    <core:abstractreference xsi:type="core:TableReference" core:columnName="STOCK" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="DOUBLE" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+                                                                  </core:simpleexp>
+                                                                </core:argument>
+                                                              </core:abstractreference>
+                                                            </core:simpleexp>
+                                                          </core:argument>
+                                                          <core:argument core:type="VARCHAR">
+                                                            <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                              <core:primitive core:value=") is out of range[ (1+THRESHOLD)*MIN_SAFETY: (1+"/>
+                                                            </core:simpleexp>
+                                                          </core:argument>
+                                                        </core:abstractreference>
+                                                      </core:simpleexp>
+                                                    </core:argument>
+                                                    <core:argument core:type="VARCHAR">
+                                                      <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                        <core:abstractreference xsi:type="core:Reference" core:method="LEFT">
+                                                          <core:argument core:type="VARCHAR">
+                                                            <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="DOUBLE">
+                                                              <core:abstractreference xsi:type="core:VariableReference" core:varname="THRESHOLD"/>
+                                                            </core:simpleexp>
+                                                          </core:argument>
+                                                          <core:argument core:type="INTEGER">
+                                                            <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="INTEGER">
+                                                              <core:primitive core:value="6"/>
+                                                            </core:simpleexp>
+                                                          </core:argument>
+                                                        </core:abstractreference>
+                                                      </core:simpleexp>
+                                                    </core:argument>
+                                                  </core:abstractreference>
+                                                </core:simpleexp>
+                                              </core:argument>
+                                              <core:argument core:type="VARCHAR">
+                                                <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                                  <core:primitive core:value=")*"/>
+                                                </core:simpleexp>
+                                              </core:argument>
+                                            </core:abstractreference>
+                                          </core:simpleexp>
+                                        </core:argument>
+                                        <core:argument core:type="VARCHAR">
+                                          <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="DOUBLE">
+                                            <core:abstractreference xsi:type="core:TableReference" core:columnName="MIN_SAFETY_STOCK" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="DOUBLE" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+                                          </core:simpleexp>
+                                        </core:argument>
+                                      </core:abstractreference>
+                                    </core:simpleexp>
+                                  </core:argument>
+                                  <core:argument core:type="VARCHAR">
+                                    <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                      <core:primitive core:value=" PCs , (1-THRESHOLD)* MAX_SAFETY: (1-"/>
+                                    </core:simpleexp>
+                                  </core:argument>
+                                </core:abstractreference>
+                              </core:simpleexp>
+                            </core:argument>
+                            <core:argument core:type="VARCHAR">
+                              <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                                <core:abstractreference xsi:type="core:Reference" core:method="LEFT">
+                                  <core:argument core:type="VARCHAR">
+                                    <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="DOUBLE">
+                                      <core:abstractreference xsi:type="core:VariableReference" core:varname="THRESHOLD"/>
+                                    </core:simpleexp>
+                                  </core:argument>
+                                  <core:argument core:type="INTEGER">
+                                    <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="INTEGER">
+                                      <core:primitive core:value="6"/>
+                                    </core:simpleexp>
+                                  </core:argument>
+                                </core:abstractreference>
+                              </core:simpleexp>
+                            </core:argument>
+                          </core:abstractreference>
+                        </core:simpleexp>
+                      </core:argument>
+                      <core:argument core:type="VARCHAR">
+                        <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+                          <core:primitive core:value=")*"/>
+                        </core:simpleexp>
+                      </core:argument>
+                    </core:abstractreference>
+                  </core:simpleexp>
+                </core:argument>
+                <core:argument core:type="VARCHAR">
+                  <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="DOUBLE">
+                    <core:abstractreference xsi:type="core:TableReference" core:columnName="MAX_SAFETY_STOCK" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="DOUBLE" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+                  </core:simpleexp>
+                </core:argument>
+              </core:abstractreference>
+            </core:simpleexp>
+          </core:argument>
+          <core:argument core:type="VARCHAR">
+            <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+              <core:primitive core:value=" PCs]."/>
+            </core:simpleexp>
+          </core:argument>
+        </core:abstractreference>
+      </core:simpleexp>
+      <core:valueDomain core:type=""/>
+      <core:selection core:isMultiLine="false" core:type=""/>
+    </core:variable>
+    <core:variable id="VAR146fa4f619exd551d" core:assignable="true" core:length="0" core:name="ALERT_SCORE_EMER" core:scale="0" core:type="DOUBLE" core:vartype="Calculated">
+      <descriptions defaultDescription="ALERT_SCORE_EMER"/>
+      <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="DOUBLE">
+        <core:primitive core:value="31"/>
+      </core:simpleexp>
+      <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="-" core:type="INTEGER">
+        <core:abstractreference xsi:type="core:Reference" core:method="DAYS_BETWEEN">
+          <core:argument core:type="DATE">
+            <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="DATE">
+              <core:abstractreference xsi:type="core:Reference" core:method="CURRENT_DATE"/>
+            </core:simpleexp>
+          </core:argument>
+          <core:argument core:type="DATE">
+            <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="TIMESTAMP">
+              <core:abstractreference xsi:type="core:TableReference" core:columnName="START_TIME" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="TIMESTAMP" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+            </core:simpleexp>
+          </core:argument>
+        </core:abstractreference>
+      </core:simpleexp>
+      <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="-" core:type="INTEGER">
+        <core:abstractreference xsi:type="core:Reference" core:method="CEIL">
+          <core:argument core:type="DECIMAL">
+            <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="DECIMAL">
+              <core:abstractreference xsi:type="core:TableReference" core:columnName="TIME_STEP" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="DECIMAL" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+            </core:simpleexp>
+            <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="/" core:type="DECIMAL">
+              <core:primitive core:value="24"/>
+            </core:simpleexp>
+          </core:argument>
+        </core:abstractreference>
+      </core:simpleexp>
+      <core:valueDomain core:type=""/>
+      <core:selection core:isMultiLine="false" core:type=""/>
+    </core:variable>
+    <core:variable id="VAR146fa4ffe2dx28e71" core:assignable="true" core:length="8" core:name="MESSAGE" core:scale="0" core:type="VARCHAR">
+      <descriptions defaultDescription="MESSAGE"/>
+      <core:simpleexp core:operator="" core:type="VARCHAR">
+        <core:primitive core:value="Normal"/>
+      </core:simpleexp>
+      <core:valueDomain core:type="empty"/>
+      <core:selection core:isMultiLine="false" core:type=""/>
+    </core:variable>
+    <core:variable id="VAR147337bf8edxbd629" core:assignable="true" core:length="0" core:name="ALERT_SCORE_IMP" core:scale="0" core:type="DOUBLE" core:vartype="Calculated">
+      <descriptions defaultDescription="ALERT_SCORE_IMP"/>
+      <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="DOUBLE">
+        <core:abstractreference xsi:type="core:TableReference" core:columnName="STOCK" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="DOUBLE" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+      </core:simpleexp>
+      <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="+" core:type="DOUBLE">
+        <core:abstractreference xsi:type="core:TableReference" core:columnName="SUPPLY" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="DOUBLE" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+      </core:simpleexp>
+      <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="-" core:type="DOUBLE">
+        <core:abstractreference xsi:type="core:TableReference" core:columnName="DEMAND" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="DOUBLE" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+      </core:simpleexp>
+      <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="-" core:type="DOUBLE">
+        <core:primitive core:value="0.5"/>
+      </core:simpleexp>
+      <core:simpleexp core:closebracket="0" core:openbracket="1" core:operator="*" core:type="DOUBLE">
+        <core:abstractreference xsi:type="core:TableReference" core:columnName="MIN_SAFETY_STOCK" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="DOUBLE" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+      </core:simpleexp>
+      <core:simpleexp core:closebracket="1" core:openbracket="0" core:operator="+" core:type="DOUBLE">
+        <core:abstractreference xsi:type="core:TableReference" core:columnName="MAX_SAFETY_STOCK" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="DOUBLE" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+      </core:simpleexp>
+      <core:valueDomain core:type=""/>
+      <core:selection core:isMultiLine="false" core:type=""/>
+    </core:variable>
+    <core:variable id="VAR147347d0597x56674" core:assignable="true" core:length="0" core:name="THRESHOLD" core:scale="0" core:type="DOUBLE">
+      <descriptions defaultDescription="THRESHOLD"/>
+      <core:simpleexp core:operator="" core:type="DOUBLE">
+        <core:primitive core:value="0.02"/>
+      </core:simpleexp>
+      <core:valueDomain core:type="empty"/>
+      <core:selection core:isMultiLine="false" core:type=""/>
+    </core:variable>
+  </dtmodel:variables>
+  <alias:aliasset alias:guid="AS146fa4b884fxd8c5ay8b">
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4be902x2f96" alias:visible="true" alias:columnName="PLAN_EXECUTION_ID" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="INTEGER" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="PLAN_EXECUTION_ID"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4beb06x7e8a1" alias:visible="true" alias:columnName="PLAN_MODEL_ID" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="INTEGER" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="PLAN_MODEL_ID"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4beccax4c770" alias:visible="true" alias:columnName="PLAN_MODEL_TYPE_ID" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="INTEGER" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="PLAN_MODEL_TYPE_ID"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4bee91x1077b" alias:visible="true" alias:columnName="PLAN_MODEL_CATEGORY_ID" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="INTEGER" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="PLAN_MODEL_CATEGORY_ID"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4bf0f4x866e" alias:visible="true" alias:columnName="FILTER_TYPE" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="INTEGER" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="FILTER_TYPE"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4bf2ebxbbda1" alias:visible="true" alias:columnName="FILTER_GROUP_ID" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="INTEGER" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="FILTER_GROUP_ID"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4bf4ebxa4862" alias:visible="true" alias:columnName="PIPELINE_MODEL_ID" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="INTEGER" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="PIPELINE_MODEL_ID"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4bf6f5xb6a7" alias:visible="true" alias:columnName="NODE_ID" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="INTEGER" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="NODE_ID"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4bf913x350bf" alias:visible="true" alias:columnName="NODE_NAME" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="VARCHAR" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="NODE_NAME"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4bfbbfx5f391" alias:visible="true" alias:columnName="NODE_VISIBLE" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="SMALLINT" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="NODE_VISIBLE"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4bfe21x73c5e" alias:visible="true" alias:columnName="DATA_OBJECT_FORMAT" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="VARCHAR" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="DATA_OBJECT_FORMAT"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4bffeexc0191" alias:visible="true" alias:columnName="LOCATION_ID" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="VARCHAR" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="LOCATION_ID"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4c01b7xcd369" alias:visible="true" alias:columnName="LOCATION_NAME" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="VARCHAR" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="LOCATION_NAME"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4c03b9x1c248" alias:visible="true" alias:columnName="EQUIP_TYPE_ID" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="VARCHAR" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="EQUIP_TYPE_ID"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4c07bexb1c5c" alias:visible="true" alias:columnName="EQUIP_TYPE_NAME" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="VARCHAR" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="EQUIP_TYPE_NAME"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4c09e9x166ea" alias:visible="true" alias:columnName="TIME_INTERVAL_ID" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="INTEGER" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="TIME_INTERVAL_ID"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4c0bcfx5478d" alias:visible="true" alias:columnName="TIME_FILTER_DESC" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="VARCHAR" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="TIME_FILTER_DESC"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4c0dcaxc5c9b" alias:visible="true" alias:columnName="SEQUENCE" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="INTEGER" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="SEQUENCE"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4c1022x716bb" alias:visible="true" alias:columnName="START_TIME" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="TIMESTAMP" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="START_TIME"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4c1291xb527a" alias:visible="true" alias:columnName="TIME_STEP" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="DECIMAL" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="TIME_STEP"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4c148exd63ce" alias:visible="true" alias:columnName="STOCK" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="DOUBLE" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="STOCK"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4c1737xa1675" alias:visible="true" alias:columnName="SUPPLY" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="DOUBLE" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="SUPPLY"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4c1aafx8da99" alias:visible="true" alias:columnName="DEMAND" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="DOUBLE" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="DEMAND"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4c1cfdx558ab" alias:visible="true" alias:columnName="BALANCE_SUPPLY_DEMAND" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="DOUBLE" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="BALANCE_SUPPLY_DEMAND"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4c1f20x34228" alias:visible="true" alias:columnName="BALANCE_STOCK_SUPPLY_DEMAND" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="DOUBLE" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="BALANCE_STOCK_SUPPLY_DEMAND"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4c2129x88718" alias:visible="true" alias:columnName="MIN_SAFETY_STOCK" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="DOUBLE" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="MIN_SAFETY_STOCK"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:TableAlias" id="TBLAL146fa4c239fx41bd0" alias:visible="true" alias:columnName="MAX_SAFETY_STOCK" alias:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" alias:columntype="DOUBLE" alias:modelType="tabletype" alias:schemaName="SAP_TM_TRP">
+      <descriptions defaultDescription="MAX_SAFETY_STOCK"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:Alias" id="VARAL146fa4e7002x6203ey8c" alias:visible="true">
+      <descriptions defaultDescription="ALERT_REASON"/>
+      <alias:member alias:returntype="VARCHAR" alias:varname="ALERT_REASON"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:Alias" id="VARAL146fa4ffe2dxecfd7y97" alias:visible="true">
+      <descriptions defaultDescription="MESSAGE"/>
+      <alias:member alias:returntype="VARCHAR" alias:varname="MESSAGE"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:Alias" id="VARAL146fa4f619ex55044y8d" alias:visible="true">
+      <descriptions defaultDescription="ALERT_SCORE_EMER"/>
+      <alias:member alias:returntype="DOUBLE" alias:varname="ALERT_SCORE_EMER"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:Alias" id="VARAL147337bf8edxb9e04y1e" alias:visible="true">
+      <descriptions defaultDescription="ALERT_SCORE_IMP"/>
+      <alias:member alias:returntype="DOUBLE" alias:varname="ALERT_SCORE_IMP"/>
+    </alias:basealias>
+    <alias:basealias xsi:type="alias:Alias" id="VARAL147347d0597x6b1bey7a" alias:visible="true">
+      <descriptions defaultDescription="THRESHOLD"/>
+      <alias:member alias:returntype="DOUBLE" alias:varname="THRESHOLD"/>
+    </alias:basealias>
+  </alias:aliasset>
+  <table:decisiontable table:guid="DT146fa4b884fx99d22" table:name="dt_stock_minSafetyStock_maxSafetyStock_timeInterval_default">
+    <table:conditionstub table:id="CS146fa4f85b1xcd64f" table:conditionstubtype="regular" table:type="VARCHAR">
+      <core:lvalue>
+        <core:simpleexp core:type="VARCHAR">
+          <core:abstractreference xsi:type="core:TableReference" core:columnName="LOCATION_NAME" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="VARCHAR" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+        </core:simpleexp>
+      </core:lvalue>
+      <table:cv table:id="CV146fa5040abxdddfay9b">
+        <core:rangeexpression xsi:type="core:SimpleRangeExpression" core:comparator="Equals">
+          <core:simpleexp core:type="VARCHAR">
+            <core:primitive core:value="*"/>
+          </core:simpleexp>
+        </core:rangeexpression>
+      </table:cv>
+    </table:conditionstub>
+    <table:conditionstub table:id="CS146fa4f8da2x58faa" table:conditionstubtype="regular" table:type="VARCHAR">
+      <core:lvalue>
+        <core:simpleexp core:type="VARCHAR">
+          <core:abstractreference xsi:type="core:TableReference" core:columnName="EQUIP_TYPE_NAME" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="VARCHAR" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+        </core:simpleexp>
+      </core:lvalue>
+      <table:cv table:id="CV146fa504cb8xbd880y9f">
+        <core:rangeexpression xsi:type="core:SimpleRangeExpression" core:comparator="Equals">
+          <core:simpleexp core:type="VARCHAR">
+            <core:primitive core:value="*"/>
+          </core:simpleexp>
+        </core:rangeexpression>
+      </table:cv>
+    </table:conditionstub>
+    <table:conditionstub table:id="CS146fa4f96bax59b3f" table:conditionstubtype="regular" table:type="INTEGER">
+      <core:lvalue>
+        <core:simpleexp core:type="INTEGER">
+          <core:abstractreference xsi:type="core:TableReference" core:columnName="SEQUENCE" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="INTEGER" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+        </core:simpleexp>
+      </core:lvalue>
+      <table:cv table:id="CV146fa505825xd12dya3">
+        <core:rangeexpression xsi:type="core:SimpleRangeExpression" core:comparator="Equals">
+          <core:simpleexp core:type="INTEGER">
+            <core:primitive core:value="*"/>
+          </core:simpleexp>
+        </core:rangeexpression>
+      </table:cv>
+    </table:conditionstub>
+    <table:conditionstub table:id="CS146fa4fa5b5x9fc2c" table:conditionstubtype="regular" table:type="DOUBLE">
+      <core:lvalue>
+        <core:simpleexp core:type="DOUBLE">
+          <core:abstractreference xsi:type="core:TableReference" core:columnName="STOCK" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="DOUBLE" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+        </core:simpleexp>
+      </core:lvalue>
+      <table:cv table:id="CV147347f42ffxe3e70y7c">
+        <core:rangeexpression xsi:type="core:SimpleRangeExpression" core:comparator="Less Than">
+          <core:simpleexp core:closebracket="0" core:openbracket="1" core:operator="" core:type="DOUBLE">
+            <core:primitive core:value="1"/>
+          </core:simpleexp>
+          <core:simpleexp core:closebracket="1" core:openbracket="0" core:operator="+" core:type="DOUBLE">
+            <core:abstractreference xsi:type="core:VariableReference" core:varname="THRESHOLD"/>
+          </core:simpleexp>
+          <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="*" core:type="DOUBLE">
+            <core:abstractreference xsi:type="core:TableReference" core:columnName="MIN_SAFETY_STOCK" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="DOUBLE" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+          </core:simpleexp>
+        </core:rangeexpression>
+      </table:cv>
+      <table:cv table:id="CV147347f78cdxacf63y7e">
+        <core:rangeexpression xsi:type="core:SimpleRangeExpression" core:comparator="Greater Than">
+          <core:simpleexp core:closebracket="0" core:openbracket="1" core:operator="" core:type="DOUBLE">
+            <core:primitive core:value="1"/>
+          </core:simpleexp>
+          <core:simpleexp core:closebracket="1" core:openbracket="0" core:operator="-" core:type="DOUBLE">
+            <core:abstractreference xsi:type="core:VariableReference" core:varname="THRESHOLD"/>
+          </core:simpleexp>
+          <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="*" core:type="DOUBLE">
+            <core:abstractreference xsi:type="core:TableReference" core:columnName="MAX_SAFETY_STOCK" core:columnObjectName="sap.tm.trp.db.alert::tt_decisionTable_execContext_timeInterval" core:columnType="DOUBLE" core:modelType="tabletype" core:schemaName="SAP_TM_TRP"/>
+          </core:simpleexp>
+        </core:rangeexpression>
+      </table:cv>
+    </table:conditionstub>
+    <table:conditionstub table:id="CS146fa4fbe78xa938a" table:conditionstubtype="regular" table:type="VARCHAR">
+      <core:lvalue>
+        <core:simpleexp core:type="VARCHAR">
+          <core:abstractreference xsi:type="core:VariableReference" core:varname="ALERT_REASON"/>
+        </core:simpleexp>
+      </core:lvalue>
+      <table:cv table:id="CV146fa507e30x7a60fya7">
+        <core:rangeexpression xsi:type="core:SimpleRangeExpression" core:comparator="Not Like">
+          <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+            <core:primitive core:value="Abc*"/>
+          </core:simpleexp>
+        </core:rangeexpression>
+      </table:cv>
+    </table:conditionstub>
+    <table:conditionstub table:id="CS146fa4fc479x8db90" table:conditionstubtype="regular" table:type="DOUBLE">
+      <core:lvalue>
+        <core:simpleexp core:type="DOUBLE">
+          <core:abstractreference xsi:type="core:VariableReference" core:varname="ALERT_SCORE_EMER"/>
+        </core:simpleexp>
+      </core:lvalue>
+      <table:cv table:id="CV146fa509591x6acb7yaa">
+        <core:rangeexpression xsi:type="core:SimpleRangeExpression" core:comparator="Not Equals">
+          <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="DOUBLE">
+            <core:primitive core:value="-1000"/>
+          </core:simpleexp>
+        </core:rangeexpression>
+      </table:cv>
+    </table:conditionstub>
+    <table:conditionstub table:id="CS147337c0329x7c2f7" table:conditionstubtype="regular" table:type="DOUBLE">
+      <core:lvalue>
+        <core:simpleexp core:type="DOUBLE">
+          <core:abstractreference xsi:type="core:VariableReference" core:varname="ALERT_SCORE_IMP"/>
+        </core:simpleexp>
+      </core:lvalue>
+      <table:cv table:id="CV147337c2141x96d3cy23">
+        <core:rangeexpression xsi:type="core:SimpleRangeExpression" core:comparator="Not Equals">
+          <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="DOUBLE">
+            <core:primitive core:value="-1000"/>
+          </core:simpleexp>
+        </core:rangeexpression>
+      </table:cv>
+    </table:conditionstub>
+    <table:actionstub table:id="AS146fa500701xe36a9" table:actionstubtype="regular">
+      <core:abstractaction xsi:type="core:Action" core:type="assign" core:varname="MESSAGE">
+        <core:assignmentvalue>
+          <core:simpleexp core:type="VARCHAR">
+            <core:abstractreference xsi:type="core:VariableReference" core:varname="MESSAGE"/>
+          </core:simpleexp>
+        </core:assignmentvalue>
+      </core:abstractaction>
+      <table:av table:ce-id-refs="CV146fa5040abxdddfay9b CV146fa504cb8xbd880y9f CV146fa505825xd12dya3 CV147347f42ffxe3e70y7c CV146fa507e30x7a60fya7 CV146fa509591x6acb7yaa CV147337c2141x96d3cy23" table:id="AV146fa50a26fx5d760">
+        <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+          <core:primitive core:value="Alert"/>
+        </core:simpleexp>
+      </table:av>
+      <table:av table:ce-id-refs="CV146fa5040abxdddfay9b CV146fa504cb8xbd880y9f CV146fa505825xd12dya3 CV147347f78cdxacf63y7e CV146fa507e30x7a60fya7 CV146fa509591x6acb7yaa CV147337c2141x96d3cy23" table:id="AV146fa52069dxefcaeyb7">
+        <core:simpleexp core:closebracket="0" core:openbracket="0" core:operator="" core:type="VARCHAR">
+          <core:primitive core:value="Alert"/>
+        </core:simpleexp>
+      </table:av>
+    </table:actionstub>
+    <table:tablelayout>
+      <table:conditionstub-layout table:stub-id="CS146fa4f85b1xcd64f" table:type="vertical">
+        <table:cell table:ref-id="CV146fa5040abxdddfay9b" table:span="2"/>
+        <table:cell table:span="-1"/>
+      </table:conditionstub-layout>
+      <table:conditionstub-layout table:stub-id="CS146fa4f8da2x58faa" table:type="vertical">
+        <table:cell table:ref-id="CV146fa504cb8xbd880y9f" table:span="2"/>
+        <table:cell table:span="-1"/>
+      </table:conditionstub-layout>
+      <table:conditionstub-layout table:stub-id="CS146fa4f96bax59b3f" table:type="vertical">
+        <table:cell table:ref-id="CV146fa505825xd12dya3" table:span="2"/>
+        <table:cell table:span="-1"/>
+      </table:conditionstub-layout>
+      <table:conditionstub-layout table:stub-id="CS146fa4fa5b5x9fc2c" table:type="vertical">
+        <table:cell table:ref-id="CV147347f42ffxe3e70y7c" table:span="1"/>
+        <table:cell table:ref-id="CV147347f78cdxacf63y7e" table:span="1"/>
+      </table:conditionstub-layout>
+      <table:conditionstub-layout table:width="103" table:stub-id="CS146fa4fbe78xa938a" table:type="vertical">
+        <table:cell table:ref-id="CV146fa507e30x7a60fya7" table:span="1"/>
+        <table:cell table:ref-id="CV146fa507e30x7a60fya7" table:span="1"/>
+      </table:conditionstub-layout>
+      <table:conditionstub-layout table:stub-id="CS146fa4fc479x8db90" table:type="vertical">
+        <table:cell table:ref-id="CV146fa509591x6acb7yaa" table:span="1"/>
+        <table:cell table:ref-id="CV146fa509591x6acb7yaa" table:span="1"/>
+      </table:conditionstub-layout>
+      <table:conditionstub-layout table:stub-id="CS147337c0329x7c2f7" table:type="vertical">
+        <table:cell table:ref-id="CV147337c2141x96d3cy23" table:span="1"/>
+        <table:cell table:ref-id="CV147337c2141x96d3cy23" table:span="1"/>
+      </table:conditionstub-layout>
+      <table:actionstub-layout table:width="100" table:stub-id="AS146fa500701xe36a9"/>
+    </table:tablelayout>
+  </table:decisiontable>
+</dtmodel:decisionTableModel>

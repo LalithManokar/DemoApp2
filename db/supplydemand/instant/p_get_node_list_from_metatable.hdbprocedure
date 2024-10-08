@@ -1,0 +1,51 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::p_get_node_list_from_metatable" (
+   IN METADATA "sap.tm.trp.db.pipeline::tt_node_metadata",
+   OUT NODE_LIST "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_node"
+  ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+/************************************************************* 
+	get node list(basic node ID, ovedue node ID) from META table
+ *************************************************************/
+ 	NODE_LIST = 
+ 	SELECT A.BASIC_NODE_ID AS NODE, IFNULL(B.OVEDUE_NODE_ID,'') AS OVERDUE_NAME 
+	FROM (
+		SELECT TO_VARCHAR(VALUE) AS BASIC_NODE_ID
+		FROM :METADATA
+		WHERE KEY = 'nodeID' AND NODE_NAME IN (
+			SELECT DISTINCT NODE_NAME
+			FROM :METADATA
+			WHERE KEY = 'isBasicNode' AND TO_VARCHAR(VALUE) = 'true')
+	     ) A
+	LEFT OUTER JOIN (
+	
+		SELECT T2.BASIC_NODE_ID, T1.OVEDUE_NODE_ID 
+		FROM (
+			SELECT NODE_NAME, TO_VARCHAR(VALUE) AS OVEDUE_NODE_ID
+			FROM :METADATA
+			WHERE KEY = 'nodeID' AND NODE_NAME IN (
+				SELECT DISTINCT TO_VARCHAR(NODE_NAME) AS NODE_NAME
+				FROM :METADATA
+				WHERE KEY = 'sourceNode' AND VALUE IS NOT NULL
+			)
+	    )  AS T1
+	   INNER JOIN (
+		 SELECT DISTINCT TO_VARCHAR(NODE_NAME) AS NODE_NAME, TO_VARCHAR(VALUE) AS BASIC_NODE_ID
+		  FROM :METADATA
+		  WHERE KEY = 'sourceNode' AND VALUE IS NOT NULL 
+		) AS T2 ON T1.NODE_NAME = T2.NODE_NAME
+		
+			
+		UNION
+		    SELECT TO_VARCHAR(VALUE) AS BASIC_NODE_ID, TO_VARCHAR(VALUE) AS OVEDUE_NODE_ID
+		    FROM :METADATA
+		    WHERE KEY = 'nodeID' AND NODE_NAME IN (
+				SELECT DISTINCT TO_VARCHAR(NODE_NAME) AS NODE_NAME
+				FROM  :METADATA
+				WHERE KEY = 'outputKey' AND TO_VARCHAR(VALUE) = 'STOCK') 
+		
+) B ON A.BASIC_NODE_ID = B.BASIC_NODE_ID;
+END;

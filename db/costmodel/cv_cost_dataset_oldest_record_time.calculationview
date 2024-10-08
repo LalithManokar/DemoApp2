@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_cost_dataset_oldest_record_time" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_anna_privilege_check"/>
+  <localVariables>
+    <variable id="IN_COST_DATASET_ID" parameter="true">
+      <descriptions/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="TIMESTAMP" id="OLDEST_RECORD_TIME"/>
+        <viewAttribute datatype="BIGINT" id="COST_DATASET_ID"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_COST_DATASET_ID</localVariable>
+      <definition> 
+  
+ BEGIN
+   
+    VAR_OUT =
+SELECT T4.OLDEST_RECORD_TIME,T3.ID AS COST_DATASET_ID
+   FROM
+     &quot;sap.tm.trp.db.costmodel::t_cost_dataset&quot; T3
+     LEFT OUTER JOIN 
+     (  SELECT  T2.OLDEST_RECORD_TIME
+        FROM
+	     ( SELECT  MIN(T1.LAST_MODIFIED_ON) AS OLDEST_RECORD_TIME
+	      FROM &quot;sap.tm.trp.db.costmodel::cv_location_based_cost_get_info&quot;
+	     (PLACEHOLDER.&quot;$$COST_DATASET_ID$$&quot; =>:IN_COST_DATASET_ID) T1
+	      UNION ALL SELECT MIN(T1.LAST_MODIFIED_ON)AS OLDEST_RECORD_TIME
+	      FROM &quot;sap.tm.trp.db.costmodel::cv_distance_based_cost_get_info&quot; 
+	     (PLACEHOLDER.&quot;$$COST_DATASET_ID$$&quot; =>:IN_COST_DATASET_ID)T1
+	      UNION ALL 
+	      SELECT MIN(T1.LAST_MODIFIED_ON)AS OLDEST_RECORD_TIME
+	      FROM &quot;sap.tm.trp.db.costmodel::cv_handling_based_cost_get_info&quot; 
+	     (PLACEHOLDER.&quot;$$COST_DATASET_ID$$&quot; =>:IN_COST_DATASET_ID)T1
+	      UNION ALL
+	      SELECT MIN(T1.LAST_MODIFIED_ON)AS OLDEST_RECORD_TIME
+	      FROM &quot;sap.tm.trp.db.costmodel::cv_quantity_based_cost_get_info&quot;
+	     (PLACEHOLDER.&quot;$$COST_DATASET_ID$$&quot; =>:IN_COST_DATASET_ID) T1
+	      UNION ALL
+	      SELECT MIN(T1.LAST_MODIFIED_ON)AS OLDEST_RECORD_TIME
+	      FROM &quot;sap.tm.trp.db.costmodel::cv_time_based_cost_get_info&quot;
+	     (PLACEHOLDER.&quot;$$COST_DATASET_ID$$&quot; =>:IN_COST_DATASET_ID) T1
+	      )T2
+	     WHERE T2.OLDEST_RECORD_TIME IS NOT NULL
+     )T4 ON (1=1)
+     WHERE T3.ID = :IN_COST_DATASET_ID;
+    
+END 
+</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes/>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="OLDEST_RECORD_TIME" order="1" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="OLDEST_RECORD_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="OLDEST_RECORD_TIME"/>
+      </measure>
+      <measure id="COST_DATASET_ID" order="2" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="COST_DATASET_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="COST_DATASET_ID"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

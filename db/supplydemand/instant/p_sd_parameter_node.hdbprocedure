@@ -1,0 +1,20 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::p_sd_parameter_node" (
+	IN PLAN_ID BIGINT,
+	IN PLAN_EXECUTION_ID BIGINT,
+	IN IN_NODE_ID BIGINT,
+	OUT NODE_ID BIGINT
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+	 
+	--get the default node id of the execution
+	IF :IN_NODE_ID = -1 THEN
+	--todo need verify instant plan node id
+	  CALL "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid"(:PLAN_EXECUTION_ID, NODE_ID);
+	ELSE 
+	  NODE_ID := :IN_NODE_ID;
+	END IF;
+END;

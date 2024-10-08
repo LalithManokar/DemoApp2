@@ -1,0 +1,32 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_eac_configuration_delete" (
+    IN ID    BIGINT,
+    OUT STATUS INTEGER,  --0 error  1 success
+    OUT MESSAGE VARCHAR(200)
+   )
+	 LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+    DECLARE EXIST_COUNT INTEGER;
+
+    SELECT COUNT(*) INTO EXIST_COUNT
+    FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group"
+    WHERE ID = :ID;
+    
+
+	IF EXIST_COUNT = 0 THEN
+		STATUS := 0;
+		MESSAGE := 'MSG_ERROR_NODATA';
+	ELSE
+		DELETE FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group" WHERE ID = :ID;
+		DELETE FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group_t" WHERE ID = :ID;
+		DELETE FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group_item" WHERE LOCATION_RULE_ID = :ID;
+		
+  	STATUS :=1;
+  	MESSAGE :='MSG_SUCCESS_STATUS';
+  	
+	END IF;
+
+END;

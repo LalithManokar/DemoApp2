@@ -1,0 +1,13 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "OBJECT_ID"; sqlType = VARCHAR;length=100;nullable = false;},
+    {name = "OBJECT_SOURCE"; sqlType = INTEGER;nullable = false;},
+	{name = "OBJECT_TYPE"; sqlType = INTEGER; nullable = false;},
+	{name = "ACTION_TYPE"; sqlType = INTEGER; nullable = false;},
+    {name = "STATUS"; sqlType = INTEGER; nullable = false;},
+	{name = "START_TIME"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "END_TIME"; sqlType = TIMESTAMP; nullable = true;}
+];
+table.primaryKey.pkcolumns = ["ID"];

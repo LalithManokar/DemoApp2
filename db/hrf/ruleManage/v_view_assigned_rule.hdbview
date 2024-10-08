@@ -1,0 +1,17 @@
+//To define the HDB view file use the following syntax: 
+schema = "SAP_TM_TRP";
+query = "
+select 
+    VIEW_ID,
+    RULE_ID
+from
+    (select T1.ALERT_VIEW_ID as VIEW_ID,
+           T1.RULE_ID     
+    from \"sap.tm.trp.db.hrf.ruleManage::t_alertView_assigned_rule\" T1) 
+    union 
+    (select T2.BUBBLE_VIEW_ID as VIEW_ID,
+           T2.RULE_ID
+    from \"sap.tm.trp.db.hrf.ruleManage::t_bubbleView_assigned_rule\" T2)
+ ";
+ 
+ depends_on_table = ["sap.tm.trp.db.hrf.ruleManage::t_alertView_assigned_rule","sap.tm.trp.db.hrf.ruleManage::t_bubbleView_assigned_rule"];

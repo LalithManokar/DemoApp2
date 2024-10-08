@@ -1,0 +1,48 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.cost::p_get_handling_based_cost_info" (
+    IN cost_model_id BIGINT,
+    OUT cost_info TABLE(priority INTEGER, location_name NVARCHAR(50), from_mot NVARCHAR(10), to_mot NVARCHAR(10), resource_type NVARCHAR(20), act_type NVARCHAR(10), cost DOUBLE, wild_star_count INTEGER)
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING
+   READS SQL DATA AS
+BEGIN
+   /*************************************
+       Retrieve handling cost info(Processing the handling type)
+   *************************************/
+   DECLARE transload_type CONSTANT NVARCHAR(10) = 'TRN';
+   DECLARE load_type CONSTANT NVARCHAR(10) = 'LOD';
+   DECLARE unload_type CONSTANT NVARCHAR(10) = 'ULD';
+	CALL "sap.tm.trp.db.costmodel::sp_get_handling_based_cost_info"(:cost_model_id, handling_cost_info);
+	
+	-- Currently Since the delta route interface is not correct, in order to adapt to it, the priority and wild_star_count will not be output
+	-- Later when the delta route interface changed, this need to adapt again!!!
+	
+	-- Compute Transload Cost
+	transload_cost = 
+	SELECT priority, location_name, from_mot, to_mot, resource_type, :transload_type AS ACT_TYPE, SUM(cost) AS cost, wild_star_count
+	FROM :handling_cost_info
+	WHERE from_mot != '' AND to_mot != ''
+	GROUP BY location_name, from_mot, to_mot, resource_type, priority, wild_star_count;
+	
+	-- Compute Load Cost
+	load_cost = 
+	SELECT priority, location_name, '' AS from_mot, to_mot, resource_type, :load_type AS ACT_TYPE, SUM(cost) AS cost, wild_star_count
+	FROM :handling_cost_info
+	WHERE from_mot = '' AND to_mot != ''
+	GROUP BY location_name, to_mot, resource_type, priority, wild_star_count;
+	
+	-- Compute Unload Cost
+	unload_cost = 
+	SELECT priority, location_name, from_mot, '' AS to_mot, resource_type, :unload_type AS ACT_TYPE, SUM(cost) AS cost, wild_star_count
+	FROM :handling_cost_info
+	WHERE from_mot != '' AND to_mot = ''
+	GROUP BY location_name, from_mot, resource_type, priority, wild_star_count;
+	
+	cost_info = 
+	SELECT * FROM :transload_cost
+	UNION ALL
+	SELECT * FROM :load_cost
+	UNION ALL
+	SELECT * FROM :unload_cost;
+END

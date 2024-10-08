@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_locations_with_stocksettings" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" runWithInvokerPrivileges="true" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="get locations with stock settings based on the resoruce category"/>
+  <localVariables>
+    <variable id="RESOURCE_CATEGORY" parameter="true">
+      <descriptions defaultDescription="resource category code, e.g - rc1,rc2,cn1,cn2"/>
+      <variableProperties datatype="VARCHAR" length="200" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="ID" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="NAME" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="DESC" length="40"/>
+        <viewAttribute datatype="NVARCHAR" id="POSTAL_CODE" length="10"/>
+        <viewAttribute datatype="NVARCHAR" id="CITY_NAME" length="40"/>
+        <viewAttribute datatype="NVARCHAR" id="STATE_NAME" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="COUNTRY_NAME" length="15"/>
+        <viewAttribute datatype="INTEGER" id="MIN_SAFETY_STOCK"/>
+        <viewAttribute datatype="INTEGER" id="MAX_SAFETY_STOCK"/>
+        <viewAttribute datatype="INTEGER" id="MAX_PHYSICAL_STOCK"/>
+        <viewAttribute datatype="INTEGER" id="HANDLING_CAPACITY"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#RESOURCE_CATEGORY</localVariable>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+ BEGIN 
+ 	 var_out = SELECT T1.&quot;ID&quot;,
+		T1.&quot;NAME&quot;, 
+		T1.&quot;DESC&quot;, 
+		T1.&quot;POSTAL_CODE&quot;, 
+		T1.&quot;CITY_NAME&quot;, 
+		T1.&quot;STATE_NAME&quot;,
+		T1.&quot;COUNTRY_NAME&quot;,
+		T2.&quot;MIN_SAFETY&quot; AS &quot;MIN_SAFETY_STOCK&quot;,
+		T2.&quot;MAX_SAFETY&quot; AS &quot;MAX_SAFETY_STOCK&quot;,
+		T2.&quot;MAX_CAPACITY&quot; AS &quot;MAX_PHYSICAL_STOCK&quot;,
+	  T2.&quot;HANDLING_CAPACITY&quot;
+	FROM &quot;sap.tm.trp.db.systemmanagement.location::cv_role_check_location_ui&quot; AS T1
+	LEFT JOIN &quot;sap.tm.trp.db.stock::t_stock_config&quot; AS T2
+	ON T2.&quot;LOCATION_ID&quot; = T1.&quot;ID&quot;
+	AND T2.&quot;RESOURCE_CATEGORY&quot; = :RESOURCE_CATEGORY
+	AND T2.&quot;LOCATION_HEAD_FLAG&quot; = 1;
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="NAME" order="2">
+        <descriptions defaultDescription="NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="DESC" order="3">
+        <descriptions defaultDescription="DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+      <attribute id="POSTAL_CODE" order="4">
+        <descriptions defaultDescription="POSTAL_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="POSTAL_CODE"/>
+      </attribute>
+      <attribute id="CITY_NAME" order="5">
+        <descriptions defaultDescription="CITY_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="CITY_NAME"/>
+      </attribute>
+      <attribute id="STATE_NAME" order="6">
+        <descriptions defaultDescription="STATE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="STATE_NAME"/>
+      </attribute>
+      <attribute id="COUNTRY_NAME" order="7">
+        <descriptions defaultDescription="COUNTRY_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="COUNTRY_NAME"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="MIN_SAFETY_STOCK" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MIN_SAFETY_STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="MIN_SAFETY_STOCK"/>
+      </measure>
+      <measure id="MAX_SAFETY_STOCK" order="9" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MAX_SAFETY_STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="MAX_SAFETY_STOCK"/>
+      </measure>
+      <measure id="MAX_PHYSICAL_STOCK" order="10" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MAX_PHYSICAL_STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="MAX_PHYSICAL_STOCK"/>
+      </measure>
+      <measure id="HANDLING_CAPACITY" order="11" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="HANDLING_CAPACITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="HANDLING_CAPACITY"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

@@ -1,0 +1,17 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "ROLE_GROUP_ID"; sqlType = INTEGER; nullable = false;},
+    {name = "NAME"; sqlType = VARCHAR; length = 50; nullable = true;},
+    {name = "DESC"; sqlType = VARCHAR; length = 50; nullable = true;},
+    {name = "LAST_MODIFIED_BY"; sqlType = BIGINT;},
+    {name = "LAST_MODIFIED_AT"; sqlType = TIMESTAMP;},
+    {name = "CREATE_BY"; sqlType = BIGINT;},
+    {name = "CREATE_AT"; sqlType = TIMESTAMP;},
+    {name = "CODE";sqlType = NVARCHAR; length = 20; nullable = true;}
+];
+table.indexes = [
+  {name = "ROLE_NAME_INDEX"; unique = true; indexColumns = ["NAME"];}
+];
+table.primaryKey.pkcolumns = ["ID"];

@@ -1,0 +1,17 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_delete_user_preference" (
+    IN USERNAME VARCHAR(100),
+    IN PREFERENCE_ITEMS "sap.tm.trp.db.systemmanagement.user::tt_user_preference"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+
+    DELETE FROM "sap.tm.trp.db.systemmanagement.user::t_user_preference"
+    WHERE USERNAME = :USERNAME 
+    AND DATA_ID IN (
+        SELECT DATA_ID FROM :PREFERENCE_ITEMS
+    );
+
+END;

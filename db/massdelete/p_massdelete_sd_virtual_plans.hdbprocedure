@@ -1,0 +1,51 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massdelete::p_massdelete_sd_virtual_plans" (IN PLAN_LIST TABLE(ID BIGINT, FILTER_GROUP_ID BIGINT) ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	--DEFAULT SCHEMA <default_schema_name>
+	--READS SQL DATA 
+	AS
+BEGIN
+
+    -- DELETE FILTER
+    -- DELETE FILTER & LOCATION FILTER RELATIONSHIP
+    DELETE FROM "sap.tm.trp.db.filter::t_filter_location_filter"
+    WHERE FILTER_GROUP_ID IN (SELECT FILTER_GROUP_ID FROM :PLAN_LIST);
+    
+    -- DELETE FILTER & EQUIPMENT FILTER RELATIONSHIP
+    DELETE FROM "sap.tm.trp.db.filter::t_filter_equipment_filter"
+    WHERE FILTER_GROUP_ID IN (SELECT FILTER_GROUP_ID FROM :PLAN_LIST);
+    
+    -- DELETE FILTER MAIN DATA
+    DELETE FROM "sap.tm.trp.db.filter::t_filter_group"
+    WHERE ID IN (SELECT FILTER_GROUP_ID FROM :PLAN_LIST);
+    
+    -- DELETE THE VIRTUAL PLAN METADATA
+    DELETE FROM "sap.tm.trp.db.pipeline::t_plan_model"
+    WHERE ID IN (SELECT ID FROM :PLAN_LIST);
+    
+    
+    --Remove the assigned flag of sub-plan before deletion
+    UPDATE "sap.tm.trp.db.pipeline::t_plan_model"
+    SET ASSIGNED_TO_VIRTUAL = ''
+    WHERE ID IN (
+              SELECT DISTINCT PERSISTED_PLAN_MODEL_ID 
+                FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan"
+               WHERE VIRTUAL_PLAN_MODEL_ID  IN (SELECT ID FROM :PLAN_LIST)
+             );
+
+
+    -- DELETE THE PERSISTED PLAN LIST
+    DELETE FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan"
+    WHERE VIRTUAL_PLAN_MODEL_ID IN (SELECT ID FROM :PLAN_LIST);
+    
+    -- DELETE VIRTUAL TREE INFO
+    DELETE FROM "sap.tm.trp.db.pipeline::t_virtual_tree_location_info" 
+    WHERE VIRTUAL_PLAN_MODEL_ID IN (SELECT ID FROM :PLAN_LIST);
+  
+    DELETE FROM "sap.tm.trp.db.pipeline::t_virtual_tree_hierarchy"  
+    WHERE VIRTUAL_PLAN_MODEL_ID IN (SELECT ID FROM :PLAN_LIST);
+ 
+    DELETE FROM "sap.tm.trp.db.pipeline::t_virtual_tree_node_name"
+    WHERE VIRTUAL_PLAN_MODEL_ID IN (SELECT ID FROM :PLAN_LIST);
+    
+END;

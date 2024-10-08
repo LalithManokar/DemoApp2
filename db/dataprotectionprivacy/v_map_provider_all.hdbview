@@ -1,0 +1,24 @@
+schema = "SAP_TM_TRP";
+query = "SELECT T1.ID,
+                T1.NAME,
+                T1.FLAG AS ENABLE_FLAG,
+                IFNULL(T2.DESC,T1.NAME) AS DESC,
+                U1.USERNAME AS CREATED_BY,
+                T1.CREATE_AT AS CREATED_ON,
+                U2.USERNAME AS LAST_CHANGED_BY,
+                T1.LAST_MODIFIED_AT AS LAST_CHANGED_ON
+         FROM \"sap.tm.trp.db.systemmanagement::t_map_provider\" AS T1 
+         LEFT OUTER JOIN (SELECT A.* FROM \"sap.tm.trp.db.systemmanagement.customization::t_map_provider_t\" AS A
+                          INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS B
+                             ON (A.SPRAS = B.SPRAS)) T2 
+         ON (T1.ID = T2.ID)
+         LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS U1
+                  ON (T1.CREATE_BY = U1.ID)
+         LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS U2
+                  ON (T1.LAST_MODIFIED_BY = U2.ID)                     
+                  ";
+                
+depends_on_table = ["sap.tm.trp.db.systemmanagement::t_map_provider",
+                    "sap.tm.trp.db.systemmanagement.customization::t_map_provider_t"];
+depends_on_view = ["sap.tm.trp.db.semantic.common::v_lang_code",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];              

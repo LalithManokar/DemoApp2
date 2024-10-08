@@ -1,0 +1,37 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_get_equiptypes_by_equip_filter_id" (
+	IN EQUIP_FILTER_ID BIGINT,
+	OUT EQUIP_TYPES "sap.tm.trp.db.filter::tt_equip_types" 
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA 
+AS
+BEGIN
+
+  DECLARE EQUIP_FLAG INTEGER;    
+
+  SELECT IFNULL(MAX(FILTER_TYPE), -1) INTO EQUIP_FLAG
+  FROM "sap.tm.trp.db.filter::t_equipment_filter" T1  
+  WHERE T1.ID = :EQUIP_FILTER_ID;
+
+
+  IF :EQUIP_FLAG = 1 THEN
+	EQUIP_TYPES = SELECT distinct T1.EQUI_CODE AS EQUIPMENT_TYPE 
+				  FROM "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T1
+				  WHERE T1.EQUIPMENT_FILTER_ID = :EQUIP_FILTER_ID;
+					
+  ELSEIF :EQUIP_FLAG = 2 THEN
+	EQUIP_TYPES = SELECT distinct T1.EQUI_CODE AS EQUIPMENT_TYPE
+	              FROM "sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth" T1 
+        		  INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T2 
+        		    ON (T1.EQUIPMENT_GROUP_ID = T2.EQUIPMENT_GROUP_ID AND T1.RESOURCE_CATEGORY = T2.RESOURCE_CATEGORY)
+      			  WHERE T2.EQUIPMENT_FILTER_ID = :EQUIP_FILTER_ID;
+        				
+        				
+  ELSE
+	EQUIP_TYPES = SELECT NULL AS EQUIPMENT_TYPE FROM dummy WHERE 1 = 0;
+
+END IF; 
+
+END;

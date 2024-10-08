@@ -1,0 +1,28 @@
+schema = "SAP_TM_TRP";
+query = "SELECT TOP 1 NAME,DESC,LAST_CHANGED_BY
+           FROM (SELECT T1.CODE AS NAME,T3.DESC AS DESC,
+                        C.USERNAME AS LAST_CHANGED_BY
+                 FROM (SELECT TOP 1 CODE,CONFIGCODE,CLIENT_CODE,ZONE_HIERARCHY_ID,
+                              NAME,LAST_MODIFIED_BY
+                       FROM (
+                       SELECT CODE,CODE AS CONFIGCODE,CLIENT_CODE,ZONE_HIERARCHY_ID,
+                              NAME,LAST_MODIFIED_BY,LAST_MODIFIED_AT
+                       FROM \"sap.tm.trp.db.semantic.common::t_config\"
+                       UNION
+                       SELECT CODE,CODE AS CONFIGCODE,NULL AS CLIENT_CODE,NULL AS ZONE_HIERARCHY_ID,
+                              NULL AS NAME,NULL AS LAST_MODIFIED_BY,NULL AS LAST_MODIFIED_AT
+                       FROM \"sap.tm.trp.db.semantic.common::t_config_pre\"  )
+                 ) T1
+                 LEFT OUTER JOIN (SELECT A.* FROM \"sap.tm.trp.db.systemmanagement.customization::t_config_t\" A
+                            INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" B
+                            ON (A.SPRAS = B.SPRAS)) T3
+                 ON (T1.CODE = T3.CODE)
+                 LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" C
+                 ON (T1.LAST_MODIFIED_BY = C.ID)
+                  )";
+       
+depends_on_view = ["sap.tm.trp.db.semantic.common::v_lang_code",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];
+depends_on_table = ["sap.tm.trp.db.semantic.common::t_config",
+                    "sap.tm.trp.db.semantic.common::t_config_pre",
+                    "sap.tm.trp.db.systemmanagement.customization::t_config_t"];

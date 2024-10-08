@@ -1,0 +1,62 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_get_mtr" (
+    OUT eT_MTR_LANE "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_mtr_lane"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_TRP
+   READS SQL DATA AS
+BEGIN
+
+    lt_trtype = select * from "sap.tm.trp.db.semantic.order::v_transportation_type";
+    
+    LT_TMODCODE = select * from "sap.tm.trp.db.semantic.order::v_transportation_mode_code";
+    
+    LT_MTR_TM = SELECT A.TTYPE AS mtr, A.AVGVEL, A.DISTFAC, A.TTYPE_PARENT, A.TRMODCODE AS MOT, B.TRMODCAT AS MOT_CAT
+                FROM :lt_trtype A
+                LEFT JOIN :LT_TMODCODE b
+                ON A.TRMODCODE = B.TRMODCOD;
+    
+    LT_MTR_MAP_CONFIG = select * from "sap.tm.trp.db.semantic.common::v_mtr_map";
+    
+    ET_MTR_LANE = SELECT DISTINCT 
+                A.MOT_CAT,
+                CASE WHEN B.MOT <> '' THEN B.MOT
+                    ELSE A.MOT
+                END AS MOT,
+                CASE WHEN B.MTR <> '' THEN B.MTR
+                    ELSE A.MTR
+                    END AS MTR,
+                 B.TRP_MTR, DISTFAC, AVGVEL,  TTYPE_PARENT
+                    FROM :LT_MTR_TM A
+                    LEFT JOIN :LT_MTR_MAP_CONFIG b
+                    ON (B.MOT = A.MOT AND B.MTR = A.MTR)
+                    or (B.MOT = A.MOT AND B.MTR = '')
+                    OR (B.MOT = '' AND B.MTR = '');
+                    
+    et_mtr_lane_1 = select A.MOT_CAT, a.mot, a.mtr, B.TRP_MTR, a.DISTFAC, a.AVGVEL, a.TTYPE_PARENT
+    				from :LT_MTR_TM a
+    				inner join :LT_MTR_MAP_CONFIG b
+    				ON (B.MOT = A.MOT AND B.MTR = A.MTR);
+    
+    et_mtr_lane_2 = select a.mot_cat, a.mtr, a.mot, B.TRP_MTR, a.DISTFAC, a.AVGVEL, a.TTYPE_PARENT
+    				from :LT_MTR_TM a
+    				inner join :LT_MTR_MAP_CONFIG b
+    				ON (B.MOT = A.MOT AND B.MTR = '')
+    				where a.mtr not in (select mtr from :et_mtr_lane_1);
+    
+    et_mtr_lane_3 = select A.MOT_CAT, a.mot, a.mtr, B.TRP_MTR, a.DISTFAC, a.AVGVEL, a.TTYPE_PARENT
+    				from :LT_MTR_TM a
+    				inner join :LT_MTR_MAP_CONFIG b
+    				on (B.MOT = '' AND B.MTR = '')
+    				where a.mtr not in (select mtr from :et_mtr_lane_1 union all select mtr from :et_mtr_lane_2);
+    
+    et_mtr_lane = select a.MOT_CAT, a.mot, a.mtr, a.TRP_MTR, a.DISTFAC, a.AVGVEL, a.TTYPE_PARENT
+    			from :et_mtr_lane_1 a
+    			union all 
+    			select A.MOT_CAT, a.mot, a.mtr, a.TRP_MTR, a.DISTFAC, a.AVGVEL, a.TTYPE_PARENT
+    			from :et_mtr_lane_2 a
+    			union all
+    			select A.MOT_CAT, a.mot, a.mtr, a.TRP_MTR, a.DISTFAC, a.AVGVEL, a.TTYPE_PARENT
+    			from :et_mtr_lane_3 a;
+ 
+END;

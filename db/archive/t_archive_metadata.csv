@@ -1,0 +1,16 @@
+ID,TABLE_NAME,TABLE_CODE,PARENT_ID,ULTIMATE_PARENT_ID,LEVEL,DATE_COLUMN_NAME,IS_TM,PARENT_REF_COL,CHILD_REF_COL,PRIMARY_KEY_COL,IS_SELECTABLE
+3,sap.tm.trp.db.pickupreturn::t_location_rule_running_log,t_location_rule_running_log,,,,EXECUTION_START_TIME,0,,,RUN_ID,1
+4,sap.tm.trp.db.pickupreturn::t_location_rule_assign_result,t_location_rule_assignment_result,3,3,1,,0,RUN_ID,RUN_ID,RUN_ID,0
+5,sap.tm.trp.db.pickupreturn::t_location_rule_assign_error,t_location_rule_assignment_error,3,3,1,,0,RUN_ID,RUN_ID,RUN_ID,0
+6,sap.tm.trp.db.pipeline::t_plan_execution,t_plan_execution,,,,EXECUTE_ON,0,,,ID,1
+7,sap.tm.trp.db.pipeline::t_execution_context,t_execution_context,6,6,1,,0,ID,EXECUTION_ID,EXECUTION_ID,0
+8,sap.tm.trp.db.pipeline::t_pipeline_output_dataset,t_pipeline_output_dataset,6,6,1,,0,ID,PLAN_EXECUTION_ID,PLAN_EXECUTION_ID,0
+10,sap.tm.trp.db.hrf.ruleManage::t_rule_dispatch_node_to_sp,t_rule_dispatch_node_to_sp,7,6,2,,0,ID,PLAN_EXECUTION_ID,PLAN_EXECUTION_ID,0
+12,sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_DeltaFlag,t_trp_hrf_SD_output_DeltaFlag,7,6,2,,0,ID,PLAN_EXECUTION_ID,PLAN_EXECUTION_ID,0
+13,sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_normalizedAlertScore,t_trp_hrf_SD_output_normalizedAlertScore,7,6,2,,0,ID,PLAN_EXECUTION_ID,PLAN_EXECUTION_ID,0
+14,sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_forUI,t_trp_hrf_SD_output_forUI,7,6,2,,0,ID,PLAN_EXECUTION_ID,PLAN_EXECUTION_ID,0
+18,sap.tm.trp.db.hrf.kpi::t_trp_hrf_KPI_output_withoutDelta,t_trp_hrf_KPI_output_withoutDelta,7,6,2,,0,ID,PLAN_EXECUTION_ID,PLAN_EXECUTION_ID,0
+19,sap.tm.trp.db.hrf.kpi::t_trp_hrf_KPI_output_normalizedAlertScore,t_trp_hrf_KPI_output_normalizedAlertScore,7,6,2,,0,ID,PLAN_EXECUTION_ID,PLAN_EXECUTION_ID,0
+20,sap.tm.trp.db.hrf.kpi::t_trp_hrf_KPI_output_forUI,t_trp_hrf_KPI_output_forUI,7,6,2,,0,ID,PLAN_EXECUTION_ID,PLAN_EXECUTION_ID,0
+24,sap.tm.trp.db.hrf.planBubble::t_SD_KPI_BubbleRule_output,t_SD_KPI_BubbleRule_output,7,6,2,,0,ID,PLAN_EXECUTION_ID,PLAN_EXECUTION_ID,0
+25,sap.tm.trp.db.hrf.planBubble::t_SD_KPI_cus_BubbleRule_output,t_SD_KPI_cus_BubbleRule_output,7,6,2,,0,ID,PLAN_EXECUTION_ID,PLAN_EXECUTION_ID,0

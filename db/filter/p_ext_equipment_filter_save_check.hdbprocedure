@@ -1,0 +1,75 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_ext_equipment_filter_save_check"(
+    IN FILTER_ID BIGINT,
+    IN VISIBLE_FLAG VARCHAR(3),
+    IN ITEMS "sap.tm.trp.db.pipeline::tt_geo_id",
+    IN FILTER_TYPE INTEGER,
+    OUT MSG VARCHAR(100),
+    OUT CODE_LIST "sap.tm.trp.db.filter::tt_save_check_code_list"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+DECLARE CNT INT;
+DECLARE CODE VARCHAR(20);
+MSG := '';
+
+-- GET CODE
+SELECT IFNULL(MAX(CODE), '') INTO CODE FROM "sap.tm.trp.db.filter::t_equipment_filter"
+WHERE ID = :FILTER_ID;
+
+--(DOWNSIDE CHECK) CHECK ITEMS' VISIBILITY FLAG IF IT'S A GLOBAL FILTER FOR GROUP
+IF :FILTER_TYPE = 2 AND :VISIBLE_FLAG = 'G'
+THEN
+	T_USING_ITEMS = 
+		SELECT
+			CODE
+	        ,T1.VISIBLE_FLAG
+	    FROM :ITEMS T0
+	    INNER JOIN "sap.tm.trp.db.systemmanagement::t_equipment_group" T1 ON T1.ID = T0.ID
+	    WHERE T1.VISIBLE_FLAG = 'P'
+	    ;
+	SELECT COUNT(*) INTO CNT FROM :T_USING_ITEMS;
+	
+    IF :CNT > 0
+    THEN
+        MSG := 'VISIBILITY_CHECK_FAILED_ITEM';
+        CODE_LIST = SELECT CODE FROM :T_USING_ITEMS;
+        RETURN;
+    END IF;
+    
+END IF;
+
+--(UPSIDE CHECK) CHECK THE OBJECTS' VISIBILITY IN THE USED LIST
+IF :FILTER_ID IS NOT NULL AND :VISIBLE_FLAG = 'P'
+THEN
+    T_USED_FILTER_LIST =
+        SELECT CODE, VISIBILITY 
+        FROM "sap.tm.trp.db.whereusedlist::cv_get_used_list"(placeholder."$$IN_CODE$$"=>:CODE,placeholder."$$TYPE$$"=>'RESOURCE_FILTER')
+    	;
+    T_USED_PLAN_LIST =
+        SELECT T1.CODE, T1.VISIBILITY
+        FROM "sap.tm.trp.db.whereusedlist::v_used_plan" T1
+        INNER JOIN :T_USED_FILTER_LIST T2 ON T2.CODE = T1.OBJECT_CODE
+        ;
+    T_USED_LIST =
+    	SELECT CODE, VISIBILITY
+    	FROM (
+	        SELECT CODE, VISIBILITY FROM :T_USED_FILTER_LIST
+	        UNION
+	        SELECT CODE, VISIBILITY FROM :T_USED_PLAN_LIST
+    	)
+    	WHERE VISIBILITY = 'G'
+    	;
+    
+    SELECT COUNT(*) INTO CNT FROM :T_USED_LIST;
+    IF :CNT > 0
+    THEN
+        MSG := 'VISIBILITY_CHECK_FAILED_USED_LIST';
+        CODE_LIST = SELECT CODE FROM :T_USED_LIST;
+        RETURN;
+    END IF;
+END IF;
+
+END;

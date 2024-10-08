@@ -1,0 +1,29 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_streetturn_get_ranking_harmonized" ( 
+	IN iv_RESOURCE_CATEGORY VARCHAR(50),
+	IN iv_tuid VARCHAR(50), -- selected tu id
+	IN iv_rule_id BIGINT, 
+	OUT ot_suggest "SAP_TM_TRP"."sap.tm.trp.db.streetturn::tt_tu_streetturn_suggest", -- output pairs with ranking
+	OUT ov_flag VARCHAR(50)
+   )
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_TRP
+ --  READS SQL DATA
+   AS
+BEGIN
+
+	CALL "SAP_TM_TRP"."sap.tm.trp.db.streetturn::p_streetturn_get_locations" (:iv_rule_id, LT_FROM_LOC, LT_TO_LOC);
+  
+    CALL "sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_get_lanes_wrapper" (:LT_FROM_LOC, :LT_TO_LOC, LANE_LIST, CARRIER_LIST);
+      
+    CALL "sap.tm.trp.db.streetturn::p_streetturn_get_ranking" (
+        :iv_RESOURCE_CATEGORY,
+        :iv_tuid,
+        :iv_rule_id,
+        :LANE_LIST,
+        :CARRIER_LIST,
+        ot_suggest,
+        ov_flag
+    );
+
+END

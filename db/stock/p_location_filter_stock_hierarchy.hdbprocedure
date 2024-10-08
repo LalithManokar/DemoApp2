@@ -1,0 +1,12 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.stock::p_location_filter_stock_hierarchy" ( 
+	IN LOCATION_FILTER_ID VARCHAR(50),
+  	OUT RESULT_OUTPUT "sap.tm.trp.db.stock::tt_location_hierarchy_level") 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN 	 
+ 	call "sap.tm.trp.db.stock::p_location_filter_stock_hierarchy_detail"(LOCATION_FILTER_ID, TEMP_RESULT, TEMP_RESULT_RELATION);
+ 	RESULT_OUTPUT = SELECT DISTINCT LEVEL FROM :TEMP_RESULT;
+ 	
+END;

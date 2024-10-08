@@ -1,0 +1,72 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_create_ruleGroup" (
+    IN ALERT_GROUP_NAME VARCHAR(50),
+    IN ALERT_GROUP_DESC VARCHAR(200),
+    IN ALERT_RULE_GROUP_CATEGORY_ID INTEGER,
+    IN ALLOWED_USAGED_ID VARCHAR(10),
+    OUT OUT_ALERT_RULE_GROUP_ID BIGINT
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+    DECLARE ALERT_RULE_GROUP_ID BIGINT;
+    DECLARE USER_ID BIGINT;
+    DECLARE CREAT_TIME TIMESTAMP;
+    DECLARE TRP_LOCALE NVARCHAR(5000);    
+    DECLARE REGISTER_RULE_GROUP INTEGER;  
+
+    
+    SELECT "sap.tm.trp.db.alert.alert_rule_group::s_alert_rule_group".NEXTVAL INTO ALERT_RULE_GROUP_ID FROM DUMMY;
+    
+    SELECT T1.ID INTO USER_ID
+    FROM "sap.tm.trp.db.systemmanagement.user::t_user" T1
+    INNER JOIN (SELECT USERNAME AS USER FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username") T2
+    ON T1.USERNAME = T2.USER;
+    
+    SELECT IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E') INTO TRP_LOCALE FROM DUMMY;
+
+    INSERT INTO "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group" 
+    (
+     ALERT_RULE_GROUP_ID,
+     NAME,
+     DESC,
+     ALERT_RULE_GROUP_CATEGORY_ID,
+     ALLOWED_USAGE,
+     CREATE_BY,
+     CREATE_ON,
+     CODE
+    )
+    VALUES(:ALERT_RULE_GROUP_ID,
+           :ALERT_GROUP_NAME,
+           :ALERT_GROUP_DESC,
+           :ALERT_RULE_GROUP_CATEGORY_ID,
+           :ALLOWED_USAGED_ID,
+           :USER_ID,
+            CURRENT_UTCTIMESTAMP,
+           :ALERT_GROUP_NAME);
+           
+    INSERT INTO "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_t" (
+        ID,
+        SPRAS,
+        DESC
+    )
+    VALUES (
+        :ALERT_RULE_GROUP_ID,
+        :TRP_LOCALE,
+        :ALERT_GROUP_DESC
+    );
+    
+    OUT_ALERT_RULE_GROUP_ID := :ALERT_RULE_GROUP_ID;
+
+    
+    PIPELINE_MODEL_IDS = SELECT DISTINCT T1.ID 
+                         FROM "sap.tm.trp.db.pipeline::t_pipeline_model" T1
+                         where T1.PIPELINE_MODEL_TYPE_ID = :ALERT_RULE_GROUP_CATEGORY_ID;
+            
+
+    CALL "sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_register_pipeline_model_available_newAlertRuleGroup"(:ALERT_RULE_GROUP_ID,:PIPELINE_MODEL_IDS,REGISTER_RULE_GROUP);
+
+    
+END;
+

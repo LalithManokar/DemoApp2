@@ -1,0 +1,31 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert.alert_rule_group::p_unregister_pipeline_model_available_alertRuleGroup" (
+IN ALERT_RULE_GROUP_ID BIGINT,
+IN PIPELINE_MODEL_ID BIGINT,
+OUT SUCCESS_FLAG INTEGER  
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+DECLARE MAPPING_EXISTING INTEGER;
+
+    select count(*) into MAPPING_EXISTING
+    from "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_map_pipeline_model_metaData" T1
+    where T1.PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID and 
+          T1.ALERT_RULE_GROUP_ID = :ALERT_RULE_GROUP_ID;
+    
+    IF ( :MAPPING_EXISTING > 0 )
+    THEN
+        delete from "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_map_pipeline_model_metaData" T1
+        where T1.PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID and 
+              T1.ALERT_RULE_GROUP_ID = :ALERT_RULE_GROUP_ID;
+              
+        select count(*) into SUCCESS_FLAG
+        from "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_map_pipeline_model_metaData" T1
+        where T1.PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID and 
+              T1.ALERT_RULE_GROUP_ID = :ALERT_RULE_GROUP_ID;
+    ELSE
+        SUCCESS_FLAG := 1;
+    END IF;
+END;

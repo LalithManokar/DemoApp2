@@ -1,0 +1,15 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "EXECUTION_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "TABLE_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "EXECUTION_TYPE"; sqlType = BIGINT; nullable = false; },
+    {name = "STATUS"; sqlType = TINYINT; nullable = false; },
+    {name = "RECORD_COUNT"; sqlType = BIGINT; nullable = false;},
+    {name = "MESSAGE"; sqlType = NVARCHAR; length = 1000; nullable = true; },
+    {name = "ERROR_CODE"; sqlType = NVARCHAR; length = 250; nullable = true; },
+    {name = "START_TIME"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "END_TIME"; sqlType = TIMESTAMP; nullable = true;}
+];
+table.primaryKey.pkcolumns = ["ID"]; 

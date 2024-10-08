@@ -1,0 +1,18 @@
+schema="SAP_TM_TRP";
+query="SELECT A.ID,
+              A.DESC AS NAME,
+              B.DESC AS DESC,
+              C.USERNAME AS CREATED_BY,
+              D.USERNAME AS LAST_CHANGED_BY,
+              A.RESOURCE_CATEGORY AS RESOURCE_CATEGORY
+       FROM \"sap.tm.trp.db.systemmanagement::t_equipment_group\" AS A 
+       LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement::t_equipment_group_t\" AS B
+       ON (A.ID = B.ID)                       
+       LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS C
+       ON (A.CREATE_BY = C.ID)
+       LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS D
+       ON (A.LAST_MODIFIED_BY = D.ID)";
+             
+depends_on_table = ["sap.tm.trp.db.systemmanagement::t_equipment_group",
+                    "sap.tm.trp.db.systemmanagement::t_equipment_group_t"];
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

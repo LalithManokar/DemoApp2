@@ -1,0 +1,10 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "RULE_NAME"; sqlType = NVARCHAR; length = 100; nullable = false; },
+    {name = "SCH_OPTION"; sqlType = TINYINT; nullable = false; },    
+    {name = "NUM_DAYS"; sqlType = BIGINT; nullable = true;},
+    {name = "NUM_EXEC"; sqlType = BIGINT; nullable = true;}
+    ];
+table.primaryKey.pkcolumns = ["ID","RULE_NAME"];   

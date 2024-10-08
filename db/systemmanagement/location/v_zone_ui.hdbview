@@ -1,0 +1,17 @@
+schema = "SAP_TM_TRP";
+query = "SELECT DISTINCT T1.ID AS ID,
+                T1.NAME AS NAME,
+                T1.DESC AS DESC,
+                T1.CREATED_BY,
+                T1.CREATED_TIME,
+                T1.MODIFIED_BY,
+                T1.MODIFIED_TIME,
+                T2.XPOS AS LOCATION_XPOS,
+                T2.YPOS AS LOCATION_YPOS,
+                T2.XPOS AS XPOS,
+                T2.YPOS AS YPOS
+           FROM \"sap.tm.trp.db.semantic.location::v_zone\" AS T1
+           LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.location::v_zone_coordinate\" AS T2
+                ON T1.ID = T2.ZONE_ID";
+                
+depends_on_view = ["sap.tm.trp.db.semantic.location::v_zone", "sap.tm.trp.db.systemmanagement.location::v_zone_coordinate"];

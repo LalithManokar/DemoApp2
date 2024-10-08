@@ -1,0 +1,493 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_booking" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_bookings"/>
+  <defaultSchema schemaName=""/>
+  <localVariables>
+    <variable id="EQUIPMENT_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="EQUIPMENT_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="LOCATION_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="LOCATION_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="FILTER_ON" parameter="true">
+      <descriptions defaultDescription="FILTER_ON"/>
+      <variableProperties datatype="TINYINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="FROM_DATE" parameter="true">
+      <descriptions defaultDescription="FROM_DATE"/>
+      <variableProperties datatype="TIMESTAMP" mandatory="true">
+        <valueDomain type="Date"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="TO_DATE" parameter="true">
+      <descriptions defaultDescription="TO_DATE"/>
+      <variableProperties datatype="TIMESTAMP" mandatory="true">
+        <valueDomain type="Date"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="BOOKING_TYPE" parameter="true">
+      <descriptions defaultDescription="BOOKING_TYPE"/>
+      <variableProperties datatype="NVARCHAR" length="2" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="LOCATION" parameter="true">
+      <descriptions defaultDescription="LOCATION"/>
+      <variableProperties datatype="NVARCHAR" length="20" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="EQUIPMENT_TYPE" parameter="true">
+      <descriptions defaultDescription="EQUIPMENT_TYPE"/>
+      <variableProperties datatype="VARCHAR" defaultValue="''" length="10" mandatory="false">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="DATA_PROVIDER_TYPE" parameter="true">
+      <descriptions defaultDescription="DATA_PROVIDER_TYPE"/>
+      <variableProperties datatype="NVARCHAR" length="2" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="NAV_TYPE" parameter="true">
+      <descriptions defaultDescription="navigation type"/>
+      <variableProperties datatype="VARCHAR" length="500" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="ORDER_ID" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="TU_TYPE_CODE" length="10"/>
+        <viewAttribute datatype="NVARCHAR" id="TU_TYPE" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="CUSTOMER_NAME" length="40"/>
+        <viewAttribute datatype="NVARCHAR" id="RESOURCE_TYPE" length="10"/>
+        <viewAttribute datatype="TIMESTAMP" id="PLANNED_DEPARTURE_TIME"/>
+        <viewAttribute datatype="NVARCHAR" id="SOURCE_LOCATION" length="20"/>
+        <viewAttribute datatype="TIMESTAMP" id="PLANNED_ARRIVAL_TIME"/>
+        <viewAttribute datatype="NVARCHAR" id="DESTINATION_LOCATION" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="SHIPPER" length="40"/>
+        <viewAttribute datatype="NVARCHAR" id="CONSIGNEE" length="40"/>
+        <viewAttribute datatype="DATE" id="BOOKING_DATE"/>
+        <viewAttribute datatype="NVARCHAR" id="PORT_OF_LOADING" length="30"/>
+        <viewAttribute datatype="NVARCHAR" id="PORT_OF_DISCHARGE" length="30"/>
+        <viewAttribute datatype="TIMESTAMP" id="VESSEL_CUTOFF_UTC"/>
+        <viewAttribute datatype="VARCHAR" id="VESSEL_POL" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="VESSEL_POD" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="VOYAGE_POL" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="VOYAGE_POD" length="100"/>
+        <viewAttribute datatype="INTEGER" id="HAULAGE_TYPE"/>
+        <viewAttribute datatype="VARCHAR" id="BOOKING_REFERENCE" length="35"/>
+        <viewAttribute datatype="VARCHAR" id="EXECUTION_STATUS_CODE" length="2"/>
+        <viewAttribute datatype="NVARCHAR" id="EXECUTION_STATUS" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="LIFECYCLE_STATUS_CODE" length="2"/>
+        <viewAttribute datatype="NVARCHAR" id="LIFECYCLE_STATUS" length="60"/>
+        <viewAttribute datatype="INTEGER" id="QUANTITY"/>
+        <viewAttribute datatype="INTEGER" id="ASSIGN_QUANTITY"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_NUMBER" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="LEASE_AGREEMENT" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="LEASE_TYPE_CODE" length="1"/>
+        <viewAttribute datatype="NVARCHAR" id="LEASE_TYPE" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="SPECIAL_INSTRUCTION_CODE" length="3"/>
+        <viewAttribute datatype="VARCHAR" id="SPECIAL_INSTRUCTION_NAME" length="30"/>
+        <viewAttribute datatype="VARCHAR" id="MOT" length="2"/>
+        <viewAttribute datatype="VARCHAR" id="MEANS_OF_TRANSPORTATION" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="CARRIER_POL" length="40"/>
+        <viewAttribute datatype="VARCHAR" id="CARRIER_POD" length="40"/>
+        <viewAttribute datatype="VARCHAR" id="PICKUP_LOCATION_NAME" length="20"/>
+        <viewAttribute datatype="DATE" id="PICKUP_DATE"/>
+        <viewAttribute datatype="VARCHAR" id="RETURN_LOCATION_NAME" length="20"/>
+        <viewAttribute datatype="DATE" id="RETURN_DATE"/>
+        <viewAttribute datatype="TIMESTAMP" id="VESSEL_ARRIVAL_DATE"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_LAST_LOCATION" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_NAME" length="40"/>
+        <viewAttribute datatype="VARCHAR" id="ITE_KEY" length="32"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#EQUIPMENT_FILTER_ID</localVariable>
+      <localVariable>#LOCATION_FILTER_ID</localVariable>
+      <localVariable>#FILTER_ON</localVariable>
+      <localVariable>#FROM_DATE</localVariable>
+      <localVariable>#TO_DATE</localVariable>
+      <localVariable>#BOOKING_TYPE</localVariable>
+      <localVariable>#LOCATION</localVariable>
+      <localVariable>#EQUIPMENT_TYPE</localVariable>
+      <localVariable>#DATA_PROVIDER_TYPE</localVariable>
+      <localVariable>#NAV_TYPE</localVariable>
+      <definition>BEGIN &#xD;
+  DECLARE LOC_AUTH SMALLINT;&#xD;
+  DECLARE EQUIP_AUTH SMALLINT;&#xD;
+  DECLARE GEO_FLAG INT;&#xD;
+  DECLARE EQUIP_FLAG INT;&#xD;
+  DECLARE END_DECIMAL INTEGER;&#xD;
+  DECLARE RES_CAT NVARCHAR(20); -- CURRENT RESOURCE CATEGORY ACCORDING TO EQUIP FILTER &#xD;
+  DECLARE RES_CAT_TYPE NVARCHAR(10);&#xD;
+  DECLARE ITEM_CAT NVARCHAR(50); -- TU ITEM CATEGORY&#xD;
+  DECLARE MOT_CAT NVARCHAR(50) := -1; -- TU TRANSPORTATION MODE CATEGORY  &#xD;
+  DECLARE CUSTOMCONDITION CONDITION FOR SQL_ERROR_CODE 10001;/* Custom Error Code = 10001*/&#xD;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION&#xD;
+  SELECT ::SQL_ERROR_CODE, ::SQL_ERROR_MESSAGE FROM DUMMY;&#xD;
+  DECLARE EXIT HANDLER FOR CUSTOMCONDITION RESIGNAL ;&#xD;
+&#xD;
+  /*User Defined exception handler */&#xD;
+  LOCATION_FILTER=SELECT :LOCATION_FILTER_ID AS ID FROM DUMMY;&#xD;
+       &#xD;
+  CALL &quot;sap.tm.trp.db.systemmanagement::p_check_location_filter_authorization&quot;(:LOCATION_FILTER, :LOC_AUTH );&#xD;
+&#xD;
+  EQUIPMENT_FILTER=SELECT :EQUIPMENT_FILTER_ID AS ID FROM DUMMY;&#xD;
+      &#xD;
+  CALL &quot;sap.tm.trp.db.systemmanagement::p_check_equipment_filter_authorization&quot;(:EQUIPMENT_FILTER,:EQUIP_AUTH);&#xD;
+    &#xD;
+         &#xD;
+  /*Location authorization */ &#xD;
+  IF LOC_AUTH = 0 THEN&#xD;
+    /* Signaling Custom error and setting the Custom Error Message */&#xD;
+    SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'LOCATION FILTER NOT AUTHORIZED';&#xD;
+  END IF;&#xD;
+  &#xD;
+  /*Equipment authorization */             &#xD;
+  IF :EQUIP_AUTH = 0 THEN&#xD;
+    /* Signaling Custom error and setting the Custom Error Message */&#xD;
+    SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'EQUIPMENT FILTER NOT AUTHORIZED';&#xD;
+  END IF;&#xD;
+&#xD;
+  -- use system date offset on the time range&#xD;
+  IF :FROM_DATE &lt;> '' AND :TO_DATE &lt;> '' THEN &#xD;
+    SELECT ADD_DAYS(:FROM_DATE,IFNULL(MAX(DATE_OFFSET),0)), ADD_DAYS(:TO_DATE,IFNULL(MAX(DATE_OFFSET),0))&#xD;
+    INTO FROM_DATE, TO_DATE&#xD;
+    FROM &quot;sap.tm.trp.db.stock::t_start_time_for_user&quot;&#xD;
+    WHERE USER = (SELECT USERNAME FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;);             &#xD;
+  END IF;  &#xD;
+  &#xD;
+  IF :nav_type is null or :nav_type = '' then&#xD;
+   &#xD;
+    ep_result = SELECT  * FROM &quot;sap.tm.trp.db.booking::cv_booking_ep&quot;           &#xD;
+                              (PLACEHOLDER.&quot;$$EQUIPMENT_FILTER_ID$$&quot; => :EQUIPMENT_FILTER_ID, &#xD;
+                               PLACEHOLDER.&quot;$$LOCATION_FILTER_ID$$&quot; => :LOCATION_FILTER_ID,&#xD;
+                               PLACEHOLDER.&quot;$$FILTER_ON$$&quot; => :FILTER_ON,&#xD;
+                               PLACEHOLDER.&quot;$$FROM_DATE$$&quot; => :FROM_DATE,&#xD;
+                               PLACEHOLDER.&quot;$$TO_DATE$$&quot; => :TO_DATE,&#xD;
+                               PLACEHOLDER.&quot;$$BOOKING_TYPE$$&quot; => :BOOKING_TYPE,&#xD;
+                               PLACEHOLDER.&quot;$$LOCATION$$&quot; => :LOCATION,&#xD;
+                               PLACEHOLDER.&quot;$$EQUIPMENT_TYPE$$&quot; => :EQUIPMENT_TYPE,&#xD;
+                               PLACEHOLDER.&quot;$$DATA_PROVIDER_TYPE$$&quot; => :DATA_PROVIDER_TYPE, &#xD;
+                               PLACEHOLDER.&quot;$$NAV_TYPE$$&quot; => :NAV_TYPE&#xD;
+                               );&#xD;
+                               &#xD;
+	er_result = SELECT  * FROM &quot;sap.tm.trp.db.booking::cv_booking_er&quot;           &#xD;
+                              (PLACEHOLDER.&quot;$$EQUIPMENT_FILTER_ID$$&quot; => :EQUIPMENT_FILTER_ID, &#xD;
+                               PLACEHOLDER.&quot;$$LOCATION_FILTER_ID$$&quot; => :LOCATION_FILTER_ID,&#xD;
+                               PLACEHOLDER.&quot;$$FILTER_ON$$&quot; => :FILTER_ON,&#xD;
+                               PLACEHOLDER.&quot;$$FROM_DATE$$&quot; => :FROM_DATE,&#xD;
+                               PLACEHOLDER.&quot;$$TO_DATE$$&quot; => :TO_DATE,&#xD;
+                               PLACEHOLDER.&quot;$$BOOKING_TYPE$$&quot; => :BOOKING_TYPE,&#xD;
+                               PLACEHOLDER.&quot;$$LOCATION$$&quot; => :LOCATION,&#xD;
+                               PLACEHOLDER.&quot;$$EQUIPMENT_TYPE$$&quot; => :EQUIPMENT_TYPE,&#xD;
+                               PLACEHOLDER.&quot;$$DATA_PROVIDER_TYPE$$&quot; => :DATA_PROVIDER_TYPE, &#xD;
+                               PLACEHOLDER.&quot;$$NAV_TYPE$$&quot; => :NAV_TYPE&#xD;
+                               );&#xD;
+                               &#xD;
+	rp_result = SELECT  * FROM &quot;sap.tm.trp.db.booking::cv_booking_rp&quot;           &#xD;
+                              (PLACEHOLDER.&quot;$$EQUIPMENT_FILTER_ID$$&quot; => :EQUIPMENT_FILTER_ID, &#xD;
+                               PLACEHOLDER.&quot;$$LOCATION_FILTER_ID$$&quot; => :LOCATION_FILTER_ID,&#xD;
+                               PLACEHOLDER.&quot;$$FILTER_ON$$&quot; => :FILTER_ON,&#xD;
+                               PLACEHOLDER.&quot;$$FROM_DATE$$&quot; => :FROM_DATE,&#xD;
+                               PLACEHOLDER.&quot;$$TO_DATE$$&quot; => :TO_DATE,&#xD;
+                               PLACEHOLDER.&quot;$$BOOKING_TYPE$$&quot; => :BOOKING_TYPE,&#xD;
+                               PLACEHOLDER.&quot;$$LOCATION$$&quot; => :LOCATION,&#xD;
+                               PLACEHOLDER.&quot;$$EQUIPMENT_TYPE$$&quot; => :EQUIPMENT_TYPE,&#xD;
+                               PLACEHOLDER.&quot;$$DATA_PROVIDER_TYPE$$&quot; => :DATA_PROVIDER_TYPE, &#xD;
+                               PLACEHOLDER.&quot;$$NAV_TYPE$$&quot; => :NAV_TYPE&#xD;
+                               );   &#xD;
+                               &#xD;
+			VAR_OUT = select * from :ep_result&#xD;
+						union all                                                                                          &#xD;
+					  select * from :er_result&#xD;
+					  	union all&#xD;
+					  select * from :rp_result; &#xD;
+&#xD;
+  elseif :nav_type = 'MRIN' or :nav_type = 'MROUT' or :nav_type = 'OMERIN' or :nav_type = 'OMEROUT'&#xD;
+  or :nav_type = 'IERIN' or :nav_type = 'OIERIN' or :nav_type = 'IERO' or :nav_type = 'OIEROUT' then&#xD;
+   &#xD;
+   		 VAR_OUT =   SELECT DISTINCT * FROM &quot;sap.tm.trp.db.booking::cv_booking_rp&quot;&#xD;
+                              (PLACEHOLDER.&quot;$$EQUIPMENT_FILTER_ID$$&quot; => :EQUIPMENT_FILTER_ID, &#xD;
+                               PLACEHOLDER.&quot;$$LOCATION_FILTER_ID$$&quot; => :LOCATION_FILTER_ID,&#xD;
+                               PLACEHOLDER.&quot;$$FILTER_ON$$&quot; => :FILTER_ON,&#xD;
+                               PLACEHOLDER.&quot;$$FROM_DATE$$&quot; => :FROM_DATE,&#xD;
+                               PLACEHOLDER.&quot;$$TO_DATE$$&quot; => :TO_DATE,&#xD;
+                               PLACEHOLDER.&quot;$$BOOKING_TYPE$$&quot; => :BOOKING_TYPE,&#xD;
+                               PLACEHOLDER.&quot;$$LOCATION$$&quot; => :LOCATION,&#xD;
+                               PLACEHOLDER.&quot;$$EQUIPMENT_TYPE$$&quot; => :EQUIPMENT_TYPE,&#xD;
+                               PLACEHOLDER.&quot;$$DATA_PROVIDER_TYPE$$&quot; => :DATA_PROVIDER_TYPE, &#xD;
+                               PLACEHOLDER.&quot;$$NAV_TYPE$$&quot; => :NAV_TYPE&#xD;
+                               ) ;&#xD;
+		&#xD;
+	&#xD;
+    elseif :nav_type =	'OEP' or :nav_type = 'EP' THEN&#xD;
+            &#xD;
+            var_out = SELECT  * FROM &quot;sap.tm.trp.db.booking::cv_booking_ep&quot;           &#xD;
+                              (PLACEHOLDER.&quot;$$EQUIPMENT_FILTER_ID$$&quot; => :EQUIPMENT_FILTER_ID, &#xD;
+                               PLACEHOLDER.&quot;$$LOCATION_FILTER_ID$$&quot; => :LOCATION_FILTER_ID,&#xD;
+                               PLACEHOLDER.&quot;$$FILTER_ON$$&quot; => :FILTER_ON,&#xD;
+                               PLACEHOLDER.&quot;$$FROM_DATE$$&quot; => :FROM_DATE,&#xD;
+                               PLACEHOLDER.&quot;$$TO_DATE$$&quot; => :TO_DATE,&#xD;
+                               PLACEHOLDER.&quot;$$BOOKING_TYPE$$&quot; => :BOOKING_TYPE,&#xD;
+                               PLACEHOLDER.&quot;$$LOCATION$$&quot; => :LOCATION,&#xD;
+                               PLACEHOLDER.&quot;$$EQUIPMENT_TYPE$$&quot; => :EQUIPMENT_TYPE,&#xD;
+                               PLACEHOLDER.&quot;$$DATA_PROVIDER_TYPE$$&quot; => :DATA_PROVIDER_TYPE, &#xD;
+                               PLACEHOLDER.&quot;$$NAV_TYPE$$&quot; => :NAV_TYPE&#xD;
+                               );&#xD;
+               &#xD;
+                                   &#xD;
+	  elseif :nav_type = 'OER' or :nav_type = 'ER' THEN&#xD;
+                &#xD;
+                var_out =   SELECT DISTINCT * FROM &quot;sap.tm.trp.db.booking::cv_booking_er&quot;&#xD;
+                              (PLACEHOLDER.&quot;$$EQUIPMENT_FILTER_ID$$&quot; => :EQUIPMENT_FILTER_ID, &#xD;
+                               PLACEHOLDER.&quot;$$LOCATION_FILTER_ID$$&quot; => :LOCATION_FILTER_ID,&#xD;
+                               PLACEHOLDER.&quot;$$FILTER_ON$$&quot; => :FILTER_ON,&#xD;
+                               PLACEHOLDER.&quot;$$FROM_DATE$$&quot; => :FROM_DATE,&#xD;
+                               PLACEHOLDER.&quot;$$TO_DATE$$&quot; => :TO_DATE,&#xD;
+                               PLACEHOLDER.&quot;$$BOOKING_TYPE$$&quot; => :BOOKING_TYPE,&#xD;
+                               PLACEHOLDER.&quot;$$LOCATION$$&quot; => :LOCATION,&#xD;
+                               PLACEHOLDER.&quot;$$EQUIPMENT_TYPE$$&quot; => :EQUIPMENT_TYPE,&#xD;
+                               PLACEHOLDER.&quot;$$DATA_PROVIDER_TYPE$$&quot; => :DATA_PROVIDER_TYPE, &#xD;
+                               PLACEHOLDER.&quot;$$NAV_TYPE$$&quot; => :NAV_TYPE&#xD;
+                               );                                                         &#xD;
+&#xD;
+                               &#xD;
+end if;	&#xD;
+  &#xD;
+   &#xD;
+END</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ORDER_ID" order="1">
+        <descriptions defaultDescription="ORDER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ORDER_ID"/>
+      </attribute>
+      <attribute id="TU_TYPE_CODE" order="2">
+        <descriptions defaultDescription="TU_TYPE_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="TU_TYPE_CODE"/>
+      </attribute>
+      <attribute id="TU_TYPE" order="3">
+        <descriptions defaultDescription="TU_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="TU_TYPE"/>
+      </attribute>
+      <attribute id="CUSTOMER_NAME" order="4">
+        <descriptions defaultDescription="CUSTOMER_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="CUSTOMER_NAME"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE" order="5">
+        <descriptions defaultDescription="RESOURCE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE"/>
+      </attribute>
+      <attribute id="PLANNED_DEPARTURE_TIME" order="6">
+        <descriptions defaultDescription="PLANNED_DEPARTURE_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLANNED_DEPARTURE_TIME"/>
+      </attribute>
+      <attribute id="SOURCE_LOCATION" order="7">
+        <descriptions defaultDescription="SOURCE_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="SOURCE_LOCATION"/>
+      </attribute>
+      <attribute id="PLANNED_ARRIVAL_TIME" order="8">
+        <descriptions defaultDescription="PLANNED_ARRIVAL_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLANNED_ARRIVAL_TIME"/>
+      </attribute>
+      <attribute id="DESTINATION_LOCATION" order="9">
+        <descriptions defaultDescription="DESTINATION_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESTINATION_LOCATION"/>
+      </attribute>
+      <attribute id="SHIPPER" order="10">
+        <descriptions defaultDescription="SHIPPER"/>
+        <keyMapping columnObjectName="Script_View" columnName="SHIPPER"/>
+      </attribute>
+      <attribute id="CONSIGNEE" order="11">
+        <descriptions defaultDescription="CONSIGNEE"/>
+        <keyMapping columnObjectName="Script_View" columnName="CONSIGNEE"/>
+      </attribute>
+      <attribute id="BOOKING_DATE" order="12">
+        <descriptions defaultDescription="BOOKING_DATE"/>
+        <keyMapping columnObjectName="Script_View" columnName="BOOKING_DATE"/>
+      </attribute>
+      <attribute id="PORT_OF_LOADING" order="13">
+        <descriptions defaultDescription="PORT_OF_LOADING"/>
+        <keyMapping columnObjectName="Script_View" columnName="PORT_OF_LOADING"/>
+      </attribute>
+      <attribute id="PORT_OF_DISCHARGE" order="14">
+        <descriptions defaultDescription="PORT_OF_DISCHARGE"/>
+        <keyMapping columnObjectName="Script_View" columnName="PORT_OF_DISCHARGE"/>
+      </attribute>
+      <attribute id="VESSEL_CUTOFF_UTC" order="15">
+        <descriptions defaultDescription="VESSEL_CUTOFF_UTC"/>
+        <keyMapping columnObjectName="Script_View" columnName="VESSEL_CUTOFF_UTC"/>
+      </attribute>
+      <attribute id="VESSEL_POL" order="16">
+        <descriptions defaultDescription="VESSEL_POL"/>
+        <keyMapping columnObjectName="Script_View" columnName="VESSEL_POL"/>
+      </attribute>
+      <attribute id="VESSEL_POD" order="17">
+        <descriptions defaultDescription="VESSEL_POD"/>
+        <keyMapping columnObjectName="Script_View" columnName="VESSEL_POD"/>
+      </attribute>
+      <attribute id="VOYAGE_POL" order="18">
+        <descriptions defaultDescription="VOYAGE_POL"/>
+        <keyMapping columnObjectName="Script_View" columnName="VOYAGE_POL"/>
+      </attribute>
+      <attribute id="VOYAGE_POD" order="19">
+        <descriptions defaultDescription="VOYAGE_POD"/>
+        <keyMapping columnObjectName="Script_View" columnName="VOYAGE_POD"/>
+      </attribute>
+      <attribute id="HAULAGE_TYPE" order="20">
+        <descriptions defaultDescription="HAULAGE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="HAULAGE_TYPE"/>
+      </attribute>
+      <attribute id="BOOKING_REFERENCE" order="21">
+        <descriptions defaultDescription="BOOKING_REFERENCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="BOOKING_REFERENCE"/>
+      </attribute>
+      <attribute id="EXECUTION_STATUS_CODE" order="22">
+        <descriptions defaultDescription="EXECUTION_STATUS_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EXECUTION_STATUS_CODE"/>
+      </attribute>
+      <attribute id="EXECUTION_STATUS" order="23">
+        <descriptions defaultDescription="EXECUTION_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="EXECUTION_STATUS"/>
+      </attribute>
+      <attribute id="LIFECYCLE_STATUS_CODE" order="24">
+        <descriptions defaultDescription="LIFECYCLE_STATUS_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LIFECYCLE_STATUS_CODE"/>
+      </attribute>
+      <attribute id="LIFECYCLE_STATUS" order="25">
+        <descriptions defaultDescription="LIFECYCLE_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="LIFECYCLE_STATUS"/>
+      </attribute>
+      <attribute id="RESOURCE_NUMBER" order="28">
+        <descriptions defaultDescription="RESOURCE_NUMBER"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_NUMBER"/>
+      </attribute>
+      <attribute id="LEASE_AGREEMENT" order="29">
+        <descriptions defaultDescription="LEASE_AGREEMENT"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASE_AGREEMENT"/>
+      </attribute>
+      <attribute id="LEASE_TYPE_CODE" order="30">
+        <descriptions defaultDescription="LEASE_TYPE_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASE_TYPE_CODE"/>
+      </attribute>
+      <attribute id="LEASE_TYPE" order="31">
+        <descriptions defaultDescription="LEASE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASE_TYPE"/>
+      </attribute>
+      <attribute id="SPECIAL_INSTRUCTION_CODE" order="32">
+        <descriptions defaultDescription="SPECIAL_INSTRUCTION_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SPECIAL_INSTRUCTION_CODE"/>
+      </attribute>
+      <attribute id="SPECIAL_INSTRUCTION_NAME" order="33">
+        <descriptions defaultDescription="SPECIAL_INSTRUCTION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="SPECIAL_INSTRUCTION_NAME"/>
+      </attribute>
+      <attribute id="MOT" order="34">
+        <descriptions defaultDescription="MOT"/>
+        <keyMapping columnObjectName="Script_View" columnName="MOT"/>
+      </attribute>
+      <attribute id="MEANS_OF_TRANSPORTATION" order="35">
+        <descriptions defaultDescription="MEANS_OF_TRANSPORTATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="MEANS_OF_TRANSPORTATION"/>
+      </attribute>
+      <attribute id="CARRIER_POL" order="36">
+        <descriptions defaultDescription="CARRIER"/>
+        <keyMapping columnObjectName="Script_View" columnName="CARRIER_POL"/>
+      </attribute>
+      <attribute id="CARRIER_POD" order="37">
+        <descriptions defaultDescription="CARRIER_POD"/>
+        <keyMapping columnObjectName="Script_View" columnName="CARRIER_POD"/>
+      </attribute>
+      <attribute id="PICKUP_LOCATION_NAME" order="38">
+        <descriptions defaultDescription="PICKUP_LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="PICKUP_LOCATION_NAME"/>
+      </attribute>
+      <attribute id="RETURN_LOCATION_NAME" order="40">
+        <descriptions defaultDescription="RETURN_LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="RETURN_LOCATION_NAME"/>
+      </attribute>
+      <attribute id="RESOURCE_LAST_LOCATION" order="43">
+        <descriptions defaultDescription="RESOURCE_LAST_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_LAST_LOCATION"/>
+      </attribute>
+      <attribute id="RESOURCE_NAME" order="44">
+        <descriptions defaultDescription="RESOURCE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_NAME"/>
+      </attribute>
+      <attribute id="ITE_KEY" order="45">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="ITE_KEY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="QUANTITY" order="26" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="QUANTITY"/>
+      </measure>
+      <measure id="ASSIGN_QUANTITY" order="27" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ASSIGN_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="ASSIGN_QUANTITY"/>
+      </measure>
+      <measure id="PICKUP_DATE" order="39" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="PICKUP_DATE"/>
+        <measureMapping columnObjectName="Script_View" columnName="PICKUP_DATE"/>
+      </measure>
+      <measure id="RETURN_DATE" order="41" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="RETURN_DATE"/>
+        <measureMapping columnObjectName="Script_View" columnName="RETURN_DATE"/>
+      </measure>
+      <measure id="VESSEL_ARRIVAL_DATE" order="42" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="VESSEL_ARRIVAL_DATE"/>
+        <measureMapping columnObjectName="Script_View" columnName="VESSEL_ARRIVAL_DATE"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

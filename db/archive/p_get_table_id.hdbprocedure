@@ -1,0 +1,17 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::p_get_table_id" (
+    	 IN RULE_ID BIGINT,
+         OUT TABLE_ID BIGINT
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_TRP"
+   AS
+BEGIN
+ 
+    SELECT A.TABLE_ID
+    INTO TABLE_ID
+    FROM "sap.tm.trp.db.archive::t_archive_rule" A
+    WHERE A.ID = :RULE_ID;
+    
+
+END

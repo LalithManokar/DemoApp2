@@ -1,0 +1,18 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "RULE_NAME"; sqlType = NVARCHAR; length = 100; nullable = false; },
+    {name = "DESCRIPTION"; sqlType = NVARCHAR; length = 500; nullable = true; },    
+    {name = "TABLE_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "DATE_FROM"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "DATE_TO"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "CREATED_BY"; sqlType = BIGINT; nullable = true;},
+    {name = "CREATED_ON"; sqlType = TIMESTAMP; nullable = true;},    
+    {name = "MODIFIED_BY"; sqlType = BIGINT; nullable = true;},
+    {name = "MODIFIED_ON"; sqlType = TIMESTAMP; nullable = true; },    
+    {name = "TYPE"; sqlType = TINYINT; nullable = false; },
+    {name = "UNARCHIVE_TYPE"; sqlType = TINYINT; nullable = false; },
+	{name = "ACTIVE"; sqlType = TINYINT; nullable = false; defaultValue = "1";}
+];
+table.primaryKey.pkcolumns = ["ID","RULE_NAME"]; 

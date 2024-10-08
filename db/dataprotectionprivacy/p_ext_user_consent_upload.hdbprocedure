@@ -1,0 +1,47 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.dataprotectionprivacy::p_ext_user_consent_upload"(
+    IN USER_CONSENT "sap.tm.trp.db.dataprotectionprivacy::tt_user_consent"
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE UTC_TIME TIMESTAMP := CURRENT_UTCTIMESTAMP;
+    
+    CONSENT_VERSION = SELECT DISTINCT T1.USERNAME,T1.VERSION
+                      FROM "sap.tm.trp.db.dataprotectionprivacy::t_user_consent" T1
+                      INNER JOIN :USER_CONSENT T2 ON (T1.USERNAME = T2.USERNAME);
+    CONSENT_VERSION_HISTORY = SELECT DISTINCT T1.USERNAME,MAX(T1.VERSION) AS VERSION
+                      FROM "sap.tm.trp.db.dataprotectionprivacy::t_user_consent_history" T1
+                      INNER JOIN :USER_CONSENT T2 ON (T1.USERNAME = T2.USERNAME)
+                      GROUP BY T1.USERNAME;
+    
+    UPSERT "sap.tm.trp.db.dataprotectionprivacy::t_user_consent"
+    (USERNAME,VALID_FROM, VALID_TO,CREATE_ON,LAST_MODIFIED_ON,CONSENT_STATEMENT,ENABLED_FLAG,VERSION)
+    SELECT T1.USERNAME,
+           T1.VALID_FROM,
+           T1.VALID_TO,
+           UTC_TIME,
+           UTC_TIME,
+           T1.CONSENT_STATEMENT,
+           T1.ENABLED_FLAG,
+           CASE WHEN T2.VERSION IS NULL THEN 1 
+             ELSE T2.VERSION + 1 END AS VERSION
+    FROM :USER_CONSENT T1
+    LEFT JOIN :CONSENT_VERSION T2 ON (T1.USERNAME = T2.USERNAME);
+    
+    INSERT INTO "sap.tm.trp.db.dataprotectionprivacy::t_user_consent_history"
+    (USERNAME,VALID_FROM, VALID_TO,CREATE_ON,LAST_MODIFIED_ON,CONSENT_STATEMENT,ENABLED_FLAG,VERSION)
+    SELECT T1.USERNAME,
+           T1.VALID_FROM,
+           T1.VALID_TO,
+           UTC_TIME,
+           UTC_TIME,
+           T1.CONSENT_STATEMENT,
+           T1.ENABLED_FLAG,
+           CASE WHEN T2.VERSION IS NULL THEN 1 
+             ELSE T2.VERSION + 1 END AS VERSION
+    FROM :USER_CONSENT T1
+    LEFT JOIN :CONSENT_VERSION_HISTORY T2 ON (T1.USERNAME = T2.USERNAME);
+   
+END;

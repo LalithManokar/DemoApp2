@@ -1,0 +1,17 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+  {name = "ID"; sqlType = BIGINT; nullable = false;},
+  {name = "DESC"; sqlType = VARCHAR; length = 50; nullable = false;},
+  {name = "SP"; sqlType = VARCHAR; length = 200;},
+  {name = "CREATED_BY"; sqlType = BIGINT;},
+  {name = "CREATED_AT"; sqlType = TIMESTAMP;},
+  {name = "LAST_MODIFIED_BY"; sqlType = BIGINT;},
+  {name = "LAST_MODIFIED_AT"; sqlType = TIMESTAMP;},
+  {name = "CODE";sqlType = NVARCHAR; length = 50; nullable = true;unique = true;}
+  
+];
+table.indexes = [
+  {name = "LOCATION_RULE_DESC_INDEX"; unique = true; indexColumns = ["DESC"];}
+];
+table.primaryKey.pkcolumns = ["ID"];

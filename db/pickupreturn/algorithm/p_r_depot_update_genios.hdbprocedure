@@ -1,0 +1,247 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.algorithm::p_r_depot_update_genios" ( 
+IN t_depot  "sap.tm.trp.db.pickupreturn.algorithm::tt_r_depot",
+IN t_shortage  "sap.tm.trp.db.pickupreturn.algorithm::tt_r_shortage",
+IN t_depot_cost "sap.tm.trp.db.pickupreturn.algorithm::tt_depot_cost_trp11",
+IN t_customer_merchant "sap.tm.trp.db.pickupreturn.algorithm::tt_customer",
+IN t_customer_carrier "sap.tm.trp.db.pickupreturn.algorithm::tt_customer",
+IN t_trans_merchant "sap.tm.trp.db.pickupreturn.algorithm::tt_trans_types",
+IN t_trans_carrier "sap.tm.trp.db.pickupreturn.algorithm::tt_trans_types",
+IN t_handling_capacity "sap.tm.trp.db.planningcockpit::tt_location_handling_capacity",
+OUT t_fulfill_booking "sap.tm.trp.db.pickupreturn.algorithm::tt_res_haulage",
+OUT t_stage_2_customer_merchant "sap.tm.trp.db.pickupreturn.algorithm::tt_customer",
+OUT t_stage_2_customer_carrier "sap.tm.trp.db.pickupreturn.algorithm::tt_customer",
+OUT t_stage_2_depot  "sap.tm.trp.db.pickupreturn.algorithm::tt_r_depot"
+) 
+LANGUAGE SQLSCRIPT 
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN 
+
+DECLARE pt_obj DOUBLE;
+DECLARE flag VARCHAR(20);
+
+t_stage_1_shortage = SELECT A."NODE_ID",
+						   A."START_TIME",
+						   A."END_TIME",
+						   A."LOCATION",
+						   A."CONTAINER_TYPE",
+						   A."SHORTAGE",
+						   A."PRIORITY",
+						   IFNULL(B."STORAGE_COSTUNIT",0) AS "STORAGE_COST",
+						   IFNULL(B."HANDLING_COSTUNIT",0) AS "HANDLING_COST"
+					FROM :t_shortage A
+					LEFT JOIN :t_depot_cost B
+					ON A."LOCATION"=B."LOCATION"
+					AND A."CONTAINER_TYPE"=B."CONTAINER_TYPE";
+--generate <V,E>
+t_stage_1_node = SELECT "NODE_ID",
+						"QUANTITY" AS "SUPPLY_DEMAND"
+				 FROM :t_customer_merchant
+				 UNION ALL
+				 SELECT "NODE_ID",
+						"QUANTITY" AS "SUPPLY_DEMAND"
+				 FROM :t_customer_carrier
+				 UNION ALL
+				 SELECT "NODE_ID",
+				 	    "SHORTAGE" AS "SUPPLY_DEMAND"
+				 FROM :t_stage_1_shortage;
+				 
+t_stage_1_arc_merchant = SELECT A."NODE_ID" AS "FROM_ID",
+								B."NODE_ID" AS "TO_ID",
+								0 AS "LOWER",
+								1000000 AS "CAPACITY",
+								CASE WHEN C."COST" IS NULL THEN 1
+									 WHEN C."COST"=0 THEN 1
+									 ELSE C."COST" END AS "COST",
+								B."STORAGE_COST",
+								B."HANDLING_COST",
+								A."BOOKING_ID",
+								B."LOCATION" AS "DEPOT_LOCATION",
+								A."CUSTOMER_LOCATION",
+								B."CONTAINER_TYPE",
+								A."START_TIME",
+								A."BOOKING_TIME",
+								0 AS "HAULAGE_TYPE",
+								C."MTR",
+								B."PRIORITY"
+						  FROM :t_trans_merchant C
+						  INNER JOIN :t_customer_merchant A
+						  ON A."CUSTOMER_LOCATION"=C."FROM_LOCATION"
+						  AND A."CONTAINER_TYPE"=C."CONTAINER_TYPE"
+						  INNER JOIN :t_stage_1_shortage B
+						  ON B."LOCATION"=C."TO_LOCATION"
+						  AND B."CONTAINER_TYPE"=C."CONTAINER_TYPE"
+						  AND SECONDS_BETWEEN(A."BOOKING_TIME",B."START_TIME")<=0;
+								
+t_stage_1_arc_carrier = SELECT A."NODE_ID" AS "FROM_ID",
+								B."NODE_ID" AS "TO_ID",
+								0 AS "LOWER",
+								1000000 AS "CAPACITY",
+								CASE WHEN C."COST" IS NULL THEN 1
+									 WHEN C."COST"=0 THEN 1
+									 ELSE C."COST" END AS "COST",
+								B."STORAGE_COST",
+								B."HANDLING_COST",
+								A."BOOKING_ID",
+								B."LOCATION" AS "DEPOT_LOCATION",
+								A."CUSTOMER_LOCATION",
+								B."CONTAINER_TYPE",
+								A."START_TIME",
+								A."BOOKING_TIME",
+								1 AS "HAULAGE_TYPE",
+								C."MTR",
+								B."PRIORITY"
+						  FROM :t_trans_carrier C
+						  INNER JOIN :t_customer_carrier A
+						  ON A."CUSTOMER_LOCATION"=C."FROM_LOCATION"
+						  AND A."CONTAINER_TYPE"=C."CONTAINER_TYPE"
+						  INNER JOIN :t_stage_1_shortage B
+						  ON B."LOCATION"=C."TO_LOCATION"
+						  AND B."CONTAINER_TYPE"=C."CONTAINER_TYPE"
+						  AND SECONDS_BETWEEN(A."BOOKING_TIME",B."START_TIME")<=0
+						  AND SECONDS_BETWEEN(A."START_TIME",A."BOOKING_TIME")>= C."DURATION";
+
+t_stage_1_arc_temp = SELECT * FROM :t_stage_1_arc_merchant
+					 UNION ALL
+					 SELECT * FROM :t_stage_1_arc_carrier;
+
+--generate path from transhipment arc
+t_stage_1_path_temp = SELECT ROW_NUMBER ( ) OVER ( ) AS "PATH_ID",
+		 			   "FROM_ID" AS "SOURCE_NODE_ID",
+					   "TO_ID" AS "SINK_NODE_ID",
+					   "DEPOT_LOCATION",
+					   "BOOKING_TIME",
+					   "LOWER",
+					   "CAPACITY",
+					   RANK ( ) OVER (ORDER BY "PRIORITY","COST"+"STORAGE_COST"+"HANDLING_COST") AS "COST"
+				FROM :t_stage_1_arc_temp; 
+
+--prepare the handling capacity based on TU pick-up date of the possible depot
+t_stage_1_path_halding_capacity = SELECT T1.*,
+                                 T2."TIME_INTERVAL_ID",
+                                 T2."HANDLING_CAPACITY" - T2."SUPPLY" - T2."DEMAND" AS "REMAINING_HC"
+		 	 	 	 	 	 	 FROM :t_stage_1_path_temp AS T1
+		 	 	 	 	 	 	 LEFT JOIN :t_handling_capacity AS T2
+		 	 	 	 	 	 	 ON T1.DEPOT_LOCATION = T2.LOCATION_NAME
+		 	 	 	 	 	 	 AND ( T1.BOOKING_TIME >= T2.START_TIME AND T1.BOOKING_TIME <= T2.END_TIME );
+
+--generate the handling capacity constraint group
+--the path should be groupped only when the pick-up will be performed at the same day of same depot		 	 	 	 	 	 	 
+t_cap_cons_group = SELECT ROW_NUMBER ( ) OVER () AS "GROUP_ID",
+                   "DEPOT_LOCATION", "TIME_INTERVAL_ID", MIN ("REMAINING_HC") AS "REMAINING_HC"
+ 				   FROM :t_stage_1_path_halding_capacity 				   
+				   GROUP BY "DEPOT_LOCATION", "TIME_INTERVAL_ID"; 
+
+--prepare the solver parameter path info				   
+t_stage_1_path = SELECT "PATH_ID","SOURCE_NODE_ID","SINK_NODE_ID","LOWER","CAPACITY","COST" FROM :t_stage_1_path_temp;
+
+--prepare the solver parameter capacity constraints
+t_stage_1_cap_cons = SELECT T1."PATH_ID", T2."GROUP_ID" AS "CONSTRAINT_ID",GREATEST (T2."REMAINING_HC" , 0) AS "CAPACITY",1 as "TEU"
+	 	 	 	 	 FROM :t_stage_1_path_halding_capacity T1
+	 	 	 	 	 INNER JOIN :t_cap_cons_group T2
+	 	 	 	 	 ON T1."DEPOT_LOCATION" = T2."DEPOT_LOCATION" AND T1."TIME_INTERVAL_ID" = T2."TIME_INTERVAL_ID"
+	 	 	 	 	 WHERE T2."REMAINING_HC" IS NOT NULL;
+
+--init data is not required, only prepare the structure for solver parameter
+t_stage_1_init = SELECT NULL AS "PATH_ID", NULL AS "FLOW" FROM dummy;
+
+--call genios solver to perform pick-up depot assignment
+CALL "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::p_genios_path_cap_types_solve2"
+(
+	-1,
+	:t_stage_1_init,
+	:t_stage_1_node,
+	:t_stage_1_path,
+	:t_stage_1_cap_cons,
+	t_res,
+	t_dual,
+	:pt_obj,
+	:flag
+); 
+				
+--CALL "_SYS_AFL"."OFL_AREA_NETWORK_SIMPLEX_SOLVE_PROC"(:t_stage_1_node, :t_stage_1_arc, t_stage_1_flow);
+
+--convert the result set to source and destination based
+t_stage_1_flow = SELECT T2."SOURCE_NODE_ID" AS "FROM_ID",
+					    T2."SINK_NODE_ID" AS  "TO_ID", 
+					    T1."FLOW"
+ 	 	 	 	 FROM :t_res T1 
+	 		 	 INNER JOIN :t_stage_1_path_temp T2
+	 		 	 ON T1."PATH_ID" = T2."PATH_ID"
+	 		 	 WHERE T1."FLOW" > 0;
+
+t_fulfill_booking = SELECT B."BOOKING_ID",
+						   B."CUSTOMER_LOCATION" AS "FROM_LOCATION",
+						   B."DEPOT_LOCATION" AS "TO_LOCATION",
+						   B."START_TIME" AS "FROM_TIME",
+						   B."BOOKING_TIME" AS "TO_TIME",
+						   B."CONTAINER_TYPE",
+						   A."FLOW" AS "QUANTITY",
+						   B."STORAGE_COST",
+						   B."HANDLING_COST",
+						   B."COST" AS "TRANSPORTATION_COST",
+						   B."COST"+B."STORAGE_COST"+B."HANDLING_COST" AS "TOTAL_COST",
+						   'RETURN' AS "MODE",
+						   B."HAULAGE_TYPE"
+					FROM :t_stage_1_flow A
+					INNER JOIN :t_stage_1_arc_temp B
+					ON A."FROM_ID"=B."FROM_ID"
+					AND A."TO_ID"=B."TO_ID";
+
+
+--remaining bookings
+t_demand_out = SELECT "FROM_ID",
+					  SUM("FLOW") AS "FLOWOUT"
+			   FROM :t_stage_1_flow
+			   GROUP BY "FROM_ID";
+			   
+t_stage_2_customer_merchant = SELECT A."NODE_ID",
+									  A."BOOKING_ID",
+									  A."START_TIME",
+									  A."BOOKING_TIME",
+									  A."CUSTOMER_LOCATION",
+									  A."CONTAINER_TYPE",
+									  IFNULL(A."QUANTITY"-B."FLOWOUT",A."QUANTITY") AS "QUANTITY",
+									  A."HAULAGE_TYPE"
+								FROM :t_customer_merchant A
+								LEFT JOIN :t_demand_out B
+								ON A."NODE_ID"=B."FROM_ID";
+
+t_stage_2_customer_merchant = SELECT * FROM :t_stage_2_customer_merchant WHERE "QUANTITY">0;
+			   
+t_stage_2_customer_carrier = SELECT A."NODE_ID",
+									  A."BOOKING_ID",
+									  A."START_TIME",
+									  A."BOOKING_TIME",
+									  A."CUSTOMER_LOCATION",
+									  A."CONTAINER_TYPE",
+									  IFNULL(A."QUANTITY"-B."FLOWOUT",A."QUANTITY") AS "QUANTITY",
+									  A."HAULAGE_TYPE"
+								FROM :t_customer_carrier A
+								LEFT JOIN :t_demand_out B
+								ON A."NODE_ID"=B."FROM_ID";
+
+t_stage_2_customer_carrier = SELECT * FROM :t_stage_2_customer_carrier WHERE "QUANTITY">0;
+
+t_supply_in = SELECT "TO_ID", 
+					  SUM("FLOW") AS "FLOWIN"
+			   FROM :t_stage_1_flow 
+			   GROUP BY "TO_ID";
+			   
+t_stage_2_depot =  SELECT A."NODE_ID",
+						  A."START_TIME",
+						  A."END_TIME",
+                  		  A."LOCATION",
+                  		  A."CONTAINER_TYPE",
+                  		  IFNULL(A."SUPPLY"+B."FLOWIN",A."SUPPLY") AS "SUPPLY",
+						  "DEMAND",
+                  		  IFNULL(A."SHORTAGE"+B."FLOWIN",A."SHORTAGE") AS "SHORTAGE",
+                  		  A."MIN_STOCK",
+						  A."MAX_STOCK",
+						  A."MAX_PHY_CAPACITY"
+              		FROM :t_depot A
+              		LEFT JOIN :t_supply_in B
+              		ON A."NODE_ID"=B."TO_ID";
+
+END;

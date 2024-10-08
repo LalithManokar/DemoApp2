@@ -1,0 +1,82 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_time_based_storage_cost_validate"(
+    IN QUANTITY_BASED_COST "sap.tm.trp.db.costmodel::tt_time_based_storage_cost",
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),
+    OUT INVALID_ITEMS "sap.tm.trp.db.costmodel::tt_cost_model_invalid_item"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    RESOURCE_TYPE = SELECT DISTINCT RESOURCE_TYPE_CODE, RESOURCE_CATEGORY
+                    FROM "sap.tm.trp.db.semantic.resource::v_resource_type_with_category";
+    
+    ITEMS = 
+        SELECT 
+               CASE WHEN RESOURCE_TYPE = '*' THEN '*'
+                    ELSE REPLACE(RESOURCE_TYPE, '*', '%')
+                    END AS RESOURCE_TYPE,
+                LOCATION_NAME,
+                THRESHOLD_FROM,THRESHOLD_TO,UOM_CODE,PER_DIEM_COST,
+               --ROW_NUMBER () OVER () AS ROW_INDEX
+               ROW_INDEX
+          FROM :QUANTITY_BASED_COST;
+    
+    
+    INVALID_ITEMS = 
+          SELECT A.ROW_INDEX,
+               1 AS COL_INDEX,
+               'RESOURCE_TYPE_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A
+               LEFT OUTER JOIN :RESOURCE_TYPE AS B
+               ON B.RESOURCE_TYPE_CODE LIKE A.RESOURCE_TYPE  and B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+         WHERE B.RESOURCE_TYPE_CODE IS NULL AND A.RESOURCE_TYPE <> '*'
+          --In document, it says: The resource type field is only allowed when the U0M is PCS or PCS*KM, otherwise must be ‘*’. 
+         UNION 
+        SELECT B.ROW_INDEX,
+               1 AS COL_INDEX,
+               'RESOURCE_TYPE_UOM_INVALID' AS REASON_CODE FROM
+               ( SELECT 
+            		CASE WHEN RESOURCE_TYPE = '*' THEN '*'
+                    ELSE REPLACE(RESOURCE_TYPE, '%', '*')
+                    END AS RESOURCE_TYPE,UOM_CODE,ROW_INDEX
+                    FROM :ITEMS AS A) B
+         WHERE (B.RESOURCE_TYPE NOT LIKE '%*%' AND B.UOM_CODE NOT IN ('PCS', 'PCS*KM'))
+         UNION
+         SELECT A.ROW_INDEX,
+               2 AS COL_INDEX,
+               'LOCATION_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A
+               LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_location" AS B
+               ON A.LOCATION_NAME = B.NAME
+         WHERE B.NAME IS NULL AND A.LOCATION_NAME <> '*' 
+         UNION
+         SELECT A.ROW_INDEX,
+               3 AS COL_INDEX,
+               'THRESHOLD_FROM_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A
+         WHERE A.THRESHOLD_FROM IS NULL 
+         /*UNION
+         SELECT A.ROW_INDEX,
+               3 AS COL_INDEX,
+               'THRESHOLD_TO_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A
+         WHERE A.THRESHOLD_TO IS NULL
+         */
+         UNION 
+         SELECT A.ROW_INDEX,
+               5 AS COL_INDEX,
+               'PER_DIEM_COST_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A
+         WHERE A.PER_DIEM_COST IS NULL
+         UNION
+         SELECT A.ROW_INDEX,
+               6 AS COL_INDEX,
+               'UOM_CODE_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A
+               LEFT OUTER JOIN "sap.tm.trp.db.costmodel::v_uom" AS B
+               ON A.UOM_CODE = B.CODE and B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+         WHERE B.CODE IS NULL ;--AND A.UOM_CODE <>'*'; according to doc, the uom should not be *
+        
+        
+END;

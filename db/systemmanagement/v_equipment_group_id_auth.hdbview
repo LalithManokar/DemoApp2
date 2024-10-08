@@ -1,0 +1,22 @@
+schema = "SAP_TM_TRP";
+query = "
+  select distinct equipment_group_id
+  from (select distinct T1.equipment_group_id --filter type equipment group auth check
+	    from \"sap.tm.trp.db.systemmanagement::t_equipment_group_item\" T1
+		minus
+		  select distinct T1.equipment_group_id
+		  from \"sap.tm.trp.db.systemmanagement::t_equipment_group_item\" T1
+		  left join \"sap.tm.trp.db.systemmanagement.user::v_resource_auth\" T2
+		  on T1.EQUI_CODE = T2.res_type AND T1.RESOURCE_CATEGORY = T2.RESOURCE_CATEGORY
+		  where T2.res_type is null
+		  union all
+		  select distinct T1.equipment_group_id
+		  from \"sap.tm.trp.db.systemmanagement::t_equipment_group_item\" T1,
+			   \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T2
+	      where T2.USERNAME = IFNULL(SESSION_CONTEXT('XS_APPLICATIONUSER'),SESSION_USER) 
+	      and T2.USER_TYPE_ID = 99)
+";
+
+depends_on_view = ["sap.tm.trp.db.systemmanagement.user::v_resource_auth",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];
+depends_on_table = ["sap.tm.trp.db.systemmanagement::t_equipment_group_item"];

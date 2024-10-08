@@ -1,0 +1,58 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_get_pol_info" (
+   IN tt_tu_detail_list "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_ord_filtered_tu_pickup",
+   OUT tt_pol_info "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_tu_pol_info"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_TRP"
+   READS SQL DATA AS 
+BEGIN
+
+    lt_schedule_info =  select  t1.TOR_ID, 
+                                t1.POL,
+                                t1.POL_NAME,
+                                t1.STAGE_VESSEL_POL,
+                                t1.FREIGHT_VESSEL_POL,
+                                t1.STAGE_CARRIER_POL,
+                                t1.FREIGHT_CARRIER_POL,
+                                t1.STAGE_VOYAGE_POL,
+                                t2.SCHED_STOP_KEY AS POL_SCHED_STOP_KEY,
+                                t2.SCHED_DEP_KEY AS POL_SCHED_DEP_KEY
+                        from :tt_tu_detail_list t1
+                        left join "sap.tm.trp.db.semantic.order::v_freight_order_stop" t2
+                        on t1.POL_FREIGHT_ORDER_STOP_KEY = t2.DB_KEY;
+    
+    lt_departure_info = select t1.db_key,
+                               t1.parent_key,
+                               t1.CUTOFF_UTC,
+                               t1.vessel
+                        from "sap.tm.trp.db.semantic.schedule::v_departure_schdpl" t1
+                        where db_key in ( select DISTINCT POL_SCHED_STOP_KEY from :lt_schedule_info );
+    
+    lt_departure_schdpd = select t1.db_key,
+                                t1.vessel,
+                                t1.voyage 
+                            from "sap.tm.trp.db.semantic.schedule::v_departure" t1
+                            where db_key in (select distinct parent_key from :lt_departure_info);
+
+    tt_pol_info = SELECT 
+                                t2.TOR_ID, 
+                                t2.POL,
+                                t2.POL_NAME,
+                                CASE WHEN t2.STAGE_VESSEL_POL <> '' THEN t2.STAGE_VESSEL_POL
+                                    WHEN t2.FREIGHT_VESSEL_POL <> '' THEN t2.FREIGHT_VESSEL_POL
+                                    WHEN t6.VESSEL <> '' THEN t6.VESSEL 
+                                    ELSE t7.VESSEL
+                                END AS VESSEL_POL ,
+                                CASE WHEN t2.STAGE_CARRIER_POL <> '' THEN t2.STAGE_CARRIER_POL
+                                    ELSE t2.FREIGHT_CARRIER_POL 
+                                END AS CARRIER_POL,
+                                CASE WHEN t2.STAGE_VOYAGE_POL <> '' THEN t2.STAGE_VOYAGE_POL
+                                    ELSE t7.VOYAGE
+                                END AS VOYAGE_POL,
+                                t6.CUTOFF_UTC
+                                FROM :lt_schedule_info t2
+                                LEFT JOIN :lt_departure_info t6
+                                ON (t6.DB_KEY = t2.POL_SCHED_STOP_KEY AND t6.PARENT_KEY = t2.POL_SCHED_DEP_KEY)
+                                LEFT JOIN :lt_departure_schdpd t7 ON (t7.DB_KEY = t6.PARENT_KEY);  
+END

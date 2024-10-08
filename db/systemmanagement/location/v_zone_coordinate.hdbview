@@ -1,0 +1,19 @@
+schema = "SAP_TM_TRP";       
+query = "SELECT DISTINCT T3.ZONE_ID AS ZONE_ID,
+                SUM(T3.XPOS) / COUNT(T3.LOCATION_ID) AS XPOS,
+                SUM(T3.YPOS) / COUNT(T3.LOCATION_ID) AS YPOS
+           FROM (SELECT DISTINCT ZONE.ID AS ZONE_ID,
+                        LOCATION.ID AS LOCATION_ID,
+                        LOCATION.XPOS AS XPOS,
+                        LOCATION.YPOS AS YPOS
+                   FROM \"sap.tm.trp.db.semantic.location::v_all_zone\" AS ZONE
+                        INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_region_location_all\" AS ZONE_LOCATION
+                        ON ZONE_LOCATION.ROOT_ID = ZONE.ID
+                        INNER JOIN \"sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype\"(PLACEHOLDER.\"$$IN_LOCATION_TYPE$$\"=>5) T2
+                        ON (T2.LOCATION_ID = ZONE.ID)
+                        INNER JOIN \"sap.tm.trp.db.semantic.location::v_location\" AS LOCATION
+                        ON ZONE_LOCATION.LOCATION_ID = LOCATION.ID) AS T3
+       GROUP BY T3.ZONE_ID" ;
+       
+depends_on_view = ["sap.tm.trp.db.semantic.location::v_all_zone", "sap.tm.trp.db.systemmanagement.location::v_region_location_all", "sap.tm.trp.db.semantic.location::v_location",
+"sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype"];       

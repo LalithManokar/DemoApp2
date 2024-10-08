@@ -1,0 +1,49 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_check_route_for_activity"
+   (IN SCENARIO_ID BIGINT,IN ACTIVITY_ID BIGINT,OUT INVALID_FLAG TINYINT) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+   
+   DECLARE VAR_SIMULATION_PLAN_ID BIGINT;
+   DECLARE NETWORK_CODE VARCHAR(50);
+   DECLARE ROUTE_ID  BIGINT;
+   INVALID_FLAG := 0;
+   
+   SQL_ROUTE_ID = SELECT ROUTE_ID AS ID
+   FROM "sap.tm.trp.db.planningcockpit::t_activity" WHERE ID = :ACTIVITY_ID;
+  
+  --check if the route_id is null:
+  SELECT IFNULL(MAX(ID),-1) INTO ROUTE_ID FROM :SQL_ROUTE_ID;
+  IF (:ROUTE_ID = -1) THEN
+    RETURN;
+  END IF;
+   
+   SELECT IFNULL(MAX(REL_SM_PLAN_ID),-1) INTO VAR_SIMULATION_PLAN_ID
+   FROM "sap.tm.trp.db.planningcockpit::t_scenario" WHERE ID = :SCENARIO_ID;
+   IF VAR_SIMULATION_PLAN_ID = -1 THEN
+      RETURN;
+   END IF;
+   
+   CALL "sap.tm.trp.db.planningcockpit::p_get_networkcode_by_simulation_scenario_id"(
+    :VAR_SIMULATION_PLAN_ID,
+    :SCENARIO_ID,
+    NETWORK_CODE
+  );
+   
+  
+  CALL "sap.tm.trp.routing.db.path::p_check_route"(
+    :NETWORK_CODE,
+    :SQL_ROUTE_ID,
+    OUT_ROUTE
+    );
+    
+    SELECT T1.valid INTO INVALID_FLAG
+    FROM :OUT_ROUTE T1
+    INNER JOIN :SQL_ROUTE_ID T2 ON (T1.ROUTE_ID = T2.ID);
+    
+   
+    
+    
+END;

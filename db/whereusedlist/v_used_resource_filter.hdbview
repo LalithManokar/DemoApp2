@@ -1,0 +1,49 @@
+schema = "SAP_TM_TRP";
+query  = "
+	SELECT 
+		T1.CODE AS OBJECT_CODE
+		,T3.ID AS USED_OBJECT_ID
+		,T3.NAME
+		,T3.CODE
+		,'Plan Model' AS CATEGORY
+		,T3.NAME AS DESC
+    	,MAP(T3.VISIBILITY_FLAG,1,'G',0,'P') AS VISIBILITY
+                 ,T5.USERNAME AS CREATED_BY
+                 ,T6.USERNAME AS MODIFIED_BY
+                 ,IFNULL(T3.LAST_MODIFIED_ON, T3.CREATE_ON) AS MODIFIED_TIME
+				 ,T1.RESOURCE_CATEGORY  
+            FROM \"sap.tm.trp.db.filter::t_equipment_filter\" T1
+                 INNER JOIN \"sap.tm.trp.db.filter::t_filter_equipment_filter\" T2 ON T2.EQUIPMENT_FILTER_ID = T1.ID
+                 INNER JOIN \"sap.tm.trp.db.pipeline::t_plan_model\" T3 ON T3.FILTER_GROUP_ID = T2.FILTER_GROUP_ID
+                 INNER JOIN \"sap.tm.trp.db.pipeline::t_plan_model_type\" T4 ON T4.ID = T3.PLAN_MODEL_TYPE_ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T5 ON T5.ID = T3.CREATE_BY
+                 LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T6 ON T6.ID = T3.LAST_MODIFIED_BY
+		
+		  UNION
+
+          SELECT T1.CODE AS OBJECT_CODE
+                 ,T2.ID AS USED_OBJECT_ID
+                 ,T2.RULE_NAME AS NAME
+                 ,T2.CODE
+                 ,'Location Rule' AS CATEGORY
+                 ,IFNULL(T3.DESC, T2.RULE_NAME) AS DESC
+    	,NULL AS VISIBILITY
+                 ,T5.USERNAME AS CREATED_BY
+                 ,T6.USERNAME AS MODIFIED_BY
+                 ,IFNULL(T2.MODIFIED_ON, T2.CREATE_ON) AS MODIFIED_TIME
+				 ,T1.RESOURCE_CATEGORY
+            FROM \"sap.tm.trp.db.filter::t_equipment_filter\" T1
+                 INNER JOIN \"sap.tm.trp.db.pickupreturn::t_location_assignment_rule\" T2 ON T2.EQUIP_FILTER_ID = T1.ID
+                 INNER JOIN \"sap.tm.trp.db.pickupreturn::t_location_rule_t\" T3 ON T3.ID = T2.ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T5 ON T5.ID = T2.CREATE_BY
+                 LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T6 ON T6.ID = T2.MODIFIED_BY
+";
+
+depends_on_table = ["sap.tm.trp.db.filter::t_equipment_filter",
+                    "sap.tm.trp.db.filter::t_filter_equipment_filter",
+                    "sap.tm.trp.db.pipeline::t_plan_model",
+                    "sap.tm.trp.db.pipeline::t_plan_model_type",
+                    "sap.tm.trp.db.pickupreturn::t_location_assignment_rule",
+                    "sap.tm.trp.db.pickupreturn::t_location_rule_t"
+					];
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

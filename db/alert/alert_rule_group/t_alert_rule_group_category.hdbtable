@@ -1,0 +1,16 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "ALERT_RULE_GROUP_CATEGORY_ID"; sqlType = INTEGER; comment="1:Supply and Demand Alerts, 2:KPI";},
+    {name = "ALERT_RULE_GROUP_CATEGORY_NAME"; sqlType = VARCHAR; length = 50; comment="1:Supply and Demand Alerts, 2:KPI Alerts";},
+    {name = "CODE";sqlType = NVARCHAR; length = 50; nullable = true; unique = true;},
+    {
+        name = "CONTAINING_OBJECT_TYPE_ID";
+        sqlType = INTEGER; 
+        comment="this records the containing objects type ID.  They are refferred in sap.tm.trp.db.objectregistration::t_object_type, currently each alert rule group category can only contain objects with the same type.  Usually, Planning Alerts Group can only contain SD Plan Alert.  KPI Alerts can only contain KPI Plan Alert";
+    },
+    {
+    	name = "RESOURCE_CATEGORY";sqlType = NVARCHAR; length = 20;
+    }
+];
+table.primaryKey.pkcolumns = ["ALERT_RULE_GROUP_CATEGORY_ID"];

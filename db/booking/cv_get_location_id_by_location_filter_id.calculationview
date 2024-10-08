@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_location_id_by_location_filter_id" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_equip_loc_filter"/>
+  <localVariables>
+    <variable id="EQUIPMENT_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="EQUIPMENT_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="LOCATION_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="LOCATION_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="LOCATION_ID" length="22"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#EQUIPMENT_FILTER_ID</localVariable>
+      <localVariable>#LOCATION_FILTER_ID</localVariable>
+      <definition>BEGIN
+  
+  DECLARE GEO_FLAG INT;
+  DECLARE EQUIP_FLAG INT;
+  DECLARE RES_CAT NVARCHAR(20); -- CURRENT RESOURCE CATEGORY ACCORDING TO EQUIP FILTER 
+  DECLARE RES_CAT_TYPE NVARCHAR(10);
+  DECLARE ITEM_CAT NVARCHAR(50); -- TU ITEM CATEGORY
+      
+        
+  SELECT IFNULL(MAX(LOCATION_TYPE),1) INTO GEO_FLAG
+  FROM (SELECT LOCATION_TYPE 
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter&quot;
+        WHERE ID = :LOCATION_FILTER_ID);
+        
+         --CURRENT RESOURCE CATEGORY BY EQUIP ID
+  SELECT RESOURCE_CATEGORY INTO RES_CAT
+  FROM &quot;sap.tm.trp.db.filter::t_equipment_filter&quot; T1
+  WHERE ID = :EQUIPMENT_FILTER_ID;
+        
+    -- GET RESOURCE CATEGORY TYPE
+  SELECT RESOURCE_CATEGORY_TYPE INTO RES_CAT_TYPE 
+  FROM &quot;sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings&quot;
+  WHERE CODE = :RES_CAT;  
+  
+  --ITEM CATEGORY BY RESOURCE CATEGORY
+  SELECT VALUE INTO ITEM_CAT from &quot;sap.tm.trp.db.systemmanagement::t_config_cust&quot; where code =:RES_CAT and KEY = 'ITEM_CAT';
+
+  --DEPOT         
+  IF :GEO_FLAG = 1 THEN
+
+    var_out = SELECT DISTINCT LOC.ID AS LOCATION_ID
+                  FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; HT 
+                  JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; LOC
+                  ON HT.LOCATION_ID = LOC.ID --LOC.ID
+                  WHERE HT.LOCATION_FILTER_ID  = :LOCATION_FILTER_ID ;
+                  
+  --DEPOT_GROUP
+  ELSEIF :GEO_FLAG = 2 THEN
+    var_out=SELECT DISTINCT LOC.ID AS LOCATION_ID
+                FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; HT
+                INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_location_group&quot; LOC_GRP 
+                ON HT.LOCATION_GROUP_ID=LOC_GRP.ID --LOC_GRP.ID
+                INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_location_group_item&quot; LOC_GRP_ITEM 
+                ON LOC_GRP_ITEM.LOCATION_GROUP_ID=LOC_GRP.ID
+                INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; LOC 
+                ON LOC_GRP_ITEM.LOCATION_ID = LOC.ID
+                WHERE HT.LOCATION_FILTER_ID = :LOCATION_FILTER_ID ;
+  -- REGION     
+  ELSEIF :GEO_FLAG = 5 THEN
+  
+      var_out=SELECT DISTINCT LOC.ID AS LOCATION_ID
+                  FROM &quot;sap.tm.trp.db.filter::t_location_filter_region&quot; HT
+                  INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::v_region_location_all&quot; R_ALL 
+                  ON R_ALL.ROOT_ID = HT.ZONE_ID
+                  INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; LOC 
+                  ON R_ALL.LOCATION_ID=LOC.ID
+                  WHERE HT.LOCATION_FILTER_ID = :LOCATION_FILTER_ID ;
+       
+  -- REGION GROUP     
+  ELSEIF :GEO_FLAG = 6 THEN
+    var_out=SELECT DISTINCT LOC.ID AS LOCATION_ID
+                FROM &quot;sap.tm.trp.db.filter::t_location_filter_region&quot; HT
+                INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_region_group&quot; R_GRP 
+                ON HT.REGION_GROUP_ID=R_GRP.ID --R_GRP.ID
+                INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_region_group_item&quot; R_GRP_ITEM 
+                ON R_GRP.ID = R_GRP_ITEM.REGION_GROUP_ID
+                INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::v_region_location_all&quot; R_ALL 
+                ON R_GRP_ITEM.ZONE_ID = R_ALL.ROOT_ID
+                INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; LOC 
+                ON R_ALL.LOCATION_ID=LOC.ID
+                WHERE HT.LOCATION_FILTER_ID = :LOCATION_FILTER_ID ;
+       
+  END IF;
+  
+END;</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes/>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="LOCATION_ID" order="1" aggregationType="max" measureType="simple">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="LOCATION_ID"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

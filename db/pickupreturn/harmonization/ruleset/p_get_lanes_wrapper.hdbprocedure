@@ -1,0 +1,19 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_get_lanes_wrapper" (
+    IN IT_FROM_LOC "sap.tm.trp.db.pickupreturn::tt_location_list",
+    IN IT_TO_LOC "sap.tm.trp.db.pickupreturn::tt_location_list",
+    OUT LANE_LIST "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_lane_list",
+    OUT CARRIER "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_carrier_list"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_TRP
+   READS SQL DATA AS
+BEGIN
+
+    CALL "sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_get_mtr"(lt_mtr_lane);
+    
+    CALL "sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_get_lanes"(
+        :it_from_loc, :it_to_loc, :lt_mtr_lane, lane_list, carrier
+    );
+    
+END

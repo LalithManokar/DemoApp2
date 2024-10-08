@@ -1,0 +1,36 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_massupload_execution_history_update" (
+	IN NEW_ID BIGINT,
+	IN EXECUTION_RESULTS "sap.tm.trp.db.massupload::tt_massupload_execution_result",
+	IN STATUS_TYPE_ID INTEGER
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER  
+	DEFAULT SCHEMA SAP_TM_TRP
+	--READS SQL DATA
+AS
+	USER_ID BIGINT;
+	REC_CRTD BIGINT;
+	REC_UPD BIGINT;
+	RECORD_CNT BIGINT;
+BEGIN
+/***************************** 
+	Write your procedure logic 
+ *****************************/
+	
+	SELECT 
+		IFNULL(REC_CRTD,0) INTO REC_CRTD
+	FROM :EXECUTION_RESULTS;
+	
+	SELECT 
+		IFNULL(REC_UPD,0) INTO REC_UPD
+	FROM :EXECUTION_RESULTS;
+	
+	SELECT 
+		IFNULL(RECORD_CNT,0) INTO RECORD_CNT
+	FROM :EXECUTION_RESULTS;
+	
+	UPDATE "sap.tm.trp.db.massupload::t_massupload_execution_history"
+	SET REC_CRTD = :REC_CRTD, REC_UPD = :REC_UPD, RECORD_CNT = :RECORD_CNT, STATUS_TYPE_ID = :STATUS_TYPE_ID
+	WHERE ID = :NEW_ID;
+	
+END;

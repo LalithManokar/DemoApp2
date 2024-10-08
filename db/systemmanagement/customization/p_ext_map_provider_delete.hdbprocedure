@@ -1,0 +1,42 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.customization::p_ext_map_provider_delete"(
+    IN ID INTEGER,
+    OUT PROVIDER_ID INTEGER,
+    OUT MESSAGE VARCHAR(500)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+    DECLARE MAP_PROVIDER_COUNT INTEGER;
+    
+    SELECT COUNT (*) INTO MAP_PROVIDER_COUNT
+    FROM "sap.tm.trp.db.systemmanagement::t_map_provider"
+    WHERE FLAG = 1
+    AND ID <>:ID;
+
+    IF :MAP_PROVIDER_COUNT = 0 THEN
+    	PROVIDER_ID :=0;
+    	--At least one map provider should be enabled
+    	MESSAGE :='MSG_ONE_PROVIDER_SHOULD_BE_ENABLE';
+
+    ELSE
+        DELETE FROM "sap.tm.trp.db.systemmanagement::t_map_provider"
+        WHERE ID = :ID;
+        	
+      	DELETE FROM "sap.tm.trp.db.systemmanagement::t_mapprovider_copyright"
+        WHERE P_ID = :ID;
+        	
+        DELETE FROM "sap.tm.trp.db.systemmanagement.customization::t_map_provider_t"
+	    WHERE ID = :ID;
+            
+        DELETE FROM "sap.tm.trp.db.systemmanagement::t_map_provider_url"
+        WHERE PROVIDER_ID =:ID;
+            
+        PROVIDER_ID :=:ID;
+        MESSAGE :='';	
+
+    END IF ;
+    
+END;

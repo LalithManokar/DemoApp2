@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_role_check_location_stock_region" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_role_check_location_stock_region"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="ID" length="32"/>
+        <viewAttribute datatype="INTEGER" id="TYPE"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_ID" length="10"/>
+        <viewAttribute datatype="INTEGER" id="RESOURCE_TYPE"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_NAME" length="10"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_DESC" length="10"/>
+        <viewAttribute datatype="VARCHAR" id="MIN_SAFETY_STOCK" length="18"/>
+        <viewAttribute datatype="VARCHAR" id="MAX_SAFETY_STOCK" length="18"/>
+        <viewAttribute datatype="VARCHAR" id="MAX_PHYSICAL_STOCK" length="18"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_CATEGORY" length="50"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> 
+
+ BEGIN 
+ 	 --LOCATION TYPE
+	 DECLARE LOCATION_TYPE_REGION INTEGER :=5; 
+    
+    RESOURCE_TYPES = SELECT DISTINCT RESOURCE_TYPE_CODE,RESOURCE_TYPE_DESC ,RESOURCE_CATEGORY
+                FROM &quot;sap.tm.trp.db.semantic.resource::v_resource_type_with_category&quot;;
+ 	  --ROLE CHECK
+	var_out = 
+	--First part: Equipmment Type EQUIP_CODE_TYPE = 1
+	SELECT 
+		T0.LOCATION_ID AS ID,
+		T0.LOCATION_TYPE AS TYPE,
+		T0.EQUIP_CODE AS RESOURCE_ID,
+		T0.EQUIP_CODE_TYPE AS RESOURCE_TYPE,
+		T0.EQUIP_CODE AS RESOURCE_NAME,
+		T1.RESOURCE_TYPE_DESC AS RESOURCE_DESC,
+		T0.MIN_SAFETY AS MIN_SAFETY_STOCK,
+		T0.MAX_SAFETY AS MAX_SAFETY_STOCK,
+		T0.MAX_CAPACITY AS MAX_PHYSICAL_STOCK,
+		T0.RESOURCE_CATEGORY AS RESOURCE_CATEGORY
+	FROM &quot;sap.tm.trp.db.stock::t_stock_config&quot; T0 
+	INNER JOIN :RESOURCE_TYPES T1 
+	ON (T0.EQUIP_CODE = T1.RESOURCE_TYPE_CODE AND T0.EQUIP_CODE_TYPE = 1 AND T1.RESOURCE_CATEGORY = T0.RESOURCE_CATEGORY)
+	INNER JOIN(
+		SELECT LOCATION_ID, :LOCATION_TYPE_REGION AS LOCATION_TYPE FROM &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(PLACEHOLDER.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_REGION)
+	) T2 ON T2.LOCATION_ID = T0.LOCATION_ID AND T2.LOCATION_TYPE = T0.LOCATION_TYPE
+	WHERE T0.LOCATION_HEAD_FLAG = 0 AND T0.LOCATION_TYPE = :LOCATION_TYPE_REGION
+	
+	UNION
+	
+	--Second part: Equipmment group EQUIP_CODE_TYPE = 2
+	SELECT 
+		T0.LOCATION_ID AS ID,
+		T0.LOCATION_TYPE AS TYPE,
+		T0.EQUIP_CODE AS RESOURCE_ID,
+		T0.EQUIP_CODE_TYPE AS RESOURCE_TYPE,
+		--Name FROM t_equipment_group table
+		T1.DESC AS RESOURCE_NAME,
+		--Description FROM language table
+		T2.DESC AS RESOURCE_DESC,
+		T0.MIN_SAFETY AS MIN_SAFETY_STOCK,
+		T0.MAX_SAFETY AS MAX_SAFETY_STOCK,
+		T0.MAX_CAPACITY AS MAX_PHYSICAL_STOCK,
+		T0.RESOURCE_CATEGORY AS RESOURCE_CATEGORY
+	FROM &quot;sap.tm.trp.db.stock::t_stock_config&quot; T0 
+	LEFT JOIN &quot;sap.tm.trp.db.systemmanagement::t_equipment_group&quot; T1 ON T0.EQUIP_CODE = T1.ID AND T0.EQUIP_CODE_TYPE = 2
+	INNER JOIN  &quot;sap.tm.trp.db.systemmanagement::t_equipment_group_t&quot; T2 ON T1.ID = T2.ID
+	INNER JOIN(
+		SELECT LOCATION_ID, :LOCATION_TYPE_REGION AS LOCATION_TYPE FROM &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(PLACEHOLDER.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_REGION)
+	) T3 ON T3.LOCATION_ID = T0.LOCATION_ID AND T3.LOCATION_TYPE = T0.LOCATION_TYPE
+	WHERE T0.LOCATION_HEAD_FLAG = 0 AND T0.LOCATION_TYPE = :LOCATION_TYPE_REGION;
+
+END</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="RESOURCE_ID" order="3">
+        <descriptions defaultDescription="RESOURCE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_ID"/>
+      </attribute>
+      <attribute id="RESOURCE_NAME" order="5">
+        <descriptions defaultDescription="RESOURCE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_NAME"/>
+      </attribute>
+      <attribute id="RESOURCE_DESC" order="6">
+        <descriptions defaultDescription="RESOURCE_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_DESC"/>
+      </attribute>
+      <attribute id="MIN_SAFETY_STOCK" order="7">
+        <descriptions defaultDescription="MIN_SAFETY_STOCK"/>
+        <keyMapping columnObjectName="Script_View" columnName="MIN_SAFETY_STOCK"/>
+      </attribute>
+      <attribute id="MAX_SAFETY_STOCK" order="8">
+        <descriptions defaultDescription="MAX_SAFETY_STOCK"/>
+        <keyMapping columnObjectName="Script_View" columnName="MAX_SAFETY_STOCK"/>
+      </attribute>
+      <attribute id="MAX_PHYSICAL_STOCK" order="9">
+        <descriptions defaultDescription="MAX_PHYSICAL_STOCK"/>
+        <keyMapping columnObjectName="Script_View" columnName="MAX_PHYSICAL_STOCK"/>
+      </attribute>
+      <attribute id="RESOURCE_CATEGORY" order="10">
+        <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_CATEGORY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="TYPE" order="2" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="TYPE"/>
+      </measure>
+      <measure id="RESOURCE_TYPE" order="4" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="RESOURCE_TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

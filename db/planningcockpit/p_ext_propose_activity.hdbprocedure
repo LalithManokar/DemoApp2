@@ -1,0 +1,135 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_ext_propose_activity"    
+(    IN SIMULATION_ID BIGINT,      
+     IN SCENARIO_ID  BIGINT,  
+     OUT MESSAGE VARCHAR(200),
+     OUT MODIFIED_BY VARCHAR(60),
+     OUT CNT INT
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"   
+	 AS
+BEGIN
+   
+    DECLARE USER_ID BIGINT;
+    DECLARE USER_NAME VARCHAR(200);    
+    DECLARE V_TIMESTAMP_START  DATETIME  := CURRENT_UTCTIMESTAMP;
+    DECLARE V_LOCK_SESSION_ID  VARCHAR(200);  
+    DECLARE V_LOCK_USER_ID  BIGINT;  
+    DECLARE V_LOCK_LAST_MODIFYED_ON  TIMESTAMP; 
+    DECLARE V_PLAN_STATUS INTEGER;
+    DECLARE V_PLAN_MODEL_ID BIGINT;    
+    DECLARE V_SUCCESS_FLAG_L  INT;
+    DECLARE SOLVER_RT_CODE VARCHAR(30);
+    DECLARE AC_PROPOSED_REPO INTEGER := 2;
+    DECLARE CURRENCY VARCHAR(30);
+    DECLARE SPRAS VARCHAR(10); 
+    
+    CALL "sap.tm.trp.db.planningcockpit::p_ext_lock_simulation_plan_by_id"(:SIMULATION_ID, V_LOCK_SESSION_ID,
+                                                                           V_LOCK_USER_ID, V_LOCK_LAST_MODIFYED_ON);
+                    
+    SELECT B.PLAN_STATUS ,B.SD_PLAN_ID
+      INTO V_PLAN_STATUS, V_PLAN_MODEL_ID 
+      FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" B
+    WHERE B.ID = :SIMULATION_ID; 
+     
+    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+ 	SELECT USERNAME INTO USER_NAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";   
+             
+    IF :V_LOCK_USER_ID = :USER_ID AND 
+       :V_LOCK_LAST_MODIFYED_ON IS NOT NULL THEN  
+             
+               IF V_PLAN_STATUS=1 THEN       
+                   MESSAGE:='MSG_ERROR_FINALIZED'; 
+                   MODIFIED_BY := :USER_NAME; 
+               ELSEIF V_PLAN_STATUS=-1 THEN   
+                   MESSAGE:='MSG_SD_PLAN_OVERDUE_PC';  
+                   MODIFIED_BY := :USER_NAME;     
+               ELSE               
+               
+               -- Delete previous proposed activities, each run would start from scratch consider the route capacity 
+               DELETE FROM "sap.tm.trp.db.planningcockpit::t_activity" 
+               WHERE REL_SCENARIO_ID = :SCENARIO_ID AND ACTIVITY_TYPE_ID = :AC_PROPOSED_REPO;              
+                  
+               -- invoke solver                                                 
+               CALL "sap.tm.trp.db.planningcockpit::p_ext_call_solver"(
+                        :SIMULATION_ID, :SCENARIO_ID,:V_PLAN_MODEL_ID,
+                        out_route_res, MESSAGE, SOLVER_RT_CODE);       
+      
+               --  if call solver successfully    
+               IF :MESSAGE = 'MSG_SUCCESS_STATUS'  OR  :MESSAGE = 'MSG_ALREADY_OPTIMAL' THEN
+               
+                 DELETE FROM "sap.tm.trp.db.planningcockpit::t_balancing_list" WHERE REL_SCENARIO_ID=:SCENARIO_ID;               
+  
+                 CALL "sap.tm.trp.db.planningcockpit::p_get_currenty_of_simulation_plan"(
+                       :SIMULATION_ID,CURRENCY);
+                                     
+                 tmp = SELECT "sap.tm.trp.db.planningcockpit::s_activity".NEXTVAL AS ACTIVITY_ID, *
+                       FROM :out_route_res
+                       WHERE CONTAINER_TYPE <> 'PENALTY';
+               
+                 -- TODO: the container and cost unit       
+                 INSERT INTO "sap.tm.trp.db.planningcockpit::t_activity"
+                        (ID,CODE, ROUTE_ID,
+                         FROM_LOC_ID,TO_LOC_ID,
+                         EQUIP_TYPE,QUANTITY,UOM,
+                         COST,CURRENCY,
+                         START_TIME,END_TIME,
+                         REL_SCENARIO_ID,FLAG,STATUS,
+                         CREATED_BY,CREATED_ON,ACTIVITY_TYPE_ID)                       
+                 SELECT T1.ACTIVITY_ID, T1.ACTIVITY_ID, T1.ROUTE_ID, 
+                        T2.ID, T3.ID,
+                        T1.CONTAINER_TYPE,T1.QUANTITY,'PCs',
+                        TOTAL_COST, :CURRENCY, 
+                        FROM_TIME, TO_TIME,
+                        :SCENARIO_ID,1,0,:USER_ID, :V_TIMESTAMP_START,:AC_PROPOSED_REPO
+                        FROM :tmp T1
+                        INNER JOIN "sap.tm.trp.db.semantic.location::v_all_location" T2 ON (T1.FROM_LOCATION = T2.NAME)
+                        INNER JOIN "sap.tm.trp.db.semantic.location::v_all_location" T3 ON (T1.TO_LOCATION = T3.NAME);   
+                  
+                 
+                 /*add record to text table*/
+                 
+                 SELECT SPRAS INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code"; 
+                 INSERT INTO "sap.tm.trp.db.planningcockpit::t_activity_t"(ID, SPRAS, DESC)
+                 SELECT T1.ACTIVITY_ID,:SPRAS,'' --system proposed no description
+                    FROM :tmp T1
+                    INNER JOIN "sap.tm.trp.db.semantic.location::v_all_location" T2 ON (T1.FROM_LOCATION = T2.NAME)
+                    INNER JOIN "sap.tm.trp.db.semantic.location::v_all_location" T3 ON (T1.TO_LOCATION = T3.NAME);
+                    
+                 /*add record to text table end*/       
+                                            
+                 UPDATE "sap.tm.trp.db.planningcockpit::t_scenario"
+                 SET BALANCING_COST = NULL,
+                 STORAGE_COST = NULL,
+                     FRESH_FLAG = -1
+                 WHERE ID=:SCENARIO_ID;
+                 
+                 --After new activities been proposed, need to recalculate the activity status of the scenario:
+                 CALL "sap.tm.trp.db.planningcockpit::p_ext_activity_expire_check_update" (:SIMULATION_ID,MESSAGE); 
+                
+                 --update lock  
+                 UPDATE "sap.tm.trp.db.planningcockpit::t_lock"
+                   SET USER_ID= :USER_ID ,
+                       LAST_MODIFYED_ON = :V_TIMESTAMP_START                     
+                 WHERE SIMULATION_ID=:SIMULATION_ID;                   
+                             
+    
+                 MESSAGE := 'MSG_SUCCESS_STATUS';       
+                 MODIFIED_BY := :USER_NAME;  
+               
+                 SELECT COUNT(*) INTO  CNT  FROM :out_route_res;
+                
+               ELSE               
+                -- Keep the message as the one returned from calling solver 
+                MODIFIED_BY := :USER_NAME; 
+               
+               END IF;
+         
+              END IF;  
+    ELSE     
+         MESSAGE:='MSG_ERROR_LOCKED';
+         SELECT IFNULL(MAX(USERNAME),'DEACTIVATED USER') INTO MODIFIED_BY FROM "sap.tm.trp.db.systemmanagement.user::t_user" WHERE ID=:V_LOCK_USER_ID ;         
+    END IF;
+
+END

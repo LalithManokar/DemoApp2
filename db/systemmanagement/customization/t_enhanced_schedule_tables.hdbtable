@@ -1,0 +1,9 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "TABLE_NAME_KEY"; sqlType = VARCHAR; length = 100; nullable = false;},
+    {name = "TABLE_NAME"; sqlType = VARCHAR; length = 200; nullable = false;unique = true;},
+    {name = "LAST_MODIFIED_BY";sqlType = VARCHAR; length = 60;},
+    {name = "LAST_MODIFIED_AT"; sqlType = TIMESTAMP;}
+    ];   
+table.primaryKey.pkcolumns = ["TABLE_NAME_KEY"];

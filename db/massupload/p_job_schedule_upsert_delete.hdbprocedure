@@ -1,0 +1,63 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_job_schedule_upsert_delete" (
+ IN SCHEDULE_ENTITIES "sap.tm.trp.db.massupload::tt_plan_schedule_entity",
+ OUT ALL_DEL_SCHEDULE_IDS "sap.tm.trp.db.massupload::tt_plan_schedule_id"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+
+---For job update, get all previous scheduled IDs     
+  OLD_SCHEDULE_IDS =
+	     SELECT IFNULL(MAX(SCHEDULE_ID),-1) AS SCHEDULE_ID
+		    FROM (
+			    SELECT A.SCHEDULE_ID , A.ID AS JOB_SCHEDULE_ID
+			    FROM "sap.tm.trp.db.job::t_job_schedule" A
+			    INNER JOIN (
+			      SELECT MAX(ID) AS JOB_SCHEDULE_ID 
+			       FROM "sap.tm.trp.db.job::t_job_schedule" T1
+			       INNER JOIN :SCHEDULE_ENTITIES  T2
+			        ON T1.MODEL_ID = T2.MODEL_ID AND T1.SCHEDULE_TYPE = T2.SCHEDULE_TYPE AND T2.IF_UPDATE = 1
+			       WHERE T1.SCHEDULE_FLAG = 1  GROUP BY T1.MODEL_ID ) B
+			    ON A.ID = B.JOB_SCHEDULE_ID ) C
+		    GROUP BY C.JOB_SCHEDULE_ID;    
+
+--For job deletion, get all the deleted schedule IDs
+  DEL_OLD_SCHEDULE_IDS = 
+     	 SELECT IFNULL(MAX(SCHEDULE_ID),-1) AS SCHEDULE_ID
+		    FROM (
+			    SELECT A.SCHEDULE_ID , A.ID AS JOB_SCHEDULE_ID
+			    FROM "sap.tm.trp.db.job::t_job_schedule" A
+			    INNER JOIN (
+			      SELECT MAX(ID) AS JOB_SCHEDULE_ID 
+			       FROM "sap.tm.trp.db.job::t_job_schedule" T1
+			       INNER JOIN :SCHEDULE_ENTITIES  T2
+			        ON T1.MODEL_ID = T2.MODEL_ID AND T1.SCHEDULE_TYPE = T2.SCHEDULE_TYPE AND T2.IF_UPDATE = 2
+			        GROUP BY T1.MODEL_ID ) B
+			    ON A.ID = B.JOB_SCHEDULE_ID ) C
+		    GROUP BY C.JOB_SCHEDULE_ID;
+      
+---Return all the scheduled IDs that need to be deleted
+  ALL_DEL_SCHEDULE_IDS = 
+     SELECT * FROM :OLD_SCHEDULE_IDS
+     UNION
+      SELECT * FROM :DEL_OLD_SCHEDULE_IDS;
+      
+---For job update and deleteion , update OLD SCHEDULE_FLAG to 0 to stop schedule
+  UPDATE A  FROM "sap.tm.trp.db.job::t_job_schedule" A
+   INNER JOIN :ALL_DEL_SCHEDULE_IDS B ON A.SCHEDULE_ID = B.SCHEDULE_ID
+   SET A.SCHEDULE_FLAG = 0;   
+
+---For job creation and update, insert new entrys
+    INSERT INTO "sap.tm.trp.db.job::t_job_schedule"
+     (ID,SCHEDULE_ID, MODEL_ID, CREATE_DATE, SCHEDULE_FLAG, SCHEDULE_TYPE)   
+     SELECT 
+	   "sap.tm.trp.db.job::s_job_schedule".NEXTVAL,
+	   	NEW_SCHEDULE_ID,
+	   	MODEL_ID,
+	   	CURRENT_UTCTIMESTAMP,
+	   	1,
+	   	SCHEDULE_TYPE
+	 FROM :SCHEDULE_ENTITIES WHERE IF_UPDATE = 0 OR IF_UPDATE = 1;
+END;

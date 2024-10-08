@@ -1,0 +1,25 @@
+//To define the HDB view file use the following syntax: 
+
+schema="SAP_TM_TRP";
+query="
+	SELECT	T1.GROUP_ID AS ID,
+			T2.ID AS NODE_ID,
+			T2.ATTRIBUTE_ID,
+			T3.CODE AS ATTRIBUTE_CODE,
+			T3.NAME AS ATTRIBUTE_NAME,
+			T3.CATEGORY_ID,
+			T4.CODE AS CATEGORY_CODE,
+			T4.NAME AS CATEGORY_NAME,
+			T3.VALUE_TYPE AS TYPE,
+			T5.CODE AS OPERATOR,
+			T6.CATEGORY
+	FROM \"sap.tm.trp.db.filter::t_attribute_group_item\" T1
+	INNER JOIN \"sap.tm.trp.db.filter::t_attribute_group\" T6 ON T6.ID = T1.GROUP_ID
+	LEFT JOIN \"sap.tm.trp.db.filter::t_attribute_group_item_node\" T2 ON T2.GROUP_ID = T1.GROUP_ID AND T2.ID = T1.NODE_ID
+	LEFT JOIN \"sap.tm.trp.db.filter::v_attribute_group_sd_attribute\" T3 ON T3.ID = T2.ATTRIBUTE_ID
+	LEFT JOIN \"sap.tm.trp.db.filter::t_attribute_group_attribute_category\" T4 ON T4.ID = T3.CATEGORY_ID
+	LEFT JOIN \"sap.tm.trp.db.filter::t_attribute_group_attribute_operator\" T5 ON T5.ID = T2.OPERATOR_ID
+	WHERE T2.ID IS NOT NULL AND T6.CATEGORY = '2'
+";
+depends_on_table = ["sap.tm.trp.db.filter::t_attribute_group_item","sap.tm.trp.db.filter::t_attribute_group_item_node","sap.tm.trp.db.filter::t_attribute_group","sap.tm.trp.db.filter::t_attribute_group_attribute_category","sap.tm.trp.db.filter::t_attribute_group_attribute_operator"];
+depends_on_view=["sap.tm.trp.db.filter::v_attribute_group_sd_attribute"];

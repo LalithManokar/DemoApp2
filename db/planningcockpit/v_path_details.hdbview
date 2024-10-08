@@ -1,0 +1,14 @@
+schema = "SAP_TM_TRP";
+query  = "
+	SELECT
+		PATH_ID
+		,SEQUENCE
+		,FROM_LOCATION
+		,TO_LOCATION
+		,DISTANCE
+		,DURATION
+		,STAY_TIME
+	FROM \"sap.tm.trp.routing.db.dataset::v_path_connection\"
+	";
+
+depends_on_view = ["sap.tm.trp.routing.db.dataset::v_path_connection"];

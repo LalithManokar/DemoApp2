@@ -1,0 +1,73 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_persisted_plans_intersection_check" (
+	IN in_persisted_plan_ids "sap.tm.trp.db.pipeline::tt_plan_model_location_filter",
+	IN in_full_check_flag SMALLINT,
+	OUT intersection_plan_info "sap.tm.trp.db.pipeline::tt_plan_model_info" 
+	) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+
+ 
+DECLARE CURSOR CUR_PLAN_MODEL FOR 
+SELECT PLAN_MODEL_ID,LOCATION_FILTER_ID 
+FROM :in_persisted_plan_ids ;
+DECLARE VAR_PERSISTED_PLAN_MODEL_ID BIGINT;
+DECLARE VAR_LOCATION_FILTER_ID BIGINT;
+DECLARE FULL_CHECK INTEGER := 1 ;
+DECLARE NON_FULL_CHECK INTEGER := 0;
+
+IF :in_full_check_flag = FULL_CHECK THEN
+	
+	FOR PLAN_MODEL_INFO as CUR_PLAN_MODEL DO
+	  --Get one of the persisted plan from the pps to check the intersection with the rest of other pps:
+	  VAR_PERSISTED_PLAN_MODEL_ID := PLAN_MODEL_INFO.PLAN_MODEL_ID;
+	  VAR_LOCATION_FILTER_ID :=  PLAN_MODEL_INFO.LOCATION_FILTER_ID;
+	  
+	  SQL_PPS_WITHOUT_THE_PP = SELECT * FROM :in_persisted_plan_ids WHERE PLAN_MODEL_ID <> :VAR_PERSISTED_PLAN_MODEL_ID;
+	 
+	  CALL "sap.tm.trp.db.pipeline::p_persisted_plans_intersect_to_persisted_plan_with_locationfilter" (
+	    :VAR_PERSISTED_PLAN_MODEL_ID, 
+	    :VAR_LOCATION_FILTER_ID, 
+		:SQL_PPS_WITHOUT_THE_PP, 
+		SQL_PERSISTED_PLANS_WITH_INTERSECTION
+		);
+		
+	  
+	   intersection_plan_info = SELECT PLAN_MODEL_ID1,NAME1,PLAN_MODEL_ID2,NAME2 FROM :intersection_plan_info
+	              UNION ALL SELECT PLAN_MODEL_ID1,NAME1,PLAN_MODEL_ID2,NAME2 FROM  :SQL_PERSISTED_PLANS_WITH_INTERSECTION;
+	  
+	END FOR;
+	
+ELSEIF :in_full_check_flag = NON_FULL_CHECK THEN
+     FOR PLAN_MODEL_INFO as CUR_PLAN_MODEL DO
+	  --Get one of the persisted plan from the pps to check the intersection with the rest of other pps:
+	  VAR_PERSISTED_PLAN_MODEL_ID := PLAN_MODEL_INFO.PLAN_MODEL_ID;
+	  VAR_LOCATION_FILTER_ID :=  PLAN_MODEL_INFO.LOCATION_FILTER_ID;
+	  
+	  SQL_PPS_WITHOUT_THE_PP = SELECT * FROM :in_persisted_plan_ids WHERE PLAN_MODEL_ID <> :VAR_PERSISTED_PLAN_MODEL_ID;
+	 
+	  CALL "sap.tm.trp.db.pipeline::p_persisted_plans_intersect_to_persisted_plan_with_locationfilter" (
+	    :VAR_PERSISTED_PLAN_MODEL_ID, 
+	    :VAR_LOCATION_FILTER_ID, 
+		:SQL_PPS_WITHOUT_THE_PP, 
+		SQL_PERSISTED_PLANS_WITH_INTERSECTION
+		);
+		
+	  
+	   intersection_plan_info = SELECT PLAN_MODEL_ID1,NAME1,PLAN_MODEL_ID2,NAME2 FROM :intersection_plan_info
+	              UNION ALL SELECT PLAN_MODEL_ID1,NAME1,PLAN_MODEL_ID2,NAME2 FROM  :SQL_PERSISTED_PLANS_WITH_INTERSECTION;
+	  RETURN;
+	END FOR;
+ELSE
+    intersection_plan_info = SELECT NULL AS PLAN_MODEL_ID1,NULL AS NAME1, NULL AS PLAN_MODEL_ID2,NULL AS NAME2 
+    FROM DUMMY;
+END IF;
+
+
+
+
+ 
+ 
+END;

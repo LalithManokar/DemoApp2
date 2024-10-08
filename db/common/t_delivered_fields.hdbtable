@@ -1,0 +1,21 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE; // ROWSTORE is an alternative value
+
+table.columns =
+ [
+    {name = "ID";  sqlType = BIGINT; nullable = false; },
+    {name = "PAGE_ID";  sqlType = INTEGER;  comment = "Page ID : BOOKING,RESOURCE"; },
+    {name = "NAME";  sqlType = NVARCHAR; length = 200; comment = "Column Name";},
+    {name = "DISPLAY_NAME";  sqlType = NVARCHAR; length = 200; comment = "Column Display Name";},
+    {name = "DATA_TYPE";  sqlType = NVARCHAR; length = 40;comment = "Column Data type";},
+    {name = "LENGTH";  sqlType = INTEGER;comment = "Column length";},
+    {name = "SCALE";  sqlType = INTEGER;comment = "Column SCALE";},
+    {name = "SEARCHABLE";  sqlType = TINYINT;comment = "Search is enabled : 1 or 0";},
+    {name = "FILTERABLE";  sqlType = TINYINT;comment = "Filter is enabled : 1 or 0";},
+    {name = "TYPE";  sqlType = INTEGER;comment = "0: Static , 1: Dynamic , 2 Extended";},
+    {name = "CONFIGURABLE";  sqlType = TINYINT;comment = "0: No , 1: Yes ";},
+    {name = "CUSTOM";  sqlType = TINYINT;comment = "0: No , 1: Yes ";},
+    {name = "DEFAULT";  sqlType = TINYINT;comment = "0: No , 1: Yes ";}
+]; 
+
+table.primaryKey.pkcolumns = ["ID"];  

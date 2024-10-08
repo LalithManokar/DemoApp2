@@ -1,0 +1,18 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+  {name = "ID"; sqlType = BIGINT;nullable = false;},
+  {name = "NAME"; sqlType = VARCHAR; length = 200; nullable = false; unique = true;},
+  {name = "CODE";sqlType = NVARCHAR; length = 200; nullable = true;unique = true;},
+  {name = "RULESET_TYPE"; sqlType = INTEGER; comment="1:pick up  2:return";},
+  {name = "JOB_PROCESS"; sqlType = BIGINT;},
+  {name = "CREATED_BY"; sqlType = BIGINT;},
+  {name = "CREATED_ON"; sqlType = TIMESTAMP;},
+  {name = "MODIFIED_BY"; sqlType = BIGINT;},
+  {name = "MODIFIED_ON"; sqlType = TIMESTAMP;},
+  {name = "RESOURCE_CATEGORY";sqlType = VARCHAR; length = 50;}
+];
+table.indexes = [
+  {name = "RULE_SCH_GROUP_NAME_INDEX"; unique = true; indexColumns = ["NAME"];}
+];
+table.primaryKey.pkcolumns = ["ID"];

@@ -1,0 +1,9 @@
+schema="SAP_TM_TRP";
+
+query="SELECT DISTINCT T1.ROOT_ID,T2.LOCATION_ID
+              FROM \"sap.tm.trp.db.systemmanagement.location::t_region_item\" T1
+              INNER JOIN \"sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions\" T2 ON (T1.ZONE_ID = T2.ZONE_ID) ";
+              
+depends_on_table = ["sap.tm.trp.db.systemmanagement.location::t_region_item"];                      
+depends_on_view = ["sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions"];              
+

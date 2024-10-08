@@ -1,0 +1,839 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_get_plan_data_by_sd_planid_rulegroup" (
+ IN IN_SD_PLAN_ID "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_sd_plan_rulegroup",
+ IN IN_LOC_RES_MAPPING "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_sd_loc_res_ids",
+ IN IN_RESOURCE_TYPE VARCHAR(20),
+ IN IN_ALL_RESULTS VARCHAR(1),
+ OUT OUT_LOCATION_FILTER_ID "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_sd_location_filter",
+ OUT OUT_RESOURCE_FILTER_ID "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_sd_resource_filter",
+ OUT OUT_EXECUTION_ID "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_sd_plan_execution_id",
+ OUT OUT_NODE_ID BIGINT,
+ OUT OUT_SD_RESULT "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_supply_demand_stock_rulegroup", 
+ OUT OUT_EXEC_RESULT "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" 
+)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+ AS
+BEGIN
+/**************************************************************************
+	Get plan data(supply,demand,stock..) by SD/VSD plan id,
+	the SD or subplan assigned to VSD can be classical plan or instant plan
+ **************************************************************************/
+ DECLARE SCHEDULED_PLAN INTEGER := 1;
+ DECLARE VIRTUAL_PLAN INTEGER := 3;
+ DECLARE V_RESOURCE_CATEGORY VARCHAR(50);
+ DECLARE V_PLAN_TYPE INTEGER;
+ DECLARE PLAN_ID BIGINT;
+ DECLARE V_EXECUTION_ID BIGINT;
+ DECLARE V_DEFAULT_NODE_ID BIGINT;
+ DECLARE V_DEFAULT_NODE_NAME VARCHAR(200);
+ DECLARE MIN_SAFETY_KEY VARCHAR(20) := 'MIN_SAFETY_STOCK';
+ DECLARE MAX_SAFETY_KEY VARCHAR(20) := 'MAX_SAFETY_STOCK';
+ DECLARE MAX_CAPACITY_KEY VARCHAR(20) := 'MAX_CAPACITY';
+ DECLARE MIN_SAFETY_DEFAULT INTEGER;
+ DECLARE MAX_SAFETY_DEFAULT INTEGER;
+ DECLARE MAX_CAPACITY_DEFAULT INTEGER;
+ DECLARE EXECUTION_ID BIGINT;
+ DECLARE V_NODETYPE VARCHAR(32) := 'nodeType';
+ DECLARE V_INITIAL_STOCK VARCHAR(32) := 'INITIAL_STOCK';
+ DECLARE V_STOCK VARCHAR(200) := 'STOCK';
+ DECLARE DATASETS_AMOUNT INTEGER;
+ DECLARE BASIC_SD_PLAN_ID BIGINT;
+ DECLARE V_INSTANT_ENABLED CHAR(1) :='';
+ DECLARE TIME_FILTER_ID BIGINT;
+  -------------------CLASSIC VSD------
+ DECLARE IN_VIRTUAL_PLAN_ID BIGINT;
+ DECLARE DEFAULT_NODE_NAME VARCHAR(200);
+ DECLARE METADATA_NODE_ID_NUM INTEGER;
+ DECLARE DEFAULT_METADATA_NODE_NUM INTEGER;
+ DECLARE PP_ID INTEGER;
+
+ 
+ -------------CLASSIC SD/INSTANT SD---
+ DECLARE SCHEDULED_PLAN_ID BIGINT;
+ DECLARE V_PIPELINE_MODEL_ID BIGINT;
+ DECLARE PIPELINE_MODEL VARCHAR(200);
+ 
+ ------------INSTANT SDPLAN----
+ DECLARE ATTRIBUTE_FILTER_ID BIGINT;
+ DECLARE RES_FILTER_ID BIGINT;
+ DECLARE TIMEZONE NVARCHAR(50):= '';
+ DECLARE RESOURCE_CATEGORY VARCHAR(20);
+ DECLARE ATTRIBUTE_FILTER NVARCHAR(500);
+ DECLARE LV_LOCATION_COUNT INTEGER;
+ 
+ -------------AGGREGATED COLUMN---
+ DECLARE  ADDREGAT_METHOD_KEY VARCHAR(30) := 'AGGREGATIONMETHOD';
+ DECLARE  ADDREGAT_METHOD_SUM_VALUE VARCHAR(30) := 'SUM';
+ DECLARE  ADDREGAT_METHOD_MEAN_VALUE VARCHAR(30) := 'MEAN';
+ DECLARE V_STOCK_NODE_ID VARCHAR(50) := 'STOCK';
+ 
+ ----------------------------------------------READ TEMP TABLE----------------------------------------
+    LOCATION = SELECT * FROM "sap.tm.trp.db.supplydemand.instant::t_cm_execution_parameter_location_temp";
+	RESOURCE = SELECT * FROM "sap.tm.trp.db.supplydemand.instant::t_cm_execution_parameter_resource_temp";
+	
+ ----------------------------------------------FETCH COLUMN VALUES----------------------------------------
+ --Get location filter id of the Scheduled/Virtual SD plan
+   V_FILTER_GROUP_ID = SELECT ID AS PLAN_ID,FILTER_GROUP_ID
+        FROM "sap.tm.trp.db.pipeline::t_plan_model"
+        WHERE ID IN (SELECT PLAN_ID FROM :IN_SD_PLAN_ID);
+       
+   SELECT TOP 1 T1.PLAN_ID INTO PLAN_ID FROM :IN_SD_PLAN_ID T1;
+    
+   SELECT PLAN_MODEL_TYPE_ID INTO V_PLAN_TYPE
+                 FROM "sap.tm.trp.db.pipeline::t_plan_model"
+                 WHERE ID = :PLAN_ID 
+                 AND  (PLAN_MODEL_TYPE_ID = :SCHEDULED_PLAN OR PLAN_MODEL_TYPE_ID = :VIRTUAL_PLAN);
+
+    OUT_LOCATION_FILTER_ID = SELECT LOCATION_FILTER_ID  
+        FROM "sap.tm.trp.db.filter::t_filter_location_filter"
+        WHERE FILTER_GROUP_ID IN (SELECT FILTER_GROUP_ID FROM :V_FILTER_GROUP_ID);
+    
+    OUT_SD_LOCATION_FILTER_ID = SELECT T2.PLAN_ID,T1.LOCATION_FILTER_ID  
+    FROM "sap.tm.trp.db.filter::t_filter_location_filter" T1
+    INNER JOIN :V_FILTER_GROUP_ID T2 ON (T1.FILTER_GROUP_ID = T2.FILTER_GROUP_ID);
+
+    OUT_RESOURCE_FILTER_ID = SELECT EQUIPMENT_FILTER_ID AS RESOURCE_FILTER_ID
+        FROM "sap.tm.trp.db.filter::t_filter_equipment_filter"
+    WHERE FILTER_GROUP_ID IN (SELECT FILTER_GROUP_ID FROM :V_FILTER_GROUP_ID);
+    
+    SELECT RESOURCE_CATEGORY INTO V_RESOURCE_CATEGORY FROM "sap.tm.trp.db.filter::t_filter_equipment_filter"
+        WHERE FILTER_GROUP_ID in (SELECT TOP 1 FILTER_GROUP_ID FROM :V_FILTER_GROUP_ID);
+
+    /*RESOURCE_TYPE_IDS =
+       SELECT DISTINCT IFNULL(EQUI_CODE,EQUIPMENT_GROUP_ID) AS EQUIP_TYPE_ID
+       FROM "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth"
+       WHERE EQUIPMENT_FILTER_ID IN (SELECT RESOURCE_FILTER_ID FROM :OUT_RESOURCE_FILTER_ID);*/
+       
+    RESOURCE_TYPE_IDS=SELECT DISTINCT RESOURCE_ID FROM :IN_LOC_RES_MAPPING;
+  
+    ---Get location list of the scheduled/virtual SD plan
+    CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_get_locations_sdplan" (:OUT_SD_LOCATION_FILTER_ID,LOCATIONS);
+    LOCATIONS = SELECT DISTINCT PLAN_ID,LOCATION_ID FROM :LOCATIONS;
+
+    -- get the default stock threshold
+    SELECT IFNULL(MAX(T1.DEFAULT_VALUE),0) INTO MIN_SAFETY_DEFAULT
+        FROM "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+        WHERE T1.DEFAULT_KEY = :MIN_SAFETY_KEY;
+
+  SELECT IFNULL(MAX(T1.DEFAULT_VALUE),999999) INTO MAX_SAFETY_DEFAULT
+  FROM "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+  WHERE T1.DEFAULT_KEY = :MAX_SAFETY_KEY; 
+
+  SELECT IFNULL(MAX(T1.DEFAULT_VALUE),999999) into MAX_CAPACITY_DEFAULT
+  FROM "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+  WHERE T1.DEFAULT_KEY = :MAX_CAPACITY_KEY;
+  
+    ---Virutal SD plan(Classical VSD) 
+    IF V_PLAN_TYPE = :VIRTUAL_PLAN THEN --check if it's VSD
+	
+        IN_VIRTUAL_PLAN_ID=:PLAN_ID;
+         ----------------------------------------------FETCH DEFAULT NODE NAME FOR VIRTUAL SD PLAN-*START*----------------------------------------
+         -- get the intersection nodes of the virtual plan
+            METADATA_NODE_ID_INTERSECTION = 
+            	 SELECT NAME 
+            	 FROM "sap.tm.trp.db.pipeline::t_virtual_tree_node_name" 
+            	 WHERE VIRTUAL_PLAN_MODEL_ID = :IN_VIRTUAL_PLAN_ID;
+    
+            SELECT COUNT(NAME) INTO METADATA_NODE_ID_NUM FROM :METADATA_NODE_ID_INTERSECTION;
+    
+            IF (:METADATA_NODE_ID_NUM = 0) THEN -- intersection is empty
+            	SELECT '' INTO V_DEFAULT_NODE_NAME FROM DUMMY;
+            ELSE
+            	  -- get the sub persisted plans for this virual plan
+            	 PP_ID_LIST =
+            	 	SELECT PERSISTED_PLAN_MODEL_ID AS ID
+            	 	FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" 
+            	    WHERE VIRTUAL_PLAN_MODEL_ID = :IN_VIRTUAL_PLAN_ID;
+    
+            	 -- get calculation model and default node for each persisted plan
+            	 PP_ID_LIST_METADATA_NODE_ID = 
+            		 SELECT T1.ID AS PLAN_MODEL_ID,T3.DEFAULT_NODE_ID, T4.METADATA_NODE_ID
+            		 FROM :PP_ID_LIST T1
+            		 INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T2 ON (T1.ID = T2.ID) -- get the calculation model id
+            		 INNER JOIN "sap.tm.trp.db.pipeline::v_pipeline_default_node" T3 ON (T2.PIPELINE_MODEL_ID = T3.PIPELINE_MODEL_ID) -- get the default node;
+            		 INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T4 ON (T3.DEFAULT_NODE_ID = T4.ID); -- get the default metadata node id
+    
+            	 -- get the intersection of the default nodes
+            	 DEFAULT_NODE_LIST = 
+            		 SELECT T1.PLAN_MODEL_ID, T1.DEFAULT_NODE_ID, T1.METADATA_NODE_ID
+            		 FROM :PP_ID_LIST_METADATA_NODE_ID T1
+            		 INNER JOIN :METADATA_NODE_ID_INTERSECTION T2 ON T1.METADATA_NODE_ID = T2.NAME;
+    
+            	 -- get the number of different metadata node id
+            	 SELECT COUNT(DISTINCT METADATA_NODE_ID) INTO DEFAULT_METADATA_NODE_NUM FROM :DEFAULT_NODE_LIST;
+    
+            	 -- then apply the following rules
+            		-- 1. If there are only one metadata node id for the default nodes, then return this metadata node id
+            		-- 2. If there is no default node in the intersection, then just return the metadata node id with maximial node id in the intersection
+            		-- 3. If there are multiple metadata node ids for the default nodes, then return the metadata node id with maximal node id in the default node set
+            	 IF( :DEFAULT_METADATA_NODE_NUM = 1) THEN
+            	 	SELECT TOP 1 METADATA_NODE_ID,DEFAULT_NODE_ID INTO V_DEFAULT_NODE_NAME,V_DEFAULT_NODE_ID FROM :DEFAULT_NODE_LIST;
+            	 ELSE
+            	 	-- the node id in the same model can be used to determine the default node in some casess 
+            	 	-- get the plan id which will be used to get the node id for each metadata node id
+            	 	SELECT TOP 1 ID INTO PP_ID FROM :PP_ID_LIST;
+            	 	NODE_ID_LIST_VSD = 
+            		 	SELECT T3.ID AS NODE_ID, T4.NAME AS METADATA_NODE_ID
+            		 	FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+            		 	INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_model" T2 ON (T1.PIPELINE_MODEL_ID = T2.ID) -- get the calculation model id
+            		 	INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T3 ON (T2.ID = T3.PIPELINE_MODEL_ID) -- get the node id
+            		 	INNER JOIN :METADATA_NODE_ID_INTERSECTION T4 ON (T3.METADATA_NODE_ID = T4.NAME)
+            		 	WHERE T1.ID = :PP_ID -- garantee they are in the same persisted plan i.e. Calculation Model
+            		 	ORDER BY T3.ID DESC;
+    
+            	 	IF (:DEFAULT_METADATA_NODE_NUM = 0) THEN
+            		 	SELECT TOP 1 METADATA_NODE_ID, NODE_ID INTO V_DEFAULT_NODE_NAME,V_DEFAULT_NODE_ID FROM :NODE_ID_LIST_VSD
+            		 	ORDER BY NODE_ID DESC; -- from the intesection, get the metadata node id which has the max node id
+            	 	ELSE
+            		 	SELECT TOP 1 T1.METADATA_NODE_ID FROM :DEFAULT_NODE_LIST T1
+            		 	INNER JOIN :NODE_ID_LIST_VSD T2 -- get the node id
+            		 	ON T1.METADATA_NODE_ID = T2.METADATA_NODE_ID
+            		 	ORDER BY DEFAULT_NODE_ID DESC;
+               	    END IF;
+                END IF;   
+            END IF;
+        ----------------------------------------------FETCH DEFAULT NODE NAME FOR VIRTUAL SD PLAN--*END*----------------------------------------
+        /*CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_get_aggregate_sd_result_for_virtual_plan_rulegroup"(:IN_SD_PLAN_ID,
+    	:LOCATIONS,'',V_DEFAULT_NODE_NAME, 
+    	OUT_EXECUTION_ID,OUTPUT_DATASET_ALL_RESOURCES);*/
+    	
+    	--Fetch max execution id amoung all sd plans
+	    SQL_EXECUTION_IDS_BEFORE_PP_EXECUTION_ID = 
+		        SELECT A.PLAN_MODEL_ID,A.ID,C.PLAN_ID AS V_PLAN_ID FROM  "sap.tm.trp.db.pipeline::t_plan_execution" A
+		        INNER JOIN "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" B
+		        ON (A.PLAN_MODEL_ID = B.PERSISTED_PLAN_MODEL_ID)
+		        INNER JOIN :IN_SD_PLAN_ID C ON (B.VIRTUAL_PLAN_MODEL_ID = C.PLAN_ID);
+		           
+    		--get the newest execution id for each persisted plan of the virtual plan 
+    	SQL_EXECUTION_IDS = SELECT T1.PLAN_MODEL_ID,T1.V_PLAN_ID,MAX(T1.ID) AS NEWEST_EXECUTION_ID
+            	FROM :SQL_EXECUTION_IDS_BEFORE_PP_EXECUTION_ID T1
+    	        GROUP BY T1.PLAN_MODEL_ID,V_PLAN_ID;
+    	
+    	--get the max execution id (which is the reference persisted plan's newest execution id) among those newest execution id of each persisted plan
+	    OUT_EXECUTION_ID = SELECT IFNULL(MAX(NEWEST_EXECUTION_ID),-1)  AS PLAN_EXECUTION_ID
+	        FROM :SQL_EXECUTION_IDS
+	        GROUP BY V_PLAN_ID;
+	    
+	    --fetch default node id based on last execution id
+	        SELECT COALESCE(max(ID),-1) INTO V_DEFAULT_NODE_ID FROM 
+	        (
+	          SELECT T0.DEFAULT_NODE_ID AS ID
+	          FROM 
+	              (
+	               select PIPELINE_MODEL_ID,TO_BIGINT(VALUE) AS DEFAULT_NODE_ID
+	          	           FROM "sap.tm.trp.db.pipeline::t_pipeline_misc_info" WHERE KEY = 'defaultNode'
+	               ) T0
+	            	INNER JOIN "sap.tm.trp.db.pipeline::t_execution_context" T1 
+	            	ON T0.PIPELINE_MODEL_ID = T1.VALUE
+	            	WHERE T1.EXECUTION_ID IN (SELECT PLAN_EXECUTION_ID FROM :OUT_EXECUTION_ID) AND T1.KEY = 'PIPELINE_MODEL_ID'
+	      	);
+	      	OUT_NODE_ID := :V_DEFAULT_NODE_ID;
+	      	
+		lt_t_pipeline_output_dataset = select T1.PLAN_EXECUTION_ID,
+                                    		T1.LOCATION_ID,
+                                        	T1.LOCATION_NAME,
+                                        	T1.EQUIP_TYPE_ID,
+                                        	T1.EQUIP_TYPE_NAME,
+                                        	T1.OUTPUT_KEY,
+                                        	T1.OUTPUT_VALUE, 
+                                        	T1.NODE_ID,
+                                        	T1.TIME_INTERVAL, 
+                                        	T1.TIME_INTERVAL_ID,
+                                        	T1.START_TIME,
+                                        	T1.END_TIME,
+                                        	T1.SEQUENCE
+                                    FROM :SQL_EXECUTION_IDS T0
+                                    INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T1
+                                    ON (T0.NEWEST_EXECUTION_ID = T1.PLAN_EXECUTION_ID)
+                                    INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" D ON (T1.NODE_ID = D.ID)
+                                    WHERE (D.METADATA_NODE_ID = :V_DEFAULT_NODE_NAME OR D.METADATA_NODE_ID = :V_STOCK_NODE_ID);
+                                    
+        --apply filters for locations and resources tied up to vsd 
+	    lt_output_dataset_equi_loc = select T1.PLAN_EXECUTION_ID,
+	                                T1.LOCATION_ID,
+                                	T1.LOCATION_NAME,
+                                	T1.EQUIP_TYPE_ID,
+                                	T1.EQUIP_TYPE_NAME,
+                                	T1.OUTPUT_KEY,
+                                	T1.OUTPUT_VALUE, 
+                                	T1.NODE_ID,
+                                	T1.TIME_INTERVAL, 
+                                	T1.TIME_INTERVAL_ID,
+                                	T1.START_TIME,
+                                	T1.END_TIME,
+                                	T1.SEQUENCE
+            				FROM :lt_t_pipeline_output_dataset T1
+            				INNER JOIN :LOCATIONS C ON (T1.LOCATION_ID = C.LOCATION_ID)
+            				INNER JOIN :RESOURCE_TYPE_IDS F ON (T1.EQUIP_TYPE_ID = F.RESOURCE_ID );
+        
+        OUTPUT_DATASET_ALL_RESOURCES = SELECT DISTINCT T1.PLAN_EXECUTION_ID,
+                                        	T1.LOCATION_ID,
+                                        	T1.LOCATION_NAME,
+                                        	T1.EQUIP_TYPE_ID,
+                                        	T1.EQUIP_TYPE_NAME,
+                                        	T1.OUTPUT_KEY,
+                                        	T1.OUTPUT_VALUE, 
+                                        	T1.NODE_ID,
+                                        	T3.TIME_INTERVAL, 
+                                        	T3.TIME_INTERVAL_ID,
+                                        	T3.START_TIME,
+                                        	T3.END_TIME,
+                                        	T3.SEQUENCE
+                                	FROM 
+                                	:lt_output_dataset_equi_loc T1
+                                	INNER JOIN :lt_t_pipeline_output_dataset T3 ON T1.END_TIME = T3.END_TIME;
+        
+       	OUTPUT_DATASETS_EXEC_ALL_RESOURCES = SELECT PLAN_EXECUTION_ID,
+       	                                            LOCATION_ID,
+       	                                            LOCATION_NAME,
+       	                                            EQUIP_TYPE_ID, 
+       	                                            EQUIP_TYPE_NAME,
+       	                                            OUTPUT_KEY,
+       	                                            OUTPUT_VALUE, 
+       	                                            NODE_ID,
+       	                                            TIME_INTERVAL,
+       	                                            TIME_INTERVAL_ID,
+       	                                            START_TIME,
+       	                                            END_TIME,
+       	                                            SEQUENCE 
+       	                                    FROM :OUTPUT_DATASET_ALL_RESOURCES;
+                 
+         OUTPUT_DATASETS = SELECT LOCATION_ID,
+                                  LOCATION_NAME,
+                                  EQUIP_TYPE_ID, 
+                                  EQUIP_TYPE_NAME,
+                                  OUTPUT_KEY,
+                                  OUTPUT_VALUE, 
+                                  NODE_ID,
+                                  TIME_INTERVAL,
+                                  TIME_INTERVAL_ID,
+                                  START_TIME,
+                                  END_TIME,
+                                  SEQUENCE 
+                            FROM :OUTPUT_DATASET_ALL_RESOURCES;
+         
+     
+ELSEIF V_PLAN_TYPE = :SCHEDULED_PLAN THEN ---SD plan(Classical SD or Instant SD)
+			
+        --fetch calculation model id
+        SELECT PIPELINE_MODEL_ID INTO V_PIPELINE_MODEL_ID
+        FROM "sap.tm.trp.db.pipeline::t_plan_model" 
+        WHERE ID = :PLAN_ID AND PLAN_MODEL_TYPE_ID = :SCHEDULED_PLAN;
+
+        --check plan is instant or classic
+        SELECT  NAME,IFNULL (INSTANT_ENABLED,'') INTO PIPELINE_MODEL,V_INSTANT_ENABLED 
+	    FROM "sap.tm.trp.db.pipeline::t_pipeline_model" WHERE ID = :V_PIPELINE_MODEL_ID;
+		
+        IF :V_INSTANT_ENABLED = 'X' THEN --instant plan
+			
+			-- load data from instant executor
+			CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_sd_parameter_filterid_by_plan_rulegroup"(:IN_SD_PLAN_ID,LOCATION_FILTER_ID,RESOURCE_FILTER_ID,TIME_FILTER_ID,ATTRIBUTE_FILTER_ID);
+			CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_node_list_by_plan"(:V_PIPELINE_MODEL_ID, NODE_LIST);
+			CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_sd_parameter_location_by_plan_rulegroup"(:LOCATION_FILTER_ID, :LOCATION, LT_LOCATIONS);
+			CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_sd_parameter_resource_by_plan_rulegroup"(:RESOURCE_FILTER_ID, :RESOURCE, LT_RESOURCES);
+			
+	        SELECT TOP 1 RESOURCE_FILTER_ID INTO RES_FILTER_ID from :RESOURCE_FILTER_ID;
+	        
+			CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_time_period_by_plan"(:TIME_FILTER_ID, :TIMEZONE, LT_TIMES);
+			CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_attribute_filter"(:ATTRIBUTE_FILTER_ID, ATTRIBUTE_FILTER);
+			CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_resource_category"(:RES_FILTER_ID, RESOURCE_CATEGORY);
+
+			--3)dynamic call the pipline procedure to get the SD plan result
+			CALL "sap.tm.trp.db.supplydemand.instant::p_pipeline_procedure_wrapper"(:PIPELINE_MODEL, :RESOURCE_CATEGORY, :LT_LOCATIONS,:LT_RESOURCES,:LT_TIMES,:NODE_LIST,:ATTRIBUTE_FILTER, INSTANT_DATASET);
+
+			-- convert string node name to node id
+    		SD_RESULT_ALL = SELECT 
+        		TO_BIGINT(0) AS PLAN_EXECUTION_ID,
+        		T2.ID AS NODE_ID, 
+        		CAST(T1.GEO_ID AS VARCHAR(32)) AS LOCATION_ID, 
+        		CAST(T1.GEO_NAME AS VARCHAR(200)) AS LOCATION_NAME, 
+        		T1.GEO_FILTER_TYPE AS LOCATION_FILTER_TYPE, 
+        		CAST(T1.EQUIP_TYPE AS VARCHAR(32)) AS EQUIP_TYPE_ID, 
+        		CAST(T1.EQUIP_NAME AS VARCHAR(100)) AS EQUIP_TYPE_NAME, 
+        		T1.EQUIP_FILTER_TYPE AS EQUIP_FILTER_TYPE, 
+        		CAST(T1.OUTPUT_KEY AS VARCHAR(200)) OUTPUT_KEY, 
+        		T1.OUTPUT_VALUE, 
+        		T1.TIME_INTERVAL_ID, 
+        		T1.START_TIME, 
+        		T1.END_TIME, 
+        		TO_INT(T1.SEQUENCE) AS SEQUENCE, 
+        		T1.INTER_SECONDS AS TIME_INTERVAL,
+        		CAST(T1.UNIT AS VARCHAR(32)) AS UNIT 
+        		FROM :INSTANT_DATASET AS T1 
+        		    INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T2
+        		    ON T2.METADATA_NODE_ID = T1.NODE_ID AND PIPELINE_MODEL_ID = :V_PIPELINE_MODEL_ID
+        		    WHERE TO_DECIMAL(T1.OUTPUT_VALUE) <> 0;
+
+            IF :LV_LOCATION_COUNT <> 0 THEN
+        		SD_RESULT_ALL = SELECT T1.* FROM :SD_RESULT_ALL T1 INNER JOIN :LOCATION T2 ON T1.LOCATION_ID = T2.LOCATION_ID;
+         	END IF;
+
+         	--OUT_EXEC_RESULT output of INSTANT SD
+         	IF :IN_ALL_RESULTS = 'X' THEN--only output whole execution result when needed to improve performance
+                 OUT_EXEC_RESULT = SELECT * FROM :SD_RESULT_ALL;
+            ELSE
+                OUT_EXEC_RESULT = SELECT * FROM :SD_RESULT_ALL WHERE 1 = 2;
+            END IF ;
+            
+            --RANK Execution id's of all sd plan's 
+			RANK_EXECUTION_ID = SELECT T1.ID AS PLAN_EXECUTION_ID,T2.PLAN_ID,
+		      ROW_NUMBER()OVER (PARTITION BY T2.PLAN_ID ORDER BY T1.ID DESC) AS RANK
+	    	  FROM "sap.tm.trp.db.pipeline::t_plan_execution" T1
+		      INNER JOIN :IN_SD_PLAN_ID T2 ON ( t1.PLAN_MODEL_ID = t2.PLAN_ID);
+	      
+	      	--fetch last run (max execution id out of all) 
+	     	OUT_EXECUTION_ID = SELECT PLAN_EXECUTION_ID FROM :RANK_EXECUTION_ID T1
+	                           WHERE T1.RANK = 1;
+	   
+			--fetch default node based on pipeline model id
+       	    SELECT COALESCE(max(ID),-1) INTO V_DEFAULT_NODE_ID 
+	        FROM (
+				SELECT T0.DEFAULT_NODE_ID AS ID
+				FROM "sap.tm.trp.db.pipeline::v_pipeline_default_node" T0
+			    WHERE T0.PIPELINE_MODEL_ID = :V_PIPELINE_MODEL_ID
+			);
+            OUT_NODE_ID := V_DEFAULT_NODE_ID;
+            
+         	NODE_ID_LIST = SELECT NODE_ID FROM "sap.tm.trp.db.pipeline::t_pipeline_node_misc_info" NODE
+	                   WHERE NODE.KEY = :V_NODETYPE AND NODE.VALUE = :V_INITIAL_STOCK
+	                   UNION SELECT :V_DEFAULT_NODE_ID AS NODE_ID FROM DUMMY ;
+
+		   OUTPUT_DATASETS_EXEC_ALL_RESOURCES = SELECT PLAN_EXECUTION_ID,
+	                                                 LOCATION_ID,
+	                                                 LOCATION_NAME,
+	                                                 EQUIP_TYPE_ID, 
+	                                                 EQUIP_TYPE_NAME,
+	                                                 OUTPUT_KEY,
+	                                                 TO_DOUBLE(OUTPUT_VALUE) AS OUTPUT_VALUE, 
+	                                                 T1.NODE_ID,
+	                                                 TIME_INTERVAL,
+	                                                 TIME_INTERVAL_ID,
+	                                                 START_TIME,
+	                                                 END_TIME,
+	                                                 SEQUENCE
+            FROM :SD_RESULT_ALL AS T1
+	        INNER JOIN :NODE_ID_LIST AS T2 ON (T1.NODE_ID = T2.NODE_ID);
+	        
+	        OUTPUT_DATASETS = SELECT LOCATION_ID,
+	                                 LOCATION_NAME,
+	                                 EQUIP_TYPE_ID, 
+	                                 EQUIP_TYPE_NAME,
+	                                 OUTPUT_KEY,
+	                                 OUTPUT_VALUE,
+	                                 NODE_ID,
+	                                 TIME_INTERVAL,
+	                                 TIME_INTERVAL_ID,
+	                                 START_TIME,
+	                                 END_TIME,
+	                                 SEQUENCE
+            FROM :OUTPUT_DATASETS_EXEC_ALL_RESOURCES;
+		
+		
+		ELSE --not instant sd plan
+
+			--RANK Execution id's of all sd plan's 
+			RANK_EXECUTION_ID = SELECT T1.ID AS PLAN_EXECUTION_ID,T2.PLAN_ID,
+		      ROW_NUMBER()OVER (PARTITION BY T2.PLAN_ID ORDER BY T1.ID DESC) AS RANK
+	    	  FROM "sap.tm.trp.db.pipeline::t_plan_execution" T1
+		      INNER JOIN :IN_SD_PLAN_ID T2 ON ( t1.PLAN_MODEL_ID = t2.PLAN_ID);
+	      
+	      	--fetch last run (max execution id out of all) 
+	     	OUT_EXECUTION_ID = SELECT PLAN_EXECUTION_ID FROM :RANK_EXECUTION_ID T1
+	                           WHERE T1.RANK = 1;
+	                       
+		    ---Get SD PLAN DATA based on execution id for various scheduled SD plan
+			SD_RESULT_ALL = SELECT * FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" 
+			WHERE PLAN_EXECUTION_ID IN (SELECT PLAN_EXECUTION_ID FROM :OUT_EXECUTION_ID);
+	
+	        IF :LV_LOCATION_COUNT <> 0 THEN
+        		SD_RESULT_ALL = SELECT T1.* FROM :SD_RESULT_ALL T1 INNER JOIN :LOCATION T2 ON T1.LOCATION_ID = T2.LOCATION_ID;
+         	END IF;
+	
+	        -- OUT_EXEC_RESULT output of SD classic
+	        IF IN_ALL_RESULTS = 'X' THEN--only output whole execution result when needed to improve performance
+	            OUT_EXEC_RESULT = SELECT * FROM :SD_RESULT_ALL;
+	        ELSE
+	            OUT_EXEC_RESULT = SELECT * FROM :SD_RESULT_ALL WHERE 1 = 2;
+	        END IF ;
+	             
+			--fetch default node id based on last execution id
+	        SELECT COALESCE(max(ID),-1) INTO V_DEFAULT_NODE_ID FROM 
+	        (
+	          SELECT T0.DEFAULT_NODE_ID AS ID
+	          FROM 
+	              (
+	               select PIPELINE_MODEL_ID,TO_BIGINT(VALUE) AS DEFAULT_NODE_ID
+	          	           FROM "sap.tm.trp.db.pipeline::t_pipeline_misc_info" WHERE KEY = 'defaultNode'
+	               ) T0
+	            	INNER JOIN "sap.tm.trp.db.pipeline::t_execution_context" T1 
+	            	ON T0.PIPELINE_MODEL_ID = T1.VALUE
+	            	WHERE T1.EXECUTION_ID IN (SELECT PLAN_EXECUTION_ID FROM :OUT_EXECUTION_ID) AND T1.KEY = 'PIPELINE_MODEL_ID'
+	      	);
+	      	OUT_NODE_ID := :V_DEFAULT_NODE_ID;
+	      	
+			--ALL NODE LIST 
+			NODE_ID_LIST = SELECT NODE_ID FROM "sap.tm.trp.db.pipeline::t_pipeline_node_misc_info" NODE
+		                   WHERE NODE.KEY = :V_NODETYPE AND NODE.VALUE = :V_INITIAL_STOCK
+		                   UNION SELECT :V_DEFAULT_NODE_ID AS NODE_ID FROM DUMMY ;
+		
+	        OUTPUT_DATASETS_EXEC_ALL_RESOURCES =  SELECT PLAN_EXECUTION_ID,
+	                                                 LOCATION_ID,
+	                                                 LOCATION_NAME,
+	                                                 EQUIP_TYPE_ID, 
+	                                                 EQUIP_TYPE_NAME,
+	                                                 OUTPUT_KEY,
+	                                                 TO_DOUBLE(OUTPUT_VALUE) AS OUTPUT_VALUE, 
+	                                                 T1.NODE_ID,
+	                                                 TIME_INTERVAL,
+	                                                 TIME_INTERVAL_ID,
+	                                                 START_TIME,
+	                                                 END_TIME,
+	                                                 SEQUENCE
+	        	   	                 FROM :SD_RESULT_ALL AS T1
+		                             INNER JOIN :NODE_ID_LIST AS T2 ON (T1.NODE_ID = T2.NODE_ID);
+		  
+		   OUTPUT_DATASETS = SELECT LOCATION_ID,
+	                                 LOCATION_NAME,
+	                                 EQUIP_TYPE_ID, 
+	                                 EQUIP_TYPE_NAME,
+	                                 OUTPUT_KEY,
+	                                 OUTPUT_VALUE,
+	                                 NODE_ID,
+	                                 TIME_INTERVAL,
+	                                 TIME_INTERVAL_ID,
+	                                 START_TIME,
+	                                 END_TIME,
+	                                 SEQUENCE
+            FROM :OUTPUT_DATASETS_EXEC_ALL_RESOURCES;
+            
+	    END IF;
+    END IF;  
+    
+   PLAN_EXEC_ID = SELECT PLAN_MODEL_ID,ID AS PLAN_EXECUTION_ID FROM "sap.tm.trp.db.pipeline::t_plan_execution" WHERE ID IN (SELECT PLAN_EXECUTION_ID FROM :OUT_EXECUTION_ID);
+   
+   LOCATION_RESOURCE_SOTCK =
+     SELECT A.PLAN_ID,A.LOCATION_ID,A.LOCATION_NAME,A.EQUIP_TYPE_ID,A.EQUIP_TYPE_NAME,
+           IFNULL(B.MIN_SAFETY,:MIN_SAFETY_DEFAULT) AS MIN_SAFETY_STOCK,
+           IFNULL(B.MAX_SAFETY,:MAX_SAFETY_DEFAULT) AS MAX_SAFETY_STOCK,
+           IFNULL(B.MAX_CAPACITY,:MAX_CAPACITY_DEFAULT) AS MAX_CAPACITY,
+           IFNULL(C.MIN_SAFETY,:MIN_SAFETY_DEFAULT) AS MIN_SAFETY_STOCK_HEADER,
+           IFNULL(C.MAX_SAFETY,:MAX_SAFETY_DEFAULT) AS MAX_SAFETY_STOCK_HEADER,
+           IFNULL(C.MAX_CAPACITY,:MAX_CAPACITY_DEFAULT) AS MAX_CAPACITY_HEADER
+	  FROM (
+	         SELECT T1.PLAN_ID, T1.LOCATION_ID, T2.NAME AS LOCATION_NAME, T1.RESOURCE_ID AS EQUIP_TYPE_ID, T1.RESOURCE_ID AS EQUIP_TYPE_NAME
+	         FROM :IN_LOC_RES_MAPPING T1
+	         INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T2
+	         ON (T1.LOCATION_ID = T2.ID)
+		   ) A
+	 LEFT JOIN  (SELECT  T1.LOCATION_ID,T1.LOCATION_TYPE,
+                     T1.EQUIP_CODE,T1.EQUIP_CODE_TYPE,
+                     T1.MIN_SAFETY,T1.MAX_SAFETY,T1.MAX_CAPACITY,
+                     T1.RESOURCE_CATEGORY
+                    FROM "sap.tm.trp.db.stock::t_stock_config" T1 WHERE RESOURCE_CATEGORY = :V_RESOURCE_CATEGORY
+                 ) B  ON (A.LOCATION_ID = B.LOCATION_ID AND A.EQUIP_TYPE_ID = B.EQUIP_CODE)
+     LEFT JOIN
+                 (  SELECT  T1.LOCATION_ID,T1.LOCATION_TYPE,
+                     T1.EQUIP_CODE,T1.EQUIP_CODE_TYPE,
+                     T1.MIN_SAFETY,T1.MAX_SAFETY,T1.MAX_CAPACITY,
+                     T1.RESOURCE_CATEGORY
+                    FROM "sap.tm.trp.db.stock::t_stock_config" T1 WHERE LOCATION_HEAD_FLAG = 1 AND RESOURCE_CATEGORY = :V_RESOURCE_CATEGORY
+                 ) C ON (A.LOCATION_ID = C.LOCATION_ID);
+
+    LT_TIME_FILTER_NO_INTERVAL =    
+        SELECT 
+            A.ID AS PLAN_ID,
+            B.TIME_FILTER_ID,
+            C.ID AS TIME_INTERVAL_ID
+        FROM "sap.tm.trp.db.pipeline::t_plan_model" A
+	    INNER JOIN "sap.tm.trp.db.filter::t_filter_group" b ON A.FILTER_GROUP_ID = B.ID
+        INNER JOIN "sap.tm.trp.db.filter::t_time_filter_interval" C ON B.TIME_FILTER_ID = C.TIME_FILTER_ID
+        WHERE A.ID IN (SELECT PLAN_ID FROM :IN_SD_PLAN_ID);
+    
+    SELECT TOP 1 TIME_FILTER_ID INTO TIME_FILTER_ID FROM :LT_TIME_FILTER_NO_INTERVAL;
+    
+    CALL "sap.tm.trp.db.filter::p_time_filter_interval_4_timezone"(:TIME_FILTER_ID,'',TIME_INTERVAL);
+    
+    LT_TIME_FILTER = 
+        SELECT 
+            A.PLAN_ID,
+			A.TIME_FILTER_ID,
+            A.TIME_INTERVAL_ID,
+            B.START_TIME,
+            B.END_TIME
+        FROM :LT_TIME_FILTER_NO_INTERVAL A
+        INNER JOIN :TIME_INTERVAL B
+        ON A. TIME_INTERVAL_ID = B.TIME_INTERVAL_ID
+        AND A.TIME_FILTER_ID = B.ID;
+		
+	LT_RESOURCE_STOCK	= 
+	    SELECT 
+	        A.PLAN_ID,
+	        A.LOCATION_ID,
+	        A.LOCATION_NAME,
+	        A.EQUIP_TYPE_ID,
+	        A.EQUIP_TYPE_NAME,
+	        A.MIN_SAFETY_STOCK,
+	        A.MAX_SAFETY_STOCK,
+	        A.MAX_CAPACITY,
+	        A.MIN_SAFETY_STOCK_HEADER,
+	        A.MAX_SAFETY_STOCK_HEADER,
+	        A.MAX_CAPACITY_HEADER,
+	        B.TIME_INTERVAL_ID,
+			B.TIME_FILTER_ID,
+			B.START_TIME,
+			B.END_TIME
+	    FROM :LOCATION_RESOURCE_SOTCK A
+		LEFT JOIN :LT_TIME_FILTER B ON A.PLAN_ID = B.PLAN_ID;
+  
+    SELECT COUNT(1) INTO DATASETS_AMOUNT FROM :OUTPUT_DATASETS;
+	
+    IF DATASETS_AMOUNT > 0 THEN
+       
+    LT_DATA = 
+        SELECT DISTINCT 
+            A.LOCATION_ID,
+            A.LOCATION_NAME,
+            A.EQUIP_TYPE_ID,
+            A.EQUIP_TYPE_NAME,
+            A.START_TIME,
+	        A.END_TIME,
+	        A.TIME_INTERVAL,
+	        A.TIME_INTERVAL_ID,
+	        A.SEQUENCE,
+	        IFNULL(B.OUTPUT_VALUE,0) AS STOCK,
+	        IFNULL(S.OUTPUT_VALUE,0) AS SUPPLY,
+	        IFNULL(D.OUTPUT_VALUE,0) AS DEMAND,
+	        (IFNULL(S.OUTPUT_VALUE,0) - IFNULL(D.OUTPUT_VALUE,0)) as BALANCE_SUPPLY_DEMAND,
+	        (IFNULL(B.OUTPUT_VALUE,0) + IFNULL(S.OUTPUT_VALUE,0) - IFNULL(D.OUTPUT_VALUE,0)) as BALANCE_STOCK_SUPPLY_DEMAND
+        FROM :OUTPUT_DATASETS_EXEC_ALL_RESOURCES A
+        LEFT JOIN (SELECT * FROM  :OUTPUT_DATASETS WHERE OUTPUT_KEY = 'STOCK') AS B
+	        ON (A.LOCATION_ID = B.LOCATION_ID AND A.EQUIP_TYPE_ID = B.EQUIP_TYPE_ID AND A.TIME_INTERVAL_ID = B.TIME_INTERVAL_ID
+	        AND A.START_TIME = B.START_TIME AND A.END_TIME = B.END_TIME)
+        LEFT JOIN (SELECT * FROM :OUTPUT_DATASETS WHERE OUTPUT_KEY = 'SUPPLY' ) AS S
+	        ON (A.LOCATION_ID = S.LOCATION_ID AND A.EQUIP_TYPE_ID = S.EQUIP_TYPE_ID AND A.TIME_INTERVAL_ID = S.TIME_INTERVAL_ID
+	        AND A.START_TIME = S.START_TIME AND A.END_TIME = S.END_TIME)
+        LEFT JOIN (SELECT * FROM  :OUTPUT_DATASETS WHERE OUTPUT_KEY = 'DEMAND' ) AS D
+        	ON (A.LOCATION_ID = D.LOCATION_ID AND A.EQUIP_TYPE_ID =  D.EQUIP_TYPE_ID AND A.TIME_INTERVAL_ID = D.TIME_INTERVAL_ID
+        	AND A.START_TIME = D.START_TIME AND A.END_TIME = D.END_TIME);
+    
+    LT_BALANCE = 
+        SELECT 
+            A.LOCATION_ID,
+            A.TIME_INTERVAL_ID,
+	        sum(stock + supply - demand) as balance_stock
+	    FROM :LT_DATA A
+	    group by LOCATION_ID, TIME_INTERVAL_ID;
+	
+	LT_START_END_TIME = SELECT DISTINCT MIN(START_TIME) AS START_TIME, MAX(END_TIME) AS END_TIME, TIME_INTERVAL_ID FROM :LT_DATA GROUP BY TIME_INTERVAL_ID;
+	
+	LT_FINAL_PRE = 
+	    SELECT DISTINCT 
+	        A.PLAN_ID,
+	        A.LOCATION_ID,
+	        A.LOCATION_NAME,
+	        A.EQUIP_TYPE_ID,
+	        A.EQUIP_TYPE_NAME,
+	        A.MIN_SAFETY_STOCK,
+	        A.MAX_SAFETY_STOCK,
+	        A.MAX_CAPACITY,
+	        A.MIN_SAFETY_STOCK_HEADER,
+	        A.MAX_SAFETY_STOCK_HEADER,
+	        A.MAX_CAPACITY_HEADER,
+	        A.TIME_INTERVAL_ID,
+	        IFNULL(IFNULL(B.START_TIME, C.START_TIME), A.START_TIME) AS START_TIME,
+	        IFNULL(IFNULL(B.END_TIME, C.END_TIME), A.END_TIME) AS END_TIME,
+	        B.SEQUENCE,
+	        B.STOCK,
+	        B.SUPPLY,
+	        B.DEMAND, 
+			B.BALANCE_SUPPLY_DEMAND,
+			B.BALANCE_STOCK_SUPPLY_DEMAND,
+			B.TIME_INTERVAL
+		FROM :LT_RESOURCE_STOCK A
+		LEFT JOIN :LT_DATA B ON A. LOCATION_ID = B.LOCATION_ID AND A.EQUIP_TYPE_ID = B.EQUIP_TYPE_ID AND A.TIME_INTERVAL_ID = B.TIME_INTERVAL_ID
+		LEFT JOIN :LT_START_END_TIME C ON A.TIME_INTERVAL_ID = C.TIME_INTERVAL_ID;
+		
+	OUT_SD_RESULT = 
+	    select DISTINCT 
+	        A.PLAN_ID,
+	        A.LOCATION_ID,
+	        A.LOCATION_NAME,
+	        A.EQUIP_TYPE_ID,
+	        A.EQUIP_TYPE_NAME,
+	        A.START_TIME,
+	        A.END_TIME,
+	        A.TIME_INTERVAL,
+	        A.TIME_INTERVAL_ID,
+	        A.SEQUENCE,
+	        A.SUPPLY,
+	        A.DEMAND, 
+			A.BALANCE_SUPPLY_DEMAND,
+			A.BALANCE_STOCK_SUPPLY_DEMAND,
+			A.STOCK,
+	        A.MIN_SAFETY_STOCK,
+	        A.MAX_SAFETY_STOCK,
+	        A.MAX_CAPACITY,
+	        A.MIN_SAFETY_STOCK_HEADER,
+	        A.MAX_SAFETY_STOCK_HEADER,
+	        A.MAX_CAPACITY_HEADER,
+			B.BALANCE_STOCK AS STOCK_BALANCE_HEADER
+		from :LT_FINAL_PRE a
+		left join :LT_BALANCE b on a.location_id = b.location_id and a.time_interval_id = b.time_interval_id;
+	
+	/* OUT_SD_RESULT_TMP =
+		 	SELECT  
+		 	        PLAN_ID,
+		 	        LOCATION_ID,
+				    LOCATION_NAME,
+				    EQUIP_TYPE_ID,
+				    EQUIP_TYPE_NAME,
+				    START_TIME,
+				    END_TIME,
+				    TIME_INTERVAL,
+				    TIME_INTERVAL_ID,
+				    SEQUENCE,
+				    SUPPLY,
+				    DEMAND,
+				    (SUPPLY - DEMAND) AS BALANCE_SUPPLY_DEMAND,
+				    (STOCK + SUPPLY - DEMAND) AS BALANCE_STOCK_SUPPLY_DEMAND,
+				    STOCK,
+				    MIN_SAFETY_STOCK,
+	                MAX_SAFETY_STOCK,
+	                MAX_CAPACITY,
+	                MIN_SAFETY_STOCK_HEADER,
+	                MAX_SAFETY_STOCK_HEADER,
+	                MAX_CAPACITY_HEADER
+	            FROM (
+			     SELECT  
+			        A.PLAN_ID,
+			        A.LOCATION_ID,
+					A.LOCATION_NAME,
+					A.EQUIP_TYPE_ID,
+					A.EQUIP_TYPE_NAME,
+					A.START_TIME,
+	                A.END_TIME,
+	                A.TIME_INTERVAL,
+	                A.TIME_INTERVAL_ID,
+	                A.SEQUENCE,
+	                IFNULL(B.OUTPUT_VALUE,0) AS STOCK,
+				    IFNULL(SUPPLY_T.OUTPUT_VALUE,0) AS SUPPLY,
+				    IFNULL(DEMAND_T.OUTPUT_VALUE,0) AS DEMAND,
+					A.MIN_SAFETY_STOCK,
+	                A.MAX_SAFETY_STOCK,
+	                A.MAX_CAPACITY,
+	                A.MIN_SAFETY_STOCK_HEADER,
+	                A.MAX_SAFETY_STOCK_HEADER,
+	                A.MAX_CAPACITY_HEADER
+					FROM ( SELECT T1.PLAN_ID,T1.LOCATION_ID,T1.LOCATION_NAME,T1.EQUIP_TYPE_ID,T1.EQUIP_TYPE_NAME,
+					              T1.MIN_SAFETY_STOCK,T1.MAX_SAFETY_STOCK,T1.MAX_CAPACITY,
+					              T1.MIN_SAFETY_STOCK_HEADER,T1.MAX_SAFETY_STOCK_HEADER,T1.MAX_CAPACITY_HEADER,
+		                          T2.TIME_INTERVAL,T2.TIME_INTERVAL_ID,T2.START_TIME,T2.END_TIME,T2.SEQUENCE
+					       FROM :LOCATION_RESOURCE_SOTCK T1
+					       LEFT JOIN (SELECT DISTINCT PLAN_ID,LOCATION_ID,EQUIP_TYPE_ID,TIME_INTERVAL,TIME_INTERVAL_ID,START_TIME,
+					                   END_TIME,SEQUENCE FROM :OUTPUT_DATASETS_EXEC_ALL_RESOURCES) T2
+					       ON (T1.LOCATION_ID = T2.LOCATION_ID AND T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID)
+					       ) A
+					 LEFT JOIN (SELECT * FROM  :OUTPUT_DATASETS WHERE OUTPUT_KEY = 'STOCK') AS B
+			         ON (A.LOCATION_ID = B.LOCATION_ID AND A.EQUIP_TYPE_ID = B.EQUIP_TYPE_ID AND A.TIME_INTERVAL_ID = B.TIME_INTERVAL_ID)
+			         LEFT JOIN (SELECT * FROM  :OUTPUT_DATASETS WHERE OUTPUT_KEY = 'SUPPLY' ) AS SUPPLY_T
+			         ON (A.LOCATION_ID = SUPPLY_T.LOCATION_ID AND A.LOCATION_NAME = SUPPLY_T.LOCATION_NAME
+			             AND A.EQUIP_TYPE_ID =  SUPPLY_T.EQUIP_TYPE_ID AND A.TIME_INTERVAL_ID = SUPPLY_T.TIME_INTERVAL_ID
+			             AND A.START_TIME = SUPPLY_T.START_TIME AND A.END_TIME = SUPPLY_T.END_TIME)
+					 LEFT JOIN (SELECT * FROM  :OUTPUT_DATASETS WHERE OUTPUT_KEY = 'DEMAND' ) AS DEMAND_T
+			         ON (A.LOCATION_ID = DEMAND_T.LOCATION_ID AND A.LOCATION_NAME = DEMAND_T.LOCATION_NAME
+			             AND A.EQUIP_TYPE_ID =  DEMAND_T.EQUIP_TYPE_ID AND A.TIME_INTERVAL_ID = DEMAND_T.TIME_INTERVAL_ID
+			             AND A.START_TIME = DEMAND_T.START_TIME AND A.END_TIME = DEMAND_T.END_TIME)
+			) ;
+
+	STOCK_BALANCE_BY_LOCATION = SELECT  
+	                              T10.PLAN_ID,
+	                              T10.LOCATION_ID,
+                                  T10.TIME_INTERVAL_ID,
+                                  SUM(T10.STOCK + T10.SUPPLY - T10.DEMAND) AS BALANCE_STOCK
+	                            FROM (
+								     SELECT 
+								        A.PLAN_ID,
+								        A.LOCATION_ID,
+										A.LOCATION_NAME,
+										A.EQUIP_TYPE_ID,
+										A.EQUIP_TYPE_NAME,
+										A.START_TIME,
+						                A.END_TIME,
+						                A.TIME_INTERVAL,
+						                A.TIME_INTERVAL_ID,
+						                A.SEQUENCE,
+						                IFNULL(B.OUTPUT_VALUE,0) AS STOCK,
+									    IFNULL(SUPPLY_T.OUTPUT_VALUE,0) AS SUPPLY,
+									    IFNULL(DEMAND_T.OUTPUT_VALUE,0) AS DEMAND
+										FROM ( SELECT DISTINCT PLAN_ID, LOCATION_ID, LOCATION_NAME,EQUIP_TYPE_ID, EQUIP_TYPE_NAME, TIME_INTERVAL,TIME_INTERVAL_ID,START_TIME,
+										         END_TIME,SEQUENCE FROM :OUT_SD_RESULT_TMP
+										       ) A
+										 LEFT JOIN (SELECT * FROM  :OUTPUT_DATASETS_ALL_RESOURCES WHERE OUTPUT_KEY = 'STOCK') AS B
+								         ON (A.LOCATION_ID = B.LOCATION_ID AND A.EQUIP_TYPE_ID = B.EQUIP_TYPE_ID AND A.TIME_INTERVAL_ID = B.TIME_INTERVAL_ID)
+								         LEFT JOIN (SELECT * FROM  :OUTPUT_DATASETS_ALL_RESOURCES WHERE OUTPUT_KEY = 'SUPPLY' ) AS SUPPLY_T
+								         ON (A.LOCATION_ID = SUPPLY_T.LOCATION_ID AND A.LOCATION_NAME = SUPPLY_T.LOCATION_NAME
+								             AND A.EQUIP_TYPE_ID =  SUPPLY_T.EQUIP_TYPE_ID AND A.TIME_INTERVAL_ID = SUPPLY_T.TIME_INTERVAL_ID
+								             AND A.START_TIME = SUPPLY_T.START_TIME AND A.END_TIME = SUPPLY_T.END_TIME)
+										 LEFT JOIN (SELECT * FROM  :OUTPUT_DATASETS_ALL_RESOURCES WHERE OUTPUT_KEY = 'DEMAND' ) AS DEMAND_T
+								         ON (A.LOCATION_ID = DEMAND_T.LOCATION_ID AND A.LOCATION_NAME = DEMAND_T.LOCATION_NAME
+								             AND A.EQUIP_TYPE_ID =  DEMAND_T.EQUIP_TYPE_ID AND A.TIME_INTERVAL_ID = DEMAND_T.TIME_INTERVAL_ID
+								             AND A.START_TIME = DEMAND_T.START_TIME AND A.END_TIME = DEMAND_T.END_TIME)
+								) T10 GROUP BY T10.LOCATION_ID,T10.TIME_INTERVAL_ID,T10.PLAN_ID;
+
+    OUT_SD_RESULT = SELECT
+                    T2.PLAN_ID,
+		 	        T1.LOCATION_ID,
+				    T1.LOCATION_NAME,
+				    T1.EQUIP_TYPE_ID,
+				    T1.EQUIP_TYPE_NAME,
+				    T1.START_TIME,
+				    T1.END_TIME,
+				    T1.TIME_INTERVAL,
+				    T1.TIME_INTERVAL_ID,
+				    T1.SEQUENCE,
+				    T1.SUPPLY,
+				    T1.DEMAND,
+				    T1.BALANCE_SUPPLY_DEMAND,
+				    T1.BALANCE_STOCK_SUPPLY_DEMAND,
+				    T1.STOCK,
+				    T1.MIN_SAFETY_STOCK,
+	                T1.MAX_SAFETY_STOCK,
+	                T1.MAX_CAPACITY,
+	                T1.MIN_SAFETY_STOCK_HEADER,
+	                T1.MAX_SAFETY_STOCK_HEADER,
+	                T1.MAX_CAPACITY_HEADER,
+                    T2.BALANCE_STOCK AS STOCK_BALANCE_HEADER
+                      FROM :OUT_SD_RESULT_TMP T1
+                      INNER JOIN :STOCK_BALANCE_BY_LOCATION T2
+                      ON (T1.LOCATION_ID = T2.LOCATION_ID AND T1.TIME_INTERVAL_ID = T2.TIME_INTERVAL_ID); */
+                     
+  ELSE
+   OUT_SD_RESULT = SELECT 
+                    A.PLAN_ID,
+                    A.LOCATION_ID,
+				    A.LOCATION_NAME,
+				    A.EQUIP_TYPE_ID,
+				    A.EQUIP_TYPE_NAME,
+				    A.START_TIME AS START_TIME,
+				    A.END_TIME AS END_TIME,
+				    NULL AS TIME_INTERVAL,
+				    A.TIME_INTERVAL_ID AS TIME_INTERVAL_ID,
+				    NULL AS SEQUENCE,
+				    0 AS SUPPLY,
+				    0 AS DEMAND,
+				    0 AS BALANCE_SUPPLY_DEMAND,
+				    0 AS BALANCE_STOCK_SUPPLY_DEMAND, 
+				    0 AS STOCK,
+				    A.MIN_SAFETY_STOCK,
+                    A.MAX_SAFETY_STOCK,
+                    A.MAX_CAPACITY,
+                    A.MIN_SAFETY_STOCK_HEADER,
+	                A.MAX_SAFETY_STOCK_HEADER,
+	                A.MAX_CAPACITY_HEADER,
+	                0 AS STOCK_BALANCE_HEADER
+                    FROM :LT_RESOURCE_STOCK A;
+
+  END IF;
+
+END;

@@ -1,0 +1,49 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.customization::p_ext_schedule_table_update"(
+    IN INTEGRATION_TABLES "sap.tm.trp.db.systemmanagement.customization::tt_integration_tables",
+    OUT MESSAGE VARCHAR(500),
+    OUT VIEW_NAMES "sap.tm.trp.db.systemmanagement.customization::tt_view_name"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE COUNT_TABLES INTEGER;
+    DECLARE USER_NAME VARCHAR(60);
+    DECLARE COUNT_CORRECT_TABLES INTEGER;
+    
+    SELECT IFNULL (USERNAME,'') INTO USER_NAME 
+    FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+    
+    SELECT COUNT (*) INTO COUNT_TABLES 
+    FROM :INTEGRATION_TABLES 
+    WHERE TABLE_NAME_KEY = 'DEPARTURE_RULE' OR TABLE_NAME_KEY ='DEPARTURE_RULE_STAGE';
+    
+    IF :COUNT_TABLES <= 0 THEN
+      MESSAGE := 'MSG_NO_DATA_INPUT';
+    ELSEIF :COUNT_TABLES = 1 THEN
+      MESSAGE := 'MSG_COMPLETE_INPUT';
+    ELSE
+      SELECT COUNT(*) INTO COUNT_CORRECT_TABLES
+      FROM (
+        SELECT DISTINCT T1.TABLE_NAME
+        FROM :INTEGRATION_TABLES T1
+        INNER JOIN "SYS"."M_TABLES" T2
+        ON (T1.TABLE_NAME = T2.TABLE_NAME));
+        
+      IF :COUNT_CORRECT_TABLES = 2 THEN
+        DELETE FROM "sap.tm.trp.db.systemmanagement.customization::t_enhanced_schedule_tables";
+        INSERT INTO "sap.tm.trp.db.systemmanagement.customization::t_enhanced_schedule_tables"
+        SELECT TABLE_NAME_KEY, TABLE_NAME, USER_NAME AS LAST_MODIFIED_BY, CURRENT_UTCTIMESTAMP AS LAST_MODIFIED_AT
+        FROM  :INTEGRATION_TABLES;
+        MESSAGE := 'MSG_SUCCESS_STATUS';
+        VIEW_NAMES = SELECT T1.VIEW_NAME FROM "SYS"."VIEWS" T1
+                     INNER JOIN "sap.tm.trp.db.systemmanagement.customization::t_enhanced_schedule_view_names" T2
+                     ON T1.VIEW_NAME = T2.VIEW_NAME;
+      ELSE
+        VIEW_NAMES = SELECT NULL AS VIEW_NAME FROM DUMMY WHERE 2=1;
+        MESSAGE := 'MSG_CORRECT_TABLE_NAME';
+      END IF;
+    END IF ;
+    
+END;

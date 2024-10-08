@@ -1,0 +1,232 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.resourceStock.bubbleView::p_call_resource_stock_bubbleView_rule_normalized" ( 
+in IN_RESOURCE_STOCK_ALERT_RULE_ID BIGINT,
+in IN_TBL "sap.tm.trp.db.hrf.resourceStock::t_resource_stock",
+out OUT_TBL "sap.tm.trp.db.hrf.resourceStock.bubbleView::tt_trp_hrf_resourceStockBubbleView_score_output"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    DECLARE SCRIPT VARCHAR(5000);
+    DECLARE RULE_SP VARCHAR(200);
+    DECLARE TMP_CONNECTION BIGINT;
+    DECLARE NUM_AMOUNT_DECIMAL_POINT INTEGER;
+    DECLARE ZERO DOUBLE := 0.0001;
+    NUM_AMOUNT_DECIMAL_POINT := 2; 
+
+  select T1.SP into RULE_SP
+  from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule" T1
+  where T1.RULE_ID = :IN_RESOURCE_STOCK_ALERT_RULE_ID;
+  
+  select CURRENT_CONNECTION into TMP_CONNECTION
+  from dummy;
+      
+  TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.hrf.resourceStock::t_hrf_resourceStock_inputGlobalTemp";
+  TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.hrf.resourceStock.bubbleView::t_hrf_resourceStockBubbleView_outputGlobalTemp";
+  insert into "sap.tm.trp.db.hrf.resourceStock::t_hrf_resourceStock_inputGlobalTemp"
+    (select
+     "RESOURCE_CATEGORY", 
+     "MAX_CAPACITY",
+     "MAX_SAFETY_STOCK",
+     "MIN_SAFETY_STOCK",
+     "STOCK",
+     "DATE",       
+     "EQUIP_TYPE_CATEGORY",
+     "EQUIP_TYPE_NAME",    
+     "EQUIP_TYPE_ID",    
+     "LOCATION_TYPE",
+     "LOCATION_NAME",
+     "LOCATION_ID"     
+     from :IN_TBL);
+      --
+    --select * from  "sap.tm.trp.db.hrf.resourceStock::t_hrf_resourceStock_inputGlobalTemp";
+  SCRIPT := 'call '|| :RULE_SP ||'("sap.tm.trp.db.hrf.resourceStock::t_hrf_resourceStock_inputGlobalTemp" ,"sap.tm.trp.db.hrf.resourceStock.bubbleView::t_hrf_resourceStockBubbleView_outputGlobalTemp","sap.tm.trp.db.hrf.resourceStock::t_hrf_actions_results") with overview'; 
+
+    execute immediate(:SCRIPT); 
+    --
+   -- select * from  "sap.tm.trp.db.hrf.resourceStock.bubbleView::t_hrf_resourceStockBubbleView_outputGlobalTemp";
+    tmp_tbl_resourceStockBubbleView_output =
+    select 	distinct
+     T1."MAX_CAPACITY",
+     T1."MAX_SAFETY_STOCK",
+     T1."MIN_SAFETY_STOCK",
+     T1."STOCK",
+     T1."DATE",       
+     T1."EQUIP_TYPE_CATEGORY",
+     T1."EQUIP_TYPE_NAME",    
+     T1."EQUIP_TYPE_ID",    
+     T1."LOCATION_TYPE",
+     T1."LOCATION_NAME",
+     T1."LOCATION_ID",   
+     T2.RULE_NAME,
+     T2.ROW_ID,
+     T2."MESSAGE",    
+     T2.SURPLUS_DEFICIT_NUM,
+     T2.THRESHOLD,
+     :TMP_CONNECTION as CONNECTION
+    from "sap.tm.trp.db.hrf.resourceStock.bubbleView::t_hrf_resourceStockBubbleView_outputGlobalTemp" T2
+    inner join "sap.tm.trp.db.hrf.resourceStock::t_hrf_resourceStock_inputGlobalTemp" T1
+    on T1.LOCATION_TYPE = T2.LOCATION_TYPE and 
+       T1.LOCATION_ID = T2.LOCATION_ID and 
+       T1.EQUIP_TYPE_CATEGORY = T2.EQUIP_TYPE_CATEGORY and 
+       T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID and 
+       T1.DATE = T2.DATE;
+       
+    --normalizing
+      tmp_tbl_resourceStockBubbleView_score_output= 
+                SELECT  
+                  T1.MAX_CAPACITY,
+                  T1.MAX_SAFETY_STOCK,
+                  T1.MIN_SAFETY_STOCK,
+                  T1.STOCK,
+                  T1.DATE,       
+                  T1.EQUIP_TYPE_CATEGORY,
+                  T1.EQUIP_TYPE_NAME,    
+                  T1.EQUIP_TYPE_ID,    
+                  T1.LOCATION_TYPE,
+                  T1.LOCATION_NAME,
+                  T1.LOCATION_ID,   
+                  T1.RULE_NAME,
+                  T1.ROW_ID,
+                  T1.MESSAGE,    
+                  T1.SURPLUS_DEFICIT_NUM,
+                  T1.THRESHOLD,
+                  T5.ALERT_SCORE_NORMALIZED,
+                  T1.CONNECTION
+          FROM :tmp_tbl_resourceStockBubbleView_output T1
+          INNER JOIN
+          (
+                    SELECT T41.LOCATION_TYPE,
+                           T41.LOCATION_ID,
+                           T41.EQUIP_TYPE_CATEGORY,
+                           T41.EQUIP_TYPE_ID,
+                           T41.DATE,
+                           T41.ALERT_SCORE,
+                           T42.ALERT_SCORE_RANGE,
+                           CASE WHEN T42.ALERT_SCORE_RANGE > :ZERO
+                           THEN CEIL((T41.ALERT_SCORE - T42.ALERT_SCORE_MIN)/T42.ALERT_SCORE_RANGE*(100-1))+1
+                           ELSE 50
+                           END AS ALERT_SCORE_NORMALIZED
+                    FROM
+                    (
+                         SELECT T1.LOCATION_TYPE,
+                                T1.LOCATION_ID,
+                                T1.EQUIP_TYPE_CATEGORY,
+                                T1.EQUIP_TYPE_ID,
+                                T1.DATE,
+                                ABS(T1.SURPLUS_DEFICIT_NUM) as ALERT_SCORE  
+                         FROM :tmp_tbl_resourceStockBubbleView_output T1
+                         WHERE T1.CONNECTION = :TMP_CONNECTION
+                    )T41,
+                    (     
+                             SELECT (MAX(T4.ALERT_SCORE) - MIN(T4.ALERT_SCORE)) AS ALERT_SCORE_RANGE,
+                                    MIN(T4.ALERT_SCORE) AS ALERT_SCORE_MIN
+                             FROM
+                             (
+                                 SELECT ABS(T1.SURPLUS_DEFICIT_NUM) as ALERT_SCORE
+                                 FROM :tmp_tbl_resourceStockBubbleView_output T1
+                                 WHERE T1.CONNECTION = :TMP_CONNECTION
+                             )T4
+                   )T42
+               )T5
+          ON (T1.LOCATION_TYPE = T5.LOCATION_TYPE and 
+              T1.LOCATION_ID = T5.LOCATION_ID and 
+              T1.EQUIP_TYPE_CATEGORY = T5.EQUIP_TYPE_CATEGORY and 
+              T1.EQUIP_TYPE_ID = T5.EQUIP_TYPE_ID and 
+              T1.DATE = T5.DATE and 
+              T1.CONNECTION = :TMP_CONNECTION) ;
+    --normal and alert
+     tmp_tbl_resourceStockBubbleView_normal_alert_output= 
+                SELECT  
+                  T1.MAX_CAPACITY,
+                  T1.MAX_SAFETY_STOCK,
+                  T1.MIN_SAFETY_STOCK,
+                  T1.STOCK,
+                  T1.DATE,       
+                  T1.EQUIP_TYPE_CATEGORY,
+                  T1.EQUIP_TYPE_NAME,    
+                  T1.EQUIP_TYPE_ID,    
+                  T1.LOCATION_TYPE,
+                  T1.LOCATION_NAME,
+                  T1.LOCATION_ID,   
+                  T2.RULE_NAME,
+                  T2.ROW_ID,
+                  T2.MESSAGE,   
+                  T2.SURPLUS_DEFICIT_NUM,
+                  T2.THRESHOLD,
+                  T2.ALERT_SCORE_NORMALIZED,
+                  T2.CONNECTION
+          FROM :IN_TBL T1 
+          left outer join :tmp_tbl_resourceStockBubbleView_score_output T2
+          on (T1.LOCATION_TYPE = T2.LOCATION_TYPE and 
+              T1.LOCATION_ID = T2.LOCATION_ID and 
+              T1.EQUIP_TYPE_CATEGORY = T2.EQUIP_TYPE_CATEGORY and 
+              T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID and 
+              T1.DATE = T2.DATE ) ;
+              
+    --aggregate alert_num, alert_score
+    tmp_tbl_resourceStockBubbleView_aggregatedAlertNumScore_output = 
+    select 
+     T1.LOCATION_TYPE,
+     T1.LOCATION_ID,
+    -- T1.EQUIP_TYPE_CATEGORY,
+    -- T1.EQUIP_TYPE_ID, 
+     T1.DATE,
+     T1.CONNECTION,
+     Sum(CASE WHEN (MESSAGE = 'Surplus' or MESSAGE = 'Deficit')
+         THEN 1
+         ELSE 0
+     END ) as ALERT_NUM,
+     Max(CASE WHEN (MESSAGE = 'Surplus' or MESSAGE = 'Deficit') 
+         THEN ALERT_SCORE_NORMALIZED
+         ELSE 0
+     END) as ALERT_AGGREGATED_SCORE
+    from :tmp_tbl_resourceStockBubbleView_normal_alert_output T1
+    group by T1.LOCATION_TYPE,
+             T1.LOCATION_ID,
+           --  T1.EQUIP_TYPE_CATEGORY,
+           --  T1.EQUIP_TYPE_ID, 
+             T1.DATE,
+             T1.CONNECTION;
+   
+   OUT_TBL = 
+                 SELECT  
+                  T1.MAX_CAPACITY,
+                  T1.MAX_SAFETY_STOCK,
+                  T1.MIN_SAFETY_STOCK,
+                  T1.STOCK,
+                  T1.DATE,       
+                  T1.EQUIP_TYPE_CATEGORY,
+                  T1.EQUIP_TYPE_NAME,    
+                  T1.EQUIP_TYPE_ID,    
+                  T1.LOCATION_TYPE,
+                  T1.LOCATION_NAME,
+                  T1.LOCATION_ID,   
+                  T1.RULE_NAME,
+                  T1.ROW_ID,
+                  T1.MESSAGE,   
+                  T1.SURPLUS_DEFICIT_NUM,
+                  T1.THRESHOLD,
+                  CASE WHEN ( SURPLUS_DEFICIT_NUM > 0 and  MAX_CAPACITY > :ZERO)
+                         THEN ROUND(SURPLUS_DEFICIT_NUM/MAX_CAPACITY*100,:NUM_AMOUNT_DECIMAL_POINT)
+                       WHEN ( SURPLUS_DEFICIT_NUM > 0 and  MAX_CAPACITY <= :ZERO)
+                         THEN ROUND(SURPLUS_DEFICIT_NUM/(MAX_CAPACITY+1)*100,:NUM_AMOUNT_DECIMAL_POINT)
+                       WHEN (SURPLUS_DEFICIT_NUM < 0 and MIN_SAFETY_STOCK > :ZERO)
+                         THEN ROUND(ABS(SURPLUS_DEFICIT_NUM)/MIN_SAFETY_STOCK*100,:NUM_AMOUNT_DECIMAL_POINT)
+                       WHEN (SURPLUS_DEFICIT_NUM < 0 and MIN_SAFETY_STOCK <= :ZERO)
+                         THEN ROUND(ABS(SURPLUS_DEFICIT_NUM)/(MIN_SAFETY_STOCK+1)*100,:NUM_AMOUNT_DECIMAL_POINT)
+                       ELSE 0
+                  END as SURPLUS_DEFICIT_PERCENT,
+                  T1.ALERT_SCORE_NORMALIZED,
+                  T2.ALERT_NUM,
+                  T2.ALERT_AGGREGATED_SCORE,
+                  T1.CONNECTION
+          FROM :tmp_tbl_resourceStockBubbleView_normal_alert_output T1 
+          left outer join :tmp_tbl_resourceStockBubbleView_aggregatedAlertNumScore_output T2
+          on (T1.LOCATION_TYPE = T2.LOCATION_TYPE and 
+              T1.LOCATION_ID = T2.LOCATION_ID and 
+              T1.DATE = T2.DATE and 
+              T2.CONNECTION = :TMP_CONNECTION ) ;
+    
+END;

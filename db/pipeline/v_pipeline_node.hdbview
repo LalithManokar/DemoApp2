@@ -1,0 +1,9 @@
+//To define the HDB view file use the following syntax: 
+
+schema="SAP_TM_TRP";
+query="SELECT A.* FROM \"sap.tm.trp.db.pipeline::t_pipeline_node\" AS A 
+  --   LEFT JOIN \"sap.tm.trp.db.alert::t_alert_rule_group_assign\" AS B 
+  --   ON A.ID = B.NODE_ID"
+  ;
+     
+depends_on_table = ["sap.tm.trp.db.pipeline::t_pipeline_node"];

@@ -1,0 +1,349 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.algorithm::p_pickup_optimize_genios" (
+IN v_mode NVARCHAR(50),
+IN handling_capa INTEGER,
+IN t_trans "sap.tm.trp.db.pickupreturn.algorithm::tt_trans_types",
+IN name_value_conf "sap.tm.trp.db.planningcockpit.reposition::tt_name_value_conf",
+IN t_supply_demand "sap.tm.trp.db.pickupreturn.algorithm::tt_supply_demand_range",
+IN t_booking "sap.tm.trp.db.pickupreturn.algorithm::tt_booking_haulage",
+IN t_stock_conf "sap.tm.trp.db.pickupreturn.algorithm::tt_stock_configure",
+IN t_depot_cost "sap.tm.trp.db.pickupreturn.algorithm::tt_depot_cost_trp11",
+IN t_min_provision_stock "sap.tm.trp.db.pickupreturn.algorithm::tt_min_provision_stock",
+IN t_handling_capacity "sap.tm.trp.db.planningcockpit::tt_location_handling_capacity",
+OUT t_fulfill_booking "sap.tm.trp.db.pickupreturn.algorithm::tt_res_haulage"
+ )
+LANGUAGE SQLSCRIPT 
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN 
+
+DECLARE v_customer_node INT;
+DECLARE v_stock_node INT;
+
+--get all of  the unique locaion and resource type combination from SD plan.
+t_unique_loc_type = SELECT DISTINCT "LOCATION",
+                                    "LOCATION_ID", 
+									"CONTAINER_TYPE" 
+					FROM :t_supply_demand;
+
+--get the depot capactiy settings and current stock
+t_stock_conf = SELECT A."LOCATION",
+					  A."CONTAINER_TYPE",
+					  IFNULL(B."CURRENT_STOCK",0) AS "CURRENT_STOCK",
+					  IFNULL(C."MIN_SAFETY_STOCK",0) AS "MIN_STOCK",
+					  IFNULL(C."MAX_SAFETY_STOCK",1000000) AS "MAX_STOCK",
+					  IFNULL(C."MAX_PHYSICAL_STOCK",1000000) AS "MAX_PHY_CAPACITY"
+				FROM :t_unique_loc_type A
+				LEFT JOIN :t_stock_conf B ON A."LOCATION"=B."LOCATION" AND A."CONTAINER_TYPE"=B."CONTAINER_TYPE"
+				LEFT JOIN "sap.tm.trp.db.stock::v_location_stock_location" C
+                                ON (A.LOCATION_ID = C.ID AND A.CONTAINER_TYPE = C.RESOURCE_ID);
+
+--modify the pure SD plan data to reverse the min safety stock of each depot.
+CALL "sap.tm.trp.db.pickupreturn::p_modify_sd_with_min_safety_stock"
+(
+:t_supply_demand,
+:t_stock_conf,
+et_supply_demand
+);
+
+t_supply_demand = select * from :et_supply_demand;
+
+--get depot cost
+t_depot_cost = SELECT "LOCATION",
+					  "CONTAINER_TYPE",
+					  100*"STORAGE_COSTUNIT" AS "STORAGE_COSTUNIT",
+					  100*"HANDLING_COSTUNIT" AS "HANDLING_COSTUNIT"
+				FROM :t_depot_cost;				
+
+--extract possilbe transhippment channel for requested container				
+t_trans = SELECT "FROM_LOCATION",
+				 "TO_LOCATION",
+				 "MTR",
+				 "DURATION",
+				 (CASE 
+				 WHEN "COST" IS NULL THEN 1
+				 WHEN "COST"=0 THEN 1
+				 ELSE
+				 100*"COST"
+				 END) AS "COST",
+				 "CONTAINER_TYPE" 
+		  FROM :t_trans 
+		  WHERE "CONTAINER_TYPE" IN (SELECT "CONTAINER_TYPE" FROM :t_booking);
+
+--prepare merchant transshipment channel		  
+t_trans_merchant = SELECT "FROM_LOCATION",
+				 "TO_LOCATION",
+				 "MTR",
+				 "DURATION",
+				 "COST",
+				 "CONTAINER_TYPE"
+		   FROM :t_trans;
+
+--prepare carrier transshipment channel
+t_trans_carrier = SELECT "FROM_LOCATION",
+				 "TO_LOCATION",
+				 "MTR",
+				 "DURATION",
+				 "COST",
+				 "CONTAINER_TYPE"
+		   FROM :t_trans;
+
+--get all of the select TUs as pick-up requirement
+t_customer = SELECT ROW_NUMBER() OVER() AS "NODE_ID",
+					"BOOKING_ID",
+					"START_TIME",
+					"BOOKING_TIME",
+					"CUSTOMER_LOCATION",
+					"CONTAINER_TYPE",
+					"QUANTITY",
+					IFNULL("HAULAGE_TYPE",0) AS "HAULAGE_TYPE"
+			 FROM :t_booking WHERE "MODE"='PICKUP';
+			 
+--prepare merchant haulage and carrier haulage data
+t_customer_merchant = SELECT * FROM :t_customer WHERE "HAULAGE_TYPE"=0;
+t_customer_carrier  = SELECT * FROM :t_customer WHERE "HAULAGE_TYPE"=1;
+			 
+SELECT COUNT(*) INTO v_customer_node FROM :t_customer;			 
+
+--prepare the availabe stock node
+t_current_stock = SELECT ROW_NUMBER() OVER()+:v_customer_node+1 AS "NODE_ID",
+						 "LOCATION",
+				  		 "CONTAINER_TYPE",
+				  		 "CURRENT_STOCK" AS "SURPLUS",
+				  		 "MIN_STOCK",
+				  		 "MAX_STOCK",
+				  		 "MAX_PHY_CAPACITY"
+				  FROM :t_stock_conf
+				  WHERE "CURRENT_STOCK">0;
+				  
+t_min_provision_stock = SELECT "LOCATION",
+							   "CONTAINER_TYPE",
+							   MIN("MIN_PROVISION_STOCK") AS "MIN_PROVISION_STOCK"
+						FROM :t_min_provision_stock
+						GROUP BY "LOCATION","CONTAINER_TYPE";
+
+--bad provision when the total provision in the SD is less than min safety stock
+t_bad_provision_stock = SELECT A."NODE_ID",
+							   A."LOCATION",
+							   A."CONTAINER_TYPE",
+							   A."SURPLUS",
+							   A."MIN_STOCK",
+							   A."MAX_STOCK",
+							   A."MAX_PHY_CAPACITY"
+						FROM :t_current_stock A
+						INNER JOIN :t_min_provision_stock B
+						ON A."LOCATION"=B."LOCATION"
+						AND A."CONTAINER_TYPE"=B."CONTAINER_TYPE"
+						AND B."MIN_PROVISION_STOCK"<A."MIN_STOCK";
+						
+IF (:v_mode!='COST') THEN					
+t_current_stock = SELECT * FROM :t_current_stock 
+				  WHERE "NODE_ID" NOT IN (SELECT "NODE_ID" FROM :t_bad_provision_stock);
+END IF;
+							   
+SELECT COUNT(*) INTO v_stock_node FROM :t_current_stock;
+
+t_depot_temp = SELECT A."START_TIME",
+				  	  A."END_TIME",
+                  	  A."LOCATION",
+                  	  A."CONTAINER_TYPE",
+                  	  A."SUPPLY",
+                  	  A."DEMAND",
+                  	  A."SUPPLY"-A."DEMAND" AS "SURPLUS",
+                  	  B."MIN_STOCK",
+                  	  B."MAX_STOCK",
+                  	  B."MAX_PHY_CAPACITY"
+           FROM :t_supply_demand A
+           LEFT JOIN :t_stock_conf B
+           ON A."LOCATION"=B."LOCATION"
+           AND A."CONTAINER_TYPE"=B."CONTAINER_TYPE"
+           WHERE A."SUPPLY"-A."DEMAND">0;
+
+t_depot = SELECT ROW_NUMBER() OVER()+:v_stock_node+:v_customer_node+1 AS "NODE_ID",
+				"START_TIME",
+				"END_TIME",
+				"LOCATION",
+				"CONTAINER_TYPE",
+				"SUPPLY",
+				"DEMAND",
+				"SURPLUS",
+				"MIN_STOCK",
+				"MAX_STOCK",
+				"MAX_PHY_CAPACITY"
+		  FROM :t_depot_temp;
+					  
+IF (:v_mode='COST') THEN
+    
+    --get the possible container provider from SD plan data for each depot
+    t_stage_1_surplus_temp = SELECT "NODE_ID",
+    							"START_TIME",
+    							"END_TIME",
+    							"LOCATION",
+    							"CONTAINER_TYPE",
+    							"SURPLUS" AS "SURPLUS",
+    							1 AS "PRIORITY" -- 1st priority
+    					 FROM :t_depot;
+    
+    --get the possible container provider from current stock				 
+    t_stage_2_surplus_temp = SELECT "NODE_ID",
+								CURRENT_TIMESTAMP AS "START_TIME",
+								NULL AS "END_TIME",
+								"LOCATION",
+								"CONTAINER_TYPE",
+								"SURPLUS" - "MIN_STOCK"  AS "SURPLUS",
+								2 AS "PRIORITY"  --2nd priority
+						 FROM  :t_current_stock
+						 WHERE "SURPLUS" - "MIN_STOCK" >0;	
+	
+	--combine both stock and SD plan provider
+	t_stage_all_surplus = SELECT * FROM :t_stage_1_surplus_temp
+						  UNION ALL
+						  SELECT * FROM :t_stage_2_surplus_temp;
+	
+	--call genios solver to do the optimization					 			 
+    CALL "sap.tm.trp.db.pickupreturn.algorithm::p_p_depot_update_genios" ( 
+    :t_depot,
+    :t_stage_all_surplus,
+    :t_depot_cost,
+    :t_customer_merchant,
+    :t_customer_carrier,
+    :t_trans_merchant,
+    :t_trans_carrier,
+    :t_handling_capacity,
+    t_fulfill_booking,
+    t_stage_customer_merchant,
+    t_stage_customer_carrier,
+    t_stage_depot
+    ); 
+					
+ELSE
+    --balance at depot which current stock already exceed max safety stock
+    t_stage_1_surplus_temp = SELECT "NODE_ID",
+    								CURRENT_TIMESTAMP AS "START_TIME",
+								    NULL AS "END_TIME",
+    						   		"LOCATION",
+    						   		"CONTAINER_TYPE",
+    						   		"SURPLUS"-"MAX_STOCK" AS "SURPLUS",
+    						   		1 AS "PRIORITY" --1st priority
+    					FROM :t_current_stock
+    					WHERE "SURPLUS"-"MAX_STOCK">0; 
+        
+     --balance at depot which current stock above min safety stock
+    t_stage_2_surplus_temp = SELECT "NODE_ID",
+	    							CURRENT_TIMESTAMP AS "START_TIME",
+									NULL AS "END_TIME",
+	    							"LOCATION",
+	    							"CONTAINER_TYPE",
+	    							LEAST ("SURPLUS"-"MIN_STOCK","MAX_STOCK"-"MIN_STOCK") AS "SURPLUS",
+	    							2 AS "PRIORITY" --2nd priority
+    					 FROM :t_current_stock
+    					 WHERE "SURPLUS"-"MIN_STOCK">0;
+    					 
+    --balance at sd plan
+    t_stage_3_surplus_temp = SELECT "NODE_ID",
+    						   		"START_TIME",
+    						   		"END_TIME",
+    						   		"LOCATION",
+    						   		"CONTAINER_TYPE",
+    						   		"SURPLUS" AS "SURPLUS",
+    						   		3 AS "PRIORITY" --3rd priority
+    					FROM :t_depot
+    					WHERE "SURPLUS" >0;  
+    
+    --combine all possible container provider togeter
+    t_stage_all_surplus = SELECT * FROM :t_stage_1_surplus_temp
+						  UNION ALL
+						  SELECT * FROM :t_stage_2_surplus_temp
+						  UNION ALL
+						  SELECT * FROM :t_stage_3_surplus_temp;
+	
+	--call genios solver to run the optimization					  
+    CALL "sap.tm.trp.db.pickupreturn.algorithm::p_p_depot_update_genios" ( 
+    :t_depot,
+    :t_stage_all_surplus,
+    :t_depot_cost,
+    :t_customer_merchant,
+    :t_customer_carrier,
+    :t_trans_merchant,
+    :t_trans_carrier,
+    :t_handling_capacity,
+    t_fulfill_booking,
+    t_stage_customer_merchant,
+    t_stage_customer_carrier,
+    t_stage_depot
+    );   
+    
+END IF;
+
+t_fulfill_booking = SELECT "BOOKING_ID",
+						   "FROM_LOCATION",
+						   "TO_LOCATION",	
+					       "FROM_TIME",
+						   "TO_TIME",
+						   "CONTAINER_TYPE",
+						   SUM("QUANTITY") AS "QUANTITY",
+						   "STORAGE_COST"/100.0 AS "STORAGE_COST",
+						   "HANDLING_COST"/100.0 AS "HANDLING_COST",
+						   "TRANSPORTATION_COST"/100.0 AS "TRANSPORTATION_COST",
+						   "TOTAL_COST"/100.0 AS "TOTAL_COST",
+						   "MODE",
+						   "HAULAGE_TYPE"
+					FROM :t_fulfill_booking
+					GROUP BY "BOOKING_ID",
+						     "FROM_LOCATION",
+						     "TO_LOCATION",	
+					         "FROM_TIME",
+						     "TO_TIME",
+						     "CONTAINER_TYPE",
+						     "STORAGE_COST",
+						     "HANDLING_COST",
+						     "TRANSPORTATION_COST",
+						     "TOTAL_COST",
+						     "MODE",
+						     "HAULAGE_TYPE";
+
+						     
+t_max_booking = SELECT "BOOKING_ID",
+                       MAX("QUANTITY") AS QUANTITY
+                FROM :t_fulfill_booking
+                GROUP BY "BOOKING_ID";
+                
+t_fulfill_booking = SELECT A."BOOKING_ID",
+						   A."FROM_LOCATION",
+						   A."TO_LOCATION",	
+					       A."FROM_TIME",
+						   A."TO_TIME",
+						   A."CONTAINER_TYPE",
+						   A."QUANTITY",
+						   A."STORAGE_COST",
+						   A."HANDLING_COST",
+						   A."TRANSPORTATION_COST",
+						   A."TOTAL_COST",
+						   A."MODE",
+						   A."HAULAGE_TYPE"
+					FROM :t_fulfill_booking A
+					INNER JOIN :t_max_booking B
+					ON A."BOOKING_ID"=B."BOOKING_ID"
+					AND A."QUANTITY"=B."QUANTITY";
+							 
+t_key_booking = SELECT ROW_NUMBER() OVER() AS "KEY",* FROM :t_fulfill_booking;
+t_filter_booking = SELECT MAX("KEY") AS "KEY" FROM :t_key_booking GROUP BY "BOOKING_ID";
+
+t_fulfill_booking = SELECT A."BOOKING_ID",
+						   A."FROM_LOCATION",
+						   A."TO_LOCATION",	
+					       A."FROM_TIME",
+						   A."TO_TIME",
+						   A."CONTAINER_TYPE",
+						   A."QUANTITY",
+						   A."STORAGE_COST",
+						   A."HANDLING_COST",
+						   A."TRANSPORTATION_COST",
+						   A."TOTAL_COST",
+						   A."MODE",
+						   A."HAULAGE_TYPE"
+					FROM :t_key_booking A
+					INNER JOIN :t_filter_booking B
+					ON A."KEY"=B."KEY";
+
+END;

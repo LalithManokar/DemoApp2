@@ -1,0 +1,18 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_ext_geo_group_in_filter_check"(
+    IN ID VARCHAR(22),
+    IN TYPE INTEGER,
+    OUT ERR_NUM INTEGER
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    IF :TYPE = 1 THEN
+        CALL "sap.tm.trp.db.systemmanagement::p_location_group_in_filter_check"(:ID, ERR_NUM);
+    ELSEIF :TYPE = 2 THEN
+        CALL "sap.tm.trp.db.systemmanagement::p_zone_group_in_filter_check"(:ID, ERR_NUM);
+    ELSEIF :TYPE = 3 THEN
+        CALL "sap.tm.trp.db.systemmanagement::p_region_group_in_filter_check"(:ID, ERR_NUM);
+    END IF;
+END;

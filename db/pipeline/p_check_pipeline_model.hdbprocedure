@@ -1,0 +1,22 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_check_pipeline_model" (
+	IN SCHEMA_NAME NVARCHAR(256), 
+    IN PROCEDURE_NAME NVARCHAR(256),
+    IN TABLE_NAME NVARCHAR(256),
+    -- IN PIPELINE_TYPE_ID INTEGER,
+    OUT ERROR_MSG NVARCHAR(256),
+    OUT IS_VALID SMALLINT
+)
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+-- DEFAULT SCHEMA ""
+-- READS SQL DATA
+AS
+BEGIN
+	--1. check the procedure
+	CALL "sap.tm.trp.db.pipeline::p_check_pipeline_model_procedure"(:SCHEMA_NAME, :PROCEDURE_NAME, ERROR_MSG, IS_VALID);
+	IF (:IS_VALID = 1) THEN
+		-- 2. if the procedure is valid, then check the metadata table
+		CALL "sap.tm.trp.db.pipeline::p_check_pipeline_model_metadata_table"(:SCHEMA_NAME, :TABLE_NAME, ERROR_MSG, IS_VALID);
+	END IF;
+
+END;

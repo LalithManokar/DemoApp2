@@ -1,0 +1,30 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.dataprovider::p_check_extra_filter_on_transportation_order_item_by_attr_group"(
+    IN ATTR_GROUP_ID BIGINT,
+    OUT MISSING_COUNT INT,
+    OUT MISSING_ATTRIBUTES "sap.tm.trp.db.filter::t_attribute_group_attribute"
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP"
+READS SQL DATA
+AS
+BEGIN
+	-- get the attributes code of the attribute group
+	ATTRIBUTES = SELECT T2.* FROM "sap.tm.trp.db.filter::t_attribute_group_item_node" T1
+	INNER JOIN "sap.tm.trp.db.filter::v_attribute_group_sd_attribute" T2 on T1.ATTRIBUTE_ID = T2.ID
+	WHERE T1.GROUP_ID = :ATTR_GROUP_ID;
+	
+	-- get the columns of the data source
+	--COLUMNS = SELECT COLUMN_NAME FROM "VIEW_COLUMNS" WHERE VIEW_NAME = 'sap.tm.trp.db.semantic.order::v_transportation_unit_item_attributes';
+	COLUMNS = select CODE AS COLUMN_NAME FROM "sap.tm.trp.db.filter::v_attribute_group_sd_attribute";
+	
+	-- find the attributes which don't exist in data source
+	MISSING_ATTRIBUTES =
+	SELECT T1.ID, T1.NAME, T1.CODE, T1.DESC,9 AS CATEGORY_ID,T1.VALUE_TYPE,T1.RESOURCE_CATEGORY  FROM :ATTRIBUTES AS T1 
+	LEFT OUTER JOIN :COLUMNS AS T2
+	ON T1.CODE = T2.COLUMN_NAME
+	WHERE T2.COLUMN_NAME is null; 
+        
+	SELECT COUNT(*) INTO MISSING_COUNT FROM :MISSING_ATTRIBUTES;
+	
+END;

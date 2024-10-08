@@ -1,0 +1,40 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage::p_gen_SD_KPI_planModel_alert_forUI" (
+IN  PLAN_EXECUTION_ID BIGINT,
+IN  IN_PLAN_MODEL_TYPE_ID INTEGER,
+OUT OUTPUT_RECORDS INTEGER  
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN SEQUENTIAL EXECUTION
+
+    DECLARE FILTER_TYPE INTEGER;
+    DECLARE OUTPUT_ALERT_SCORE_RECORDS INTEGER;
+    
+    --persistent/temporary plan
+    IF (:IN_PLAN_MODEL_TYPE_ID = 1 or :IN_PLAN_MODEL_TYPE_ID = 2 or :IN_PLAN_MODEL_TYPE_ID = 99)
+        THEN 
+		    SELECT TOP 1 FILTER_TYPE 
+		    INTO FILTER_TYPE 
+		    FROM "sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_DeltaFlag"
+		    WHERE PLAN_EXECUTION_ID = :PLAN_EXECUTION_ID;
+    ELSEIF(:IN_PLAN_MODEL_TYPE_ID = 4) --persistent KPI plan
+        THEN
+            SELECT TOP 1 FILTER_TYPE 
+		    INTO FILTER_TYPE 
+		    FROM  "sap.tm.trp.db.hrf.kpi::t_trp_hrf_KPI_cus_output_withoutDelta"
+		    WHERE PLAN_EXECUTION_ID = :PLAN_EXECUTION_ID;
+    END IF;	  
+      
+    CALL "sap.tm.trp.db.hrf.ruleManage::p_normalizing_alert_score"(:PLAN_EXECUTION_ID,:IN_PLAN_MODEL_TYPE_ID,:OUTPUT_ALERT_SCORE_RECORDS);
+    
+    IF ( :OUTPUT_ALERT_SCORE_RECORDS > 0 )
+    THEN 
+        CALL "sap.tm.trp.db.hrf.ruleManage::p_gen_owners_timeInterval"(:PLAN_EXECUTION_ID,:FILTER_TYPE,:IN_PLAN_MODEL_TYPE_ID,OUT_TBL);
+        CALL "sap.tm.trp.db.hrf.ruleManage::p_compose_ScoreOwners_alert_forUI"(:PLAN_EXECUTION_ID,:FILTER_TYPE,:OUT_TBL,:IN_PLAN_MODEL_TYPE_ID,OUTPUT_RECORDS);  
+    ELSE
+        OUTPUT_RECORDS := -1;
+    END IF;
+
+END;

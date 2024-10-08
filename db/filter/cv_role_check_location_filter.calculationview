@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_role_check_location_filter" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_role_check_location_filter"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="VARCHAR" id="NAME" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="DESC" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="VISIBILITY" length="3"/>
+        <viewAttribute datatype="VARCHAR" id="VISIBILITY_DESC" length="50"/>
+        <viewAttribute datatype="INTEGER" id="TYPE"/>
+        <viewAttribute datatype="VARCHAR" id="TYPE_DESC" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="CREATED_BY" length="60"/>
+        <viewAttribute datatype="TIMESTAMP" id="CREATED_TIME"/>
+        <viewAttribute datatype="VARCHAR" id="MODIFIED_BY" length="60"/>
+        <viewAttribute datatype="TIMESTAMP" id="MODIFIED_TIME"/>
+        <viewAttribute datatype="BIGINT" id="CREATED_USER_ID"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_CATEGORY" length="50"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition>
+ BEGIN
+ 	 DECLARE LANGUAGE_CODE VARCHAR(1);
+     DECLARE USERID BIGINT;
+     DECLARE NAME VARCHAR(60);
+     --DECLARE USERTYPE INTEGER;
+     DECLARE USER_ID BIGINT;
+     DECLARE HAS_AUTHORIZATION_FLAG TINYINT;
+
+     SELECT IFNULL(MAX(USERNAME),'') INTO NAME FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+
+     SELECT IFNULL(MAX(ID),-1) INTO USER_ID FROM &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot;
+     WHERE USERNAME = :NAME;
+
+	 SELECT IFNULL(MAX(SPRAS),'E') INTO LANGUAGE_CODE FROM &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot;;
+
+     CALL &quot;sap.tm.trp.db.systemmanagement::p_check_location_full_authorization&quot; (
+                                               HAVE_AUTHORIZATION_FLAG => HAS_AUTHORIZATION_FLAG
+                                );
+
+
+     --IF :USERTYPE = 99 THEN
+     IF :HAS_AUTHORIZATION_FLAG = 1 THEN
+       var_out = SELECT A.ID,
+                        A.DESC AS NAME,
+                        B.DESC,
+                        A.VISIBLE_FLAG AS VISIBILITY,
+                        T4.DESC AS VISIBILITY_DESC,
+                        A.LOCATION_TYPE AS TYPE,
+                        T6.DESC AS TYPE_DESC,
+                        CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+                          WHEN A.CREATE_BY &lt;> 0 AND A.CREATE_BY IS NOT NULL AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+		                  WHEN A.CREATE_BY = 0 OR A.CREATE_BY IS NULL THEN ''
+		                  ELSE '***' END AS CREATED_BY,
+                        A.CREATE_AT AS CREATED_TIME,
+                        CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+                          WHEN A.LAST_MODIFIED_BY &lt;> 0 AND A.LAST_MODIFIED_BY IS NOT NULL AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+		                  WHEN A.LAST_MODIFIED_BY = 0 OR A.LAST_MODIFIED_BY IS NULL THEN ''
+		                  ELSE '***' END AS MODIFIED_BY,
+                        IFNULL(A.LAST_MODIFIED_AT, A.CREATE_AT) AS MODIFIED_TIME,
+                        A.CREATE_BY AS CREATED_USER_ID,
+                        A.RESOURCE_CATEGORY
+                 FROM &quot;sap.tm.trp.db.filter::t_location_filter&quot; AS A
+                 INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_visibility_type&quot; T3 ON T3.CODE = A.VISIBLE_FLAG
+                 LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement::t_visibility_type_t&quot; T4 ON T4.ID = T3.ID AND T4.SPRAS = :LANGUAGE_CODE
+                 INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter_type&quot; T5 ON T5.ID = A.LOCATION_TYPE
+                 LEFT OUTER JOIN &quot;sap.tm.trp.db.filter::t_location_filter_type_t&quot; T6 ON T6.ID = T5.ID AND T6.SPRAS = :LANGUAGE_CODE
+                 LEFT OUTER JOIN &quot;sap.tm.trp.db.filter::t_location_filter_t&quot; AS B ON (A.ID = B.ID)
+                 LEFT OUTER JOIN &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot; AS E ON (B.SPRAS = E.SPRAS)
+                 LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; AS CR ON (A.CREATE_BY = CR.ID)
+                 LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; AS MR ON (A.LAST_MODIFIED_BY = MR.ID) 
+                 LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T9 ON CR.USERNAME = T9.USERNAME
+                 LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T10 ON MR.USERNAME = T10.USERNAME
+                 CROSS JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege&quot; PRIVILEGE;
+     ELSE
+       var_out = SELECT T1.ID,
+                        T1.DESC AS NAME,
+                        B.DESC,
+                        T1.VISIBLE_FLAG AS VISIBILITY,
+                        T4.DESC AS VISIBILITY_DESC,
+                        T1.LOCATION_TYPE AS TYPE,
+                        T6.DESC AS TYPE_DESC,
+                        CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+                          WHEN T1.CREATE_BY &lt;> 0 AND T1.CREATE_BY IS NOT NULL AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+		                  WHEN T1.CREATE_BY = 0 OR T1.CREATE_BY IS NULL THEN ''
+		                  ELSE '***' END AS CREATED_BY,
+                        T1.CREATE_AT AS CREATED_TIME,
+                        CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+                          WHEN T1.LAST_MODIFIED_BY &lt;> 0 AND T1.LAST_MODIFIED_BY IS NOT NULL AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+		                  WHEN T1.LAST_MODIFIED_BY = 0 OR T1.LAST_MODIFIED_BY IS NULL THEN ''
+		                  ELSE '***' END AS MODIFIED_BY,
+                        IFNULL(T1.LAST_MODIFIED_AT, T1.CREATE_AT) AS MODIFIED_TIME,
+                        T1.CREATE_BY AS CREATED_USER_ID,
+                        T1.RESOURCE_CATEGORY
+                 FROM &quot;sap.tm.trp.db.filter::t_location_filter&quot; T1
+                 INNER JOIN &quot;sap.tm.trp.db.systemmanagement::cv_getlocationfilters_by_user&quot;(
+                            placeholder.&quot;$$IN_USER_NAME$$&quot;=>:NAME) T2 ON T1.ID = T2.LOCATION_FILTER_ID
+                 INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_visibility_type&quot; T3 ON T3.CODE = T1.VISIBLE_FLAG
+                 INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_visibility_type_t&quot; T4 ON T4.ID = T3.ID AND T4.SPRAS = :LANGUAGE_CODE
+                 INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter_type&quot; T5 ON T5.ID = T1.LOCATION_TYPE
+                 INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter_type_t&quot; T6 ON T6.ID = T5.ID AND T6.SPRAS = :LANGUAGE_CODE
+                 LEFT OUTER JOIN &quot;sap.tm.trp.db.filter::t_location_filter_t&quot; AS B ON (T1.ID = B.ID)
+                 LEFT OUTER JOIN &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot; AS E ON (B.SPRAS = E.SPRAS)
+                 LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; AS CR ON (T1.CREATE_BY = CR.ID)
+                 LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; AS MR ON (T1.LAST_MODIFIED_BY = MR.ID)
+                 LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T9 ON CR.USERNAME = T9.USERNAME
+                 LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T10 ON MR.USERNAME = T10.USERNAME
+                 CROSS JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege&quot; PRIVILEGE
+                 WHERE T1.VISIBLE_FLAG = 'G' OR (T1.VISIBLE_FLAG = 'P' AND T1.CREATE_BY = :USER_ID);
+
+    END IF;
+
+END</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="NAME" order="2">
+        <descriptions defaultDescription="NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="DESC" order="3">
+        <descriptions defaultDescription="DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+      <attribute id="VISIBILITY" order="4">
+        <descriptions defaultDescription="VISIBLE_FLAG"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY"/>
+      </attribute>
+      <attribute id="VISIBILITY_DESC" order="5">
+        <descriptions defaultDescription="VISIBILITY_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY_DESC"/>
+      </attribute>
+      <attribute id="TYPE_DESC" order="7">
+        <descriptions defaultDescription="TYPE_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="TYPE_DESC"/>
+      </attribute>
+      <attribute id="CREATED_BY" order="8">
+        <descriptions defaultDescription="CREATE_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATED_BY"/>
+      </attribute>
+      <attribute id="MODIFIED_BY" order="10">
+        <descriptions defaultDescription="MODIFIED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="MODIFIED_BY"/>
+      </attribute>
+      <attribute id="CREATED_USER_ID" order="12">
+        <descriptions defaultDescription="USER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATED_USER_ID"/>
+      </attribute>
+      <attribute id="RESOURCE_CATEGORY" order="13">
+        <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_CATEGORY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="TYPE" order="6" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LOCATION_TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="TYPE"/>
+      </measure>
+      <measure id="CREATED_TIME" order="9" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="CREATE_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="CREATED_TIME"/>
+      </measure>
+      <measure id="MODIFIED_TIME" order="11" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="LAST_MODIFIED_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="MODIFIED_TIME"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

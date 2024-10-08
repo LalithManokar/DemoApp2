@@ -1,0 +1,43 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_ext_equi_group_create"(
+    IN NAME VARCHAR(50),
+    IN DESC VARCHAR(500),
+    IN VISIBLE_FLAG VARCHAR(2),
+    IN ITEMS "sap.tm.trp.db.pipeline::tt_equipment_type_id",
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),
+    OUT GROUP_ID VARCHAR(22)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE ID VARCHAR(22);
+    DECLARE CURRENT_USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+  --DECLARE RESOURCE_CATEGORY_CONTAINER VARCHAR(50) := 'CN'; -- 'RESOURCE_CATEGORY EQ CN' INDICATES THAT YOU'RE USING CONTAINER
+
+    SELECT IFNULL(MAX(ID),-100) INTO CURRENT_USER_ID FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+    SELECT IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E') INTO SPRAS FROM DUMMY;
+
+    SELECT "sap.tm.trp.db.systemmanagement::s_equip_group".NEXTVAL INTO ID FROM DUMMY;
+
+    INSERT INTO "sap.tm.trp.db.systemmanagement::t_equipment_group"(ID, DESC, VISIBLE_FLAG, CREATE_BY, CREATE_AT, CODE, RESOURCE_CATEGORY, LAST_MODIFIED_BY, LAST_MODIFIED_AT)
+    VALUES (:ID, :NAME, :VISIBLE_FLAG, :CURRENT_USER_ID, CURRENT_UTCTIMESTAMP, UPPER(:NAME), :RESOURCE_CATEGORY_ID, :CURRENT_USER_ID, CURRENT_UTCTIMESTAMP);
+
+    INSERT INTO "sap.tm.trp.db.systemmanagement::t_equipment_group_t"(ID, SPRAS, DESC)
+    VALUES(:ID, :SPRAS, :DESC);
+
+    INSERT INTO "sap.tm.trp.db.systemmanagement::t_equipment_group_item"(EQUIPMENT_GROUP_ID, EQUI_CODE, RESOURCE_CATEGORY)
+    SELECT :ID, ID, :RESOURCE_CATEGORY_ID FROM :ITEMS A
+    join "sap.tm.trp.db.systemmanagement.user::v_resource_auth" B
+    on A.ID = B.res_type AND B.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID; --authorization check;
+
+    IF :VISIBLE_FLAG = 'P' THEN
+        INSERT INTO "sap.tm.trp.db.systemmanagement::t_user_equipment_group"(USER_ID, EQUIPMENT_GROUP_ID)
+        VALUES(:CURRENT_USER_ID, :ID);
+    END IF;
+
+    GROUP_ID := :ID;
+END;

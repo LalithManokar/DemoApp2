@@ -1,0 +1,1087 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.eac::p_eac_main_check" ( 
+    IN RULE_ID      BIGINT,
+    IN BK_TUS      "sap.tm.trp.db.eac::tt_booking_item_eac_req",
+    IN LOCATION_BASED_COST "sap.tm.trp.db.pickupreturn::tt_location_based_cost_info",
+    OUT MESSAGE    "sap.tm.trp.db.common::tt_message",
+    OUT ITEMREQ_RESULT "sap.tm.trp.db.eac::tt_booking_item_eac_result"
+    )
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	AS
+BEGIN
+
+
+    DECLARE V_USER_ID                    BIGINT;
+    DECLARE V_USERNAME                   VARCHAR(60);
+
+  --rule info
+    DECLARE V_RULE_TYPE                  INTEGER;
+    DECLARE V_SD_PLAN_ID                 BIGINT;
+    DECLARE V_TIME_RANGE_ID              INTEGER;
+    DECLARE V_EQUIP_FILTER_ID            BIGINT;
+    DECLARE V_LOCATION_FILTER_ID         BIGINT;
+    DECLARE V_NETWORK_SETTING_GROUP_ID   BIGINT;
+    DECLARE V_OP_SETTING_TYPE            INTEGER;
+    DECLARE V_OPTIMIZATION               INTEGER;
+    DECLARE V_SCHEDULE_TIME_TYPE         INTEGER;
+    DECLARE V_LDR_RULE_ID                INTEGER;
+    DECLARE V_OPTIMIZATION_OPTION        VARCHAR(50);
+    DECLARE V_EXCLUSIVE_RULE_ID          INTEGER;
+    DECLARE V_FILTER_EXECUTION           SMALLINT;
+
+   --supply_demand info
+    DECLARE V_EXECUTION_ID               INTEGER;
+    DECLARE V_NODE_ID                    INTEGER;
+    DECLARE V_SD_LF_ID                   BIGINT;
+    DECLARE V_SD_EF_ID                   BIGINT;
+    DECLARE TMP_PROV_STOCK_NODE_FLAG     INTEGER;
+
+    DECLARE V_SUCCESS_FLAG               INTEGER;
+    DECLARE  MIN_SAFETY_KEY              VARCHAR(20) := 'MIN_SAFETY_STOCK';
+    DECLARE MAX_SAFETY_KEY               VARCHAR(20) := 'MAX_SAFETY_STOCK';
+    DECLARE MAX_CAPACITY_KEY             VARCHAR(20) := 'MAX_CAPACITY';
+    DECLARE MIN_SAFETY_DEFAULT           INTEGER;
+    DECLARE MAX_SAFETY_DEFAULT           INTEGER;
+    DECLARE MAX_CAPACITY_DEFAULT         INTEGER;
+
+    DECLARE DATE_OFFSET                  INTEGER;
+    DECLARE COUNT_DATEOFFSET             INTEGER;
+
+    --DECLARE SCRIPT VARCHAR(5000);
+    DECLARE RULE_SP                      VARCHAR(200);
+    --DECLARE DRAFT_FLAG INTEGER;
+    DECLARE RESOURCE_CATEGORY            VARCHAR(20);
+
+    DECLARE PICKUPRETURN_MODE            VARCHAR(2);
+    DECLARE TOTAL_COUNT                  INTEGER;
+
+    DECLARE TOTAL_COUNT_ERR              INTEGER;
+    DECLARE TOTAL_COUNT_INP              INTEGER;
+
+    DECLARE MANDATORY_COST_MODEL_ID      INTEGER;
+
+    DECLARE V_MAX_COST                   DOUBLE;
+    DECLARE V_MIN_INTERVAL_ID            INT;
+
+    --DECLARE shift_c INT;
+    DECLARE shift                        INT;
+    DECLARE HANDLING_CAPA                INTEGER;
+    DECLARE V_TIME_ZONE_ID               VARCHAR(20);
+    DECLARE V_RESOURCE_TYPE              VARCHAR(20);
+ 	DECLARE V_ALL_RESULTS_WITH_X         VARCHAR(1);
+
+    --Get detail information of ruleset according to imput ruleset ID
+
+    CALL "sap.tm.trp.db.pickupreturn::p_location_ruleset_info" (
+      :RULE_ID,
+      V_RULE_TYPE,
+      V_SD_PLAN_ID,
+      V_TIME_RANGE_ID,
+      V_EQUIP_FILTER_ID,
+      V_LOCATION_FILTER_ID,
+      V_NETWORK_SETTING_GROUP_ID,
+      V_OP_SETTING_TYPE,
+      V_OPTIMIZATION,
+      V_SCHEDULE_TIME_TYPE,
+      V_LDR_RULE_ID,
+      V_EXCLUSIVE_RULE_ID,
+      V_FILTER_EXECUTION,
+      RESOURCE_CATEGORY
+    );
+
+     --Check if resource category exist in RULESET  in EAC
+    IF :RESOURCE_CATEGORY = '' THEN
+        MESSAGE = SELECT 'E' AS severity, 'MSG_RESOURCE_CATEGORY_INVALID' AS message_id,
+        'Resource Category cannot be Blank.' AS message, '' AS var0, '' AS var1, '' AS var2, '' AS var3,
+        '' AS var4 FROM dummy;
+        RETURN;
+    END IF;
+
+    SELECT IFNULL(MAX(T1.NAME), '') INTO RULE_SP
+    FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule" T1
+    WHERE T1.RULE_ID = :V_LDR_RULE_ID;
+
+    SELECT IFNULL(MAX(CASE RULE_TYPE WHEN 1 THEN 'EP' WHEN 2 THEN 'ER' END),'') INTO PICKUPRETURN_MODE
+    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID=:RULE_ID;
+
+    --Only pick up mode could be used in EAC
+    IF :V_RULE_TYPE = 2 THEN
+        MESSAGE = SELECT 'E' AS severity, 'MSG_RULE_TYPE_MODE_INVALID' AS message_id,
+        'Rule Type Mode of Ruleset is not valid for EAC check.' AS message, '' AS var0, '' AS var1, '' AS var2, '' AS var3,
+        '' AS var4 FROM dummy;
+        RETURN;
+    END IF;
+
+    --Only pick up mode could be used in EAC
+    IF :PICKUPRETURN_MODE = 'ER' THEN
+        MESSAGE = SELECT 'E' AS severity, 'MSG_PICKUPRETURN_MODE_INVALID' AS message_id,
+        'Pickup return mode of Ruleset is not valid for EAC check.' AS message, '' AS var0, '' AS var1, '' AS var2, '' AS var3,
+        '' AS var4 FROM dummy;
+        RETURN;
+    END IF;
+
+
+    SELECT IFNULL (MAX (USERNAME),''),'','X'
+    INTO V_USERNAME,V_RESOURCE_TYPE,V_ALL_RESULTS_WITH_X
+    FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+
+    SELECT IFNULL (MAX (SHIFT),0) INTO shift
+	FROM "sap.tm.trp.db.pickupreturn::t_shift2" WHERE NAME=:V_USERNAME;
+
+    --Optimization options
+    SELECT IFNULL (MAX(CASE OPTIMIZATION WHEN 1 THEN 'COST' ELSE 'BALANCE' END),'') INTO V_OPTIMIZATION_OPTION
+    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID=:RULE_ID;
+
+-->>---New creat logic to set import data to TU_INFO
+    TU_INFO = SELECT :RULE_ID AS RULE_ID,
+                     TU_ID ,
+                     TU_KEY,
+              --       TU_TYPE_CODE,
+                     EP_SRC_LOC_ID,
+                     EP_SRC_LOC_KEY,
+                     EP_DEST_LOC_ID AS ORIGINAL_PICKUP_LOCATION_ID,
+                     EP_DEST_LOC_KEY,
+                     POL,
+                     RESOURCE_TYPE,
+                     QUANTITY,
+                     RELEVANT_PLANNING,
+                     MOT,
+                     MEANS_OF_TRANSPORTATION,
+                     PICKUP_DATE,
+                     1 as FLAG
+               FROM :BK_TUS;
+ --<<--
+
+
+    --DATEOFFSET OF THIS USER TO QUERY OLD INFO
+    SELECT IFNULL(MAX (DATE_OFFSET), 0) INTO DATE_OFFSET
+    FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+    WHERE USER = :V_USERNAME;
+
+    --GET EXECUTION_ID NODE_ID
+ /*   SELECT MAX(ID)  INTO V_EXECUTION_ID
+    FROM "sap.tm.trp.db.pipeline::t_plan_execution"
+    WHERE PLAN_MODEL_ID = ( SELECT SD_PLAN_ID
+                            FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+                            WHERE ID=:RULE_ID);
+
+    --Raise error message when there's no execution for supply and demand plan
+    IF :V_EXECUTION_ID IS NULL THEN
+        MESSAGE = SELECT 'E' AS severity, 'MSG_EXECUTION_ID_BLANK' AS message_id,
+        'No Supply and Demand Plan Executed.' AS message, '' AS var0, '' AS var1, '' AS var2, '' AS var3,
+        '' AS var4 FROM dummy;
+        RETURN;
+    END IF;
+
+    CALL  "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid"(:V_EXECUTION_ID, V_NODE_ID);
+
+    --GET USED SD PLAN'S LOCATION FILTER
+    SELECT IFNULL (MAX (LOCATION_FILTER_ID),0) INTO V_SD_LF_ID
+    FROM "sap.tm.trp.db.pipeline::t_plan_model" A
+    INNER JOIN "sap.tm.trp.db.filter::t_filter_location_filter" B
+    ON A.FILTER_GROUP_ID = B.FILTER_GROUP_ID
+    WHERE A.ID  = ( SELECT SD_PLAN_ID
+                    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+                    WHERE ID=:RULE_ID);
+
+    --GET USED SD PLAN'S RESOURCE FILTER
+    SELECT IFNULL (MAX (EQUIPMENT_FILTER_ID),0) INTO V_SD_EF_ID
+    FROM "sap.tm.trp.db.pipeline::t_plan_model" A
+    INNER JOIN "sap.tm.trp.db.filter::t_filter_equipment_filter" B
+    ON A.FILTER_GROUP_ID = B.FILTER_GROUP_ID
+    WHERE A.ID = ( SELECT SD_PLAN_ID
+                   FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+                   WHERE ID=:RULE_ID);
+*/
+     CALL "sap.tm.trp.db.pickupreturn::p_get_plan_data_by_sd_planid"
+    (:V_SD_PLAN_ID,:V_RESOURCE_TYPE,:V_ALL_RESULTS_WITH_X,V_SD_LF_ID, V_SD_EF_ID, V_EXECUTION_ID, V_NODE_ID,plan_data_from_cv,SD_EXECUTIION_RESULT);
+
+      PLAN_DATA  = SELECT
+                        V_EXECUTION_ID AS PLAN_EXECUTION_ID,
+                        V_NODE_ID AS NODE_ID,
+                        T0.EQUIP_TYPE_ID,
+                        T0.EQUIP_TYPE_NAME,
+                        T0.LOCATION_ID,
+                        T0.LOCATION_NAME,
+                        T0.SUPPLY,
+                        T0.DEMAND,
+                        T0.BALANCE_SUPPLY_DEMAND,
+                        T0.BALANCE_STOCK_SUPPLY_DEMAND,
+                        IFNULL (T0.MIN_SAFETY_STOCK,0) AS MIN_SAFETY_STOCK,
+                        T0.MAX_SAFETY_STOCK,
+                        T0.MAX_CAPACITY,
+                        T0.MIN_SAFETY_STOCK_HEADER,
+                        T0.MAX_SAFETY_STOCK_HEADER,
+                        T0.MAX_CAPACITY_HEADER,
+                        T0.STOCK_BALANCE_HEADER,
+					    T0.START_TIME,
+					    T0.END_TIME
+                      FROM :plan_data_from_cv T0;
+
+    --Get cost model
+    SELECT IFNULL (MAX (MANDATORY_COST_MODEL_ID),0) INTO MANDATORY_COST_MODEL_ID
+    FROM "sap.tm.trp.db.planningcockpit::v_network_setting_group"
+    WHERE ID = :V_NETWORK_SETTING_GROUP_ID;
+
+
+    LOCATION_BASED_COST_TMP = SELECT FROM_LOCATION,
+                                     TO_LOCATION,
+                                     MTR,
+                                     CARRIER,
+                                     RESOURCE_TYPE,
+                                     DISTANCE,
+                                     DURATION
+                              FROM :LOCATION_BASED_COST;
+
+
+    --Get transportation cost by cost model
+    CALL "sap.tm.trp.routing.db.cost::p_calculate_connection_transport_cost"(
+      :MANDATORY_COST_MODEL_ID,
+      :LOCATION_BASED_COST_TMP,
+      CALCULATED_TRANSPORT_COST
+    );
+
+	-- get the default stock threshold
+    SELECT IFNULL(MAX(T1.DEFAULT_VALUE),0) INTO MIN_SAFETY_DEFAULT
+    FROM "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+    WHERE T1.DEFAULT_KEY = :MIN_SAFETY_KEY;
+
+    SELECT IFNULL(MAX(T1.DEFAULT_VALUE),999999) INTO MAX_SAFETY_DEFAULT
+    FROM "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+    WHERE T1.DEFAULT_KEY = :MAX_SAFETY_KEY;
+
+    SELECT IFNULL(MAX(T1.DEFAULT_VALUE),999999) into MAX_CAPACITY_DEFAULT
+    FROM "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+    WHERE T1.DEFAULT_KEY = :MAX_CAPACITY_KEY;
+
+	--Get handling cost by cost model
+	prepare_direction = SELECT DISTINCT CASE :V_RULE_TYPE WHEN 1 THEN FROM_LOCATION END AS LOCATION,
+	                           CASE :V_RULE_TYPE WHEN 1 THEN '' END AS FROM_MTR,
+	                           CASE :V_RULE_TYPE WHEN 1 THEN MTR END AS TO_MTR,
+	                           RESOURCE_TYPE
+	                    FROM :LOCATION_BASED_COST;
+
+	CALL "sap.tm.trp.routing.db.cost::p_calculate_location_handling_cost"(
+      :MANDATORY_COST_MODEL_ID,
+      :PREPARE_DIRECTION,
+      HANDLING_COST
+    );
+
+
+   --Pure SD
+    CALL "sap.tm.trp.db.pickupreturn::p_origin_sd_stock_cutoff_v2"
+      (
+        :SD_EXECUTIION_RESULT,
+        :V_EXECUTION_ID,
+        :V_SD_PLAN_ID,
+        :V_NODE_ID,
+        PURE_SD,
+        INITIAL_STOCK
+       );
+
+	SELECT MIN(TIME_INTERVAL_ID) INTO V_MIN_INTERVAL_ID FROM :PURE_SD;
+
+	PURE_SD =   SELECT T0.LOCATION_ID,
+					   T0.LOCATION_NAME,
+					   T0.EQUIP_TYPE_ID,
+					   T0.TIME_INTERVAL_ID,
+					   T0.START_TIME,
+					   T0.END_TIME,
+					   IFNULL(T0.SUPPLY-T1.INIT_STOCK,SUPPLY) AS SUPPLY,
+					   DEMAND
+				FROM :PURE_SD T0
+				LEFT JOIN :INITIAL_STOCK T1
+				ON T0.LOCATION_ID=T1.LOCATION_ID
+				AND T0.EQUIP_TYPE_ID=T1.RESOURCE_TYPE
+				AND T0.TIME_INTERVAL_ID=:V_MIN_INTERVAL_ID;
+
+    --check stock flag
+    SELECT COUNT(*) INTO TMP_PROV_STOCK_NODE_FLAG
+    FROM "sap.tm.trp.db.pipeline::t_plan_model" AS A
+    INNER JOIN "sap.tm.trp.db.pipeline::v_pipeline_node" B
+    ON (A.PIPELINE_MODEL_ID = B.PIPELINE_MODEL_ID AND UPPER (B.NAME) LIKE '%PROVISIONAL_STOCK%')
+    WHERE B.RESULT_VISIBLE = 1 AND A.ID = :V_SD_PLAN_ID;
+
+
+     --HANDLING COST
+    t_handling_cost  = SELECT DISTINCT LOCATION,
+                              RESOURCE_TYPE,
+                              AVG(COST) AS COST
+                       FROM :HANDLING_COST
+                       GROUP BY LOCATION,RESOURCE_TYPE;
+
+
+	SELECT MAX(COST) INTO V_MAX_COST FROM :CALCULATED_TRANSPORT_COST;
+
+    --TRANSPORTATION COST
+    t_transportation_cost = SELECT DISTINCT T1.FROM_LOCATION,
+							     T1.TO_LOCATION,
+							     T2.RESOURCE_TYPE,
+							     T1.MTR,
+							     T2.DURATION,
+							     IFNULL (T1.COST,:V_MAX_COST) AS COST
+						   FROM :CALCULATED_TRANSPORT_COST T1
+						   INNER JOIN :LOCATION_BASED_COST T2
+						   ON (T1.FROM_LOCATION = T2.FROM_LOCATION AND T1.TO_LOCATION = T2.TO_LOCATION
+						       AND T1.MTR = T2.MTR);
+
+
+	    TU_TBL  = SELECT TU_ID,
+	               --      TU_TYPE_CODE AS TU_TYPE,
+	                     RESOURCE_TYPE,
+                         TU_KEY,
+                   --      SHIPPER_ID,
+	                     CASE WHEN :V_RULE_TYPE=1 THEN IFNULL(ORIGINAL_PICKUP_LOCATION_ID,POL) END AS CUR_LOCATION_ID,
+	                     EP_SRC_LOC_KEY,
+	                     EP_DEST_LOC_KEY,
+	                     QUANTITY,
+	               --      CASE WHEN :V_RULE_TYPE=1 THEN IFNULL(ORIGINAL_PICKUP_DATE,NULL) END AS CUR_DATE,
+	                     CASE WHEN :V_RULE_TYPE=1 THEN IFNULL(PICKUP_DATE,NULL) END AS PRE_DATE,
+	                     CASE WHEN ORIGINAL_PICKUP_LOCATION_ID  = '' THEN POL
+	                          ELSE ORIGINAL_PICKUP_LOCATION_ID END AS SHIPPER_LOCATION_ID,
+	               --      BOOKING_DATE,
+	                     FLAG,
+	                     RELEVANT_PLANNING,
+	                     POL
+                --         EXECUTION_STATUS_CODE AS STATUS,
+                --         LIFECYCLE_CODE AS LIFECYCLE_STATUS
+	              FROM :TU_INFO;
+
+
+
+	    --Solver parameters preparation
+	    t_supply_demand_p = SELECT DISTINCT t1.START_TIME,
+	                               t1.END_TIME,
+	                               LOC.NAME AS LOCATION,
+	                               t1.EQUIP_TYPE_ID AS CONTAINER_TYPE,
+	                               t1.SUPPLY,
+	                               t1.DEMAND
+	                        FROM :PURE_SD t1
+	                        INNER JOIN "sap.tm.trp.db.semantic.location::v_location" AS LOC
+                                    ON LOC.ID = T1.LOCATION_ID;
+	                        --WHERE END_TIME > CURRENT_UTCTIMESTAMP;
+
+          -- prepare transportation cost, handling cost, AND storage cost
+          t_transportation_cost_p = SELECT DISTINCT T1.FROM_LOCATION,
+                                           T1.TO_LOCATION,
+                                           T1.MTR,
+                                           T1.DURATION,
+                                           T1.COST,
+                                           T1.RESOURCE_TYPE AS CONTAINER_TYPE
+                                    FROM :t_transportation_cost T1;
+
+          --Stock configuration
+          t_stock_configuration_p = SELECT DISTINCT LOC.NAME AS LOCATION,
+                                           T1.RESOURCE_TYPE AS CONTAINER_TYPE,
+                                           IFNULL (T1.INIT_STOCK,0) AS CURRENT_STOCK,
+                                           IFNULL (T2.MIN_SAFETY_STOCK,:MIN_SAFETY_DEFAULT) AS MIN_STOCK,
+                                           IFNULL (T2.MAX_SAFETY_STOCK,:MAX_SAFETY_DEFAULT) AS MAX_STOCK,
+                                           IFNULL (T2.MAX_PHYSICAL_STOCK,:MAX_CAPACITY_DEFAULT) AS MAX_PHY_CAPACITY
+                                    FROM :INITIAL_STOCK T1
+                                    INNER JOIN "sap.tm.trp.db.semantic.location::v_location" AS LOC
+                                    ON LOC.ID = T1.LOCATION_ID
+                                    LEFT JOIN "sap.tm.trp.db.stock::v_location_stock_location" T2
+                                    ON (T1.LOCATION_ID = T2.ID AND T1.RESOURCE_TYPE = T2.RESOURCE_ID);
+
+          --locations' storage cost and handling cost
+          t_location_cost_p = SELECT DISTINCT LOCATION,
+                                     RESOURCE_TYPE AS CONTAINER_TYPE,
+                                     0 AS STORAGE_COSTUNIT,
+                                     COST AS HANDLING_COSTUNIT
+                              FROM :t_handling_cost;
+
+          --Some out parameters
+          t_parameters = SELECT TOP 0 '' AS NAME,
+                                '' AS VALUE
+                         FROM :t_transportation_cost;
+
+          --Pickup used provisioning location and resource
+          IF :TMP_PROV_STOCK_NODE_FLAG > 0 THEN
+            t_pro_loc_res = SELECT DISTINCT LOC.NAME AS LOCATION,
+                                   T0.EQUIP_TYPE_ID AS CONTAINER_TYPE,
+                                   (T0.SUPPLY-T0.DEMAND) AS MIN_PROVISION_STOCK
+                            FROM :PLAN_DATA T0
+
+                            INNER JOIN "sap.tm.trp.db.semantic.location::v_location" AS LOC
+                                    ON LOC.ID = T0.LOCATION_ID;
+          ELSE
+            t_pro_loc_res = SELECT TOP 0 '' AS LOCATION,
+                                   '' AS CONTAINER_TYPE,
+                                   0 AS MIN_PROVISION_STOCK
+                            FROM :t_transportation_cost;
+          END IF ;
+
+          --Patch8 new functionality to consider handling capacity
+	      CALL "sap.tm.trp.db.planningcockpit::p_get_network_setting_handling_capacity_value" (
+	          :V_NETWORK_SETTING_GROUP_ID,
+	          :V_SD_PLAN_ID,
+	          HANDLING_CAPA
+	      );
+
+	      IF HANDLING_CAPA = 1 THEN  --ONLY Days time interval consider the handling capacity
+
+                --Get the timezone id of the location filter of SD Plan
+               	SELECT T3.TIMEZONE_ID INTO V_TIME_ZONE_ID
+                            FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+                            INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2 ON T2.ID = T1.FILTER_GROUP_ID
+                            INNER JOIN "sap.tm.trp.db.filter::t_time_filter" T3 ON T2.TIME_FILTER_ID = T3.ID
+                            WHERE T1.ID = :V_SD_PLAN_ID;
+
+                     CALL "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_origin_sd_stock_cutoff_pure_transportation_v2"
+                     (
+                            :SD_EXECUTIION_RESULT,
+                            :V_EXECUTION_ID,
+                            :V_NETWORK_SETTING_GROUP_ID,
+                            :PURE_SD,
+                            LT_PURE_SD
+                     );
+
+                     CALL "sap.tm.trp.db.planningcockpit::p_get_location_handling_capacity" (
+                     :LT_PURE_SD,
+                     :V_TIME_ZONE_ID,
+                     :RESOURCE_CATEGORY,
+                     T_HANDLING_CAPACITY
+	        );
+	      END IF;
+
+
+----EAC only support the pick up case, not for return.
+------Main pick up process----
+
+----/****Start****/-------
+
+ --Optimized by ldr
+      IF :V_OP_SETTING_TYPE = 1 THEN
+
+        ---To extend the column
+        INSERT INTO "SAP_TM_TRP"."sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_booking_ER_LDR_balance_cost_base_inputGlobalTemp"(
+                    PR_RULE_ID,
+                    TU_ID,
+                    EQUIPMENT_ID,
+                    EQUIP_TYPE_NAME,
+                    QUANTITY,
+                    LOCATION_ID,
+                    LOCATION_NAME,
+                    PLANNED_DATE,
+                    TU_TYPE,
+                    ITE_KEY,
+             --       SHIPPER_ID,
+             --       SHIPPER_NAME,
+                    POL,
+                    POL_NAME,
+             --       POD,
+             --       POD_NAME,
+             --       CONSIGNEE_ID,
+             --       CONSIGNEE_NAME,
+             --       CUSTOMER_NAME,
+                    PLANNING_RELEVANT,
+             --       EXECUTION_STATUS,
+             --       LIFECYCLE_STATUS,
+                    BOOKING_DATE,
+                    PLAN_EXECUTION_ID,
+                    PLAN_MODEL_ID,
+                    NODE_ID,
+                    DEPOT_ID,
+                    DEPOT_NAME,
+                    STOCK,
+                    SUPPLY,
+                    DEMAND,
+                    IMPACTED_SUPPLY,
+                    IMPACTED_DEMAND,
+                    BALANCE_SUPPLY_DEMAND,
+                    BALANCE_STOCK_SUPPLY_DEMAND,
+                    MIN_SAFETY_STOCK,
+                    MAX_SAFETY_STOCK,
+                    MAX_CAPACITY,
+                    COST_MODEL_ID,
+                    TR_COST,
+                    HANDLE_COST,
+                    FREE_DAYS,
+                    FREE_AMOUNT,
+                    STORAGE_COST,
+                    MIN_SAFETY_STOCK_HEADER,
+                    MAX_SAFETY_STOCK_HEADER,
+                    MAX_CAPACITY_HEADER,
+                    STOCK_BALANCE_HEADER,
+                    HANDLING_CAPACITY,
+                    SUPPLY_DEMAND,
+                    REMAINING_HANDLING_CAPACITY)
+             SELECT DISTINCT :RULE_ID AS RULE_ID,
+                    T4.TU_ID,
+                    T4.RESOURCE_TYPE,
+                    T0.EQUIP_TYPE_NAME,
+                    T4.QUANTITY ,
+                    T4.EP_DEST_LOC_KEY,
+                    T4.SHIPPER_LOCATION_ID AS LOCATION_ID,
+            --        T4.SHIPPER_LOCATION,
+                    T4.PRE_DATE,
+                    'EP',  --        T4.TU_TYPE,
+                    T4.TU_KEY, -- T5.ITE_KEY,
+            --        T4.SHIPPER_ID,
+            --        T4.SHIPPER AS SHIPPER_NAME,
+                    T4.POL,
+                    T4.POL,
+            --        T4.POD,
+            --        T4.POD_NAME,
+            --        T4.CONSIGNEE_ID,
+            --        T4.CONSIGNEE AS CONSIGNEE_NAME,
+            --        T4.CUSTOMER_NAME, --T5."CUSTOMER_NAME",
+                    T4.RELEVANT_PLANNING,
+            --        T4.STATUS, --T5."EXECUTION_STATUS",
+            --        T4.LIFECYCLE_STATUS, --T5."LIFECYCLE_STATUS",
+                    CURRENT_UTCDATE,--        T4.BOOKING_DATE, --T5."BOOKING_DATE"
+                    :V_EXECUTION_ID AS EXECUTION_ID,
+                    :V_SD_PLAN_ID AS SD_PLAN_ID,
+                    :V_NODE_ID AS NODE_ID,
+                    T0.LOCATION_ID,
+                    T0.LOCATION_NAME,
+                    IFNULL(T5.CURRENT_STOCK, 0)  AS stock,-- T5.STOCK,
+                    T0.SUPPLY,
+                    T0.DEMAND,
+                    IFNULL(T6.QUANTITY,0) AS IMPACTED_DEMAND,
+                    IFNULL(T7.QUANTITY,0) AS IMPACTED_SUPPLY,
+                    T0.BALANCE_SUPPLY_DEMAND,
+                    T0.BALANCE_STOCK_SUPPLY_DEMAND,
+                    IFNULL (T0.MIN_SAFETY_STOCK,0) AS MIN_STOCK,
+                    T0.MAX_SAFETY_STOCK AS MAX_STOCK,
+                    T0.MAX_CAPACITY,
+                    :MANDATORY_COST_MODEL_ID AS COST_MODEL_ID,
+                    T1.COST AS TRANSPORTATION_COST,
+                    T2.COST AS HANDLING_COST,
+                    0 AS FREE_DAYS,
+                    0 AS FREE_AMOUNT,
+                    0 AS LOCATION_COST,
+                    T0.MIN_SAFETY_STOCK_HEADER,
+                    T0.MAX_SAFETY_STOCK_HEADER,
+                    T0.MAX_CAPACITY_HEADER,
+                    T0.STOCK_BALANCE_HEADER,
+                    T8.HANDLING_CAPACITY,
+                    IFNULL(T8.SUPPLY + T8.DEMAND,0) AS SUPPLY_DEMAND,
+                    T8.HANDLING_CAPACITY - T8.SUPPLY - T8.DEMAND AS REMAINING_HANDLING_CAPACITY
+              FROM :PLAN_DATA T0
+        INNER JOIN :t_transportation_cost  T1 ON T0.LOCATION_NAME=T1.FROM_LOCATION AND T1.RESOURCE_TYPE=T0.EQUIP_TYPE_ID
+        LEFT JOIN :t_handling_cost        T2 ON T0.LOCATION_NAME=T2.LOCATION   AND T2.RESOURCE_TYPE=T0.EQUIP_TYPE_ID
+        --INNER JOIN :t_storage_cost         T3 ON T0.LOCATION_ID=T3.LOCATION_ID   AND T3.RESOURCE_TYPE=T0.EQUIP_TYPE_ID
+        INNER JOIN :TU_TBL  T4
+                ON T4.RESOURCE_TYPE = T0.EQUIP_TYPE_ID
+               AND  ADD_DAYS (T0.END_TIME, :DATE_OFFSET) >= T4.PRE_DATE
+               AND  ADD_DAYS(T0.START_TIME, :DATE_OFFSET)< T4.PRE_DATE
+        LEFT OUTER JOIN  (SELECT LOCATION_ID,
+                                 RESOURCE_TYPE,
+                                 CURRENT_STOCK
+                          FROM "sap.tm.trp.db.pickupreturn::cv_current_stock"(
+                                placeholder."$$IN_LOCATION_FILTER_ID$$"=>:V_SD_LF_ID,
+                                placeholder."$$IN_RESOURCE_ID$$"=>:V_SD_EF_ID)
+                               ) T5
+               ON  T0.EQUIP_TYPE_ID = T5.RESOURCE_TYPE
+              AND  T0.LOCATION_ID   = T5.LOCATION_ID
+        LEFT OUTER JOIN (SELECT TOP 1 * FROM :TU_INFO)  T6
+                ON  T0.EQUIP_TYPE_ID       = T6.RESOURCE_TYPE
+               --AND  T0.LOCATION_ID         = T6.PICKUP_LOCATION_ID
+               AND  ADD_DAYS(T0.END_TIME, :DATE_OFFSET) >= T6.PICKUP_DATE
+               AND  ADD_DAYS(T0.START_TIME, :DATE_OFFSET) <= T6.PICKUP_DATE
+               AND  T6.RULE_ID             = :RULE_ID
+               --AND  T6.FLAG                = 2  --tbc
+               --AND  (T6.PICKUP_LOCATION_ID IS NOT NULL OR T6.PICKUP_LOCATION_ID <> '')
+
+               --//to do, to check the condition
+        LEFT OUTER JOIN (SELECT TOP 1 * FROM :TU_INFO)  T7
+                ON  T0.EQUIP_TYPE_ID       = T7.RESOURCE_TYPE
+         --      AND  T0.LOCATION_ID         = T7.PICKUP_LOCATION_ID
+               AND  T0.LOCATION_ID         = T7.ORIGINAL_PICKUP_LOCATION_ID
+               AND  ADD_DAYS (T0.START_TIME, :DATE_OFFSET)<= T7.PICKUP_DATE --TO DO
+               AND ADD_DAYS (T0.END_TIME, :DATE_OFFSET) >=T7.PICKUP_DATE  --TO DO
+               AND  T7.RULE_ID             = :RULE_ID
+               AND  T7.FLAG                = 2  --tbc
+       --AND  (T7.PICKUP_LOCATION_ID IS NOT NULL OR T7.PICKUP_LOCATION_ID <> '')
+        LEFT OUTER JOIN :T_HANDLING_CAPACITY T8
+				ON T0.LOCATION_ID = T8.LOCATION_ID
+				AND T0.START_TIME = T8.START_TIME
+				AND T0.END_TIME = T8.END_TIME
+        --INNER JOIN :TU_INFO AS T10 ON T10.RULE_ID =:RULE_ID AND T10.TRANSPORTATION_ID = T4.TU_ID
+             WHERE   T0.PLAN_EXECUTION_ID   = :V_EXECUTION_ID
+               AND  T0.NODE_ID             = :V_NODE_ID
+               AND  T4.FLAG                <>2;
+
+
+        --tmp_in_rule = select * from "SAP_TM_TRP"."sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_booking_ER_LDR_balance_cost_base_inputGlobalTemp";
+
+        CALL "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::p_call_ER_LDR_rules"(
+              :PICKUPRETURN_MODE,
+              :RULE_SP,
+              ER_LDR_RESULT
+             );
+
+
+	      RESULT_TMP = SELECT DISTINCT T1.RULE_ID,
+	             :V_USERNAME AS USER,
+	             T1.TU_ID,
+	        --     T1.TU_TYPE_CODE,
+	        --     T1.EXECUTION_STATUS_CODE,
+	        --     T1.SHIPPER_ID,
+	        --     T1.CONSIGNEE_ID,
+	             T1.RESOURCE_TYPE,
+	             T2.QUANTITY,
+	        --     T1.ASSIGNED_CONTAINERS,
+	        --     T1.RESOURCE_NUMBER,
+	        --     T1.SOURCE_LOCATION_ID,
+	        --     T1.DESTINATION_LOCATION_ID,
+	        --     T1.POL,
+	        --     T1.POD,
+	        --     CASE :V_RULE_TYPE WHEN 1 THEN T1.VESSEL_CUTOFF_TIME END AS DATE,
+	        --     CASE :V_RULE_TYPE WHEN 1 THEN IFNULL (T2.DEPOT_ID,T1.PICKUP_LOCATION_ID) END AS PRE_LOCATION_ID,
+	        --     CASE :V_RULE_TYPE WHEN 1 THEN T1.ORIGINAL_PICKUP_LOCATION_ID END AS CUR_LOCATION_ID,
+	             CASE :V_RULE_TYPE WHEN 1 THEN T1.PICKUP_DATE  END AS PRE_DATE,
+	        --     CASE :V_RULE_TYPE WHEN 1 THEN T1.ORIGINAL_PICKUP_DATE END AS CUR_DATE,
+	             :V_OP_SETTING_TYPE AS OP_SETTING_TYPE,
+	             :V_SCHEDULE_TIME_TYPE AS SCHEDULE_TIME_TYPE,
+	             T1.RELEVANT_PLANNING,
+	             T1.TU_KEY,
+		         T1.MOT,
+			     T1.MEANS_OF_TRANSPORTATION,
+			     T2.DEPOT_NAME AS FROM_LOCATION
+	      FROM :TU_INFO T1
+	      LEFT JOIN (SELECT TU_ID,RESOURCE_TYPE,LOCATION_ID,DEPOT_ID,DEPOT_NAME,QUANTITY
+                     FROM (SELECT DISTINCT TU_ID,EQUIPMENT_ID AS RESOURCE_TYPE,LOCATION_ID,DEPOT_ID,DEPOT_NAME,QUANTITY,
+                                  ROW_NUMBER()OVER (PARTITION BY TU_ID,EQUIPMENT_ID,LOCATION_ID ORDER BY LOC_RANK DESC) AS RANK
+                           FROM (SELECT DISTINCT * FROM :ER_LDR_RESULT WHERE ER_LDR = 'LDR'))
+                     WHERE RANK =  1 ) T2
+          ON (T1.TU_ID = T2.TU_ID
+              AND T1.RESOURCE_TYPE =T2.RESOURCE_TYPE
+              AND T1.FLAG<>2);
+
+      END IF;
+
+      IF :V_OP_SETTING_TYPE = 2 THEN
+        t_booking_depot = SELECT DISTINCT TU_ID AS BOOKING_ID,
+	            --           SHIPPER_LOCATION AS CUSTOMER_LOCATION,
+	                         CUR_LOCATION_ID AS CUSTOMER_LOCATION,
+	                         CURRENT_UTCTIMESTAMP AS START_TIME,
+	                         ADD_DAYS(TO_TIMESTAMP(PRE_DATE),IFNULL(:shift,0)) AS BOOKING_TIME,
+	                         RESOURCE_TYPE AS CONTAINER_TYPE,
+	                         QUANTITY,
+	                         CASE :V_RULE_TYPE WHEN 1 THEN 'PICKUP' END AS MODE,
+	                         RELEVANT_PLANNING AS HAULAGE_TYPE
+	                  FROM :TU_TBL;
+
+	    --Suggest location get
+          CALL "sap.tm.trp.db.pickupreturn.algorithm::p_pickup_optimize" (
+            :V_OPTIMIZATION_OPTION,
+            :HANDLING_CAPA,
+            :T_TRANSPORTATION_COST_P,
+            :T_PARAMETERS,
+            :T_SUPPLY_DEMAND_P,
+            :T_BOOKING_DEPOT,
+            :T_STOCK_CONFIGURATION_P,
+            :T_LOCATION_COST_P,
+            :T_PRO_LOC_RES,
+            :T_HANDLING_CAPACITY,
+            CUR_RESULT
+           );
+	/*
+	    --Location name to location id
+	    CUR_RESULT = SELECT T1.BOOKING_ID,
+					T2.ID AS FROM_LOCATION,
+					T1.TO_LOCATION,
+					T1.FROM_TIME,
+					T1.TO_TIME,
+					T1.CONTAINER_TYPE,
+					T1.QUANTITY,
+					T1.STORAGE_COST,
+					T1.HANDLING_COST,
+					T1.TRANSPORTATION_COST,
+					T1.TOTAL_COST,
+					T1.MODE,
+					T1.HAULAGE_TYPE
+		  FROM :CUR_RESULT T1
+		  INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T2 ON T2.NAME = T1.FROM_LOCATION;
+	 */
+
+	   RESULT_TMP =   SELECT DISTINCT T1.RULE_ID,
+	             :V_USERNAME AS USER,
+	             T1.TU_ID,
+	         --    T1.TU_TYPE_CODE,
+	         --    T1.EXECUTION_STATUS_CODE,
+	         --    T1.SHIPPER_ID,
+	         --    T1.CONSIGNEE_ID,
+	             T1.RESOURCE_TYPE,
+	             T2.QUANTITY,
+	         --    T1.ASSIGNED_CONTAINERS,
+	         --    T1.RESOURCE_NUMBER,
+	         --    T1.SOURCE_LOCATION_ID,
+	         --    T1.DESTINATION_LOCATION_ID,
+	         --    T1.POL,
+	         --    T1.POD,
+	         --    CASE :V_RULE_TYPE WHEN 1 THEN T1.VESSEL_CUTOFF_TIME END AS DATE,
+	         --    CASE :V_RULE_TYPE WHEN 1 THEN IFNULL (T2.LOCATION_ID,T1.PICKUP_LOCATION_ID) END AS PRE_LOCATION_ID,
+	         --    CASE :V_RULE_TYPE WHEN 1 THEN T1.ORIGINAL_PICKUP_LOCATION_ID  END AS CUR_LOCATION_ID,
+	             CASE :V_RULE_TYPE WHEN 1 THEN T1.PICKUP_DATE END AS PRE_DATE,
+	         --   CASE :V_RULE_TYPE WHEN 1 THEN T1.ORIGINAL_PICKUP_DATE END AS CUR_DATE,
+	             :V_OP_SETTING_TYPE AS OP_SETTING_TYPE,
+	             :V_SCHEDULE_TIME_TYPE AS SCHEDULE_TIME_TYPE,
+	             T1.RELEVANT_PLANNING,
+	         --    T1.CUSTOMER_CODE,
+	             T1.TU_KEY,
+	         --    T1.LIFECYCLE_CODE,
+	         --    T1.BOOKING_DATE,
+	         --    CASE WHEN T2.LOCATION_ID IS NULL THEN T1.ASSIGN_STATUS
+	         --      ELSE 1 END AS ASSIGN_STATUS,
+	         --    :V_RULE_TYPE,
+	         --    CURRENT_UTCTIMESTAMP AS SAVE_TIME,
+	         --    CASE WHEN T2.LOCATION_ID IS NULL THEN T1.FLAG
+	         --      ELSE 1 END AS FLAG,
+	         --    T1.BOOKING_REFERENCE,
+		         T1.MOT,
+			     T1.MEANS_OF_TRANSPORTATION,
+			     T2.LOCATION_ID AS FROM_LOCATION
+		     --    T1.CARRIER_POL,
+		     --    T1.CARRIER_POD,
+			 --    T1.VOYAGE_POL,
+			 --    T1.VOYAGE_POD,
+			 --    T1.SPECIAL_INSTRUCTION_CODE,
+			 --    T1.SPECIAL_INSTRUCTION_NAME,
+			 --    T1.LAST_LOCATION_ID,
+			 --    T1.LAST_LOCATION_NAME,
+			 --    T1.LEASE_AGREEMENT,
+			 --    T1.LEASE_TYPE_CODE,
+			 --    T1.LEASE_TYPE,
+			 --    T1.ASSIGNED_RESOURCE,
+			 --    T1.VESSEL_CUTOFF_TIME,
+			 --    T1.VESSEL_ARRIVAL_DATE,
+			 --    T1.VESSEL_POL,
+			 --    T1.VESSEL_POD,
+			 --    T1.STREETTURN_TU_ID,
+			 --    T1.PLAN_STATUS
+	      FROM :TU_INFO T1
+	      LEFT JOIN (SELECT DISTINCT BOOKING_ID AS TU_ID,CONTAINER_TYPE,FROM_LOCATION AS LOCATION_ID,QUANTITY
+                     FROM :CUR_RESULT) T2
+          ON (T1.TU_ID = T2.TU_ID
+              AND T1.RESOURCE_TYPE = T2.CONTAINER_TYPE
+              AND T1.FLAG <> 2);
+
+      END IF;
+
+      IF :V_OP_SETTING_TYPE = 3 THEN
+
+        INSERT INTO "SAP_TM_TRP"."sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_booking_ER_LDR_balance_cost_base_inputGlobalTemp"(
+                    PR_RULE_ID,
+                    TU_ID,
+                    EQUIPMENT_ID,
+                    EQUIP_TYPE_NAME,
+                    QUANTITY,
+                    LOCATION_ID,
+            --        LOCATION_NAME,
+                    PLANNED_DATE,
+            --        TU_TYPE,
+                    ITE_KEY,
+            --        SHIPPER_ID,
+            --        SHIPPER_NAME,
+                    POL,
+            --        POL_NAME,
+            --        POD,
+            --        POD_NAME,
+            --        CONSIGNEE_ID,
+            --        CONSIGNEE_NAME,
+            --        CUSTOMER_NAME,
+                    PLANNING_RELEVANT,
+            --        EXECUTION_STATUS,
+            --        LIFECYCLE_STATUS,
+            --        BOOKING_DATE,
+                    PLAN_EXECUTION_ID,
+                    PLAN_MODEL_ID,
+                    NODE_ID,
+                    DEPOT_ID,
+                    DEPOT_NAME,
+                    STOCK,
+                    SUPPLY,
+                    DEMAND,
+                    IMPACTED_SUPPLY,
+                    IMPACTED_DEMAND,
+                    BALANCE_SUPPLY_DEMAND,
+                    BALANCE_STOCK_SUPPLY_DEMAND,
+                    MIN_SAFETY_STOCK,
+                    MAX_SAFETY_STOCK,
+                    MAX_CAPACITY,
+                    COST_MODEL_ID,
+                    TR_COST,
+                    HANDLE_COST,
+                    FREE_DAYS,
+                    FREE_AMOUNT,
+                    STORAGE_COST,
+                    MIN_SAFETY_STOCK_HEADER,
+                    MAX_SAFETY_STOCK_HEADER,
+                    MAX_CAPACITY_HEADER,
+                    STOCK_BALANCE_HEADER,
+                    HANDLING_CAPACITY,
+                    SUPPLY_DEMAND,
+                    REMAINING_HANDLING_CAPACITY)
+             SELECT DISTINCT :RULE_ID AS RULE_ID,
+                    T4.TU_ID,
+                    T4.RESOURCE_TYPE,
+                    T0.EQUIP_TYPE_NAME,
+                    T4.QUANTITY ,
+                    T4.SHIPPER_LOCATION_ID AS LOCATION_ID,
+             --       T4.SHIPPER_LOCATION,
+                    T4.PRE_DATE,
+             --       T4.TU_TYPE,
+                    T4.TU_KEY, -- T5.ITE_KEY,
+             --       T4.SHIPPER_ID,
+             --       T4.SHIPPER AS SHIPPER_NAME,
+                    T4.POL,
+             --       T4.POL_NAME,
+             --       T4.POD,
+             --       T4.POD_NAME,
+             --       T4.CONSIGNEE_ID,
+             --       T4.CONSIGNEE AS CONSIGNEE_NAME,
+             --       T4.CUSTOMER_NAME,
+                    T4.RELEVANT_PLANNING,
+             --       T4.STATUS,
+             --       T4.LIFECYCLE_STATUS,
+             --       T4.BOOKING_DATE,
+                    :V_EXECUTION_ID AS EXECUTION_ID,
+                    :V_SD_PLAN_ID AS SD_PLAN_ID,
+                    :V_NODE_ID AS NODE_ID,
+                    T0.LOCATION_ID,
+                    T0.LOCATION_NAME,
+                    IFNULL(T5.CURRENT_STOCK, 0)  AS stock,-- T5.STOCK,
+                    T0.SUPPLY,
+                    T0.DEMAND,
+                    IFNULL(T6.QUANTITY,0) AS IMPACTED_DEMAND,
+                    IFNULL(T7.QUANTITY,0) AS IMPACTED_SUPPLY,
+                    T0.BALANCE_SUPPLY_DEMAND,
+                    T0.BALANCE_STOCK_SUPPLY_DEMAND,
+                    IFNULL (T0.MIN_SAFETY_STOCK,0) AS MIN_STOCK,
+                    (CASE T0.MAX_SAFETY_STOCK WHEN 0 THEN NULL END) AS MAX_STOCK,
+                    T0.MAX_CAPACITY,
+                    :MANDATORY_COST_MODEL_ID,
+                    T1.COST AS TRANSPORTATION_COST,
+                    T2.COST AS HANDLING_COST,
+                    0 AS FREE_DAYS,
+                    0 AS FREE_AMOUNT,
+                    0 AS LOCATION_COST,
+                    T0.MIN_SAFETY_STOCK_HEADER,
+                    T0.MAX_SAFETY_STOCK_HEADER,
+                    T0.MAX_CAPACITY_HEADER,
+                    T0.STOCK_BALANCE_HEADER,
+                    T8.HANDLING_CAPACITY,
+                    IFNULL(T8.SUPPLY + T8.DEMAND,0) AS SUPPLY_DEMAND,
+                    T8.HANDLING_CAPACITY - T8.SUPPLY - T8.DEMAND AS REMAINING_HANDLING_CAPACITY
+              FROM :PLAN_DATA T0
+        INNER JOIN :t_transportation_cost  T1 ON T0.LOCATION_NAME=T1.FROM_LOCATION AND T1.RESOURCE_TYPE=T0.EQUIP_TYPE_ID
+        LEFT JOIN :t_handling_cost        T2 ON T0.LOCATION_NAME=T2.LOCATION   AND T2.RESOURCE_TYPE=T0.EQUIP_TYPE_ID
+        --INNER JOIN :t_storage_cost         T3 ON T0.LOCATION_ID=T3.LOCATION_ID   AND T3.RESOURCE_TYPE=T0.EQUIP_TYPE_ID
+        INNER JOIN :TU_TBL T4
+                ON T4.RESOURCE_TYPE = T0.EQUIP_TYPE_ID
+               AND  ADD_DAYS(T0.END_TIME, :DATE_OFFSET) >= T4.PRE_DATE
+               AND  ADD_DAYS(T0.START_TIME, :DATE_OFFSET)<= T4.PRE_DATE
+               --AND  T1.TO_LOCATION =  T4.SHIPPER_LOCATION_ID
+        LEFT OUTER JOIN  (SELECT DISTINCT LOCATION_ID,
+                                 RESOURCE_TYPE,
+                                 CURRENT_STOCK
+                          FROM "sap.tm.trp.db.pickupreturn::cv_current_stock"(
+                                placeholder."$$IN_LOCATION_FILTER_ID$$"=>:V_SD_LF_ID,
+                                placeholder."$$IN_RESOURCE_ID$$"=>:V_SD_EF_ID)
+                         ) T5
+                ON  T0.EQUIP_TYPE_ID = T5.RESOURCE_TYPE
+               AND  T0.LOCATION_ID   = T5.LOCATION_ID
+        LEFT OUTER JOIN (SELECT TOP 1 * FROM :TU_INFO)  T6
+                ON  T0.EQUIP_TYPE_ID       = T6.RESOURCE_TYPE
+              --AND  T0.LOCATION_ID         = T6.PICKUP_LOCATION_ID
+               AND  ADD_DAYS(T0.END_TIME, :DATE_OFFSET) >= T6.PICKUP_DATE
+               AND  ADD_DAYS(T0.START_TIME, :DATE_OFFSET) <= T6.PICKUP_DATE
+               AND  T6.RULE_ID             = :RULE_ID
+               --AND  T6.FLAG                = 2  --tbc
+               --AND  (T6.PICKUP_LOCATION_ID IS NOT NULL OR T6.PICKUP_LOCATION_ID <> '')
+        LEFT OUTER JOIN (SELECT TOP 1 * FROM :TU_INFO)  T7
+                ON  T0.EQUIP_TYPE_ID       = T7.RESOURCE_TYPE
+               --AND  T0.LOCATION_ID         = T7.ORIGINAL_PICKUP_LOCATION_ID
+              AND  ADD_DAYS(T0.START_TIME, :DATE_OFFSET)<= T7.PICKUP_DATE
+               AND ADD_DAYS(T0.END_TIME, :DATE_OFFSET) >=T7.PICKUP_DATE
+               AND  T7.RULE_ID             = :RULE_ID
+               --AND  T7.FLAG                = 2  --tbc
+	     LEFT OUTER JOIN :T_HANDLING_CAPACITY T8
+				ON T0.LOCATION_ID = T8.LOCATION_ID
+				AND T0.START_TIME = T8.START_TIME
+				AND T0.END_TIME = T8.END_TIME
+               --AND  (T7.PICKUP_LOCATION_ID IS NOT NULL OR T7.PICKUP_LOCATION_ID <> '')
+             WHERE   T0.PLAN_EXECUTION_ID   = :V_EXECUTION_ID
+               AND  T0.NODE_ID             = :V_NODE_ID
+               AND  T4.FLAG                <>2;
+
+        CALL "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::p_call_ER_LDR_rules"(
+              :PICKUPRETURN_MODE,
+              :RULE_SP,
+              ER_LDR_RESULT
+             );
+
+          t_booking_depot = SELECT DISTINCT a.TU_ID AS BOOKING_ID,
+                      --             c.SHIPPER_LOCATION AS CUSTOMER_LOCATION,
+                                   CUR_LOCATION_ID AS CUSTOMER_LOCATION,
+                                   CURRENT_UTCTIMESTAMP AS START_TIME,
+                                   TO_TIMESTAMP(c.PRE_DATE) AS BOOKING_TIME,
+                                   c.RESOURCE_TYPE AS CONTAINER_TYPE,
+                                   c.QUANTITY,
+                                   'PICKUP' AS MODE,
+                                   C.RELEVANT_PLANNING AS HAULAGE_TYPE
+                            FROM :ER_LDR_RESULT a
+                            INNER JOIN :TU_TBL c
+                            ON c.TU_ID   = a.TU_ID
+                            --AND c.CUSTOMER_LOCATION    = a.DEPOT_ID
+                            AND c.RESOURCE_TYPE   = a.EQUIPMENT_ID
+                            AND c.PRE_DATE   = a.PLANNED_DATE;
+
+          CALL "sap.tm.trp.db.pickupreturn.algorithm::p_pickup_optimize" (
+            :V_OPTIMIZATION_OPTION,
+            :HANDLING_CAPA,
+            :T_TRANSPORTATION_COST_P,
+            :T_PARAMETERS,
+            :T_SUPPLY_DEMAND_P,
+            :T_BOOKING_DEPOT,
+            :T_STOCK_CONFIGURATION_P,
+            :T_LOCATION_COST_P,
+            :T_PRO_LOC_RES,
+            :T_HANDLING_CAPACITY,
+            CUR_RESULT
+           );
+
+/*
+        --Location name to location id
+	    CUR_RESULT = SELECT T1.BOOKING_ID,
+					T2.ID AS FROM_LOCATION,
+					T1.TO_LOCATION,
+					T1.FROM_TIME,
+					T1.TO_TIME,
+					T1.CONTAINER_TYPE,
+					T1.QUANTITY,
+					T1.STORAGE_COST,
+					T1.HANDLING_COST,
+					T1.TRANSPORTATION_COST,
+					T1.TOTAL_COST,
+					T1.MODE,
+					T1.HAULAGE_TYPE
+		  FROM :CUR_RESULT T1
+		  INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T2 ON T2.NAME = T1.FROM_LOCATION;
+*/
+
+	RESULT_TMP = SELECT DISTINCT T1.RULE_ID,
+	             :V_USERNAME AS USER,
+	             T1.TU_ID,
+	      --       T1.TU_TYPE_CODE,
+	       --      T1.EXECUTION_STATUS_CODE,
+	       --      T1.SHIPPER_ID,
+	       --      T1.CONSIGNEE_ID,
+	             T1.RESOURCE_TYPE,
+	             T2.QUANTITY,
+	       --      T1.ASSIGNED_CONTAINERS,
+	       --      T1.RESOURCE_NUMBER,
+	       --      T1.SOURCE_LOCATION_ID,
+	       --      T1.DESTINATION_LOCATION_ID,
+	       --      T1.POL,
+	       --      T1.POD,
+	       --      CASE :V_RULE_TYPE WHEN 1 THEN T1.VESSEL_CUTOFF_TIME  END AS DATE,
+	       --      CASE :V_RULE_TYPE WHEN 1 THEN IFNULL (T2.LOCATION_ID,T1.PICKUP_LOCATION_ID)  END AS PRE_LOCATION_ID,
+	       --      CASE :V_RULE_TYPE WHEN 1 THEN T1.ORIGINAL_PICKUP_LOCATION_ID  END AS CUR_LOCATION_ID,
+	             CASE :V_RULE_TYPE WHEN 1 THEN T1.PICKUP_DATE END AS PRE_DATE,
+	       --      CASE :V_RULE_TYPE WHEN 1 THEN T1.ORIGINAL_PICKUP_DATE END AS CUR_DATE,
+	             :V_OP_SETTING_TYPE AS OP_SETTING_TYPE,
+	             :V_SCHEDULE_TIME_TYPE AS SCHEDULE_TIME_TYPE,
+	             T1.RELEVANT_PLANNING,
+	       --      T1.CUSTOMER_CODE,
+	             T1.TU_KEY,
+	       --      T1.LIFECYCLE_CODE,
+	       --      T1.BOOKING_DATE,
+	       --      CASE WHEN T2.LOCATION_ID IS NULL THEN T1.ASSIGN_STATUS
+	       --        ELSE 1 END AS ASSIGN_STATUS,
+	       --      :V_RULE_TYPE,
+	       --      CURRENT_UTCTIMESTAMP AS SAVE_TIME,
+	       --      CASE WHEN T2.LOCATION_ID IS NULL THEN T1.FLAG
+	       --        ELSE 1 END AS FLAG,
+	       --      T1.BOOKING_REFERENCE,
+		         T1.MOT,
+		         T1.MEANS_OF_TRANSPORTATION,
+		         T2.LOCATION_ID AS FROM_LOCATION
+		   --      T1.CARRIER_POL,
+		   --      T1.CARRIER_POD,
+		   --      T1.VOYAGE_POL,
+			--     T1.VOYAGE_POD,
+			--     T1.SPECIAL_INSTRUCTION_CODE,
+			--     T1.SPECIAL_INSTRUCTION_NAME,
+			--     T1.LAST_LOCATION_ID,
+			--     T1.LAST_LOCATION_NAME,
+			--     T1.LEASE_AGREEMENT,
+			--     T1.LEASE_TYPE_CODE,
+			--     T1.LEASE_TYPE,
+			--     T1.ASSIGNED_RESOURCE,
+			--     T1.VESSEL_CUTOFF_TIME,
+			--     T1.VESSEL_ARRIVAL_DATE,
+			--     T1.VESSEL_POL,
+			--     T1.VESSEL_POD,
+			--     T1.STREETTURN_TU_ID,
+			--     T1.PLAN_STATUS
+	      FROM :TU_INFO T1
+	      LEFT JOIN (SELECT DISTINCT BOOKING_ID AS TU_ID,CONTAINER_TYPE,FROM_LOCATION AS LOCATION_ID, QUANTITY
+                     FROM :CUR_RESULT) T2
+          ON (T1.TU_ID = T2.TU_ID
+              AND T1.RESOURCE_TYPE = T2.CONTAINER_TYPE
+              AND T1.FLAG <> 2);
+
+     END IF;
+
+
+-->>-- Output the data
+    ITEMREQ_RESULT = SELECT DISTINCT T2.TU_ID,
+    					    T2.TU_KEY,
+    				        IFNULL(T1.FROM_LOCATION, T2.EP_SRC_LOC_ID) AS EP_SRC_LOC_ID,
+    				        T2.EP_DEST_LOC_ID AS EP_DEST_LOC_ID,
+    					    T1.RESOURCE_TYPE,
+    					    CASE WHEN T1.QUANTITY >= T2.QUANTITY THEN T2.QUANTITY ELSE
+    					    T1.QUANTITY END AS AVAILABLE_QUAN,
+    					    T1.PRE_DATE AS CALC_PICKUP_DATE,
+    					    CASE WHEN T1.QUANTITY >= T2.QUANTITY THEN 'S' ELSE
+    					                                   'E' END AS SEVERITY,
+    					    CASE WHEN T1.QUANTITY >= T2.QUANTITY THEN 'MSG_HAVE_SUFFICIENT_EQUIPMENT' ELSE
+    					                                   'MSG_HAVE_NOT_SUFFICIENT_EQUIPMENT' END AS MESSAGE_ID,
+							CASE WHEN T1.QUANTITY >= T2.QUANTITY THEN 'Available Equipment(s) Found.' ELSE
+    					                                   'No Available Equipment(s) Found.' END AS MESSAGE
+    				  FROM  :RESULT_TMP AS T1
+    				  RIGHT JOIN :BK_TUS AS T2 ON T2.TU_ID = T1.TU_ID;
+
+     --No data found at all, then return error message. And return warning message when partially available equipment
+
+     SELECT COUNT(*) INTO TOTAL_COUNT FROM :RESULT_TMP;
+
+     SELECT COUNT(*) INTO TOTAL_COUNT_ERR FROM :ITEMREQ_RESULT AS T1 WHERE T1.SEVERITY = 'E';
+
+     SELECT COUNT(*) INTO TOTAL_COUNT_INP FROM :BK_TUS;
+
+     IF :TOTAL_COUNT = 0  THEN
+
+	     MESSAGE = SELECT 'E' AS severity, 'MSG_NO_DATA_FOUND' AS message_id,
+	        'No Available Equipment(s) Found.' AS message, '' AS var0, '' AS var1, '' AS var2, '' AS var3,
+	        '' AS var4 FROM dummy;
+    ELSE
+        IF :TOTAL_COUNT_ERR > 0  THEN
+            IF :TOTAL_COUNT_ERR < :TOTAL_COUNT_INP THEN
+        		MESSAGE = SELECT 'I' AS severity, 'MSG_PARTIALY_ITEM_AVAILABLE' AS message_id,
+        	        'Only Available Equipment(s) for Partial Booking Items.' AS message, '' AS var0, '' AS var1, '' AS var2, '' AS var3,
+        	        '' AS var4 FROM dummy;
+    	    ELSE
+    	    	MESSAGE = SELECT 'E' AS severity, 'MSG_ALL_ITEMS_AVAILABLE' AS message_id,
+        	        'No Available Equipment(s) Found.' AS message, '' AS var0, '' AS var1, '' AS var2, '' AS var3,
+        	        '' AS var4 FROM dummy;
+    	    END IF;
+
+    	ELSE
+
+    	    MESSAGE = SELECT 'S' AS severity, 'MSG_ALL_ITEMS_AVAILABLE' AS message_id,
+    	        'Available Equipment(s) Found.' AS message, '' AS var0, '' AS var1, '' AS var2, '' AS var3,
+    	        '' AS var4 FROM dummy;
+
+	    END IF;
+
+
+    END IF ;
+
+END

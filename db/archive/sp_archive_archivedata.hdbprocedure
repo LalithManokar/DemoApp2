@@ -1,0 +1,120 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_archive_archivedata"
+(IN RULE_ID BIGINT,
+ IN EXECUTION_ID BIGINT,
+ OUT STATUS_CODE INTEGER,
+ OUT RECORD_COUNT BIGINT,
+ OUT MESSAGE NVARCHAR(5000)
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP" 
+AS 
+BEGIN
+    
+    DECLARE SUB_TAB_COUNT INT;
+    DECLARE SUB_TAB_NAME NVARCHAR(500);
+    DECLARE TABLE_ID BIGINT;
+    DECLARE TABLE_NAME NVARCHAR(500);
+    DECLARE SUB_TAB_ID BIGINT;
+    DECLARE ARR_TABLE_NAME NVARCHAR(500) ARRAY;
+    DECLARE DATE_COLUMN_NAME NVARCHAR(500);
+    DECLARE DATE_FROM TIMESTAMP;
+    DECLARE DATE_TO TIMESTAMP;
+    DECLARE ARR_IND INT;
+    DECLARE ROOT_TEMP_TAB NVARCHAR(500);
+    DECLARE ROOT_WARM_TAB NVARCHAR(500);
+    DECLARE SQL_STT NVARCHAR(5000);
+    DECLARE SCHEMA_NAME NVARCHAR(20) DEFAULT 'SAP_TM_TRP';
+    DECLARE COLUMN_STR NVARCHAR(1000);
+    
+    DECLARE SUB_TAB_RECORD_COUNT BIGINT;
+    
+    DECLARE CHILDTABERROR CONDITION FOR SQL_ERROR_CODE 10001;
+    DECLARE EXIT HANDLER FOR CHILDTABERROR
+    BEGIN
+		--do nothing
+    END;
+    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        STATUS_CODE := 1;
+        SELECT ::SQL_ERROR_MESSAGE INTO MESSAGE FROM DUMMY;
+    END;  
+    
+    
+    --initialize status code
+    STATUS_CODE := 0;
+    MESSAGE := 'Success';
+    RECORD_COUNT := 0;
+    SUB_TAB_RECORD_COUNT := 0;
+    
+    
+    --get table id and table name
+    SELECT A.TABLE_ID, A.DATE_FROM, A.DATE_TO, B.TABLE_NAME, B.DATE_COLUMN_NAME 
+    INTO TABLE_ID, DATE_FROM, DATE_TO, TABLE_NAME, DATE_COLUMN_NAME 
+    FROM "sap.tm.trp.db.archive::t_archive_rule" AS A 
+    INNER JOIN "sap.tm.trp.db.archive::t_archive_metadata" AS B
+    ON A.TABLE_ID = B.ID
+    WHERE A.ID = :RULE_ID;
+    
+    
+    --move archived rows of root table into temporary table
+    ROOT_WARM_TAB := :TABLE_NAME || '_warm';
+    SELECT REPLACE(REPLACE(:TABLE_NAME,'.','_'),'::','_') || '_warm_temp' INTO ROOT_TEMP_TAB FROM DUMMY;
+    SELECT STRING_AGG(COLUMN_NAME,',') INTO COLUMN_STR FROM TABLE_COLUMNS WHERE SCHEMA_NAME = :SCHEMA_NAME AND TABLE_NAME = :TABLE_NAME;
+       
+    --check if children table exist'
+    SUB_TAB_COUNT := 0;
+    SELECT COUNT(*) INTO SUB_TAB_COUNT FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE ULTIMATE_PARENT_ID = :TABLE_ID; 
+    
+    IF :SUB_TAB_COUNT > 0 
+    THEN
+    ---archive children tables
+        SUB_TABS =
+            SELECT TABLE_NAME FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE ULTIMATE_PARENT_ID = :TABLE_ID;
+        ARR_TABLE_NAME := ARRAY_AGG(:SUB_TABS.TABLE_NAME);
+        ARR_IND := 0;
+        FOR ARR_IND IN 1 .. CARDINALITY(:ARR_TABLE_NAME) DO
+            SUB_TAB_NAME := :ARR_TABLE_NAME[:ARR_IND];
+              		
+            --archive child table
+            CALL "sap.tm.trp.db.archive::sp_archive_archive_sub_tab_packets"(:RULE_ID, :EXECUTION_ID, :ROOT_TEMP_TAB, :SUB_TAB_NAME, :COLUMN_STR, :TABLE_NAME, :DATE_COLUMN_NAME, :DATE_FROM, :DATE_TO, :STATUS_CODE, :SUB_TAB_RECORD_COUNT, :MESSAGE);
+            --add effected record count
+            RECORD_COUNT := :RECORD_COUNT + :SUB_TAB_RECORD_COUNT;
+            IF :STATUS_CODE != 0 THEN
+                SIGNAL CHILDTABERROR;  --Stop procedure
+            END IF;
+
+        END FOR;
+        
+    END IF;
+    
+    SQL_STT := 'INSERT INTO "' || :SCHEMA_NAME || '"."' || :ROOT_TEMP_TAB || '" (' || COLUMN_STR || ') SELECT ' || :COLUMN_STR ||
+    	' FROM "' || :SCHEMA_NAME || '"."' || :TABLE_NAME || '" WHERE ' || :DATE_COLUMN_NAME || 
+    	' BETWEEN ' || '''' || :DATE_FROM || '''' || ' AND ' || '''' || :DATE_TO || '''';
+    EXECUTE IMMEDIATE :SQL_STT;  --insert into temp table    
+      
+    ---archive root table
+    SQL_STT :=
+    'DELETE FROM "' || :SCHEMA_NAME || '"."' || :TABLE_NAME || '" WHERE ' || :DATE_COLUMN_NAME || 
+    ' BETWEEN ' || '''' || :DATE_FROM || '''' || ' AND ' || '''' || :DATE_TO || '''';
+    EXECUTE IMMEDIATE :SQL_STT;
+    SQL_STT := 'UPDATE "' || :SCHEMA_NAME || '"."' || :ROOT_TEMP_TAB || '" SET TRP_RULE_ID = ' || :RULE_ID || ', TRP_EXECUTION_ID = ' || :EXECUTION_ID;
+    EXECUTE IMMEDIATE :SQL_STT;
+    COLUMN_STR := :COLUMN_STR || ',TRP_RULE_ID,TRP_EXECUTION_ID';
+    SQL_STT := 'INSERT INTO "' || :SCHEMA_NAME || '"."' || :ROOT_WARM_TAB || '" (' || :COLUMN_STR || ') SELECT '
+    || :COLUMN_STR || ' FROM "' || :SCHEMA_NAME || '"."' || :ROOT_TEMP_TAB || '"';
+    EXECUTE IMMEDIATE :SQL_STT;
+    --CALL "sap.tm.trp.db.archive::sp_archive_archive_root_tab"(:RULE_ID, :EXECUTION_ID, :ROOT_TEMP_TAB, :STATUS_CODE);
+    
+    --clear root temporary table
+    SQL_STT := 'DELETE FROM "' || :SCHEMA_NAME || '"."' || :ROOT_TEMP_TAB || '"';
+    EXECUTE IMMEDIATE :SQL_STT;
+        
+    COMMIT;
+
+    --get count
+    RECORD_COUNT := :RECORD_COUNT + ::ROWCOUNT;
+    
+    --commit trigger is now controlled in procedure. It was done earlier in xsjs.   
+END;

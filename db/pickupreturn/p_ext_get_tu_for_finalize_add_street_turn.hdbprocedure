@@ -1,0 +1,824 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_get_tu_for_finalize_add_street_turn" ( 
+    IN RULE_ID BIGINT,
+    IN TU_IDS  CLOB,
+    IN RUN_ID VARCHAR(200),
+    OUT AFFECTED_DATA "sap.tm.trp.db.pickupreturn::tt_tu_for_finalize_rule",
+    OUT CONTAINER_SPECIAL_INSTRUCTION "sap.tm.trp.db.pickupreturn::tt_resource_special_instruction_rule"  
+)
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+    TOTAL_COUNT INTEGER;
+BEGIN
+  
+  DECLARE USER_NAME NVARCHAR(60);
+  DECLARE USER_ID INTEGER;
+  DECLARE V_RULE_TYPE INTEGER;
+  DECLARE V_SCHEDULE_TIME_TYPE INTEGER;
+  DECLARE SCRIPT VARCHAR(5000);
+  DECLARE PROC VARCHAR(200);
+  DECLARE OBJECT_NAME VARCHAR(200);
+  DECLARE ACTIVE_COUNT BIGINT;
+  DECLARE RULE_NAME VARCHAR(200);
+  DECLARE IN_FILTER_EXECUTION BIGINT;
+  DECLARE TU_IDS_P TABLE(
+    "TU_ID" VARCHAR(200)
+    );
+  
+  CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:TU_IDS,',',TU_IDS_STRING);
+  TU_IDS_P = SELECT string as TU_ID FROM :TU_IDS_STRING;
+  
+  SELECT IFNULL (MAX (USERNAME),'') INTO USER_NAME
+  FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+  
+  SELECT T1.ID INTO USER_ID 
+  FROM "sap.tm.trp.db.systemmanagement.user::t_user" T1
+  INNER JOIN "sap.tm.trp.db.systemmanagement.user::cv_get_username" T2
+  ON (T1.USERNAME = T2.USERNAME);
+
+  SELECT IFNULL (MAX (RULE_TYPE),0) INTO V_RULE_TYPE
+  FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+  WHERE ID = :RULE_ID;
+
+  SELECT IFNULL (MAX (SCHEDULE_TIME_TYPE),0) INTO V_SCHEDULE_TIME_TYPE
+  FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+  WHERE ID = :RULE_ID;
+  
+  SELECT rule_name into RULE_NAME
+  FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+  WHERE ID = :RULE_ID;
+  
+  --TU info
+  CALL "sap.tm.trp.db.pickupreturn::p_ext_get_staging_tu"(:RULE_ID, TU_INFO);
+	
+  	
+  IF :V_SCHEDULE_TIME_TYPE = 1 THEN
+    TU_IDS_P = SELECT TRANSPORTATION_ID AS TU_ID FROM :TU_INFO;
+  END IF ;
+  
+   INVALID_STREET_TURN_TUs  =
+        SELECT TRANSPORTATION_ID  
+          FROM :TU_INFO  
+         WHERE  INVALID = 1; 
+    
+    SELECT FILTER_EXECUTION INTO IN_FILTER_EXECUTION  
+    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID=:RULE_ID;
+  
+        IF :IN_FILTER_EXECUTION = 1 THEN
+        
+         SELECT count(*) into ACTIVE_COUNT FROM  "sap.tm.trp.db.pickupreturn::t_register_exclude_processed_tu" T1
+            where T1.ACTIVATION_STATUS = 1;
+            
+            IF (:ACTIVE_COUNT > 0) THEN   --manage TU selection active
+                               
+                SELECT T1.NAME into OBJECT_NAME  FROM  "sap.tm.trp.db.pickupreturn::t_register_exclude_processed_tu" T1 
+                where T1.ACTIVATION_STATUS = 1;
+        
+                SELECT T1.procedure_name into PROC
+                FROM "sap.tm.trp.db.pickupreturn::t_register_exclude_processed_tu" T1
+                WHERE T1.NAME = :OBJECT_NAME;
+                               
+                TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_assign_result_temp";
+                INSERT INTO "sap.tm.trp.db.pickupreturn::t_assign_result_temp" (TOR_ID)
+                SELECT DISTINCT TU_ID FROM "sap.tm.trp.db.pickupreturn::v_location_rule_assign_result";
+                               
+                TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_original_tu_temp";
+                INSERT INTO "sap.tm.trp.db.pickupreturn::t_original_tu_temp" (TOR_ID)
+                SELECT DISTINCT TU_ID FROM :TU_IDS_P;
+                
+                SCRIPT := 'call "'|| :PROC || '"(' 
+                || '''' || :RULE_ID  || '''' ||    
+                ')';  
+                               
+                execute immediate(:SCRIPT); 
+                TUS_VALID = SELECT * FROM "sap.tm.trp.db.pickupreturn::t_original_tu_temp";
+                
+                INVALID_SUGGEST_LOCATION_TUs =
+                    SELECT TRANSPORTATION_ID
+                      FROM :TU_INFO A
+                    INNER JOIN "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" B
+                        ON A.RULE_ID=B.ID
+                    INNER JOIN "sap.tm.trp.db.pickupreturn::v_location_rule_assign_result" C
+                        ON A.TRANSPORTATION_ID=C.TU_ID
+                    WHERE A.TRANSPORTATION_ID not in (select TOR_ID from :TUS_VALID)
+                       AND C.PRE_LOCATION_ID <>'' 
+                       AND C.PRE_LOCATION_ID is not null;  
+
+            END IF;     
+     
+            ELSE
+  
+                INVALID_SUGGEST_LOCATION_TUs =
+                    SELECT TRANSPORTATION_ID
+                      FROM :TU_INFO A
+                INNER JOIN "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" B
+                        ON A.RULE_ID=B.ID
+                INNER JOIN "sap.tm.trp.db.pickupreturn::v_location_rule_assign_result" C
+                        ON A.TRANSPORTATION_ID=C.TU_ID
+                     WHERE B.FILTER_EXECUTION=1
+                       AND C.PRE_LOCATION_ID <>'' 
+                       AND C.PRE_LOCATION_ID is not null;     
+            END IF;
+  --insert into error log 
+  IF :V_SCHEDULE_TIME_TYPE = 1 THEN	
+  	
+  INSERT INTO   "sap.tm.trp.db.pickupreturn::t_location_rule_assign_error"	
+  	             ( RUN_ID,	
+			       RULE_ID,	
+			       TU_ID,	
+			       USER,	
+			       EXECUTION_STATUS_CODE,	
+			       SHIPPER_ID,	
+			       CONSIGNEE_ID,	
+			       RESOURCE_TYPE,	
+			       QUANTITY,	
+			       SOURCE_LOCATION_ID,	
+			       DESTINATION_LOCATION_ID,	
+			       POL,	
+			       POD,	
+			       DATE,	
+			       PRE_LOCATION_ID,	
+			       CUR_LOCATION_ID,	
+			       PRE_DATE,	
+			       CUR_DATE,	
+			       STREETTURN_TU_ID,	
+			       FLAG,	
+			       OP_SETTING_TYPE,	
+			       EXECUTION_TIME,	
+			       SCHEDULE_TIME_TYPE,	
+			       EXECUTION_BY, 	
+			       ERROR_MMESSAGE	
+                 )	
+		   SELECT   :RUN_ID,	
+			        B.RULE_ID,	
+			        B.TU_ID,	
+			        :USER_NAME,	
+			        B.EXECUTION_STATUS_CODE,	
+			        B.SHIPPER_ID,	
+			        B.CONSIGNEE_ID,	
+			        B.RESOURCE_TYPE,	
+			        B.QUANTITY,	
+			        B.SOURCE_LOCATION_ID,	
+			        B.DESTINATION_LOCATION_ID,	
+			        B.POL,	
+			        B.POD,	
+			        CASE B.TU_TYPE_CODE WHEN 'EP' THEN B.VESSEL_CUTOFF_TIME 	
+			          WHEN 'ER' THEN B.VESSEL_ARRIVAL_DATE END AS DATE,	
+			        B.PRE_LOCATION_ID,	
+			        B.CUR_LOCATION_ID,	
+			        B.PRE_DATE,	
+			        B.CUR_DATE,	
+			        B.STREETTURN_TU_ID,	
+			        B.FLAG,	
+			        B.OP_SETTING_TYPE,	
+			        B.SAVE_TIME,	
+			        B.SCHEDULE_TIME_TYPE,	
+			        :USER_ID,	
+			        'The TU has invalid.Becasue street turn assginment in other rule set.'	
+		    FROM   :INVALID_STREET_TURN_TUs A	
+      INNER JOIN   "sap.tm.trp.db.pickupreturn::t_pickupreturn_global_draft" B	
+              ON   A.TRANSPORTATION_ID =B.TU_ID 	
+      INNER JOIN   :TU_IDS_P C	
+              ON   C.TU_ID = A.TRANSPORTATION_ID        	
+           WHERE   B.RULE_ID = :RULE_ID;  	
+   	
+      INSERT INTO  "sap.tm.trp.db.pickupreturn::t_location_rule_assign_error"	
+  	             ( RUN_ID,	
+			       RULE_ID,	
+			       TU_ID,	
+			       USER,	
+			       EXECUTION_STATUS_CODE,	
+			       SHIPPER_ID,	
+			       CONSIGNEE_ID,	
+			       RESOURCE_TYPE,	
+			       QUANTITY,	
+			       SOURCE_LOCATION_ID,	
+			       DESTINATION_LOCATION_ID,	
+			       POL,	
+			       POD,	
+			       DATE,	
+			       PRE_LOCATION_ID,	
+			       CUR_LOCATION_ID,	
+			       PRE_DATE,	
+			       CUR_DATE,	
+			       STREETTURN_TU_ID,	
+			       FLAG,	
+			       OP_SETTING_TYPE,	
+			       EXECUTION_TIME,	
+			       SCHEDULE_TIME_TYPE,	
+			       EXECUTION_BY, 	
+			       ERROR_MMESSAGE	
+                 )	
+		   SELECT   :RUN_ID,	
+			        B.RULE_ID,	
+			        B.TU_ID,	
+			        :USER_NAME,	
+			        B.EXECUTION_STATUS_CODE,	
+			        B.SHIPPER_ID,	
+			        B.CONSIGNEE_ID,	
+			        B.RESOURCE_TYPE,	
+			        B.QUANTITY,	
+			        B.SOURCE_LOCATION_ID,	
+			        B.DESTINATION_LOCATION_ID,	
+			        B.POL,	
+			        B.POD,	
+			        CASE B.TU_TYPE_CODE WHEN 'EP' THEN B.VESSEL_CUTOFF_TIME 	
+			          WHEN 'ER' THEN B.VESSEL_ARRIVAL_DATE END AS DATE,	
+			        B.PRE_LOCATION_ID,	
+			        B.CUR_LOCATION_ID,	
+			        B.PRE_DATE,	
+			        B.CUR_DATE,	
+			        B.STREETTURN_TU_ID,	
+			        B.FLAG,	
+			        B.OP_SETTING_TYPE,	
+			        B.SAVE_TIME,	
+			        B.SCHEDULE_TIME_TYPE,	
+			        :USER_ID,	
+			        'The TU has invalid.Becasue suggestion location assginment in other rule set.'	
+		    FROM   :INVALID_SUGGEST_LOCATION_TUs A	
+      INNER JOIN   "sap.tm.trp.db.pickupreturn::t_pickupreturn_global_draft" B	
+              ON   A.TRANSPORTATION_ID =B.TU_ID 	
+      INNER JOIN   :TU_IDS_P C	
+              ON   C.TU_ID = A.TRANSPORTATION_ID                	
+           WHERE   B.RULE_ID = :RULE_ID; 	
+  	
+  ELSE	
+  
+   
+  INSERT INTO   "sap.tm.trp.db.pickupreturn::t_location_rule_assign_error"
+  	             ( RUN_ID,
+			       RULE_ID,
+			       TU_ID,
+			       USER,
+			       EXECUTION_STATUS_CODE,
+			       SHIPPER_ID,
+			       CONSIGNEE_ID,
+			       RESOURCE_TYPE,
+			       QUANTITY,
+			       SOURCE_LOCATION_ID,
+			       DESTINATION_LOCATION_ID,
+			       POL,
+			       POD,
+			       DATE,
+			       PRE_LOCATION_ID,
+			       CUR_LOCATION_ID,
+			       PRE_DATE,
+			       CUR_DATE,
+			       STREETTURN_TU_ID,
+			       FLAG,
+			       OP_SETTING_TYPE,
+			       EXECUTION_TIME,
+			       SCHEDULE_TIME_TYPE,
+			       EXECUTION_BY, 
+			       ERROR_MMESSAGE
+                 )
+		   SELECT   :RUN_ID,
+			        B.RULE_ID,
+			        B.TU_ID,
+			        :USER_NAME,
+			        B.EXECUTION_STATUS_CODE,
+			        B.SHIPPER_ID,
+			        B.CONSIGNEE_ID,
+			        B.RESOURCE_TYPE,
+			        B.QUANTITY,
+			        B.SOURCE_LOCATION_ID,
+			        B.DESTINATION_LOCATION_ID,
+			        B.POL,
+			        B.POD,
+			        CASE B.TU_TYPE_CODE WHEN 'EP' THEN B.VESSEL_CUTOFF_TIME 
+			          WHEN 'ER' THEN B.VESSEL_ARRIVAL_DATE END AS DATE,
+			        B.PRE_LOCATION_ID,
+			        B.CUR_LOCATION_ID,
+			        B.PRE_DATE,
+			        B.CUR_DATE,
+			        B.STREETTURN_TU_ID,
+			        B.FLAG,
+			        B.OP_SETTING_TYPE,
+			        B.SAVE_TIME,
+			        B.SCHEDULE_TIME_TYPE,
+			        :USER_ID,
+			        'The TU has invalid.Becasue street turn assginment in other rule set.'
+		    FROM   :INVALID_STREET_TURN_TUs A
+      INNER JOIN   "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft" B
+              ON   A.TRANSPORTATION_ID =B.TU_ID 
+      INNER JOIN   :TU_IDS_P C
+              ON   C.TU_ID = A.TRANSPORTATION_ID        
+           WHERE   B.RULE_ID = :RULE_ID;  
+   
+      INSERT INTO  "sap.tm.trp.db.pickupreturn::t_location_rule_assign_error"
+  	             ( RUN_ID,
+			       RULE_ID,
+			       TU_ID,
+			       USER,
+			       EXECUTION_STATUS_CODE,
+			       SHIPPER_ID,
+			       CONSIGNEE_ID,
+			       RESOURCE_TYPE,
+			       QUANTITY,
+			       SOURCE_LOCATION_ID,
+			       DESTINATION_LOCATION_ID,
+			       POL,
+			       POD,
+			       DATE,
+			       PRE_LOCATION_ID,
+			       CUR_LOCATION_ID,
+			       PRE_DATE,
+			       CUR_DATE,
+			       STREETTURN_TU_ID,
+			       FLAG,
+			       OP_SETTING_TYPE,
+			       EXECUTION_TIME,
+			       SCHEDULE_TIME_TYPE,
+			       EXECUTION_BY, 
+			       ERROR_MMESSAGE
+                 )
+		   SELECT   :RUN_ID,
+			        B.RULE_ID,
+			        B.TU_ID,
+			        :USER_NAME,
+			        B.EXECUTION_STATUS_CODE,
+			        B.SHIPPER_ID,
+			        B.CONSIGNEE_ID,
+			        B.RESOURCE_TYPE,
+			        B.QUANTITY,
+			        B.SOURCE_LOCATION_ID,
+			        B.DESTINATION_LOCATION_ID,
+			        B.POL,
+			        B.POD,
+			        CASE B.TU_TYPE_CODE WHEN 'EP' THEN B.VESSEL_CUTOFF_TIME 
+			          WHEN 'ER' THEN B.VESSEL_ARRIVAL_DATE END AS DATE,
+			        B.PRE_LOCATION_ID,
+			        B.CUR_LOCATION_ID,
+			        B.PRE_DATE,
+			        B.CUR_DATE,
+			        B.STREETTURN_TU_ID,
+			        B.FLAG,
+			        B.OP_SETTING_TYPE,
+			        B.SAVE_TIME,
+			        B.SCHEDULE_TIME_TYPE,
+			        :USER_ID,
+			        'The TU has invalid.Becasue suggestion location assginment in other rule set.'
+		    FROM   :INVALID_SUGGEST_LOCATION_TUs A
+      INNER JOIN   "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft" B
+              ON   A.TRANSPORTATION_ID =B.TU_ID 
+      INNER JOIN   :TU_IDS_P C
+              ON   C.TU_ID = A.TRANSPORTATION_ID                
+           WHERE   B.RULE_ID = :RULE_ID;           
+
+END IF;
+VTU=SELECT * FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" 
+                WHERE TOR_ID IN (SELECT DISTINCT TRANSPORTATION_ID FROM :TU_INFO
+                                UNION ALL 
+                                SELECT DISTINCT STREETTURN_TU_ID FROM :TU_INFO);
+
+  IF :V_RULE_TYPE = 1 THEN
+    ASSIGNED_DATA = SELECT  T1.RULE_ID,
+    	 	 	 	 	 	:RULE_NAME as RULE_NAME,
+							T1.RULE_TYPE,
+							T1.TRANSPORTATION_ID,
+							T1.TU_TYPE_CODE,
+							T1.TU_TYPE,
+							T1.EXECUTION_STATUS_CODE,
+							T1.STATUS,
+							T1.LIFECYCLE_CODE,
+							T1.LIFECYCLE_STATUS,
+							T1.SHIPPER_ID,
+							T1.SHIPPER,
+							T1.CONSIGNEE_ID,
+							T1.CONSIGNEE,
+							T1.RESOURCE_TYPE,
+							T1.QUANTITY,
+							T1.ASSIGNED_CONTAINERS,
+							T1.SOURCE_LOCATION_ID,
+							T1.SOURCE_LOCATION,
+							T1.DESTINATION_LOCATION_ID,
+							T1.DESTINATION_LOCATION,
+							T1.POL,
+							T1.POL_NAME,
+							T1.POD,
+							T1.POD_NAME,
+							T1.RELEVANT_PLANNING,
+							T1.CUSTOMER_CODE,
+							T1.CUSTOMER_NAME,
+							T1.BOOKING_DATE,
+							T1.ORIGINAL_PICKUP_DATE,
+							T1.ORIGINAL_PICKUP_LOCATION_ID,
+							T1.ORIGINAL_PICKUP_LOCATION,
+							T1.PICKUP_DATE,
+							CASE WHEN ((T1.PICKUP_DATE <> T1.ORIGINAL_PICKUP_DATE) AND (T1.PICKUP_LOCATION_ID IS NULL OR T1.PICKUP_LOCATION_ID = '')) 
+							  THEN T1.ORIGINAL_PICKUP_LOCATION_ID 
+							  ELSE T1.PICKUP_LOCATION_ID END AS PICKUP_LOCATION_ID,
+							CASE WHEN ((T1.PICKUP_DATE <> T1.ORIGINAL_PICKUP_DATE) AND (T1.PICKUP_LOCATION_ID IS NULL OR T1.PICKUP_LOCATION_ID = '')) 
+							  THEN T1.ORIGINAL_PICKUP_LOCATION
+							  ELSE T1.PICKUP_LOCATION END AS PICKUP_LOCATION,
+							T1.ORIGINAL_RETURN_DATE,
+							T1.ORIGINAL_RETURN_LOCATION_ID,
+							T1.ORIGINAL_RETURN_LOCATION,
+							T1.RETURN_DATE,
+							T1.RETURN_LOCATION_ID,
+							T1.RETURN_LOCATION,
+							T1.ASSIGN_STATUS,
+							T1.FLAG,
+							T1.ITE_KEY,
+                           :USER_NAME AS USER,
+                           TO_VARCHAR(T2.DB_KEY) AS TU_UUID,
+                           T1.SPECIAL_INSTRUCTION_NAME,
+                           T1.VESSEL_CUTOFF_TIME,
+                           T1.VESSEL_ARRIVAL_DATE,
+                           --STREET TURN COLUMNS
+							T1.STREETTURN_TU_ID,
+							CASE WHEN (T3.DB_KEY IS NOT NULL AND T3.DB_KEY <> '')
+							     THEN TO_VARCHAR(T3.DB_KEY) 
+							     ELSE NULL END AS TR_TU_UUID,
+                            T1.INVALID
+                    FROM :TU_INFO T1
+                    LEFT JOIN :VTU T2
+                    ON (T1.TRANSPORTATION_ID = T2.TOR_ID)
+                    LEFT JOIN :VTU T3
+                    ON T1.STREETTURN_TU_ID = T3.TOR_ID AND T3.TOR_ID<>''
+                    WHERE T1.RULE_ID = :RULE_ID
+                    AND ((T1.ASSIGN_STATUS > 0 
+                          AND (T1.PICKUP_LOCATION_ID <> T1.ORIGINAL_PICKUP_LOCATION_ID OR (T1.ORIGINAL_PICKUP_LOCATION_ID = '' OR T1.ORIGINAL_PICKUP_LOCATION_ID IS NULL)) 
+                          AND (T1.PICKUP_LOCATION_ID IS NOT NULL AND T1.PICKUP_LOCATION_ID <>'')) 
+                         OR (T1.STREETTURN_TU_ID IS NOT NULL AND T1.STREETTURN_TU_ID <> '')
+                         --if only update date it will also be update in TM
+                         OR ((T1.PICKUP_DATE <> T1.ORIGINAL_PICKUP_DATE AND T1.PICKUP_DATE <> '' AND T1.PICKUP_DATE IS NOT NULL) 
+                              OR (T1.RETURN_DATE <> T1.ORIGINAL_RETURN_DATE AND T1.RETURN_DATE <> '' AND T1.RETURN_DATE IS NOT NULL)))
+                    AND T1.TRANSPORTATION_ID NOT IN  (SELECT TRANSPORTATION_ID FROM :INVALID_STREET_TURN_TUs
+                                                      UNION
+                                                      SELECT TRANSPORTATION_ID FROM :INVALID_SUGGEST_LOCATION_TUs) ; 
+
+        SPECIAL_INS_DATA = SELECT T1.RULE_ID,
+    	 	 	 	 	 		:RULE_NAME as RULE_NAME,
+								T1.RULE_TYPE,
+								T1.TRANSPORTATION_ID,
+								T1.TU_TYPE_CODE,
+								T1.TU_TYPE,
+								T1.EXECUTION_STATUS_CODE,
+								T1.STATUS,
+								T1.LIFECYCLE_CODE,
+								T1.LIFECYCLE_STATUS,
+								T1.SHIPPER_ID,
+								T1.SHIPPER,
+								T1.CONSIGNEE_ID,
+								T1.CONSIGNEE,
+								T1.RESOURCE_TYPE,
+								T1.QUANTITY,
+								T1.ASSIGNED_CONTAINERS,
+								T1.SOURCE_LOCATION_ID,
+								T1.SOURCE_LOCATION,
+								T1.DESTINATION_LOCATION_ID,
+								T1.DESTINATION_LOCATION,
+								T1.POL,
+								T1.POL_NAME,
+								T1.POD,
+								T1.POD_NAME,
+								T1.RELEVANT_PLANNING,
+								T1.CUSTOMER_CODE,
+								T1.CUSTOMER_NAME,
+								T1.BOOKING_DATE,
+								T1.ORIGINAL_PICKUP_DATE,
+								T1.ORIGINAL_PICKUP_LOCATION_ID,
+								T1.ORIGINAL_PICKUP_LOCATION,
+								T1.PICKUP_DATE,
+								T1.PICKUP_LOCATION_ID,
+								T1.PICKUP_LOCATION,
+								T1.ORIGINAL_RETURN_DATE,
+								T1.ORIGINAL_RETURN_LOCATION_ID,
+								T1.ORIGINAL_RETURN_LOCATION,
+								T1.RETURN_DATE,
+								T1.RETURN_LOCATION_ID,
+								T1.RETURN_LOCATION,
+								T1.ASSIGN_STATUS,
+								T1.FLAG,
+								T1.ITE_KEY,
+	                           :USER_NAME AS USER,
+	                           TO_VARCHAR(T2.DB_KEY) AS TU_UUID,
+	                           T1.SPECIAL_INSTRUCTION_NAME,
+	                           T1.VESSEL_CUTOFF_TIME,
+                               T1.VESSEL_ARRIVAL_DATE,
+	                           T1.STREETTURN_TU_ID,
+								CASE WHEN (T4.DB_KEY IS NOT NULL AND T4.DB_KEY <> '')
+							     THEN TO_VARCHAR(T4.DB_KEY) 
+							     ELSE NULL END AS TR_TU_UUID,
+	                           T1.INVALID
+	                    FROM :TU_INFO T1
+	                    LEFT JOIN :VTU T2
+	                    ON (T1.TRANSPORTATION_ID = T2.TOR_ID)
+	                    LEFT JOIN :VTU T4
+                        ON (T1.STREETTURN_TU_ID = T4.TOR_ID AND T4.TOR_ID<>'') 
+	                    INNER JOIN (SELECT DISTINCT RULE_ID,USER,TU_ID 
+                                    FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction") T3
+	                    ON (T1.RULE_ID = T3.RULE_ID AND T1.TRANSPORTATION_ID = T3.TU_ID AND T3.USER = :USER_NAME)
+	                    WHERE T1.TRANSPORTATION_ID NOT IN  (SELECT TRANSPORTATION_ID FROM :INVALID_STREET_TURN_TUs
+                                                      UNION
+                                                      SELECT TRANSPORTATION_ID FROM :INVALID_SUGGEST_LOCATION_TUs) ; 
+  ELSE
+    ASSIGNED_DATA = SELECT T1.RULE_ID,
+    	 	 	 	 	 	:RULE_NAME as RULE_NAME,
+							T1.RULE_TYPE,
+							T1.TRANSPORTATION_ID,
+							T1.TU_TYPE_CODE,
+							T1.TU_TYPE,
+							T1.EXECUTION_STATUS_CODE,
+							T1.STATUS,
+							T1.LIFECYCLE_CODE,
+							T1.LIFECYCLE_STATUS,
+							T1.SHIPPER_ID,
+							T1.SHIPPER,
+							T1.CONSIGNEE_ID,
+							T1.CONSIGNEE,
+							T1.RESOURCE_TYPE,
+							T1.QUANTITY,
+							T1.ASSIGNED_CONTAINERS,
+							T1.SOURCE_LOCATION_ID,
+							T1.SOURCE_LOCATION,
+							T1.DESTINATION_LOCATION_ID,
+							T1.DESTINATION_LOCATION,
+							T1.POL,   
+							T1.POL_NAME,
+							T1.POD,
+							T1.POD_NAME,
+							T1.RELEVANT_PLANNING,
+							T1.CUSTOMER_CODE,
+							T1.CUSTOMER_NAME,
+							T1.BOOKING_DATE,
+							T1.ORIGINAL_PICKUP_DATE,
+							T1.ORIGINAL_PICKUP_LOCATION_ID,
+							T1.ORIGINAL_PICKUP_LOCATION,
+							T1.PICKUP_DATE,
+							T1.PICKUP_LOCATION_ID,
+							T1.PICKUP_LOCATION,
+							T1.ORIGINAL_RETURN_DATE,
+							T1.ORIGINAL_RETURN_LOCATION_ID,
+							T1.ORIGINAL_RETURN_LOCATION,
+							T1.RETURN_DATE,
+							CASE WHEN ((T1.RETURN_DATE <> T1.ORIGINAL_RETURN_DATE) AND (T1.RETURN_LOCATION_ID IS NULL OR T1.RETURN_LOCATION_ID = '')) 
+							  THEN T1.ORIGINAL_RETURN_LOCATION_ID 
+							  ELSE T1.RETURN_LOCATION_ID END AS RETURN_LOCATION_ID,
+							CASE WHEN ((T1.RETURN_DATE <> T1.ORIGINAL_RETURN_DATE) AND (T1.RETURN_LOCATION_ID IS NULL OR T1.RETURN_LOCATION_ID = '')) 
+							  THEN T1.ORIGINAL_RETURN_LOCATION
+							  ELSE T1.RETURN_LOCATION END AS RETURN_LOCATION,
+							T1.ASSIGN_STATUS,
+							T1.FLAG,
+							T1.ITE_KEY,
+                           :USER_NAME AS USER,
+                           TO_VARCHAR(T2.DB_KEY) AS TU_UUID,
+                           T1.SPECIAL_INSTRUCTION_NAME,
+                           T1.VESSEL_CUTOFF_TIME,
+                           T1.VESSEL_ARRIVAL_DATE,
+                           --STREET TURN COLUMNS
+							T1.STREETTURN_TU_ID,
+							CASE WHEN (T3.DB_KEY IS NOT NULL AND T3.DB_KEY <> '')
+							     THEN TO_VARCHAR(T3.DB_KEY) 
+							     ELSE NULL END AS TR_TU_UUID,
+                           T1.INVALID
+                    FROM :TU_INFO T1
+                    LEFT JOIN :VTU T2
+                    ON (T1.TRANSPORTATION_ID = T2.TOR_ID)
+                    LEFT JOIN :VTU T3
+                    ON (T1.STREETTURN_TU_ID = T3.TOR_ID AND T3.TOR_ID<>'') 
+                    WHERE T1.RULE_ID = :RULE_ID
+                    AND ((T1.ASSIGN_STATUS > 0 
+                          AND (T1.RETURN_LOCATION_ID <> T1.ORIGINAL_RETURN_LOCATION_ID OR (T1.ORIGINAL_RETURN_LOCATION_ID = '' OR T1.ORIGINAL_RETURN_LOCATION_ID IS NULL))
+                          AND (T1.RETURN_LOCATION_ID IS NOT NULL AND T1.RETURN_LOCATION_ID <> ''))
+                        OR (T1.STREETTURN_TU_ID IS NOT NULL AND T1.STREETTURN_TU_ID <> '') 
+                        OR ((T1.PICKUP_DATE <> T1.ORIGINAL_PICKUP_DATE AND T1.PICKUP_DATE <> '' AND T1.PICKUP_DATE IS NOT NULL) 
+                              OR (T1.RETURN_DATE <> T1.ORIGINAL_RETURN_DATE AND T1.RETURN_DATE <> '' AND T1.RETURN_DATE IS NOT NULL)))
+                    AND T1.TRANSPORTATION_ID NOT IN  (SELECT TRANSPORTATION_ID FROM :INVALID_STREET_TURN_TUs
+                                                      UNION
+                                                      SELECT TRANSPORTATION_ID FROM :INVALID_SUGGEST_LOCATION_TUs) ; 
+                    -- no matter the assign status is success or warning, both can be finalized to TM
+                    --((T1.RETURN_LOCATION_ID IS NOT NULL AND T1.RETURN_LOCATION_ID <> ''
+                    --      AND T1.RETURN_LOCATION_ID <> T1.ORIGINAL_RETURN_LOCATION_ID)
+                    --      OR (T1.RETURN_DATE <> T1.ORIGINAL_RETURN_DATE AND T1.RETURN_DATE <> '' AND T1.RETURN_DATE IS NOT NULL));
+
+    SPECIAL_INS_DATA = SELECT T1.RULE_ID,
+    	 	 	 	 	 	:RULE_NAME as RULE_NAME,
+							T1.RULE_TYPE,
+							T1.TRANSPORTATION_ID,
+							T1.TU_TYPE_CODE,
+							T1.TU_TYPE,
+							T1.EXECUTION_STATUS_CODE,
+							T1.STATUS,
+							T1.LIFECYCLE_CODE,
+							T1.LIFECYCLE_STATUS,
+							T1.SHIPPER_ID,
+							T1.SHIPPER,
+							T1.CONSIGNEE_ID,
+							T1.CONSIGNEE,
+							T1.RESOURCE_TYPE,
+							T1.QUANTITY,
+							T1.ASSIGNED_CONTAINERS,
+							T1.SOURCE_LOCATION_ID,
+							T1.SOURCE_LOCATION,
+							T1.DESTINATION_LOCATION_ID,
+							T1.DESTINATION_LOCATION,
+							T1.POL,
+							T1.POL_NAME,
+							T1.POD,
+							T1.POD_NAME,
+							T1.RELEVANT_PLANNING,
+							T1.CUSTOMER_CODE,
+							T1.CUSTOMER_NAME,
+							T1.BOOKING_DATE,
+							T1.ORIGINAL_PICKUP_DATE,
+							T1.ORIGINAL_PICKUP_LOCATION_ID,
+							T1.ORIGINAL_PICKUP_LOCATION,
+							T1.PICKUP_DATE,
+							T1.PICKUP_LOCATION_ID,
+							T1.PICKUP_LOCATION,
+							T1.ORIGINAL_RETURN_DATE,
+							T1.ORIGINAL_RETURN_LOCATION_ID,
+							T1.ORIGINAL_RETURN_LOCATION,
+							T1.RETURN_DATE,
+							T1.RETURN_LOCATION_ID,
+							T1.RETURN_LOCATION,
+							T1.ASSIGN_STATUS,
+							T1.FLAG,
+							T1.ITE_KEY,
+                           :USER_NAME AS USER,
+                           TO_VARCHAR(T2.DB_KEY) AS TU_UUID,
+                           T1.SPECIAL_INSTRUCTION_NAME,
+                            T1.VESSEL_CUTOFF_TIME,
+                           T1.VESSEL_ARRIVAL_DATE,
+                           T1.STREETTURN_TU_ID,
+						   CASE WHEN (T4.DB_KEY IS NOT NULL AND T4.DB_KEY <> '')
+							     THEN TO_VARCHAR(T4.DB_KEY) 
+							     ELSE NULL END AS TR_TU_UUID,
+                           T1.INVALID
+                    FROM :TU_INFO T1
+                    LEFT JOIN :VTU T2
+                    ON (T1.TRANSPORTATION_ID = T2.TOR_ID)
+                    LEFT JOIN :VTU T4
+                    ON (T1.STREETTURN_TU_ID = T4.TOR_ID AND T4.TOR_ID<>'') 
+                    INNER JOIN (SELECT DISTINCT RULE_ID,USER,TU_ID 
+                                FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction") T3
+	                ON (T1.RULE_ID = T3.RULE_ID AND T1.TRANSPORTATION_ID = T3.TU_ID AND T3.USER = :USER_NAME)
+	                WHERE T1.TRANSPORTATION_ID NOT IN  (SELECT TRANSPORTATION_ID FROM :INVALID_STREET_TURN_TUs
+                                                        UNION
+                                                        SELECT TRANSPORTATION_ID FROM :INVALID_SUGGEST_LOCATION_TUs) ; 
+  END IF ;
+
+  AFFECTED_DATA  = SELECT DISTINCT * FROM (
+                     SELECT RULE_ID,
+                            RULE_NAME,
+							RULE_TYPE,
+							TRANSPORTATION_ID,
+							TU_TYPE_CODE,
+							TU_TYPE,
+							EXECUTION_STATUS_CODE,
+							STATUS,
+							LIFECYCLE_CODE,
+							LIFECYCLE_STATUS,
+							SHIPPER_ID,
+							SHIPPER,
+							CONSIGNEE_ID,
+							CONSIGNEE,
+							RESOURCE_TYPE,
+							QUANTITY,
+							ASSIGNED_CONTAINERS,
+							SOURCE_LOCATION_ID,
+							SOURCE_LOCATION,
+							DESTINATION_LOCATION_ID,
+							DESTINATION_LOCATION,
+							POL,
+							POL_NAME,
+							POD,
+							POD_NAME,
+							RELEVANT_PLANNING,
+							CUSTOMER_CODE,
+							CUSTOMER_NAME,
+							BOOKING_DATE,
+							ORIGINAL_PICKUP_DATE,
+							ORIGINAL_PICKUP_LOCATION_ID,
+							ORIGINAL_PICKUP_LOCATION,
+							IFNULL (PICKUP_DATE,ORIGINAL_PICKUP_DATE) AS PICKUP_DATE,
+							CASE PICKUP_LOCATION_ID
+							WHEN NULL THEN ORIGINAL_PICKUP_LOCATION_ID
+							WHEN '' THEN ORIGINAL_PICKUP_LOCATION_ID
+							ELSE PICKUP_LOCATION_ID
+							END AS PICKUP_LOCATION_ID,
+							CASE PICKUP_LOCATION
+							WHEN NULL THEN ORIGINAL_PICKUP_LOCATION
+							WHEN '' THEN ORIGINAL_PICKUP_LOCATION
+							ELSE PICKUP_LOCATION
+							END AS PICKUP_LOCATION,
+							--IFNULL (PICKUP_LOCATION_ID,ORIGINAL_PICKUP_LOCATION_ID) AS PICKUP_LOCATION_ID,
+							--IFNULL (PICKUP_LOCATION,ORIGINAL_PICKUP_LOCATION) AS PICKUP_LOCATION,
+							ORIGINAL_RETURN_DATE,
+							ORIGINAL_RETURN_LOCATION_ID,
+							ORIGINAL_RETURN_LOCATION,
+							IFNULL (RETURN_DATE,ORIGINAL_RETURN_DATE) AS RETURN_DATE,
+							CASE RETURN_LOCATION_ID
+							WHEN NULL THEN ORIGINAL_RETURN_LOCATION_ID
+							WHEN '' THEN ORIGINAL_RETURN_LOCATION_ID
+							ELSE RETURN_LOCATION_ID
+							END AS RETURN_LOCATION_ID,
+							CASE RETURN_LOCATION
+							WHEN NULL THEN ORIGINAL_RETURN_LOCATION
+							WHEN '' THEN ORIGINAL_RETURN_LOCATION
+							ELSE RETURN_LOCATION
+							END AS RETURN_LOCATION,
+							--IFNULL (RETURN_LOCATION_ID,ORIGINAL_RETURN_LOCATION_ID) AS RETURN_LOCATION_ID,
+							--IFNULL (RETURN_LOCATION,ORIGINAL_RETURN_LOCATION) AS RETURN_LOCATION,
+							ASSIGN_STATUS,
+							FLAG,
+							ITE_KEY,
+                            USER,
+                            TU_UUID,
+                            SPECIAL_INSTRUCTION_NAME,
+                            VESSEL_CUTOFF_TIME,
+                            VESSEL_ARRIVAL_DATE,
+                            STREETTURN_TU_ID,
+							TR_TU_UUID,
+                            INVALID
+	                 FROM :ASSIGNED_DATA
+	                 UNION
+	                 SELECT RULE_ID,
+	                 	 	RULE_NAME,
+							RULE_TYPE,
+							TRANSPORTATION_ID,
+							TU_TYPE_CODE,
+							TU_TYPE,
+							EXECUTION_STATUS_CODE,
+							STATUS,
+							LIFECYCLE_CODE,
+							LIFECYCLE_STATUS,
+							SHIPPER_ID,
+							SHIPPER,
+							CONSIGNEE_ID,
+							CONSIGNEE,
+							RESOURCE_TYPE,
+							QUANTITY,
+							ASSIGNED_CONTAINERS,
+							SOURCE_LOCATION_ID,
+							SOURCE_LOCATION,
+							DESTINATION_LOCATION_ID,
+							DESTINATION_LOCATION,
+							POL,
+							POL_NAME,
+							POD,
+							POD_NAME,
+							RELEVANT_PLANNING,
+							CUSTOMER_CODE,
+							CUSTOMER_NAME,
+							BOOKING_DATE,
+							ORIGINAL_PICKUP_DATE,
+							ORIGINAL_PICKUP_LOCATION_ID,
+							ORIGINAL_PICKUP_LOCATION,
+							IFNULL (PICKUP_DATE,ORIGINAL_PICKUP_DATE) AS PICKUP_DATE,
+							CASE PICKUP_LOCATION_ID
+							WHEN NULL THEN ORIGINAL_PICKUP_LOCATION_ID
+							WHEN '' THEN ORIGINAL_PICKUP_LOCATION_ID
+							ELSE PICKUP_LOCATION_ID
+							END AS PICKUP_LOCATION_ID,
+							CASE PICKUP_LOCATION
+							WHEN NULL THEN ORIGINAL_PICKUP_LOCATION
+							WHEN '' THEN ORIGINAL_PICKUP_LOCATION
+							ELSE PICKUP_LOCATION
+							END AS PICKUP_LOCATION,
+							--IFNULL (PICKUP_LOCATION_ID,ORIGINAL_PICKUP_LOCATION_ID) AS PICKUP_LOCATION_ID,
+							--IFNULL (PICKUP_LOCATION,ORIGINAL_PICKUP_LOCATION) AS PICKUP_LOCATION,
+							ORIGINAL_RETURN_DATE,
+							ORIGINAL_RETURN_LOCATION_ID,
+							ORIGINAL_RETURN_LOCATION,
+							IFNULL (RETURN_DATE,ORIGINAL_RETURN_DATE) AS RETURN_DATE,
+							CASE RETURN_LOCATION_ID
+							WHEN NULL THEN ORIGINAL_RETURN_LOCATION_ID
+							WHEN '' THEN ORIGINAL_RETURN_LOCATION_ID
+							ELSE RETURN_LOCATION_ID
+							END AS RETURN_LOCATION_ID,
+							CASE RETURN_LOCATION
+							WHEN NULL THEN ORIGINAL_RETURN_LOCATION
+							WHEN '' THEN ORIGINAL_RETURN_LOCATION
+							ELSE RETURN_LOCATION
+							END AS RETURN_LOCATION,
+							--IFNULL (RETURN_LOCATION_ID,ORIGINAL_RETURN_LOCATION_ID) AS RETURN_LOCATION_ID,
+							--IFNULL (RETURN_LOCATION,ORIGINAL_RETURN_LOCATION) AS RETURN_LOCATION,
+							ASSIGN_STATUS,
+							FLAG,
+							ITE_KEY,
+                            USER,
+                            TU_UUID,
+                            SPECIAL_INSTRUCTION_NAME,
+                            VESSEL_CUTOFF_TIME,
+                            VESSEL_ARRIVAL_DATE,
+                            STREETTURN_TU_ID,
+							TR_TU_UUID,
+                            INVALID
+	                 FROM :SPECIAL_INS_DATA
+	                 WHERE TRANSPORTATION_ID NOT IN (SELECT TRANSPORTATION_ID FROM :ASSIGNED_DATA)
+	               );
+
+  CONTAINER_SPECIAL_INSTRUCTION = SELECT DISTINCT T1.RESOURCE_ID,
+                                         T1.SPECIAL_INSTRUCTION_CODE,T2.TRANSPORTATION_ID
+                                  FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction" T1
+                                  INNER JOIN :AFFECTED_DATA T2 ON (T1.TU_ID = T2.TRANSPORTATION_ID)
+                                  WHERE T1.RULE_ID = :RULE_ID
+                                  AND T1.USER = :USER_NAME;
+                                  
+  
+END;

@@ -1,0 +1,52 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.dataprotectionprivacy::p_ext_user_consent_validate"(
+    IN USER_CONSENT "sap.tm.trp.db.dataprotectionprivacy::tt_user_consent",
+    OUT INVALID_USER_CONSENT "sap.tm.trp.db.costmodel::tt_cost_model_invalid_item"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN    
+    
+    INVALID_USER_CONSENT = 
+          SELECT ROW_INDEX,
+               1 AS COL_INDEX,
+               'USER_NAME_BLANK' AS REASON_CODE
+          FROM :USER_CONSENT
+         WHERE USERNAME IS NULL OR  USERNAME = ''
+         --Check user name null. 
+         UNION ALL 
+          SELECT ROW_INDEX,
+               2 AS COL_INDEX,
+               'VALID_FROM_INVALID' AS REASON_CODE
+          FROM :USER_CONSENT
+         WHERE (VALID_FROM IS NULL OR VALID_FROM = '')
+         UNION ALL 
+          SELECT ROW_INDEX,
+               3 AS COL_INDEX,
+               'VALID_TO_INVALID' AS REASON_CODE
+          FROM :USER_CONSENT
+         WHERE (VALID_TO IS NULL OR VALID_TO = '')
+         UNION ALL
+         SELECT ROW_INDEX,
+               3 AS COL_INDEX,
+               'VALID_TO_MUST_NOT_EARLY_THAN_TODAY' AS REASON_CODE
+          FROM :USER_CONSENT
+         WHERE (VALID_TO IS NOT NULL AND VALID_TO <> '')
+         AND VALID_TO < current_utctimestamp 
+         UNION ALL
+         SELECT ROW_INDEX,
+               3 AS COL_INDEX,
+               'VALID_TO_MUST_NOT_EARLY_THAN_VALID_FROM' AS REASON_CODE
+          FROM :USER_CONSENT
+         WHERE (VALID_TO IS NOT NULL AND VALID_TO <> '')
+         AND VALID_TO < VALID_FROM
+         UNION ALL
+         SELECT ROW_INDEX,
+               7 AS COL_INDEX,
+               'ENABLED_FLAG_INVALID' AS REASON_CODE
+          FROM :USER_CONSENT
+         WHERE ENABLED_FLAG NOT IN (0,1);
+        
+        
+END;

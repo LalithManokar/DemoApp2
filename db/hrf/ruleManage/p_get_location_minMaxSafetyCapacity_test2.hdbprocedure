@@ -1,0 +1,75 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage::p_get_location_minMaxSafetyCapacity_test2"( 
+IN IN_EXECUTION_ID BIGINT, 
+IN IN_LOC_FILTER_TYPE INTEGER,
+OUT OUT_TBL "sap.tm.trp.db.hrf.ruleManage::tt_locationEquip_name_minMaxSafetyCapacity") 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    
+    DECLARE MIN_SAFETY_DEFAULT INTEGER;
+    DECLARE MAX_SAFETY_DEFAULT INTEGER;
+    DECLARE MAX_CAPACITY_DEFAULT INTEGER;
+    
+    DECLARE MIN_SAFETY_KEY VARCHAR(20);
+    DECLARE MAX_SAFETY_KEY VARCHAR(20);
+    DECLARE MAX_CAPACITY_KEY VARCHAR(20);
+    
+    MIN_SAFETY_KEY := 'MIN_SAFETY_STOCK';
+    MAX_SAFETY_KEY := 'MAX_SAFETY_STOCK';
+    MAX_CAPACITY_KEY := 'MAX_CAPACITY';
+        
+    select IFNULL(MAX(T1.DEFAULT_VALUE),0) into MIN_SAFETY_DEFAULT
+    from "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+    where T1.DEFAULT_KEY = :MIN_SAFETY_KEY;
+    
+    select IFNULL(MAX(T1.DEFAULT_VALUE),999999) into MAX_SAFETY_DEFAULT
+    from "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+    where T1.DEFAULT_KEY = :MAX_SAFETY_KEY; 
+    
+    select IFNULL(MAX(T1.DEFAULT_VALUE),999999) into MAX_CAPACITY_DEFAULT
+    from "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+    where T1.DEFAULT_KEY = :MAX_CAPACITY_KEY;
+
+
+    OUT_TBL =
+         select LOCATION_ID,
+                IFNULL(LOCATION_NAME,'No Location Name set') as LOCATION_NAME,
+                LOCATION_TYPE,
+                'N/A' as EQUIP_TYPE_ID,
+                'N/A' as EQUIP_TYPE_NAME,
+                -1 as EQUIP_TYPE_TYPE,
+                0 as FILTER_TYPE,
+                TO_DOUBLE(MIN_SAFETY_STOCK) as MIN_SAFETY_STOCK,
+                TO_DOUBLE(MAX_SAFETY_STOCK) as MAX_SAFETY_STOCK,
+                TO_DOUBLE(MAX_CAPACITY) as MAX_CAPACITY
+         from 
+         ( select 
+               T12.LOCATION_ID,
+               T12.LOCATION_NAME,
+               T12.LOCATION_FILTER_TYPE AS LOCATION_TYPE,
+               IFNULL(MIN_SAFETY_STOCK,:MIN_SAFETY_DEFAULT) AS MIN_SAFETY_STOCK,
+               IFNULL(MAX_SAFETY_STOCK,:MAX_SAFETY_DEFAULT) AS MAX_SAFETY_STOCK,
+               IFNULL(MAX_CAPACITY,:MAX_CAPACITY_DEFAULT) AS MAX_CAPACITY
+           from 
+           ( select distinct 
+             LOCATION_ID, LOCATION_NAME, LOCATION_FILTER_TYPE
+             from "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T1
+             where T1.PLAN_EXECUTION_ID = :IN_EXECUTION_ID
+           ) as T12
+           left outer join
+           (select 
+               LOCATION_ID,
+               LOCATION_TYPE,
+               MIN_SAFETY AS MIN_SAFETY_STOCK,
+               MAX_SAFETY AS MAX_SAFETY_STOCK,
+               MAX_CAPACITY AS MAX_CAPACITY
+           from "sap.tm.trp.db.stock::t_stock_config"
+           where (LOCATION_TYPE = :IN_LOC_FILTER_TYPE and 
+                  LOCATION_HEAD_FLAG = 1)
+           ) as T11
+           ON (T11.LOCATION_ID = T12.LOCATION_ID)
+         ) ;
+ 
+END;

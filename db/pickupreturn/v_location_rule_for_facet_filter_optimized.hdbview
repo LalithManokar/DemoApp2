@@ -1,0 +1,57 @@
+schema = "SAP_TM_TRP";
+query = "SELECT DISTINCT A.ID,
+                A.RULE_NAME,
+                B.DESC AS DESCRIPTION,
+                A.RULE_TYPE,
+                A.SD_PLAN_ID,
+                D.NAME AS SUPPLY_DEMAND_PLAN,
+                A.TIME_RANGE_UINT AS TIME_RANGE_UNIT,
+                A.EQUIP_FILTER_ID AS RESOURCE_FILTER_ID,
+                T2.DESC AS RESOURCE_FILTER_DESC,
+                A.LOCATION_FILTER_ID,
+                T1.DESC AS LOCATION_FILTER_DESC,
+                A.NETWORK_SETTING_GROUP_ID,
+                C.NAME AS NETWORK_SETTING_GROUP,
+                C.CURRENCY_CODE AS CURRENCY,
+                A.LOCATION_DETERMIN_ID,
+                E.NAME AS LOCATION_DETERMINATION_RULE,
+                A.SCHEDULE_TIME_TYPE,
+                A.EXECUTE_INTERVAL AS RECURRENCE_INTERVAL,
+                A.EXECUTE_TIME_UINT AS RECURRENCE_TYPE,
+                A.EXECUTE_DAY AS RECURRENCE_DAY,
+                A.START_DATETIME,
+                A.END_DATETIME,
+                A.OP_SETTING_TYPE,
+                A.OPTIMIZATION,
+                USER.USERNAME AS CREATED_BY,
+                A.CREATE_ON AS CREATED_ON,
+                USER1.USERNAME AS MODIFIED_BY,
+                A.MODIFIED_ON,
+                IFNULL(A.MODIFIED_ON, A.CREATE_ON) AS LAST_MODIFIED_TIME,
+                A.ALLOWED_USAGE AS VISIBILITY,
+                A.FILTER_EXECUTION,
+                A.EXCLUSIVE_RULE_ID,
+                A.TIME_WINDOW_SECONDS AS TIME_WINDOW,
+                A.RANK_NUMBER,
+                A.RESOURCE_CATEGORY,
+                A.KEEP_EXECUTION_RUNS
+           FROM \"sap.tm.trp.db.pickupreturn::t_location_assignment_rule\" A
+                LEFT OUTER JOIN  \"sap.tm.trp.db.pickupreturn::t_location_rule_t\" B ON A.ID=B.ID
+                LEFT OUTER JOIN  \"sap.tm.trp.db.filter::t_location_filter\" T1 ON A.LOCATION_FILTER_ID = T1.ID
+                LEFT OUTER JOIN  \"sap.tm.trp.db.filter::t_equipment_filter\" T2 ON A.EQUIP_FILTER_ID = T2.ID
+                LEFT OUTER JOIN  \"sap.tm.trp.db.planningcockpit::v_network_setting_group\" C ON A.NETWORK_SETTING_GROUP_ID=C.ID
+                LEFT OUTER JOIN  \"sap.tm.trp.db.pipeline::t_plan_model\" D ON A.SD_PLAN_ID=D.ID
+                LEFT OUTER JOIN  \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" USER ON A.CREATE_BY=USER.ID
+                LEFT OUTER JOIN  \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" USER1 ON A.MODIFIED_BY=USER1.ID
+                LEFT OUTER JOIN  \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule\" E ON A.LOCATION_DETERMIN_ID=E.RULE_ID";
+
+depends_on_table = ["sap.tm.trp.db.pickupreturn::t_location_assignment_rule",
+					"sap.tm.trp.db.pickupreturn::t_location_rule_t",	
+                    "sap.tm.trp.db.pipeline::t_plan_model",
+                    "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule",
+                    "sap.tm.trp.db.pickupreturn::t_location_assignment_rule",
+                    "sap.tm.trp.db.filter::t_location_filter",
+                    "sap.tm.trp.db.filter::t_equipment_filter"];
+depends_on_view = ["sap.tm.trp.db.planningcockpit::v_network_setting_group",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];
+                   

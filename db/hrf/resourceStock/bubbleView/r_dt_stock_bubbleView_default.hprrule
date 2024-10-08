@@ -1,0 +1,302 @@
+{
+    "description":"r_stock_bubbleView_default",
+    "status":"Active",
+    "ruleBody":{
+        "type":"decisionTable",
+        "hitPolicy":"firstMatch",
+        "content":{
+            "headers":[
+                {
+                    "colID":"CS14b7e84e179x72afd",
+                    "expression":"resource_stock.LOCATION_TYPE",
+                    "alias":"LOCATION_TYPE",
+                    "type":"condition",
+                    "width":100
+                },
+                {
+                    "colID":"CS14b7e84ea11xcdf86",
+                    "expression":"resource_stock.LOCATION_NAME",
+                    "alias":"LOCATION_NAME",
+                    "type":"condition",
+                    "width":100
+                },
+                {
+                    "colID":"CS14b7e84f1afx46302",
+                    "expression":"resource_stock.EQUIP_TYPE_CATEGORY",
+                    "alias":"EQUIP_TYPE_CATEGORY",
+                    "type":"condition",
+                    "width":100
+                },
+                {
+                    "colID":"CS14b7e84f7d6x23ab8",
+                    "expression":"resource_stock.EQUIP_TYPE_NAME",
+                    "alias":"EQUIP_TYPE_NAME",
+                    "type":"condition",
+                    "width":100
+                },
+                {
+                    "colID":"CS14b7e8500acxaa81e",
+                    "expression":"resource_stock.DATE",
+                    "alias":"DATE",
+                    "type":"condition",
+                    "width":100
+                },
+                {
+                    "colID":"CS14b7e850703xe98fc",
+                    "expression":"resource_stock.STOCK",
+                    "alias":"STOCK",
+                    "type":"condition",
+                    "width":100
+                },
+                {
+                    "colID":"AS14b7e8517f4x81cf3",
+                    "name":"MESSAGE",
+                    "type":"output",
+                    "width":100
+                },
+                {
+                    "colID":"AS14b7e8517f4xbabdy4e",
+                    "name":"THRESHOLD",
+                    "type":"output",
+                    "width":100
+                },
+                {
+                    "colID":"AS14b7e8517f4xa54d0y4d",
+                    "name":"SURPLUS_DEFICIT_NUM",
+                    "type":"output",
+                    "width":100
+                }
+            ],
+            "rows":[
+                {
+                    "rowID":"0",
+                    "row":[
+                        {
+                            "colID":"CS14b7e84e179x72afd",
+                            "content":"exists in ( 1,2,3,4,5,6)",
+                            "span":"4"
+                        },
+                        {
+                            "colID":"CS14b7e84ea11xcdf86",
+                            "content":"is not like 'null'",
+                            "span":"4"
+                        },
+                        {
+                            "colID":"CS14b7e84f1afx46302",
+                            "content":"exists in (1,2)",
+                            "span":"2"
+                        },
+                        {
+                            "colID":"CS14b7e84f7d6x23ab8",
+                            "content":"is not like 'null'",
+                            "span":"2"
+                        },
+                        {
+                            "colID":"CS14b7e8500acxaa81e",
+                            "content":"is after '01/01/2012'",
+                            "span":"2"
+                        },
+                        {
+                            "colID":"CS14b7e850703xe98fc",
+                            "content":"is greater than resource_stock.MAX_SAFETY_STOCK * 0.95",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"AS14b7e8517f4x81cf3",
+                            "content":"'Surplus'"
+                        },
+                        {
+                            "colID":"AS14b7e8517f4xbabdy4e",
+                            "content":"0.95"
+                        },
+                        {
+                            "colID":"AS14b7e8517f4xa54d0y4d",
+                            "content":"resource_stock.STOCK - resource_stock.MAX_SAFETY_STOCK*0.95"
+                        }
+                    ]
+                },
+                {
+                    "rowID":"1",
+                    "row":[
+                        {
+                            "colID":"CS14b7e84e179x72afd",
+                            "content":"exists in ( 1,2,3,4,5,6)",
+                            "span":"-1"
+                        },
+                        {
+                            "colID":"CS14b7e84ea11xcdf86",
+                            "content":"is not like 'null'",
+                            "span":"-1"
+                        },
+                        {
+                            "colID":"CS14b7e84f1afx46302",
+                            "content":"exists in (1,2)",
+                            "span":"-1"
+                        },
+                        {
+                            "colID":"CS14b7e84f7d6x23ab8",
+                            "content":"is not like 'null'",
+                            "span":"-1"
+                        },
+                        {
+                            "colID":"CS14b7e8500acxaa81e",
+                            "content":"is after '01/01/2012'",
+                            "span":"-1"
+                        },
+                        {
+                            "colID":"CS14b7e850703xe98fc",
+                            "content":"is less than resource_stock.MIN_SAFETY_STOCK * 0.9",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"AS14b7e8517f4x81cf3",
+                            "content":"'Deficit'"
+                        },
+                        {
+                            "colID":"AS14b7e8517f4xbabdy4e",
+                            "content":"0.9"
+                        },
+                        {
+                            "colID":"AS14b7e8517f4xa54d0y4d",
+                            "content":"resource_stock.STOCK - resource_stock.MIN_SAFETY_STOCK*0.9"
+                        }
+                    ]
+                },
+                {
+                    "rowID":"2",
+                    "row":[
+                        {
+                            "colID":"CS14b7e84e179x72afd",
+                            "content":"exists in ( 1,2,3,4,5,6)",
+                            "span":"-2"
+                        },
+                        {
+                            "colID":"CS14b7e84ea11xcdf86",
+                            "content":"is not like 'null'",
+                            "span":"-2"
+                        },
+                        {
+                            "colID":"CS14b7e84f1afx46302",
+                            "content":"does not exist in (1,2)",
+                            "span":"2"
+                        },
+                        {
+                            "colID":"CS14b7e84f7d6x23ab8",
+                            "content":"is like 'N/A'",
+                            "span":"2"
+                        },
+                        {
+                            "colID":"CS14b7e8500acxaa81e",
+                            "content":"is after '01/01/2012'",
+                            "span":"2"
+                        },
+                        {
+                            "colID":"CS14b7e850703xe98fc",
+                            "content":"is greater than resource_stock.MAX_SAFETY_STOCK * 0.95",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"AS14b7e8517f4x81cf3",
+                            "content":"'Surplus'"
+                        },
+                        {
+                            "colID":"AS14b7e8517f4xbabdy4e",
+                            "content":"0.95"
+                        },
+                        {
+                            "colID":"AS14b7e8517f4xa54d0y4d",
+                            "content":"resource_stock.STOCK - resource_stock.MAX_SAFETY_STOCK*0.95"
+                        }
+                    ]
+                },
+                {
+                    "rowID":"3",
+                    "row":[
+                        {
+                            "colID":"CS14b7e84e179x72afd",
+                            "content":"exists in ( 1,2,3,4,5,6)",
+                            "span":"-3"
+                        },
+                        {
+                            "colID":"CS14b7e84ea11xcdf86",
+                            "content":"is not like 'null'",
+                            "span":"-3"
+                        },
+                        {
+                            "colID":"CS14b7e84f1afx46302",
+                            "content":"does not exist in (1,2)",
+                            "span":"-1"
+                        },
+                        {
+                            "colID":"CS14b7e84f7d6x23ab8",
+                            "content":"is like 'N/A'",
+                            "span":"-1"
+                        },
+                        {
+                            "colID":"CS14b7e8500acxaa81e",
+                            "content":"is after '01/01/2012'",
+                            "span":"-1"
+                        },
+                        {
+                            "colID":"CS14b7e850703xe98fc",
+                            "content":"is less than resource_stock.MIN_SAFETY_STOCK * 0.9",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"AS14b7e8517f4x81cf3",
+                            "content":"'Deficit'"
+                        },
+                        {
+                            "colID":"AS14b7e8517f4xbabdy4e",
+                            "content":"0.9"
+                        },
+                        {
+                            "colID":"AS14b7e8517f4xa54d0y4d",
+                            "content":"resource_stock.STOCK - resource_stock.MIN_SAFETY_STOCK*0.9"
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "vocabulary":"sap.tm.trp.db.hrf.resourceStock::voc_resource_stock",
+    "output":"stock_bubble_view",
+    "embeddedServices":[
+        {
+            "readOnly":true,
+            "allowCalibration":false,
+            "executionContext":{
+                "dataObject":{
+                    "name":"resource_stock",
+                    "keys":[
+                        "LOCATION_ID",
+                        "LOCATION_TYPE",
+                        "EQUIP_TYPE_ID",
+                        "EQUIP_TYPE_CATEGORY",
+                        "DATE"
+                    ]
+                },
+                "parameters":{
+                    "definition":[
+                        {
+                            "name":"resource_stock",
+                            "dataType":"DataObject",
+                            "description":"resource_stock info",
+                            "persist":false,
+                            "dataObject":{
+                                "name":"resource_stock",
+                                "identifiers":[
+                                    "LOCATION_ID",
+                                    "LOCATION_TYPE",
+                                    "EQUIP_TYPE_ID",
+                                    "EQUIP_TYPE_CATEGORY",
+                                    "DATE"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,32 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "USERNAME"; unique = true; sqlType = VARCHAR; length = 60; nullable = false;},
+    {name = "FIRST_NAME"; sqlType = VARCHAR; length = 60; nullable = true;},
+    {name = "MIDDLE_NAME"; sqlType = VARCHAR; length = 60; nullable = true;},
+    {name = "LAST_NAME"; sqlType = VARCHAR; length = 60; nullable = true;},
+    {name = "CREATE_DATE"; sqlType = DATE;},
+    {name = "START_DATE"; sqlType = DATE;},
+    {name = "END_DATE"; sqlType = DATE;},
+    {name = "LAST_MODIFIED_DATE"; sqlType = TIMESTAMP;},
+    {name = "TIME_FORMAT_ID"; sqlType = INTEGER;},
+    {name = "DATE_FORMAT_ID"; sqlType = INTEGER;},
+    {name = "DECIMAL_NOTATION_ID"; sqlType = INTEGER;},
+    {name = "TEMPERATURE_UNIT_CODE"; sqlType = VARCHAR; length = 3;},
+    {name = "TIME_ZONE_CODE"; sqlType = VARCHAR; length = 6;},
+    {name = "WEIGHT_UNIT_CODE"; sqlType = VARCHAR; length = 3;},
+    {name = "DISTANCE_CODE"; sqlType = VARCHAR; length = 3;},
+    {name = "DAT_HORIZON"; sqlType = VARCHAR; length = 22;},
+    {name = "WEEK_HORIZON"; sqlType = VARCHAR; length = 22;},
+    {name = "VOLUMN_UNIT_CODE"; sqlType = VARCHAR; length = 3;},
+    {name = "THEME"; sqlType = VARCHAR; length = 50;},
+    {name = "CLIENT_CODE"; sqlType = VARCHAR; length = 50;},
+    {name = "USER_TYPE_ID"; sqlType = INTEGER;},
+    {name = "LANG_CODE"; sqlType = VARCHAR;length = 1;},
+    {name = "EQUIPMENT_GROUP_VISIBLE_FLAG"; sqlType = SMALLINT;},
+    {name = "PLAN_MODEL_EXECUTE_FLAG"; sqlType = SMALLINT; comment = "1 for available, 0 for not available";},
+    {name = "CODE";sqlType = NVARCHAR; length = 20; nullable = true;}
+];
+table.primaryKey.pkcolumns = ["ID"];
+table.indexes = [ {name = "IDX_USERNAME"; unique = true; indexColumns = ["USERNAME"];}]; 

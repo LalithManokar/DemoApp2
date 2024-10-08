@@ -1,0 +1,17 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.consistencycheck::p_update_sd_plan_assigned_to_virtual" (
+)
+ LANGUAGE SQLSCRIPT
+ SQL SECURITY INVOKER
+ DEFAULT SCHEMA SAP_TM_TRP
+ AS 
+BEGIN
+  UPDATE "sap.tm.trp.db.pipeline::t_plan_model" SET ASSIGNED_TO_VIRTUAL = 'X' WHERE ID IN (
+  SELECT ID
+  FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+  INNER JOIN (
+  	SELECT DISTINCT(PERSISTED_PLAN_MODEL_ID) FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan"
+  ) T2
+  ON T1.ID = T2.PERSISTED_PLAN_MODEL_ID
+  WHERE ASSIGNED_TO_VIRTUAL = '' OR ASSIGNED_TO_VIRTUAL IS NULL
+  );
+END

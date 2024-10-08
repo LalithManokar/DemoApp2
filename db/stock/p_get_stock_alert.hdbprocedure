@@ -1,0 +1,18 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.stock::p_get_stock_alert" (
+IN stocks "sap.tm.trp.db.hrf.resourceStock::tt_get_stock_alert_input" ,
+OUT outputs "sap.tm.trp.db.hrf.resourceStock.alertView::t_hrf_stock_output",
+OUT results "sap.tm.trp.db.hrf.resourceStock::t_hrf_actions_results"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA 
+AS
+BEGIN
+
+
+    -- user needs always register it before using it correctly 
+    outputs = SELECT * FROM "sap.tm.trp.db.hrf.resourceStock.alertView::t_hrf_stock_output" WHERE 1=0;
+    results = SELECT * FROM "sap.tm.trp.db.hrf.resourceStock::t_hrf_actions_results" WHERE 1=0;
+     
+END;

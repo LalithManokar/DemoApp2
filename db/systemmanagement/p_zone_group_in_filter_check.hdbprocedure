@@ -1,0 +1,17 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_zone_group_in_filter_check"(
+    IN ID VARCHAR(22),
+    OUT ERR_NUM INTEGER
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    ZONE_GROUP_ID_LIST = SELECT DISTINCT T2.ZONE_GROUP_ID
+                           FROM "sap.tm.trp.db.filter::t_filter_location_filter" AS T1
+                                INNER JOIN "sap.tm.trp.db.filter::t_location_filter_zone" AS T2
+                                ON T1.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID
+                          WHERE T2.ZONE_GROUP_ID = :ID;
+    
+    SELECT COUNT(*) INTO ERR_NUM FROM :ZONE_GROUP_ID_LIST;
+END;

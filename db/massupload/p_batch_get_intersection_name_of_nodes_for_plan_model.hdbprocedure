@@ -1,0 +1,41 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_batch_get_intersection_name_of_nodes_for_plan_model" (
+IN IN_PLAN_ID_LIST "sap.tm.trp.db.massupload::tt_virtual_plan_id_list",
+OUT OUT_NAME_INTERSECTION "sap.tm.trp.db.massupload::tt_virtual_plan_node_name"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+
+  -- To find the intersection nodes for the given plan id list
+  OUT_NAME_INTERSECTION = 
+		    SELECT
+				 DISTINCT T6.VSDP_ID,
+				 T6.METADATA_NODE_ID AS NAME 
+			FROM (SELECT
+				 VSDP_ID,
+				 COUNT(DISTINCT PP_ID) AS TOTAL_PLAN_MODEL_ID_NUM 
+				FROM :IN_PLAN_ID_LIST 
+				GROUP BY VSDP_ID) T5 
+			INNER JOIN (SELECT
+				 T4.VSDP_ID,
+				 T4.METADATA_NODE_ID,
+				 COUNT(DISTINCT T4.PP_ID) AS NUM_BY_NODE_ID 
+				FROM (SELECT
+				 T1.VSDP_ID,
+				 T1.PP_ID,
+				 T3.METADATA_NODE_ID 
+					FROM :IN_PLAN_ID_LIST T1 
+					INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T2 ON (T1.PP_ID = T2.ID) 
+					INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T3 ON (T2.PIPELINE_MODEL_ID = T3.PIPELINE_MODEL_ID) 
+					WHERE T3.RESULT_VISIBLE = 1) T4 
+				GROUP BY T4.VSDP_ID,
+				 T4.METADATA_NODE_ID) T6 ON T5.VSDP_ID = T6.VSDP_ID 
+			AND T5.TOTAL_PLAN_MODEL_ID_NUM = T6.NUM_BY_NODE_ID;
+        
+END;
+
+
+
+

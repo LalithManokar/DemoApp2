@@ -1,0 +1,47 @@
+//To define the HDB view file use the following syntax: 
+
+schema="SAP_TM_TRP";
+query="
+	SELECT
+		T0.ID
+		,T0.CODE
+		,T0.NAME
+		,T0.DESC
+		,T2.DESC AS USAGE
+		,T0.MANDATORY
+		,T0.VALUE_TYPE
+		,T0.COMMENT
+		,T0.DEFAULT_VALUE
+		,T0.AVAILABLE_VALUE
+		,T0.LIMIT_VALUE
+		,T0.LIMIT_OPERATOR_CODE
+		,T0.UNIT
+		,T3.CODE AS RESOURCE_CATEGORY
+	FROM \"sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter\" T0
+	INNER JOIN \"sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_usage\" T1 ON T1.CODE = T0.USAGE
+	INNER JOIN \"sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_usage_t\" T2 ON T2.ID = T1.ID
+	INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" LANGUAGE ON LANGUAGE.SPRAS = T2.SPRAS
+	INNER JOIN \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings\" T3 ON 1 = 1
+	UNION
+	SELECT
+		18 AS ID
+		,'BASE_RESOURCE_TYPE' AS CODE
+		,'Base Resource Type' AS NAME
+		,'Base Resource Type' AS DESC
+		,'Path and Route and Optimization' AS USAGE
+		,1 AS MANDATORY
+		,'String' AS VALUE_TYPE
+		,'READ ONLY' AS COMMENT
+		,BASE_RESOURCE_TYPE AS DEFAULT_VALUE
+		,BASE_RESOURCE_TYPE AS AVAILABLE_VALUE
+		,BASE_RESOURCE_TYPE AS LIMIT_VALUE
+		,'EQ' AS LIMIT_OPERATOR_CODE
+		,NULL AS UNIT
+		,CODE AS RESOURCE_CATEGORY
+	FROM \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings\"
+";
+depends_on_table = ["sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter"
+					,"sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_usage"
+					,"sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_usage_t"
+					,"sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings"];
+depends_on_view = ["sap.tm.trp.db.semantic.common::v_lang_code"];

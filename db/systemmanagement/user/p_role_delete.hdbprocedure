@@ -1,0 +1,16 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_role_delete" (
+  IN ROLE_ID BIGINT) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+  
+    DELETE FROM "sap.tm.trp.db.systemmanagement.user::t_role" WHERE ID = :ROLE_ID;
+    
+    CALL "sap.tm.trp.db.systemmanagement.user::p_role_location_delete"(:ROLE_ID);
+    --CALL "sap.tm.trp.db.systemmanagement.user::p_role_zone_delete"(:ROLE_ID);
+    CALL "sap.tm.trp.db.systemmanagement.user::p_role_region_delete"(:ROLE_ID);
+    CALL "sap.tm.trp.db.systemmanagement.user::p_role_resource_delete"(:ROLE_ID);
+
+END;

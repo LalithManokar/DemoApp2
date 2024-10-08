@@ -1,0 +1,660 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage::p_get_locationEquip_name_minMaxSafetyCapacity" ( 
+IN IN_EXECUTION_ID BIGINT, 
+IN IN_FILTER_TYPE INTEGER,
+OUT OUT_TBL "sap.tm.trp.db.hrf.ruleManage::tt_locationEquip_name_minMaxSafetyCapacity") 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+--LOCATION_TYPE INTEGER,    1: location;   2: location group;  3: zone; 4: zone group; 5: region; 6: region group
+--EQUIP_CODE_TYPE INTEGER,  1: equip type; 2: equip type group
+--FILTER_TYPE 
+--               Location  zone  region  loc_Group  zone_Group  region_Group
+--Equip_Type           1        2       3       4         5             6
+--Equip_Group          7        8       9       10        11           12
+
+    DECLARE LOCATION_EQUIP INTEGER;
+    DECLARE LOCATION_EQUIP_GROUP INTEGER;
+    
+    DECLARE LOCATION_GROUP_EQUIP INTEGER;
+    DECLARE LOCATION_GROUP_EQUIP_GROUP INTEGER;
+    
+    DECLARE ZONE_EQUIP INTEGER;
+    DECLARE ZONE_EQUIP_GROUP INTEGER;
+    
+    DECLARE ZONE_GROUP_EQUIP INTEGER;
+    DECLARE ZONE_GROUP_EQUIP_GROUP INTEGER;
+    
+    DECLARE REGION_EQUIP INTEGER;
+    DECLARE REGION_EQUIP_GROUP INTEGER;
+    
+    DECLARE REGION_GROUP_EQUIP INTEGER;
+    DECLARE REGION_GROUP_EQUIP_GROUP INTEGER;
+    
+    DECLARE MIN_SAFETY_DEFAULT INTEGER;
+    DECLARE MAX_SAFETY_DEFAULT INTEGER;
+    DECLARE MAX_CAPACITY_DEFAULT INTEGER;
+    
+    DECLARE MIN_SAFETY_KEY VARCHAR(20);
+    DECLARE MAX_SAFETY_KEY VARCHAR(20);
+    DECLARE MAX_CAPACITY_KEY VARCHAR(20);
+    
+    DECLARE RESOURCE_CATEGORY VARCHAR(10);
+    
+    LOCATION_EQUIP :=1;
+    LOCATION_EQUIP_GROUP :=7;
+    
+    ZONE_EQUIP := 2;
+    ZONE_EQUIP_GROUP := 8;
+    
+    REGION_EQUIP := 3;
+    REGION_EQUIP_GROUP := 9;
+    
+    LOCATION_GROUP_EQUIP := 4;
+    LOCATION_GROUP_EQUIP_GROUP :=10;
+    
+    ZONE_GROUP_EQUIP :=5;
+    ZONE_GROUP_EQUIP_GROUP := 11;
+    
+    REGION_GROUP_EQUIP :=6;
+    REGION_GROUP_EQUIP_GROUP := 12;
+    
+    MIN_SAFETY_KEY := 'MIN_SAFETY_STOCK';
+    MAX_SAFETY_KEY := 'MAX_SAFETY_STOCK';
+    MAX_CAPACITY_KEY := 'MAX_CAPACITY';
+        
+    select IFNULL(MAX(T1.DEFAULT_VALUE),0) into MIN_SAFETY_DEFAULT
+    from "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+    where T1.DEFAULT_KEY = :MIN_SAFETY_KEY;
+    
+    select IFNULL(MAX(T1.DEFAULT_VALUE),999999) into MAX_SAFETY_DEFAULT
+    from "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+    where T1.DEFAULT_KEY = :MAX_SAFETY_KEY; 
+    
+    select IFNULL(MAX(T1.DEFAULT_VALUE),999999) into MAX_CAPACITY_DEFAULT
+    from "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+    where T1.DEFAULT_KEY = :MAX_CAPACITY_KEY;
+    
+    PLAN_EXECUTE_LOC_EQUIP_TBL = 
+        select distinct 
+            LOCATION_ID, 
+            EQUIP_TYPE_ID 
+        from "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T1
+        where T1.PLAN_EXECUTION_ID = :IN_EXECUTION_ID;
+   
+   SELECT IFNULL (MAX (T1.RESOURCE_CATEGORY),'') INTO RESOURCE_CATEGORY
+   FROM "sap.tm.trp.db.pipeline::v_pipeline_model" T1
+   INNER JOIN "sap.tm.trp.db.pipeline::v_plan_execution_info" T2
+   ON (T1.ID = T2.PLAN_MODEL_ID)
+   WHERE T2.EXECUTION_ID = :IN_EXECUTION_ID;
+   
+   RESOURCE_TYPES = SELECT DISTINCT RESOURCE_TYPE_CODE, RESOURCE_TYPE_DESC
+                FROM "sap.tm.trp.db.semantic.resource::v_resource_type_with_category"
+                WHERE RESOURCE_CATEGORY = :RESOURCE_CATEGORY;
+   
+   --LOCATION,EQUIP
+   IF(:IN_FILTER_TYPE = :LOCATION_EQUIP) 
+   THEN
+       --LOC_EQUIP_NAME_MIN_MAX_SAFETY_SQL =
+       OUT_TBL =
+         select LOCATION_ID,
+                IFNULL(T2.NAME,'No Location Name set') as LOCATION_NAME,
+                LOCATION_TYPE,
+                EQUIP_TYPE_ID,
+                IFNULL(T3.RESOURCE_TYPE_CODE,'No Equipment Name set') as EQUIP_TYPE_NAME,
+                EQUIP_TYPE_TYPE,
+                :LOCATION_EQUIP as FILTER_TYPE,
+                TO_DOUBLE(MIN_SAFETY_STOCK) as MIN_SAFETY_STOCK,
+                TO_DOUBLE(MAX_SAFETY_STOCK) as MAX_SAFETY_STOCK,
+                TO_DOUBLE(MAX_CAPACITY) as MAX_CAPACITY
+         from 
+         ( select 
+               T12.LOCATION_ID,
+               IFNULL(LOCATION_TYPE,1) AS LOCATION_TYPE,
+               T12.EQUIP_TYPE_ID,
+               IFNULL(EQUIP_TYPE_TYPE,1) AS EQUIP_TYPE_TYPE,
+               IFNULL(MIN_SAFETY_STOCK,:MIN_SAFETY_DEFAULT) AS MIN_SAFETY_STOCK,
+               IFNULL(MAX_SAFETY_STOCK,:MAX_SAFETY_DEFAULT) AS MAX_SAFETY_STOCK,
+               IFNULL(MAX_CAPACITY,:MAX_CAPACITY_DEFAULT) AS MAX_CAPACITY
+           from :PLAN_EXECUTE_LOC_EQUIP_TBL as T12
+           left outer join
+           (select 
+               LOCATION_ID,
+               LOCATION_TYPE,
+               EQUIP_CODE as EQUIP_TYPE_ID,
+               EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+               MIN_SAFETY AS MIN_SAFETY_STOCK,
+               MAX_SAFETY AS MAX_SAFETY_STOCK,
+               MAX_CAPACITY AS MAX_CAPACITY
+           from "sap.tm.trp.db.stock::t_stock_config" T1
+           where (LOCATION_TYPE = 1 and EQUIP_CODE_TYPE = 1 and LOCATION_HEAD_FLAG = 0)
+           ) as T11
+           ON (T11.LOCATION_ID = T12.LOCATION_ID and
+               T11.EQUIP_TYPE_ID  = T12.EQUIP_TYPE_ID)
+         ) T1
+         LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_location" T2
+         --ON T1.LOCATION_ID = to_VARCHAR(T2.ID)
+         ON T1.LOCATION_ID = T2.ID 
+         LEFT OUTER JOIN :RESOURCE_TYPES T3
+         --ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) ;
+         ON T1.EQUIP_TYPE_ID = T3.RESOURCE_TYPE_CODE ;
+         
+   --LOCATION,EQUIP_GROUP
+   ELSEIF(:IN_FILTER_TYPE = :LOCATION_EQUIP_GROUP) 
+   THEN   
+       --LOC_EQUIP_NAME_MIN_MAX_SAFETY_SQL =
+       OUT_TBL =
+         select LOCATION_ID,
+                IFNULL(T2.NAME,'No Location Name set') as LOCATION_NAME,
+                LOCATION_TYPE,
+                EQUIP_TYPE_ID,
+                IFNULL(T3.DESC,'No Equipment group Name set') as EQUIP_TYPE_NAME,
+                EQUIP_TYPE_TYPE,
+                :LOCATION_EQUIP_GROUP as FILTER_TYPE,
+                TO_DOUBLE(MIN_SAFETY_STOCK) as MIN_SAFETY_STOCK,
+                TO_DOUBLE(MAX_SAFETY_STOCK) as MAX_SAFETY_STOCK,
+                TO_DOUBLE(MAX_CAPACITY) as MAX_CAPACITY
+         from 
+         ( select 
+               T12.LOCATION_ID,
+               IFNULL(LOCATION_TYPE,1) AS LOCATION_TYPE,
+               T12.EQUIP_TYPE_ID,
+               IFNULL(EQUIP_TYPE_TYPE,2) AS EQUIP_TYPE_TYPE,
+               IFNULL(MIN_SAFETY_STOCK,:MIN_SAFETY_DEFAULT) AS MIN_SAFETY_STOCK,
+               IFNULL(MAX_SAFETY_STOCK,:MAX_SAFETY_DEFAULT) AS MAX_SAFETY_STOCK,
+               IFNULL(MAX_CAPACITY,:MAX_CAPACITY_DEFAULT) AS MAX_CAPACITY
+           from :PLAN_EXECUTE_LOC_EQUIP_TBL as T12
+           left outer join
+           (select 
+               LOCATION_ID,
+               LOCATION_TYPE,
+               EQUIP_CODE as EQUIP_TYPE_ID,
+               EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+               MIN_SAFETY AS MIN_SAFETY_STOCK,
+               MAX_SAFETY AS MAX_SAFETY_STOCK,
+               MAX_CAPACITY AS MAX_CAPACITY
+           from "sap.tm.trp.db.stock::t_stock_config" T1
+           where (LOCATION_TYPE = 1 and EQUIP_CODE_TYPE = 2 and LOCATION_HEAD_FLAG = 0)
+           ) as T11
+           ON (T11.LOCATION_ID = T12.LOCATION_ID and
+               T11.EQUIP_TYPE_ID  = T12.EQUIP_TYPE_ID)
+         ) T1
+         LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_location" T2
+         --ON T1.LOCATION_ID = to_VARCHAR(T2.ID)
+         ON T1.LOCATION_ID = T2.ID 
+         LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_equipment_group" T3
+         --ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) ;
+         ON T1.EQUIP_TYPE_ID = T3.ID
+         ;   
+   --ZONE,EQUIP 
+   ELSEIF (:IN_FILTER_TYPE = :ZONE_EQUIP) 
+   THEN
+       --LOC_EQUIP_NAME_MIN_MAX_SAFETY_SQL =
+       OUT_TBL =
+         select LOCATION_ID,
+                IFNULL(T2.NAME,'No Zone Name set') as LOCATION_NAME,
+                LOCATION_TYPE,
+                EQUIP_TYPE_ID,
+                IFNULL(T3.RESOURCE_TYPE_CODE,'No Equipment Name set') as EQUIP_TYPE_NAME,
+                EQUIP_TYPE_TYPE,
+                :ZONE_EQUIP as FILTER_TYPE,
+                TO_DOUBLE(MIN_SAFETY_STOCK) as MIN_SAFETY_STOCK,
+                TO_DOUBLE(MAX_SAFETY_STOCK) as MAX_SAFETY_STOCK,
+                TO_DOUBLE(MAX_CAPACITY) as MAX_CAPACITY
+         from 
+         ( select 
+               T12.LOCATION_ID,
+               IFNULL(LOCATION_TYPE,3) AS LOCATION_TYPE,
+               T12.EQUIP_TYPE_ID,
+               IFNULL(EQUIP_TYPE_TYPE,1) AS EQUIP_TYPE_TYPE,
+               IFNULL(MIN_SAFETY_STOCK,:MIN_SAFETY_DEFAULT) AS MIN_SAFETY_STOCK,
+               IFNULL(MAX_SAFETY_STOCK,:MAX_SAFETY_DEFAULT) AS MAX_SAFETY_STOCK,
+               IFNULL(MAX_CAPACITY,:MAX_CAPACITY_DEFAULT) AS MAX_CAPACITY
+           from :PLAN_EXECUTE_LOC_EQUIP_TBL as T12
+           left outer join
+           (select 
+               LOCATION_ID,
+               LOCATION_TYPE,
+               EQUIP_CODE as EQUIP_TYPE_ID,
+               EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+               MIN_SAFETY AS MIN_SAFETY_STOCK,
+               MAX_SAFETY AS MAX_SAFETY_STOCK,
+               MAX_CAPACITY AS MAX_CAPACITY
+           from "sap.tm.trp.db.stock::t_stock_config" T1
+           where (LOCATION_TYPE = 3 and EQUIP_CODE_TYPE = 1 and LOCATION_HEAD_FLAG = 0)
+           ) as T11
+           ON (T11.LOCATION_ID = T12.LOCATION_ID and
+               T11.EQUIP_TYPE_ID  = T12.EQUIP_TYPE_ID)
+         ) T1
+         LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_zone" T2
+         --ON T1.LOCATION_ID = to_VARCHAR(T2.ID)
+         ON T1.LOCATION_ID = T2.ID 
+         LEFT OUTER JOIN :RESOURCE_TYPES T3
+         --ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) ;    
+         ON T1.EQUIP_TYPE_ID = T3.RESOURCE_TYPE_CODE ;
+   --ZONE,EQUIP_GROUP 
+   ELSEIF (:IN_FILTER_TYPE = :ZONE_EQUIP_GROUP) 
+   THEN
+       --LOC_EQUIP_NAME_MIN_MAX_SAFETY_SQL =
+       OUT_TBL =
+         select LOCATION_ID,
+                IFNULL(T2.NAME,'No Zone Name set') as LOCATION_NAME,
+                LOCATION_TYPE,
+                EQUIP_TYPE_ID,
+                IFNULL(T3.DESC,'No Equipment group Name set') as EQUIP_TYPE_NAME,
+                EQUIP_TYPE_TYPE,
+                :ZONE_EQUIP_GROUP as FILTER_TYPE,
+                TO_DOUBLE(MIN_SAFETY_STOCK) as MIN_SAFETY_STOCK,
+                TO_DOUBLE(MAX_SAFETY_STOCK) as MAX_SAFETY_STOCK,
+                TO_DOUBLE(MAX_CAPACITY) as MAX_CAPACITY
+         from 
+         ( select 
+               T12.LOCATION_ID,
+               IFNULL(LOCATION_TYPE,3) AS LOCATION_TYPE,
+               T12.EQUIP_TYPE_ID,
+               IFNULL(EQUIP_TYPE_TYPE,2) AS EQUIP_TYPE_TYPE,
+               IFNULL(MIN_SAFETY_STOCK,:MIN_SAFETY_DEFAULT) AS MIN_SAFETY_STOCK,
+               IFNULL(MAX_SAFETY_STOCK,:MAX_SAFETY_DEFAULT) AS MAX_SAFETY_STOCK,
+               IFNULL(MAX_CAPACITY,:MAX_CAPACITY_DEFAULT) AS MAX_CAPACITY
+           from :PLAN_EXECUTE_LOC_EQUIP_TBL as T12
+           left outer join
+           (select 
+               LOCATION_ID,
+               LOCATION_TYPE,
+               EQUIP_CODE as EQUIP_TYPE_ID,
+               EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+               MIN_SAFETY AS MIN_SAFETY_STOCK,
+               MAX_SAFETY AS MAX_SAFETY_STOCK,
+               MAX_CAPACITY AS MAX_CAPACITY
+           from "sap.tm.trp.db.stock::t_stock_config" T1
+           where (LOCATION_TYPE = 3 and EQUIP_CODE_TYPE = 2 and LOCATION_HEAD_FLAG = 0)
+           ) as T11
+           ON (T11.LOCATION_ID = T12.LOCATION_ID and
+               T11.EQUIP_TYPE_ID  = T12.EQUIP_TYPE_ID)
+         ) T1
+         LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_zone" T2
+         --ON T1.LOCATION_ID = to_VARCHAR(T2.ID)
+         ON T1.LOCATION_ID = T2.ID 
+         LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_equipment_group" T3
+         --ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) ;
+         ON T1.EQUIP_TYPE_ID = T3.ID
+         ;   
+   --REGION,EQUIP
+   ELSEIF (:IN_FILTER_TYPE = :REGION_EQUIP) 
+   THEN
+       --LOC_EQUIP_NAME_MIN_MAX_SAFETY_SQL =
+       OUT_TBL =
+         select LOCATION_ID,
+                IFNULL(T2.NAME,'No Region Name set') as LOCATION_NAME,
+                LOCATION_TYPE,
+                EQUIP_TYPE_ID,
+                IFNULL(T3.RESOURCE_TYPE_CODE,'No Equipment Name set') as EQUIP_TYPE_NAME,
+                EQUIP_TYPE_TYPE,
+                :REGION_EQUIP as FILTER_TYPE,
+                TO_DOUBLE(MIN_SAFETY_STOCK) as MIN_SAFETY_STOCK,
+                TO_DOUBLE(MAX_SAFETY_STOCK) as MAX_SAFETY_STOCK,
+                TO_DOUBLE(MAX_CAPACITY) as MAX_CAPACITY
+         from 
+         ( select 
+               T12.LOCATION_ID,
+               IFNULL(LOCATION_TYPE,5) AS LOCATION_TYPE,
+               T12.EQUIP_TYPE_ID,
+               IFNULL(EQUIP_TYPE_TYPE,1) AS EQUIP_TYPE_TYPE,
+               IFNULL(MIN_SAFETY_STOCK,:MIN_SAFETY_DEFAULT) AS MIN_SAFETY_STOCK,
+               IFNULL(MAX_SAFETY_STOCK,:MAX_SAFETY_DEFAULT) AS MAX_SAFETY_STOCK,
+               IFNULL(MAX_CAPACITY,:MAX_CAPACITY_DEFAULT) AS MAX_CAPACITY
+           from :PLAN_EXECUTE_LOC_EQUIP_TBL as T12
+           left outer join
+           (select 
+               LOCATION_ID,
+               LOCATION_TYPE,
+               EQUIP_CODE as EQUIP_TYPE_ID,
+               EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+               MIN_SAFETY AS MIN_SAFETY_STOCK,
+               MAX_SAFETY AS MAX_SAFETY_STOCK,
+               MAX_CAPACITY AS MAX_CAPACITY
+           from "sap.tm.trp.db.stock::t_stock_config" T1
+           where (LOCATION_TYPE = 5 and EQUIP_CODE_TYPE = 1 and LOCATION_HEAD_FLAG = 0)
+           ) as T11
+           ON (T11.LOCATION_ID = T12.LOCATION_ID and
+               T11.EQUIP_TYPE_ID  = T12.EQUIP_TYPE_ID)
+         ) T1
+         LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_zone" T2
+         --ON T1.LOCATION_ID = to_VARCHAR(T2.ID)
+         ON T1.LOCATION_ID = T2.ID 
+         LEFT OUTER JOIN :RESOURCE_TYPES T3
+         --ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) ;
+         ON T1.EQUIP_TYPE_ID = T3.RESOURCE_TYPE_CODE ;   
+   --REGION,EQUIP_GROUP
+   ELSEIF (:IN_FILTER_TYPE = :REGION_EQUIP_GROUP) 
+   THEN
+       --LOC_EQUIP_NAME_MIN_MAX_SAFETY_SQL =
+       OUT_TBL =
+         select LOCATION_ID,
+                IFNULL(T2.NAME,'No Region Name set') as LOCATION_NAME,
+                LOCATION_TYPE,
+                EQUIP_TYPE_ID,
+                IFNULL(T3.DESC,'No Equipment group Name set') as EQUIP_TYPE_NAME,
+                EQUIP_TYPE_TYPE,
+                :REGION_EQUIP_GROUP as FILTER_TYPE,
+                TO_DOUBLE(MIN_SAFETY_STOCK) as MIN_SAFETY_STOCK,
+                TO_DOUBLE(MAX_SAFETY_STOCK) as MAX_SAFETY_STOCK,
+                TO_DOUBLE(MAX_CAPACITY) as MAX_CAPACITY
+         from 
+         ( select 
+               T12.LOCATION_ID,
+               IFNULL(LOCATION_TYPE,5) AS LOCATION_TYPE,
+               T12.EQUIP_TYPE_ID,
+               IFNULL(EQUIP_TYPE_TYPE,2) AS EQUIP_TYPE_TYPE,
+               IFNULL(MIN_SAFETY_STOCK,:MIN_SAFETY_DEFAULT) AS MIN_SAFETY_STOCK,
+               IFNULL(MAX_SAFETY_STOCK,:MAX_SAFETY_DEFAULT) AS MAX_SAFETY_STOCK,
+               IFNULL(MAX_CAPACITY,:MAX_CAPACITY_DEFAULT) AS MAX_CAPACITY
+           from :PLAN_EXECUTE_LOC_EQUIP_TBL as T12
+           left outer join
+           (select 
+               LOCATION_ID,
+               LOCATION_TYPE,
+               EQUIP_CODE as EQUIP_TYPE_ID,
+               EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+               MIN_SAFETY AS MIN_SAFETY_STOCK,
+               MAX_SAFETY AS MAX_SAFETY_STOCK,
+               MAX_CAPACITY AS MAX_CAPACITY
+           from "sap.tm.trp.db.stock::t_stock_config" T1
+           where (LOCATION_TYPE = 5 and EQUIP_CODE_TYPE = 2 and LOCATION_HEAD_FLAG = 0)
+           ) as T11
+           ON (T11.LOCATION_ID = T12.LOCATION_ID and
+               T11.EQUIP_TYPE_ID  = T12.EQUIP_TYPE_ID)
+         ) T1
+         LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_zone" T2
+         --ON T1.LOCATION_ID = to_VARCHAR(T2.ID)
+         ON T1.LOCATION_ID = T2.ID 
+         LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_equipment_group" T3
+         --ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) ;
+         ON T1.EQUIP_TYPE_ID = T3.ID
+         ;    
+   --LOCATION GROUP,EQUIP
+   ELSEIF (:IN_FILTER_TYPE = :LOCATION_GROUP_EQUIP) 
+   THEN
+       --LOC_EQUIP_NAME_MIN_MAX_SAFETY_SQL =
+       OUT_TBL =
+         select LOCATION_ID,
+                IFNULL(T2.DESC,'No Location group Name set') as LOCATION_NAME,
+                LOCATION_TYPE,
+                EQUIP_TYPE_ID,
+                IFNULL(T3.RESOURCE_TYPE_CODE,'No Equipment Name set') as EQUIP_TYPE_NAME,
+                EQUIP_TYPE_TYPE,
+                :LOCATION_GROUP_EQUIP as FILTER_TYPE,
+                TO_DOUBLE(MIN_SAFETY_STOCK) as MIN_SAFETY_STOCK,
+                TO_DOUBLE(MAX_SAFETY_STOCK) as MAX_SAFETY_STOCK,
+                TO_DOUBLE(MAX_CAPACITY) as MAX_CAPACITY
+         from 
+         ( select 
+               T12.LOCATION_ID,
+               IFNULL(LOCATION_TYPE,2) AS LOCATION_TYPE,
+               T12.EQUIP_TYPE_ID,
+               IFNULL(EQUIP_TYPE_TYPE,1) AS EQUIP_TYPE_TYPE,
+               IFNULL(MIN_SAFETY_STOCK,:MIN_SAFETY_DEFAULT) AS MIN_SAFETY_STOCK,
+               IFNULL(MAX_SAFETY_STOCK,:MAX_SAFETY_DEFAULT) AS MAX_SAFETY_STOCK,
+               IFNULL(MAX_CAPACITY,:MAX_CAPACITY_DEFAULT) AS MAX_CAPACITY
+           from :PLAN_EXECUTE_LOC_EQUIP_TBL as T12
+           left outer join
+           (select 
+               LOCATION_ID,
+               LOCATION_TYPE,
+               EQUIP_CODE as EQUIP_TYPE_ID,
+               EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+               MIN_SAFETY AS MIN_SAFETY_STOCK,
+               MAX_SAFETY AS MAX_SAFETY_STOCK,
+               MAX_CAPACITY AS MAX_CAPACITY
+           from "sap.tm.trp.db.stock::t_stock_config" T1
+           where (LOCATION_TYPE = 2 and EQUIP_CODE_TYPE = 1 and LOCATION_HEAD_FLAG = 0)
+           ) as T11
+           ON (T11.LOCATION_ID = T12.LOCATION_ID and
+               T11.EQUIP_TYPE_ID  = T12.EQUIP_TYPE_ID)
+         ) T1
+         LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_location_group" T2
+         --ON T1.LOCATION_ID = to_VARCHAR(T2.ID)
+         ON T1.LOCATION_ID = T2.ID 
+         LEFT OUTER JOIN :RESOURCE_TYPES T3
+         --ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) ;
+         ON T1.EQUIP_TYPE_ID = T3.RESOURCE_TYPE_CODE ;   
+   --LOCATION GROUP,EQUIP_GROUP
+   ELSEIF (:IN_FILTER_TYPE = :LOCATION_GROUP_EQUIP_GROUP) 
+   THEN
+       --LOC_EQUIP_NAME_MIN_MAX_SAFETY_SQL =
+       OUT_TBL =
+         select LOCATION_ID,
+                IFNULL(T2.DESC,'No Location group Name set') as LOCATION_NAME,
+                LOCATION_TYPE,
+                EQUIP_TYPE_ID,
+                IFNULL(T3.DESC,'No Equipment group Name set') as EQUIP_TYPE_NAME,
+                EQUIP_TYPE_TYPE,
+                :LOCATION_GROUP_EQUIP_GROUP as FILTER_TYPE,
+                TO_DOUBLE(MIN_SAFETY_STOCK) as MIN_SAFETY_STOCK,
+                TO_DOUBLE(MAX_SAFETY_STOCK) as MAX_SAFETY_STOCK,
+                TO_DOUBLE(MAX_CAPACITY) as MAX_CAPACITY
+         from 
+         ( select 
+               T12.LOCATION_ID,
+               IFNULL(LOCATION_TYPE,2) AS LOCATION_TYPE,
+               T12.EQUIP_TYPE_ID,
+               IFNULL(EQUIP_TYPE_TYPE,2) AS EQUIP_TYPE_TYPE,
+               IFNULL(MIN_SAFETY_STOCK,:MIN_SAFETY_DEFAULT) AS MIN_SAFETY_STOCK,
+               IFNULL(MAX_SAFETY_STOCK,:MAX_SAFETY_DEFAULT) AS MAX_SAFETY_STOCK,
+               IFNULL(MAX_CAPACITY,:MAX_CAPACITY_DEFAULT) AS MAX_CAPACITY
+           from :PLAN_EXECUTE_LOC_EQUIP_TBL as T12
+           left outer join
+           (select 
+               LOCATION_ID,
+               LOCATION_TYPE,
+               EQUIP_CODE as EQUIP_TYPE_ID,
+               EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+               MIN_SAFETY AS MIN_SAFETY_STOCK,
+               MAX_SAFETY AS MAX_SAFETY_STOCK,
+               MAX_CAPACITY AS MAX_CAPACITY
+           from "sap.tm.trp.db.stock::t_stock_config" T1
+           where (LOCATION_TYPE = 2 and EQUIP_CODE_TYPE = 2 and LOCATION_HEAD_FLAG = 0)
+           ) as T11
+           ON (T11.LOCATION_ID = T12.LOCATION_ID and
+               T11.EQUIP_TYPE_ID  = T12.EQUIP_TYPE_ID)
+         ) T1
+         LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_location_group" T2
+         --ON T1.LOCATION_ID = to_VARCHAR(T2.ID)
+         ON T1.LOCATION_ID = T2.ID 
+         LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_equipment_group" T3
+         --ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) ;
+         ON T1.EQUIP_TYPE_ID = T3.ID
+         ;   
+   --ZONE GROUP,EQUIP
+   ELSEIF (:IN_FILTER_TYPE = :ZONE_GROUP_EQUIP) 
+   THEN
+       --LOC_EQUIP_NAME_MIN_MAX_SAFETY_SQL =
+       OUT_TBL =
+         select LOCATION_ID,
+                IFNULL(T2.DESC,'No Zone group Name set') as LOCATION_NAME,
+                LOCATION_TYPE,
+                EQUIP_TYPE_ID,
+                IFNULL(T3.RESOURCE_TYPE_CODE,'No Equipment Name set') as EQUIP_TYPE_NAME,
+                EQUIP_TYPE_TYPE,
+                :ZONE_GROUP_EQUIP as FILTER_TYPE,
+                TO_DOUBLE(MIN_SAFETY_STOCK) as MIN_SAFETY_STOCK,
+                TO_DOUBLE(MAX_SAFETY_STOCK) as MAX_SAFETY_STOCK,
+                TO_DOUBLE(MAX_CAPACITY) as MAX_CAPACITY
+         from 
+         ( select 
+               T12.LOCATION_ID,
+               IFNULL(LOCATION_TYPE,4) AS LOCATION_TYPE,
+               T12.EQUIP_TYPE_ID,
+               IFNULL(EQUIP_TYPE_TYPE,1) AS EQUIP_TYPE_TYPE,
+               IFNULL(MIN_SAFETY_STOCK,:MIN_SAFETY_DEFAULT) AS MIN_SAFETY_STOCK,
+               IFNULL(MAX_SAFETY_STOCK,:MAX_SAFETY_DEFAULT) AS MAX_SAFETY_STOCK,
+               IFNULL(MAX_CAPACITY,:MAX_CAPACITY_DEFAULT) AS MAX_CAPACITY
+           from :PLAN_EXECUTE_LOC_EQUIP_TBL as T12
+           left outer join
+           (select 
+               LOCATION_ID,
+               LOCATION_TYPE,
+               EQUIP_CODE as EQUIP_TYPE_ID,
+               EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+               MIN_SAFETY AS MIN_SAFETY_STOCK,
+               MAX_SAFETY AS MAX_SAFETY_STOCK,
+               MAX_CAPACITY AS MAX_CAPACITY
+           from "sap.tm.trp.db.stock::t_stock_config" T1
+           where (LOCATION_TYPE = 4 and EQUIP_CODE_TYPE = 1 and LOCATION_HEAD_FLAG = 0)
+           ) as T11
+           ON (T11.LOCATION_ID = T12.LOCATION_ID and
+               T11.EQUIP_TYPE_ID  = T12.EQUIP_TYPE_ID)
+         ) T1
+         LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_zone_group" T2
+         --ON T1.LOCATION_ID = to_VARCHAR(T2.ID)
+         ON T1.LOCATION_ID = T2.ID 
+         LEFT OUTER JOIN :RESOURCE_TYPES T3
+         --ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) ;
+         ON T1.EQUIP_TYPE_ID = T3.RESOURCE_TYPE_CODE ;    
+   --ZONE GROUP,EQUIP_GROUP
+   ELSEIF (:IN_FILTER_TYPE = :ZONE_GROUP_EQUIP_GROUP) 
+   THEN  
+       --LOC_EQUIP_NAME_MIN_MAX_SAFETY_SQL =
+       OUT_TBL =
+         select LOCATION_ID,
+                IFNULL(T2.DESC,'No Zone group Name set') as LOCATION_NAME,
+                LOCATION_TYPE,
+                EQUIP_TYPE_ID,
+                IFNULL(T3.DESC,'No Equipment group Name set') as EQUIP_TYPE_NAME,
+                EQUIP_TYPE_TYPE,
+                :ZONE_GROUP_EQUIP_GROUP as FILTER_TYPE,
+                TO_DOUBLE(MIN_SAFETY_STOCK) as MIN_SAFETY_STOCK,
+                TO_DOUBLE(MAX_SAFETY_STOCK) as MAX_SAFETY_STOCK,
+                TO_DOUBLE(MAX_CAPACITY) as MAX_CAPACITY
+         from 
+         ( select 
+               T12.LOCATION_ID,
+               IFNULL(LOCATION_TYPE,4) AS LOCATION_TYPE,
+               T12.EQUIP_TYPE_ID,
+               IFNULL(EQUIP_TYPE_TYPE,2) AS EQUIP_TYPE_TYPE,
+               IFNULL(MIN_SAFETY_STOCK,:MIN_SAFETY_DEFAULT) AS MIN_SAFETY_STOCK,
+               IFNULL(MAX_SAFETY_STOCK,:MAX_SAFETY_DEFAULT) AS MAX_SAFETY_STOCK,
+               IFNULL(MAX_CAPACITY,:MAX_CAPACITY_DEFAULT) AS MAX_CAPACITY
+           from :PLAN_EXECUTE_LOC_EQUIP_TBL as T12
+           left outer join
+           (select 
+               LOCATION_ID,
+               LOCATION_TYPE,
+               EQUIP_CODE as EQUIP_TYPE_ID,
+               EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+               MIN_SAFETY AS MIN_SAFETY_STOCK,
+               MAX_SAFETY AS MAX_SAFETY_STOCK,
+               MAX_CAPACITY AS MAX_CAPACITY
+           from "sap.tm.trp.db.stock::t_stock_config" T1
+           where (LOCATION_TYPE = 4 and EQUIP_CODE_TYPE = 2 and LOCATION_HEAD_FLAG = 0)
+           ) as T11
+           ON (T11.LOCATION_ID = T12.LOCATION_ID and
+               T11.EQUIP_TYPE_ID  = T12.EQUIP_TYPE_ID)
+         ) T1
+         LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_zone_group" T2
+         --ON T1.LOCATION_ID = to_VARCHAR(T2.ID)
+         ON T1.LOCATION_ID = T2.ID 
+         LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_equipment_group" T3
+         --ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) ;
+         ON T1.EQUIP_TYPE_ID = T3.ID
+         ;    
+   --REGION GROUP,EQUIP
+   ELSEIF (:IN_FILTER_TYPE = :REGION_GROUP_EQUIP)
+   THEN
+       --LOC_EQUIP_NAME_MIN_MAX_SAFETY_SQL =
+       OUT_TBL =
+         select LOCATION_ID,
+                IFNULL(T2.DESC,'No Region group Name set') as LOCATION_NAME,
+                LOCATION_TYPE,
+                EQUIP_TYPE_ID,
+                IFNULL(T3.RESOURCE_TYPE_CODE,'No Equipment Name set') as EQUIP_TYPE_NAME,
+                EQUIP_TYPE_TYPE,
+                :REGION_GROUP_EQUIP as FILTER_TYPE,
+                TO_DOUBLE(MIN_SAFETY_STOCK) as MIN_SAFETY_STOCK,
+                TO_DOUBLE(MAX_SAFETY_STOCK) as MAX_SAFETY_STOCK,
+                TO_DOUBLE(MAX_CAPACITY) as MAX_CAPACITY
+         from 
+         (    
+           select 
+               T12.LOCATION_ID,
+               IFNULL(LOCATION_TYPE,6) AS LOCATION_TYPE,
+               T12.EQUIP_TYPE_ID,
+               IFNULL(EQUIP_TYPE_TYPE,1) AS EQUIP_TYPE_TYPE,
+               IFNULL(MIN_SAFETY_STOCK,:MIN_SAFETY_DEFAULT) AS MIN_SAFETY_STOCK,
+               IFNULL(MAX_SAFETY_STOCK,:MAX_SAFETY_DEFAULT) AS MAX_SAFETY_STOCK,
+               IFNULL(MAX_CAPACITY,:MAX_CAPACITY_DEFAULT) AS MAX_CAPACITY
+           from :PLAN_EXECUTE_LOC_EQUIP_TBL as T12
+           left outer join
+           (select 
+               LOCATION_ID,
+               LOCATION_TYPE,
+               EQUIP_CODE as EQUIP_TYPE_ID,
+               EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+               MIN_SAFETY AS MIN_SAFETY_STOCK,
+               MAX_SAFETY AS MAX_SAFETY_STOCK,
+               MAX_CAPACITY AS MAX_CAPACITY
+           from "sap.tm.trp.db.stock::t_stock_config" T1
+           where (LOCATION_TYPE = 6 and EQUIP_CODE_TYPE = 1 and LOCATION_HEAD_FLAG = 0)
+           ) as T11
+           ON (T11.LOCATION_ID = T12.LOCATION_ID and
+               T11.EQUIP_TYPE_ID  = T12.EQUIP_TYPE_ID)
+         ) T1
+         LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_region_group" T2
+         --ON T1.LOCATION_ID = to_VARCHAR(T2.ID)
+         ON T1.LOCATION_ID = T2.ID 
+         LEFT OUTER JOIN :RESOURCE_TYPES T3
+         --ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) ;
+         ON T1.EQUIP_TYPE_ID = T3.RESOURCE_TYPE_CODE ;
+         
+   --REGION GROUP,EQUIP_GROUP
+   ELSE-- (:IN_FILTER_TYPE = :REGION_GROUP_EQUIP_GROUP)
+   --THEN
+       --LOC_EQUIP_NAME_MIN_MAX_SAFETY_SQL =
+       OUT_TBL =
+         select LOCATION_ID,
+                IFNULL(T2.DESC,'No Region group Name set') as LOCATION_NAME,
+                LOCATION_TYPE,
+                EQUIP_TYPE_ID,
+                IFNULL(T3.DESC,'No Equipment group Name set') as EQUIP_TYPE_NAME,
+                EQUIP_TYPE_TYPE,
+                :REGION_GROUP_EQUIP_GROUP as FILTER_TYPE,
+                TO_DOUBLE(MIN_SAFETY_STOCK) as MIN_SAFETY_STOCK,
+                TO_DOUBLE(MAX_SAFETY_STOCK) as MAX_SAFETY_STOCK,
+                TO_DOUBLE(MAX_CAPACITY) as MAX_CAPACITY
+         from 
+         ( select 
+               T12.LOCATION_ID,
+               IFNULL(LOCATION_TYPE,6) AS LOCATION_TYPE,
+               T12.EQUIP_TYPE_ID,
+               IFNULL(EQUIP_TYPE_TYPE,2) AS EQUIP_TYPE_TYPE,
+               IFNULL(MIN_SAFETY_STOCK,:MIN_SAFETY_DEFAULT) AS MIN_SAFETY_STOCK,
+               IFNULL(MAX_SAFETY_STOCK,:MAX_SAFETY_DEFAULT) AS MAX_SAFETY_STOCK,
+               IFNULL(MAX_CAPACITY,:MAX_CAPACITY_DEFAULT) AS MAX_CAPACITY
+           from :PLAN_EXECUTE_LOC_EQUIP_TBL as T12
+           left outer join
+           (select 
+               LOCATION_ID,
+               LOCATION_TYPE,
+               EQUIP_CODE as EQUIP_TYPE_ID,
+               EQUIP_CODE_TYPE as EQUIP_TYPE_TYPE,
+               MIN_SAFETY AS MIN_SAFETY_STOCK,
+               MAX_SAFETY AS MAX_SAFETY_STOCK,
+               MAX_CAPACITY AS MAX_CAPACITY
+           from "sap.tm.trp.db.stock::t_stock_config" T1
+           where (LOCATION_TYPE = 6 and EQUIP_CODE_TYPE = 2 and LOCATION_HEAD_FLAG = 0)
+           ) as T11
+           ON (T11.LOCATION_ID = T12.LOCATION_ID and
+               T11.EQUIP_TYPE_ID  = T12.EQUIP_TYPE_ID)
+         ) T1
+         LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_region_group" T2
+         --ON T1.LOCATION_ID = to_VARCHAR(T2.ID)
+         ON T1.LOCATION_ID = T2.ID 
+         LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_equipment_group" T3
+         --ON T1.EQUIP_TYPE_ID = to_VARCHAR(T3.ID) ;
+         ON T1.EQUIP_TYPE_ID = T3.ID
+         ;    
+    
+   END IF;
+
+END;

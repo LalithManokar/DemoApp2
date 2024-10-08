@@ -1,0 +1,40 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_get_alert_for_sim_plan_location_by_executionId"(
+    IN IN_EXECUTION_ID BIGINT,
+    IN IN_NODE_ID BIGINT,
+    OUT out_alert "sap.tm.trp.db.pipeline::tt_alert_for_location"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    READS SQL DATA
+    AS
+BEGIN
+
+  -- retrive all the alerts for locations(sum over all time intervals & equip types)
+    LOCATION_ALERT_INFO =     
+      SELECT T1.LOCATION_ID, T1.LOCATION_NAME, T1.EQUIP_TYPE_ID, T1.TIME_INTERVAL_ID,
+             CASE LOWER(T3.MESSAGE) WHEN 'alert' THEN 1 ELSE 0 END AS ALERT_NUM,
+             CASE WHEN LOWER(T3.MESSAGE) = 'alert' THEN ALERT_SCORE_NORMALIZING ELSE 0 END AS ALERT_SCORE 
+      FROM        
+      (
+       SELECT DISTINCT LOCATION_ID,LOCATION_NAME, EQUIP_TYPE_ID, TIME_INTERVAL_ID
+       FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"
+       WHERE PLAN_EXECUTION_ID = :IN_EXECUTION_ID AND NODE_ID = :IN_NODE_ID
+      ) T1 
+      LEFT JOIN 
+      (
+          SELECT * FROM "sap.tm.trp.db.hrf::v_SD_KPI_rules"  
+          WHERE PLAN_EXECUTION_ID = :IN_EXECUTION_ID AND NODE_ID = :IN_NODE_ID
+      )T3 
+      ON ( T3.EQUIP_TYPE_ID = T1.EQUIP_TYPE_ID 
+           AND T3.LOCATION_ID = T1.LOCATION_ID 
+           AND T3.TIME_INTERVAL_ID = T1.TIME_INTERVAL_ID 
+         );
+     
+     out_alert = 
+       SELECT T1.LOCATION_ID,T1.LOCATION_NAME, 
+              SUM(T1.ALERT_NUM) AS ALERT_NUM,MAX(T1.ALERT_SCORE) AS ALERT_SCORE
+       FROM :LOCATION_ALERT_INFO T1
+       GROUP BY T1.LOCATION_ID,T1.LOCATION_NAME; 
+    
+END;

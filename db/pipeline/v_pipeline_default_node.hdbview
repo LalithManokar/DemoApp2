@@ -1,0 +1,8 @@
+schema = "SAP_TM_TRP";
+query  = "select 
+                 PIPELINE_MODEL_ID,
+                 TO_BIGINT(VALUE) AS DEFAULT_NODE_ID
+          FROM \"sap.tm.trp.db.pipeline::t_pipeline_misc_info\"
+          WHERE KEY = 'defaultNode'";
+               
+depends_on_table = ["sap.tm.trp.db.pipeline::t_pipeline_misc_info"];

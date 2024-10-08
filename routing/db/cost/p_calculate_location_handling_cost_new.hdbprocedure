@@ -1,0 +1,68 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.routing.db.cost::p_calculate_location_handling_cost_new" (
+    IN cost_model_id BIGINT,
+    IN RESOURCE_TYPES_CODE_TEU_COUNT "sap.tm.trp.db.pickupreturn::tt_resource_types_code_teu_count",
+    IN handling_location TABLE (location NVARCHAR(50), from_mtr NVARCHAR(10), to_mtr NVARCHAR(10), resource_type NVARCHAR(20)),
+    OUT cost TABLE(location NVARCHAR(50), from_mtr NVARCHAR(10), to_mtr NVARCHAR(10), resource_type NVARCHAR(20), cost DOUBLE)
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING"
+   READS SQL DATA AS
+BEGIN
+
+    DECLARE UOM_CODE_TEU VARCHAR(10) := 'TEU';
+
+    CALL "sap.tm.trp.db.costmodel::sp_get_handling_based_cost_info_new"
+        (:cost_model_id, :RESOURCE_TYPES_CODE_TEU_COUNT, handling_cost_info);
+
+	-- Compute load and unload cost
+	load_costs =
+	SELECT location, from_mtr, to_mtr, resource_type, SUM(IFNULL(cost, 0)) AS cost
+	FROM (
+		SELECT A.location, A.from_mtr, A.to_mtr, A.resource_type,
+		CASE B.uom_code WHEN :UOM_CODE_TEU
+        THEN B.cost * E.teu_count
+        ELSE B.cost END AS cost,
+		RANK() OVER
+		(PARTITION BY A.location, A.from_mtr, A.to_mtr, A.resource_type
+		ORDER BY B.priority, B.wild_star_count) AS priority
+		FROM (SELECT * FROM :handling_location WHERE from_mtr = '' AND  to_mtr != '') AS A
+		INNER JOIN :RESOURCE_TYPES_CODE_TEU_COUNT AS E
+        ON A.resource_type = E.resource_type_code
+		LEFT OUTER JOIN
+		(SELECT * FROM :handling_cost_info WHERE from_mot = '*' AND to_mot != '' )AS B
+		ON (B.location_name = '*' OR A.location = B.location_name)
+		AND (B.to_mot = '*' OR A.to_mtr = B.to_mot)
+		AND (B.resource_type = '*' OR A.resource_type = B.resource_type)
+	)
+	WHERE priority = 1
+	GROUP BY location, from_mtr, to_mtr, resource_type;
+
+	unload_costs =
+	SELECT location, from_mtr, to_mtr, resource_type, SUM(IFNULL(cost, 0)) AS cost
+	FROM (
+		SELECT A.location, A.from_mtr, A.to_mtr, A.resource_type,
+		CASE B.uom_code WHEN :UOM_CODE_TEU
+        THEN B.cost * E.teu_count
+        ELSE B.cost END AS cost,
+        RANK() OVER
+		(PARTITION BY A.location, A.from_mtr, A.to_mtr, A.resource_type
+		ORDER BY B.priority, B.wild_star_count) AS priority
+		FROM (SELECT * FROM :handling_location WHERE from_mtr != '' AND  to_mtr = '') AS A
+		INNER JOIN :RESOURCE_TYPES_CODE_TEU_COUNT AS E
+        ON A.resource_type = E.resource_type_code
+		LEFT OUTER JOIN
+		(SELECT * FROM :handling_cost_info WHERE from_mot != '' AND to_mot = '*' )AS B
+		ON (B.location_name = '*' OR A.location = B.location_name)
+		AND (B.from_mot = '*' OR A.from_mtr = B.from_mot)
+		AND (B.resource_type = '*' OR A.resource_type = B.resource_type)
+	)
+	WHERE priority = 1
+	GROUP BY location, from_mtr, to_mtr, resource_type;
+
+
+	cost =
+	SELECT * FROM :load_costs
+	UNION ALL
+	SELECT * FROM :unload_costs;
+END

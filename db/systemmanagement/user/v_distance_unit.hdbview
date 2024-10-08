@@ -1,0 +1,8 @@
+schema="SAP_TM_TRP";
+query= "SELECT T1.CODE,T1.NOTATION,IFNULL(T2.DESC,T1.DESC) AS DESC
+    FROM \"sap.tm.trp.db.systemmanagement.user::t_distance\" AS T1
+    LEFT OUTER JOIN  \"sap.tm.trp.db.systemmanagement.user::t_distance_t\" AS T2
+    ON T1.CODE = T2.DISTANCE_CODE
+    "; 
+
+depends_on = ["sap.tm.trp.db.systemmanagement.user::t_distance","sap.tm.trp.db.systemmanagement.user::t_distance_t"];

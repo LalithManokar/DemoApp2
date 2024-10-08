@@ -1,0 +1,34 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_get_dataset_chain" (
+    IN delta_dataset_id BIGINT,
+    OUT dataset_id_chain TABLE(id BIGINT, level INTEGER)
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING
+   READS SQL DATA AS
+BEGIN
+   /*************************************
+       Prequisite: assume the each local dataset always has a base dataset 
+   *************************************/
+	-- decl_list
+	DECLARE chainid_arr BIGINT ARRAY = ARRAY(:delta_dataset_id);
+	DECLARE global_dataset_id CONSTANT BIGINT = 0;
+	DECLARE cur_dataset_id, base_dataset_id BIGINT;
+	DECLARE arr_len BIGINT = 1;
+	-- exception_list
+	-- stmt_list
+	cur_dataset_id = :delta_dataset_id;
+	WHILE :cur_dataset_id != :global_dataset_id DO
+		-- look for next base dataset id
+		SELECT base_dataset_id INTO base_dataset_id
+		FROM "sap.tm.trp.routing.db.dataset::t_dataset"
+		WHERE id = :cur_dataset_id;
+		-- append the base dataset id to chainid_arr
+		arr_len = :arr_len + 1;
+		chainid_arr[:arr_len] = :base_dataset_id;
+		cur_dataset_id = :base_dataset_id;
+	END WHILE;
+
+	-- convert chainid_arr to table
+	dataset_id_chain = UNNEST(:chainid_arr) WITH ORDINALITY AS (id, level);
+END

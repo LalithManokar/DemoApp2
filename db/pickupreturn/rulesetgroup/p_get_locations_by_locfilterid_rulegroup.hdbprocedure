@@ -1,0 +1,57 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_get_locations_by_locfilterid_rulegroup" (
+	IN LOC_FILTER_ID "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_sd_location_filter",
+	OUT LOCATIONS "sap.tm.trp.db.filter::tt_location_ids" 
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA 
+AS
+BEGIN
+ 
+
+
+DECLARE GEO_FLAG INT;
+ 	
+select IFNULL(MAX(LOCATION_TYPE),-1) INTO GEO_FLAG 
+from "sap.tm.trp.db.filter::t_location_filter" where ID in (SELECT LOCATION_FILTER_ID FROM :LOC_FILTER_ID);
+    
+IF :GEO_FLAG = 1 THEN
+--LOCATION
+  LOCATIONS = select HT.LOCATION_ID
+	          from "sap.tm.trp.db.filter::t_location_filter_location" HT 
+	   		  where HT.LOCATION_FILTER_ID in (SELECT LOCATION_FILTER_ID FROM :LOC_FILTER_ID) ;
+
+
+ELSEIF :GEO_FLAG = 2 THEN
+--LOCATION GROUP
+   
+   LOCATIONS = select LOC_GRP_ITEM.LOCATION_ID
+			   from "sap.tm.trp.db.filter::t_location_filter_location" HT			   
+			   inner join "sap.tm.trp.db.systemmanagement::t_location_group_item" LOC_GRP_ITEM on LOC_GRP_ITEM.LOCATION_GROUP_ID=HT.LOCATION_GROUP_ID
+			   where HT.LOCATION_FILTER_ID in (SELECT LOCATION_FILTER_ID FROM :LOC_FILTER_ID) ;
+
+
+ELSEIF :GEO_FLAG = 5 THEN
+-- REGION
+       
+   LOCATIONS = select R_ALL.LOCATION_ID
+		       from "sap.tm.trp.db.filter::t_location_filter_region" HT
+		       inner join "sap.tm.trp.db.systemmanagement.location::v_region_location_all" R_ALL on R_ALL.ROOT_ID = HT.ZonE_ID
+		       where HT.LOCATION_FILTER_ID in (SELECT LOCATION_FILTER_ID FROM :LOC_FILTER_ID) ;
+
+
+ELSEIF :GEO_FLAG = 6 THEN
+-- REGION GROUP
+
+   LOCATIONS = select R_ALL.LOCATION_ID
+			   from "sap.tm.trp.db.filter::t_location_filter_region" HT			  
+		       inner join "sap.tm.trp.db.systemmanagement::t_region_group_item" R_GRP_ITEM on HT.REGION_GROUP_ID = R_GRP_ITEM.REGION_GROUP_ID
+    	       inner join "sap.tm.trp.db.systemmanagement.location::v_region_location_all" R_ALL on  R_GRP_ITEM.ZONE_ID = R_ALL.ROOT_ID
+		       where HT.LOCATION_FILTER_ID in (SELECT LOCATION_FILTER_ID FROM :LOC_FILTER_ID);
+
+END IF;	       		      
+
+
+
+END;

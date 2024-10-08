@@ -1,0 +1,185 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_location_group_save"(
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),
+    IN CONNECTION_ID VARCHAR(100),
+    OUT EXECUTION_RESULTS "sap.tm.trp.db.massupload::tt_massupload_execution_result" )
+
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    
+AS
+CURRENT_USER_ID BIGINT;
+BEGIN
+    
+    --Declarations
+      DECLARE LOCATION_TYPE_LOCATION_GROUP INTEGER :=2;
+      DECLARE LOCATION_TYPE_REGION_GROUP INTEGER :=6; 
+      DECLARE MAX_CAPACITY DECIMAL(18);
+      DECLARE USER_ID INTEGER;
+      DECLARE CRTD_REC_CNT integer;
+      DECLARE UPDT_REC_CNT integer;
+      DECLARE TOTAL_REC_CNT integer;
+    
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE CITY_ID VARCHAR(50);
+    DECLARE CITY_NAME VARCHAR(50);
+    DECLARE STATE_CODE VARCHAR(50);
+    DECLARE STATE_NAME VARCHAR(50);
+    DECLARE COUNTRY_CODE VARCHAR(50);
+    DECLARE COUNTRY_NAME VARCHAR(50);    
+    
+    --Generate Unique Location Group Id
+    LOC_GRP_ID   = 
+                SELECT  
+                CASE WHEN LOCATION_GROUP_ID IS NULL 
+                THEN "sap.tm.trp.db.systemmanagement::s_location_group".NEXTVAL
+                ELSE LOCATION_GROUP_ID
+                END AS LOCATION_GROUP_ID,
+                LOCATION_GROUP_NAME
+                FROM
+                (SELECT DISTINCT LOCATION_GROUP_ID, LOCATION_GROUP_NAME
+                FROM "sap.tm.trp.db.massupload::t_location_group_temporary" AS TMP                                            
+                WHERE CONNECTION_ID = :CONNECTION_ID 
+                AND RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID);
+    
+    
+    --Select data from temporary table
+    SOURCE = 
+                SELECT 
+                LG_ID.LOCATION_GROUP_ID,
+                LG_ID.LOCATION_GROUP_NAME,
+                DESC,IND_UPD,LOCATION_TYPE,VISIBILITY,LOCATION_ID,LOCATION_NAME,PRIME_LOCATION_ID,
+                PRIME_LOCATION_NAME,RESOURCE_CATEGORY,USER_ID,CREATE_BY,CREATE_AT,ACTION_TIME,CONNECTION_ID
+                FROM "sap.tm.trp.db.massupload::t_location_group_temporary" AS TMP
+                LEFT OUTER JOIN :LOC_GRP_ID AS LG_ID
+                ON UPPER(LG_ID.LOCATION_GROUP_NAME) = UPPER(TMP.LOCATION_GROUP_NAME)
+                WHERE TMP.CONNECTION_ID = :CONNECTION_ID 
+                AND TMP.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID;    
+
+    
+    -- Get User Id
+              SELECT IFNULL(MAX(ID),0) INTO CURRENT_USER_ID
+              FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+              WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username"); 
+              
+     --Get Language   
+     SELECT IFNULL(MAX(SPRAS),'E') INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+
+
+    --Get Locations/Regions
+    LOCATIONS = 
+                    SELECT ID , NAME 
+                    FROM "sap.tm.trp.db.semantic.location::v_location";
+                                                                                    
+    REGIONS =       SELECT ID , NAME
+                    FROM "sap.tm.trp.db.semantic.location::v_zone";
+
+    --Upsert Location Group
+    UPSERT "sap.tm.trp.db.systemmanagement::t_location_group"
+    (ID, DESC, USER_ID, CREATE_AT, PRIME_LOC_ID, CITY_CODE, CITY_NAME, STATE_CODE, STATE_NAME, COUNTRY_CODE, COUNTRY_NAME, VISIBLE_FLAG, CODE, LAST_MODIFIED_BY, LAST_MODIFIED_AT, RESOURCE_CATEGORY)
+    SELECT
+              DISTINCT(LOCATION_GROUP_ID),
+              LOCATION_GROUP_NAME,
+              CREATE_BY, 
+              CREATE_AT,
+              PRIME_LOCATION_ID,           
+              :CITY_ID, 
+              :CITY_NAME, 
+              :STATE_CODE, 
+              :STATE_NAME, 
+              :COUNTRY_CODE, 
+              :COUNTRY_NAME, 
+              VISIBILITY, 
+              UPPER(LOCATION_GROUP_NAME), 
+              :CURRENT_USER_ID, 
+              CURRENT_UTCTIMESTAMP, 
+              RESOURCE_CATEGORY
+              FROM :SOURCE AS SR
+              WHERE LOCATION_TYPE = :LOCATION_TYPE_LOCATION_GROUP;
+   
+
+    --Upsert Region Group
+    UPSERT "sap.tm.trp.db.systemmanagement::t_region_group"
+    (ID, DESC, USER_ID, CREATE_AT, PRIME_LOC_ID, CITY_CODE, CITY_NAME, STATE_CODE, STATE_NAME, COUNTRY_CODE, COUNTRY_NAME, VISIBLE_FLAG, CODE, LAST_MODIFIED_BY, LAST_MODIFIED_AT, RESOURCE_CATEGORY)
+    SELECT
+        DISTINCT(LOCATION_GROUP_ID), 
+              LOCATION_GROUP_NAME, 
+              CREATE_BY, 
+              CREATE_AT,
+              PRIME_LOCATION_ID,           
+              :CITY_ID, 
+              :CITY_NAME, 
+              :STATE_CODE, 
+              :STATE_NAME, 
+              :COUNTRY_CODE, 
+              :COUNTRY_NAME, 
+              VISIBILITY, 
+              UPPER(LOCATION_GROUP_NAME), 
+              :CURRENT_USER_ID, 
+              CURRENT_UTCTIMESTAMP, 
+              RESOURCE_CATEGORY
+              FROM :SOURCE AS SR
+              WHERE LOCATION_TYPE = :LOCATION_TYPE_REGION_GROUP;
+
+
+    --Upsert Location Group Texts
+    UPSERT "sap.tm.trp.db.systemmanagement::t_location_group_t"(ID, SPRAS, DESC)
+    SELECT
+    DISTINCT(LOCATION_GROUP_ID),
+    :SPRAS, 
+    DESC               
+    FROM :SOURCE
+    WHERE LOCATION_TYPE = :LOCATION_TYPE_LOCATION_GROUP;
+    
+    
+    --Upsert Region Group Texts
+    UPSERT "sap.tm.trp.db.systemmanagement::t_region_group_t"(ID, SPRAS, DESC)
+    SELECT
+    DISTINCT(LOCATION_GROUP_ID),
+    :SPRAS, 
+    DESC               
+    FROM :SOURCE
+    WHERE LOCATION_TYPE = :LOCATION_TYPE_REGION_GROUP;       
+
+
+    --Delete existing Location assignments from the location group
+    DELETE FROM "sap.tm.trp.db.systemmanagement::t_location_group_item" 
+    WHERE LOCATION_GROUP_ID IN (SELECT LOCATION_GROUP_ID FROM :SOURCE WHERE IND_UPD = 1);
+    --Insert Location Assignments to Location Group
+    UPSERT "sap.tm.trp.db.systemmanagement::t_location_group_item"(LOCATION_ID, LOCATION_GROUP_ID)
+    SELECT LOCATION_ID, LOCATION_GROUP_ID FROM :SOURCE WHERE LOCATION_TYPE = :LOCATION_TYPE_LOCATION_GROUP;
+    
+    
+    --Delete existing Region assignments from the region group
+    DELETE FROM "sap.tm.trp.db.systemmanagement::t_region_group_item" 
+    WHERE REGION_GROUP_ID IN (SELECT LOCATION_GROUP_ID FROM :SOURCE WHERE IND_UPD = 1);    
+    --Insert Region Assignments to Region Group
+    UPSERT "sap.tm.trp.db.systemmanagement::t_region_group_item"(ZONE_ID, REGION_GROUP_ID)
+    SELECT LOCATION_ID, LOCATION_GROUP_ID FROM :SOURCE WHERE LOCATION_TYPE = :LOCATION_TYPE_REGION_GROUP;
+             
+
+    --Get records inserted/updated
+    SELECT 
+    COUNT(LOCATION_GROUP_ID) INTO CRTD_REC_CNT FROM :source
+    WHERE ind_upd = 0;
+    
+    SELECT
+    COUNT(LOCATION_GROUP_ID) INTO UPDT_REC_CNT FROM :source
+    WHERE ind_upd = 1;         
+    
+    --Get total records
+    SELECT COUNT(LOCATION_GROUP_ID) INTO TOTAL_REC_CNT FROM :SOURCE;
+     
+    --Delete the records in temporary table.
+    DELETE FROM "sap.tm.trp.db.massupload::t_location_group_temporary" 
+    WHERE CONNECTION_ID = :CONNECTION_ID;
+    
+   
+    --Update Mass Upload Execution History table
+    EXECUTION_RESULTS = 
+                            SELECT 
+                                          :CRTD_REC_CNT AS REC_CRTD,
+                                          :UPDT_REC_CNT AS REC_UPD,
+                                          :TOTAL_REC_CNT AS RECORD_CNT from dummy;
+
+END;

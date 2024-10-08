@@ -1,0 +1,15 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "LOCATION_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "LOCATION_TYPE"; sqlType = INTEGER; },
+    {name = "EQUIP_CODE"; sqlType = VARCHAR; length = 10; },
+    {name = "EQUIP_CODE_TYPE"; sqlType = INTEGER;  },
+    {name = "MIN_SAFETY"; sqlType = DECIMAL; length = 18; scale = 0; },
+    {name = "MAX_SAFETY"; sqlType = DECIMAL; length = 18; scale = 0;  },
+    {name = "MAX_CAPACITY"; sqlType = DECIMAL; length = 18; scale = 0; },
+    {name = "HANDLING_CAPACITY"; sqlType = BIGINT; },
+    {name = "LOCATION_HEAD_FLAG"; sqlType = SMALLINT; comment="1: configuration for location head, 0: configuration for location and equipment"; },
+    {name = "RESOURCE_CATEGORY"; sqlType = VARCHAR; length = 50; }
+];
+table.primaryKey.pkcolumns = ["LOCATION_ID", "LOCATION_TYPE", "EQUIP_CODE", "EQUIP_CODE_TYPE","LOCATION_HEAD_FLAG","RESOURCE_CATEGORY"];

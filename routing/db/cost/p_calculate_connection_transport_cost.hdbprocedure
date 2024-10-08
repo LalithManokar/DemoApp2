@@ -1,0 +1,65 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.cost::p_calculate_connection_transport_cost" (
+    IN cost_model_id BIGINT,
+    IN connection TABLE (from_location NVARCHAR(50), to_location NVARCHAR(50), mtr NVARCHAR(10), 
+    carrier NVARCHAR(50), resource_type NVARCHAR(20), distance DOUBLE, duration INTEGER), 
+    OUT cost TABLE(from_location NVARCHAR(50), to_location NVARCHAR(50), mtr NVARCHAR(10), 
+    resource_type NVARCHAR(20), cost DOUBLE)
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING"
+   READS SQL DATA AS
+BEGIN
+    
+    DECLARE UOM_CODE_TEU VARCHAR(10) := 'TEU';
+    
+    RESOURCE_TYPES = SELECT DISTINCT T1.RESOURCE_TYPE_CODE,T3.TEU_COUNT
+                     FROM "sap.tm.trp.db.semantic.resource::v_resource_type_with_category" T1
+                     INNER JOIN "sap.tm.trp.db.costmodel::v_cost_model" T2	
+                     ON (T1.RESOURCE_CATEGORY = T2.RESOURCE_CATEGORY)
+                     INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_type" T3
+                     ON (T1.RESOURCE_TYPE_CODE = T3.RESOURCE_TYPE_CODE)
+                     WHERE T2.ID = :COST_MODEL_ID;
+    
+    CALL "sap.tm.trp.db.costmodel::sp_get_transportation_based_cost_info"(
+        :cost_model_id,
+        transport_cost_info
+    );
+	
+    -- To-do: check how we can reuse existing function
+    cost_per_carrier =
+    SELECT from_location, to_location, mtr, carrier, A.resource_type,
+        FIRST_VALUE(
+            CASE WHEN (B.from_location_name = '*' OR B.to_location_name = '*') AND B.uom_code = :UOM_CODE_TEU
+            THEN B.cost * A.distance * R.teu_count
+            WHEN (B.from_location_name = '*' OR B.to_location_name = '*') AND B.uom_code <> :UOM_CODE_TEU
+            THEN B.cost * A.distance
+            WHEN B.uom_code = :UOM_CODE_TEU
+            THEN B.cost * R.teu_count
+            ELSE B.cost 
+            END 
+            ORDER BY B.priority, B.wild_star_count, 
+    		CASE 
+    			WHEN B.from_location_name != '*' THEN 1
+    			WHEN B.to_location_name != '*' THEN 2
+    			WHEN B.transportation_mode_code != '*' THEN 3
+    			WHEN B.carrier_id != '*' THEN 4
+    			ELSE 5
+    		END
+            ) AS cost
+    FROM :connection AS A
+    INNER JOIN :RESOURCE_TYPES AS R
+    ON A.resource_type = r.resource_type_code
+    LEFT OUTER JOIN :transport_cost_info AS B
+    ON (B.from_location_name = '*' OR A.from_location = B.from_location_name) AND 
+        (B.to_location_name = '*' OR A.to_location = B.to_location_name) AND
+        (B.transportation_mode_code = '*' OR A.mtr = B.transportation_mode_code) AND
+        (B.carrier_id = '*' OR A.carrier = B.carrier_id) AND
+        (B.resource_type = '*' OR A.resource_type = B.resource_type)
+    GROUP BY from_location, to_location, mtr, carrier, A.resource_type;
+    
+    cost = 
+       SELECT from_location, to_location, mtr, resource_type, AVG(cost) AS cost
+       FROM :cost_per_carrier
+       GROUP BY from_location, to_location, mtr, resource_type;
+END

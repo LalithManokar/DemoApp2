@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_archive_rule" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_archive_rule"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="NVARCHAR" id="NAME" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="DESC" length="500"/>
+        <viewAttribute datatype="TINYINT" id="TYPE"/>
+        <viewAttribute datatype="NVARCHAR" id="TYPE_DESC" length="50"/>
+        <viewAttribute datatype="BIGINT" id="TABLE_ID"/>
+        <viewAttribute datatype="NVARCHAR" id="TABLE_NAME" length="100"/>
+        <viewAttribute datatype="TIMESTAMP" id="DATE_FROM"/>
+        <viewAttribute datatype="TIMESTAMP" id="DATE_TO"/>
+        <viewAttribute datatype="NVARCHAR" id="CREATED_BY" length="100"/>
+        <viewAttribute datatype="TIMESTAMP" id="CREATED_TIME"/>
+        <viewAttribute datatype="NVARCHAR" id="MODIFIED_BY" length="100"/>
+        <viewAttribute datatype="TIMESTAMP" id="MODIFIED_TIME"/>
+        <viewAttribute datatype="TINYINT" id="IS_TM"/>
+        <viewAttribute datatype="TINYINT" id="ACTIVE_STATUS"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+ BEGIN 
+ 
+    DECLARE AUTH SMALLINT;
+ 	DECLARE CUSTOMCONDITION CONDITION FOR SQL_ERROR_CODE 10001;/* Custom Error Code = 10001*/
+	
+	/*User Defined exception handler */
+	
+	DECLARE EXIT HANDLER FOR CUSTOMCONDITION RESIGNAL ;
+
+	CALL &quot;sap.tm.trp.db.archive::p_check_archive_authorization&quot;(
+	  	:AUTH
+		);
+		
+
+	IF AUTH = 0 THEN
+		--Signaling Custom error and setting the Custom Error Message
+		SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'USER DOES NOT HAVE READ ACCESS';
+	END IF;
+
+	out_tmp =
+	SELECT T1.ID,
+				RULE_NAME AS NAME,
+				T1.DESCRIPTION AS DESC,
+			    T0.TYPE AS TYPE,
+			    T0.TYPE_DESC AS TYPE_DESC,
+				T1.TABLE_ID,
+				T2.TABLE_CODE as TABLE_NAME,
+				T1.DATE_FROM,
+				T1.DATE_TO,
+				CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+				     WHEN (T1.CREATED_BY &lt;> 0 AND T1.CREATED_BY IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+			         WHEN T1.CREATED_BY = 0 OR T1.CREATED_BY IS NULL THEN ''
+			         ELSE '***' END AS CREATED_BY,
+				T1.CREATED_ON AS CREATED_TIME,
+				CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+				     WHEN (T1.MODIFIED_BY &lt;> 0 AND T1.MODIFIED_BY IS NOT NULL) AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+			         WHEN T1.MODIFIED_BY = 0 OR T1.MODIFIED_BY IS NULL THEN ''
+			         ELSE '***' END AS MODIFIED_BY,
+				T1.MODIFIED_ON AS MODIFIED_TIME,
+				T2.IS_TM,
+				T1.ACTIVE AS ACTIVE
+            FROM &quot;sap.tm.trp.db.archive::t_archive_rule_type&quot; T0
+            INNER JOIN &quot;sap.tm.trp.db.archive::t_archive_rule&quot; T1
+            ON T0.TYPE = T1.TYPE
+            INNER JOIN &quot;sap.tm.trp.db.archive::t_archive_metadata&quot; T2                 
+            ON T1.TABLE_ID = T2.ID
+            LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; T3
+            ON T1.CREATED_BY=T3.ID
+            LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; T4
+            ON T1.MODIFIED_BY=T4.ID
+            LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T9  ON T3.USERNAME = T9.USERNAME
+            LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T10  ON T4.USERNAME = T10.USERNAME
+            CROSS JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege&quot; PRIVILEGE;
+            --WHERE T1.ACTIVE=1;
+     
+	var_out = 
+	SELECT T1.ID,T1.NAME,T1.DESC,T1.TYPE,T1.TYPE_DESC,T1.TABLE_ID,T1.TABLE_NAME,T1.DATE_FROM,T1.DATE_TO,T1.CREATED_BY,T1.CREATED_TIME,
+ 	             T1.MODIFIED_BY,T1.MODIFIED_TIME,T1.IS_TM,
+				 T1.ACTIVE AS ACTIVE_STATUS
+			FROM 
+			:out_tmp T1
+            LEFT OUTER JOIN 
+            (SELECT MIN(ID) AS ID,RULE_ID FROM &quot;sap.tm.trp.db.archive::t_archive_execution_detail&quot;
+			GROUP BY RULE_ID) T2
+			ON T1.ID=T2.RULE_ID;
+ 
+
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="NAME" order="2">
+        <descriptions defaultDescription="RULE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="DESC" order="3">
+        <descriptions defaultDescription="DESCRIPTION"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+      <attribute id="TYPE" order="4">
+        <descriptions defaultDescription="TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="TYPE"/>
+      </attribute>
+      <attribute id="TYPE_DESC" order="5">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="TYPE_DESC"/>
+      </attribute>
+      <attribute id="TABLE_ID" order="6">
+        <descriptions defaultDescription="TABLE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TABLE_ID"/>
+      </attribute>
+      <attribute id="TABLE_NAME" order="7">
+        <descriptions defaultDescription="TABLE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="TABLE_NAME"/>
+      </attribute>
+      <attribute id="DATE_FROM" order="8">
+        <descriptions defaultDescription="DATE_FROM"/>
+        <keyMapping columnObjectName="Script_View" columnName="DATE_FROM"/>
+      </attribute>
+      <attribute id="DATE_TO" order="9">
+        <descriptions defaultDescription="DATE_TO"/>
+        <keyMapping columnObjectName="Script_View" columnName="DATE_TO"/>
+      </attribute>
+      <attribute id="CREATED_BY" order="10">
+        <descriptions defaultDescription="CREATED_BY_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATED_BY"/>
+      </attribute>
+      <attribute id="CREATED_TIME" order="11">
+        <descriptions defaultDescription="CREATED_ON"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATED_TIME"/>
+      </attribute>
+      <attribute id="MODIFIED_BY" order="12">
+        <descriptions defaultDescription="MODIFIED_BY_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="MODIFIED_BY"/>
+      </attribute>
+      <attribute id="MODIFIED_TIME" order="13">
+        <descriptions defaultDescription="MODIFIED_ON"/>
+        <keyMapping columnObjectName="Script_View" columnName="MODIFIED_TIME"/>
+      </attribute>
+      <attribute id="ACTIVE_STATUS" order="15">
+        <descriptions defaultDescription="ENABLE_DELETE"/>
+        <keyMapping columnObjectName="Script_View" columnName="ACTIVE_STATUS"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="IS_TM" order="14" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="IS_TM"/>
+        <measureMapping columnObjectName="Script_View" columnName="IS_TM"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

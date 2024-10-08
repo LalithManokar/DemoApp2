@@ -1,0 +1,15 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.leasecontract::sp_lease_object_change_add_entry" (
+ IN OBJECT_ID_IN VARCHAR(100),
+ IN OBJECT_SOURCE_IN INTEGER,
+ IN OBJECT_TYPE_IN INTEGER,
+ IN ACTION_TYPE_IN INTEGER
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	 AS
+BEGIN
+
+insert into "sap.tm.trp.db.leasecontract::t_lease_object_change_track" (id,object_id,object_source,object_type,action_type,status) values 
+	("sap.tm.trp.db.leasecontract::s_lease_object_change_track".NEXTVAL ,:OBJECT_ID_IN,:OBJECT_SOURCE_IN,:OBJECT_TYPE_IN,:ACTION_TYPE_IN,1);
+END;

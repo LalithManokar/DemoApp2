@@ -1,0 +1,333 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_update_connection" (
+    IN dataset_id BIGINT,
+    IN connection "sap.tm.trp.routing.db.dataset::tt_connection",
+    IN connection_carrier "sap.tm.trp.routing.db.dataset::tt_connection_carrier",
+    OUT return_code TINYINT,
+    OUT id_map "sap.tm.trp.routing.db.dataset::tt_id_map",
+    OUT message "sap.tm.trp.routing.db.common::tt_message",
+    OUT log "sap.tm.trp.routing.db.common::tt_message"
+) 
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING"
+   AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+    DECLARE dataset_code NVARCHAR(50);
+    DECLARE count INTEGER;
+	DECLARE msg_param TABLE(PLACEHOLDER INTEGER, VALUE NVARCHAR(100));
+	DECLARE CURSOR c_connection(connection "sap.tm.trp.routing.db.dataset::tt_connection")
+	FOR SELECT from_location, to_location, mtr FROM :connection;
+	DECLARE CURSOR c_connection_id(connection_id "sap.tm.trp.routing.db.common::tt_id")
+	FOR SELECT id FROM :connection_id;
+	DECLARE CURSOR c_id_map FOR SELECT * FROM :id_map;
+	DECLARE CURSOR c_connection_joined(connection "sap.tm.trp.routing.db.dataset::tt_path_merge")
+	FOR SELECT * FROM :connection;
+	
+	--DECLARE ACTION_CREATE CHAR = 'C';
+	DECLARE ACTION_UPDATE CHAR = 'U';
+	DECLARE SOURCE_MANUAL CHAR = 'M';
+	DECLARE SOURCE_SYSTEM CHAR = 'S';
+	
+	-- Check whether the dataset exist or not
+	DECLARE EXIT HANDLER FOR SQL_ERROR_CODE 1299
+    BEGIN
+        return_code = 1;
+        msg_params = SELECT 0 AS PLACEHOLDER, TO_NVARCHAR(:dataset_id) AS VALUE FROM DUMMY;
+	    call "SAP_TM_ROUTING"."sap.tm.trp.routing.db.common::p_get_text"
+        ('MSG_DATASET_ID_NOT_EXIST', :msg_params, 'E', :message);
+    END;
+	
+	return_code = 0;
+	
+	-- Validate input
+	CALL "sap.tm.trp.routing.db.dataset::p_validate_connection"(
+	    :connection, :connection_carrier, :return_code, :message
+	);
+	
+	IF :return_code <> 0 THEN
+	    RETURN;
+	END IF;
+	
+	SELECT count(*) INTO count FROM :connection;
+	
+	IF :count = 0 THEN
+	    RETURN;
+	END IF;
+	
+	-- Check whether there is any duplicate in the input
+	connection_duplicate = SELECT '' as id, from_location, to_location, mtr, 
+	0 AS distance, 0 AS duration
+	FROM (
+	    SELECT from_location, to_location, mtr, count(*) AS count
+    	FROM :connection 
+    	GROUP BY from_location, to_location, mtr
+	) AS c
+	WHERE count > 1;
+	
+	FOR row AS c_connection(:connection_duplicate) DO
+	    return_code = 1;
+	    msg_param = SELECT 0 AS PLACEHOLDER, row.from_location AS VALUE FROM DUMMY
+	    UNION ALL SELECT 1 AS PLACEHOLDER, row.to_location AS VALUE FROM DUMMY
+	    UNION ALL SELECT 2 AS PLACEHOLDER, row.mtr AS VALUE FROM DUMMY;
+	    
+	    call "sap.tm.trp.routing.db.common::p_get_text"
+        ('MSG_CONNECTION_UNIQUENESS_VIOLATED', :msg_param, 'E', :message_tmp);
+        
+        message = SELECT * FROM :message 
+        UNION ALL SELECT * FROM :message_tmp;
+	END FOR;
+	
+	IF return_code <> 0 THEN
+	    RETURN;
+	END IF;
+	
+	-- Check existence and lock the dataset
+	SELECT code INTO dataset_code 
+	FROM "sap.tm.trp.routing.db.dataset::t_dataset"
+	WHERE id = :dataset_id FOR UPDATE;
+	
+	-- Get old connection
+	connection_old = SELECT c2.*
+	FROM :connection AS c1
+	INNER JOIN "sap.tm.trp.routing.db.dataset::t_connection" as c2
+	ON c1.id = c2.id;
+	
+	-- Check whether id exists
+	connection_id = SELECT id
+	FROM :connection
+	WHERE id NOT IN (SELECT id FROM :connection_old);
+	
+	FOR row AS c_connection_id(:connection_id) DO
+	    return_code = 1;
+	    msg_param = SELECT 0 AS PLACEHOLDER, TO_NVARCHAR(row.id) AS VALUE FROM DUMMY;
+	    
+	    call "sap.tm.trp.routing.db.common::p_get_text"
+        ('MSG_CONNECTION_ID_NOT_FOUND', :msg_param, 'E', :message_tmp);
+        
+        message = SELECT * FROM :message 
+        UNION ALL SELECT * FROM :message_tmp;
+	END FOR;
+	
+	IF return_code <> 0 THEN
+	    RETURN;
+	END IF;
+	
+	-- Check whether connection is visible in current layer even it exists in database
+	-- Current layer is ignored
+	-- Void connection is not visible in current layer
+	hash = SELECT DISTINCT hash FROM :connection_old
+	WHERE dataset_id <> :dataset_id OR source = :SOURCE_SYSTEM;
+	
+	-- Get the connection visible in current layer by hash
+	CALL "sap.tm.trp.routing.db.dataset::p_get_connection_by_hash"(
+	    :dataset_id,
+	    :hash,
+	    :connection_exist
+	);
+	
+	connection_joined = SELECT e.hash, c.id AS id_1, '' AS action_1, 
+	e.id AS id_2, '' AS action_2
+	FROM :connection_old AS c
+	LEFT OUTER JOIN :connection_exist AS e
+	ON c.id = e.id
+	WHERE c.dataset_id <> :dataset_id OR c.source = :SOURCE_SYSTEM;
+	
+	-- The connection identified by the id cannot be updated due to 
+	-- it is not visible in current layer
+	FOR conn AS c_connection_joined(:connection_joined) DO
+        IF conn.id_2 IS NULL OR conn.id_2 <> conn.id_1 THEN
+	        return_code = 1;
+    	    msg_param = SELECT 0 AS PLACEHOLDER, TO_NVARCHAR(conn.id_1) AS value FROM DUMMY;
+    	    
+    	    call "sap.tm.trp.routing.db.common::p_get_text"
+            ('MSG_CONNECTION_ID_NOT_FOUND', :msg_param, 'E', :message_tmp);
+            
+            message = SELECT * FROM :message 
+            UNION ALL SELECT * FROM :message_tmp;
+    	END IF;
+	END FOR;
+	
+	IF return_code <> 0 THEN
+	    RETURN;
+	END IF;
+	
+	-- Compute hash
+	path_tmp = SELECT id, from_location, to_location, mtr, '' AS carrier
+	FROM :connection;
+	
+	path_connection_tmp = SELECT id as path_id, 0 AS sequence, from_location,
+	to_location, distance, duration, 0 as stay_time,0 AS cutoff_offset, 0 AS availability_offset
+	FROM :connection;
+	
+	CALL "sap.tm.trp.routing.db.dataset::p_calculate_path_hash"(
+	    :path_tmp, :path_connection_tmp, :path_hash
+	);
+	
+	-- Check whether the hash has been changed
+	-- A. UPDATE connection in current layer
+	-- B. Connection from layer below
+	-- C. System connection in current layer
+	connection_id = SELECT id
+	FROM :path_hash AS h
+	INNER JOIN :connection_old AS o
+	ON o.id = h.path_id
+	AND o.hash <> h.hash
+	WHERE o.dataset_id <> :dataset_id
+	OR o.source = SOURCE_SYSTEM
+	OR o.action = ACTION_UPDATE; 
+	
+	FOR row AS c_connection_id(:connection_id) DO
+	    return_code = 1;
+	    msg_param = SELECT 0 AS PLACEHOLDER, TO_NVARCHAR(row.id) AS VALUE FROM DUMMY;
+	    
+	    call "sap.tm.trp.routing.db.common::p_get_text"
+        ('MSG_CONNECTION_HASH_CHANGED', :msg_param, 'E', :message_tmp);
+        
+        message = SELECT * FROM :message 
+        UNION ALL SELECT * FROM :message_tmp;
+	END FOR;
+	
+	IF return_code <> 0 THEN
+	    RETURN;
+	END IF;
+	
+	-- Delete connection from current layer. Then we can check whether there is duplicate
+	connection_cur = SELECT c1.*, h.hash, c2.action, c2.created_by, c2.created_on
+	FROM :connection AS c1
+	INNER JOIN "sap.tm.trp.routing.db.dataset::t_connection" AS c2
+	ON c1.id = c2.id
+	INNER JOIN :path_hash AS h
+	ON c1.id = h.path_id
+	WHERE c2.dataset_id = :dataset_id AND c2.source = SOURCE_MANUAL;
+    
+    DELETE FROM "sap.tm.trp.routing.db.dataset::t_connection" AS o
+    WHERE EXISTS (SELECT id FROM :connection_cur AS n WHERE o.id = n.id);
+    
+    DELETE FROM "sap.tm.trp.routing.db.dataset::t_connection_carrier" AS o
+    WHERE EXISTS (SELECT id FROM :connection_cur AS n WHERE o.connection_id = n.id);
+    
+    -- Create UPDATE delta for connection in layer below
+	connection_below = SELECT c1.*, c2.hash, c2.created_by, c2.created_on
+	FROM :connection AS c1
+	INNER JOIN "sap.tm.trp.routing.db.dataset::t_connection" AS c2
+	ON c1.id = c2.id
+	WHERE c2.dataset_id <> :dataset_id OR c2.source = SOURCE_SYSTEM;
+	
+	-- Check whether there is any duplicate in current layer
+	connection_duplicated = SELECT c1.id, c1.from_location, c1.to_location, c1.mtr, 
+	c1.distance, c1.duration
+	FROM :connection_below AS c1
+	INNER JOIN "sap.tm.trp.routing.db.dataset::t_connection" AS c2
+	ON c1.from_location = c2.from_location
+	AND c1.to_location = c2.to_location
+	AND c1.mtr = c2.mtr
+	WHERE c2.dataset_id = :dataset_id AND c2.SOURCE = SOURCE_MANUAL;
+	
+	FOR row AS c_connection(:connection_duplicated) DO
+	    return_code = 1;
+	    msg_param = SELECT 0 AS PLACEHOLDER, row.from_location AS VALUE FROM DUMMY
+	    UNION ALL SELECT 1 AS PLACEHOLDER, row.to_location AS VALUE FROM DUMMY
+	    UNION ALL SELECT 2 AS PLACEHOLDER, row.mtr AS VALUE FROM DUMMY;
+	    
+	    call "sap.tm.trp.routing.db.common::p_get_text"
+        ('MSG_CONNECTION_UNIQUENESS_VIOLATED', :msg_param, 'E', :message_tmp);
+        
+        message = SELECT * FROM :message 
+        UNION ALL SELECT * FROM :message_tmp;
+	END FOR;
+	
+	IF return_code <> 0 THEN
+	    RETURN;
+	END IF;
+	
+	-- Insert updated connection in current layer
+	-- Action should be kept
+	INSERT INTO "sap.tm.trp.routing.db.dataset::t_connection"
+	(id, dataset_id, from_location, to_location, mtr, distance, duration, 
+	action, source, hash, created_by, created_on, changed_by, changed_on)
+	SELECT c.id, :dataset_id, c.from_location, c.to_location, c.mtr, c.distance, c.duration, 
+	c.action, SOURCE_MANUAL, h.hash, c.created_by, c.created_on, 
+	SESSION_CONTEXT('APPLICATIONUSER'), CURRENT_UTCTIMESTAMP
+	FROM :connection_cur AS c
+	INNER JOIN :path_hash AS h
+	ON c.id = h.path_id;
+	
+	INSERT INTO "sap.tm.trp.routing.db.dataset::t_connection_carrier" (connection_id, carrier)
+	SELECT c.connection_id, carrier FROM :connection_carrier AS c
+	INNER JOIN :connection_cur n
+	ON c.connection_id = n.id;
+    
+    -- Compute new id
+    id_map = SELECT id AS external_id, "sap.tm.trp.routing.db.dataset::s_path".nextval AS id
+    FROM :connection_below;
+    
+    INSERT INTO "sap.tm.trp.routing.db.dataset::t_connection"
+	(id, dataset_id, from_location, to_location, mtr, distance, duration, 
+	action, source, hash, created_by, created_on, changed_by, changed_on)
+	SELECT m.id, :dataset_id, c.from_location, c.to_location, c.mtr, c.distance, 
+	c.duration, ACTION_UPDATE, SOURCE_MANUAL, c.hash, c.created_by, c.created_on, 
+	SESSION_CONTEXT('APPLICATIONUSER'), CURRENT_UTCTIMESTAMP
+	FROM :connection_below AS c
+	INNER JOIN :id_map AS m
+	ON c.id = m.external_id;
+	
+	INSERT INTO "sap.tm.trp.routing.db.dataset::t_connection_carrier"
+	(connection_id, carrier)
+	SELECT m.id, carrier FROM :connection_carrier AS c
+	INNER JOIN :id_map AS m
+	ON c.connection_id = m.external_id;
+    
+	--Invalidate dataset
+	-- Network model using the dataset will be invalidated
+	-- The invalidation will be executed recursively
+	UPDATE "sap.tm.trp.routing.db.dataset::t_dataset"
+	SET changed_by = SESSION_CONTEXT('APPLICATIONUSER'), changed_on = CURRENT_UTCTIMESTAMP
+	WHERE id = :dataset_id; 
+	
+    -- Check whether the hash has been changed for connection from layer below
+	connection_id = SELECT id
+	FROM :connection_cur; 
+	
+	FOR row AS c_connection_id(:connection_id) DO
+	    msg_param = SELECT 0 AS PLACEHOLDER, TO_NVARCHAR(row.id)AS VALUE FROM DUMMY
+	    UNION ALL SELECT 1 AS PLACEHOLDER, :dataset_code AS VALUE FROM DUMMY;
+	    
+	    call "sap.tm.trp.routing.db.common::p_get_text"
+        ('MSG_BASIC_CONNECTION_UPDATED_SUCCESSFULLY', :msg_param, 'I', :message_tmp);
+        
+        message = SELECT * FROM :message 
+        UNION ALL SELECT * FROM :message_tmp;
+	END FOR;
+	
+	FOR row AS c_id_map DO
+        msg_param = SELECT 0 AS PLACEHOLDER, TO_NVARCHAR(row.external_id) AS VALUE FROM DUMMY
+        UNION ALL SELECT 1 AS PLACEHOLDER, TO_NVARCHAR(row.id) AS VALUE FROM DUMMY
+        UNION ALL SELECT 2 AS PLACEHOLDER, :dataset_code AS VALUE FROM DUMMY;
+        call "SAP_TM_ROUTING"."sap.tm.trp.routing.db.common::p_get_text"
+        ('MSG_BASIC_CONNECTION_UPDATED_WITH_SUCCESSFULLY', :msg_param, 'I', :message_tmp);
+        
+        message = SELECT * FROM :message_tmp
+        UNION ALL SELECT * FROM :message;
+    END FOR;
+    
+    CALL "sap.tm.trp.routing.db.path::p_invalidate_network_by_dataset" 
+    (:dataset_id, 'X', :return_code, :message_tmp, :log_tmp);
+    
+    IF :return_code <> 0 THEN
+        message = SELECT * FROM :message_tmp;
+        log = SELECT * FROM :log_tmp;
+        RETURN;
+    END IF;
+        
+    message = SELECT * FROM :message 
+    UNION ALL SELECT * FROM :message_tmp;
+    log = SELECT * FROM :log 
+    UNION ALL SELECT * FROM :log_tmp;
+    
+    log = SELECT '' AS severity, '' AS message FROM DUMMY WHERE 1 <> 1;
+	
+	return_code = 0;
+END

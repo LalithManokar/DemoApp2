@@ -1,0 +1,14 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_get_username_by_user_id" ( 
+    IN USER_ID BIGINT,
+    OUT USER_NAME VARCHAR(60),
+    OUT USER_TYPE_ID INTEGER
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+
+    SELECT USERNAME, USER_TYPE_ID INTO USER_NAME, USER_TYPE_ID FROM "sap.tm.trp.db.systemmanagement.user::t_user" WHERE ID = :USER_ID;
+
+END;

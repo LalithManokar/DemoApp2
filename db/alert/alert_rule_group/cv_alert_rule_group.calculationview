@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_alert_rule_group" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_planModel_alerts"/>
+  <defaultSchema schemaName=""/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="NVARCHAR" id="CODE" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="NAME" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="DESC" length="60"/>
+        <viewAttribute datatype="BIGINT" id="CATEGORY_ID"/>
+        <viewAttribute datatype="NVARCHAR" id="CATEGORY_NAME" length="60"/>
+        <viewAttribute datatype="BIGINT" id="CONTAINING_OBJECT_TYPE_ID"/>
+        <viewAttribute datatype="NVARCHAR" id="CONTAINING_OBJECT_TYPE_NAME" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="VISIBILITY" length="3"/>
+        <viewAttribute datatype="NVARCHAR" id="VISIBILITY_DESC" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="CREATED_BY" length="60"/>
+        <viewAttribute datatype="TIMESTAMP" id="CREATED_TIME"/>
+        <viewAttribute datatype="NVARCHAR" id="MODIFIED_BY" length="60"/>
+        <viewAttribute datatype="TIMESTAMP" id="MODIFIED_TIME"/>
+        <viewAttribute datatype="NVARCHAR" id="RESOURCE_CATEGORY" length="20"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition>BEGIN 
+ 	DECLARE NAME VARCHAR(60);     
+	DECLARE USERTYPE INTEGER;
+	
+	SELECT IFNULL(MAX(USERNAME),'DEACTIVATED USER') INTO NAME 
+	FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+	
+	SELECT IFNULL(MAX(USER_TYPE_ID),0) INTO USERTYPE 
+	FROM &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot; WHERE USERNAME = :NAME;
+ 	
+ 	IF :USERTYPE = 99 THEN
+ 	  var_out = SELECT ALERT_GRP_TBL.ALERT_RULE_GROUP_ID AS ID,
+                       ALERT_GRP_TBL.CODE,
+                       ALERT_GRP_TBL.NAME,
+                       IFNULL(I18N_TEXT_TBL.DESC, ALERT_GRP_TBL.DESC) AS DESC,
+                       ALERT_GRP_TBL.ALERT_RULE_GROUP_CATEGORY_ID AS CATEGORY_ID,
+                       CATEGORY_T_TBL.DESC AS CATEGORY_NAME,
+                       OBJ_TYPE_TBL.ID AS CONTAINING_OBJECT_TYPE_ID,
+                       OBJ_TYPE_TBL.NAME AS CONTAINING_OBJECT_TYPE_NAME,                       
+                       ALERT_GRP_TBL.ALLOWED_USAGE AS VISIBILITY,
+                       T4.DESC AS VISIBILITY_DESC,
+                       CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+                            WHEN (ALERT_GRP_TBL.CREATE_BY &lt;> 0 AND ALERT_GRP_TBL.CREATE_BY IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+			                WHEN ALERT_GRP_TBL.CREATE_BY = 0 OR ALERT_GRP_TBL.CREATE_BY IS NULL THEN ''
+			                ELSE '***' END AS CREATED_BY,
+                       ALERT_GRP_TBL.CREATE_ON  AS CREATED_TIME,
+                       CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+                            WHEN (ALERT_GRP_TBL.LAST_MODIFIED_BY &lt;> 0 AND ALERT_GRP_TBL.LAST_MODIFIED_BY IS NOT NULL) AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+			                WHEN ALERT_GRP_TBL.LAST_MODIFIED_BY = 0 OR ALERT_GRP_TBL.LAST_MODIFIED_BY IS NULL THEN ''
+			                ELSE '***' END AS MODIFIED_BY,
+                       IFNULL(ALERT_GRP_TBL.LAST_MODIFIED_ON, ALERT_GRP_TBL.CREATE_ON) AS MODIFIED_TIME,
+                       ALERT_GRP_TBL.RESOURCE_CATEGORY as RESOURCE_CATEGORY
+                FROM &quot;sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group&quot; AS ALERT_GRP_TBL
+                INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_visibility_type&quot; T3 ON T3.CODE = ALERT_GRP_TBL.ALLOWED_USAGE
+                LEFT OUTER JOIN ( SELECT V_TYPE.ID,V_TYPE.DESC
+                                  FROM &quot;sap.tm.trp.db.systemmanagement::t_visibility_type_t&quot; V_TYPE
+                                  INNER JOIN &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot; LANG
+                                  ON (V_TYPE.SPRAS = LANG.SPRAS)
+                                 ) T4 ON T4.ID = T3.ID
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_category&quot; AS GRP_CATEGORY_TBL
+                ON ALERT_GRP_TBL.ALERT_RULE_GROUP_CATEGORY_ID = GRP_CATEGORY_TBL.ALERT_RULE_GROUP_CATEGORY_ID
+                LEFT OUTER JOIN (SELECT ALERT_CAT.ID,ALERT_CAT.DESC
+                                 FROM &quot;sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_category_t&quot; ALERT_CAT
+                                 INNER JOIN &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot; LANG
+                                 ON (ALERT_CAT.SPRAS = LANG.SPRAS)) AS CATEGORY_T_TBL
+                ON CATEGORY_T_TBL.ID = GRP_CATEGORY_TBL.ALERT_RULE_GROUP_CATEGORY_ID
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.objectregistration::t_object_type&quot; AS OBJ_TYPE_TBL
+                ON GRP_CATEGORY_TBL.CONTAINING_OBJECT_TYPE_ID = OBJ_TYPE_TBL.ID
+                LEFT OUTER JOIN (SELECT ALERT_GROUP.ID,ALERT_GROUP.DESC
+                                 FROM &quot;sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_t&quot; ALERT_GROUP
+                                 INNER JOIN &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot; LANG
+                                 ON (ALERT_GROUP.SPRAS = LANG.SPRAS)) AS I18N_TEXT_TBL
+                ON ALERT_GRP_TBL.ALERT_RULE_GROUP_ID = I18N_TEXT_TBL.ID
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; AS USER_TBL_CREATE
+                ON ALERT_GRP_TBL.CREATE_BY = USER_TBL_CREATE.ID
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; AS USER_TBL_MODIFY
+                ON ALERT_GRP_TBL.LAST_MODIFIED_BY = USER_TBL_MODIFY.ID
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T9  ON USER_TBL_CREATE.USERNAME = T9.USERNAME
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T10  ON USER_TBL_MODIFY.USERNAME = T10.USERNAME
+                CROSS JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege&quot; PRIVILEGE;
+	ELSE
+		var_out = SELECT ALERT_GRP_TBL.ALERT_RULE_GROUP_ID AS ID,
+                       ALERT_GRP_TBL.CODE,
+                       ALERT_GRP_TBL.NAME,
+                       IFNULL(I18N_TEXT_TBL.DESC, ALERT_GRP_TBL.DESC) AS DESC,
+                       ALERT_GRP_TBL.ALERT_RULE_GROUP_CATEGORY_ID AS CATEGORY_ID,
+                       CATEGORY_T_TBL.DESC AS CATEGORY_NAME,
+                       OBJ_TYPE_TBL.ID AS CONTAINING_OBJECT_TYPE_ID,
+                       OBJ_TYPE_TBL.NAME AS CONTAINING_OBJECT_TYPE_NAME,
+                       ALERT_GRP_TBL.ALLOWED_USAGE AS VISIBILITY,
+                       T4.DESC AS VISIBILITY_DESC,
+                       CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+                            WHEN (ALERT_GRP_TBL.CREATE_BY &lt;> 0 AND ALERT_GRP_TBL.CREATE_BY IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+			                WHEN ALERT_GRP_TBL.CREATE_BY = 0 OR ALERT_GRP_TBL.CREATE_BY IS NULL THEN ''
+			                ELSE '***' END AS CREATED_BY,
+                       ALERT_GRP_TBL.CREATE_ON  AS CREATED_TIME,
+                       CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+                            WHEN (ALERT_GRP_TBL.LAST_MODIFIED_BY &lt;> 0 AND ALERT_GRP_TBL.LAST_MODIFIED_BY IS NOT NULL) AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+			                WHEN ALERT_GRP_TBL.LAST_MODIFIED_BY = 0 OR ALERT_GRP_TBL.LAST_MODIFIED_BY IS NULL THEN ''
+			                ELSE '***' END AS MODIFIED_BY,
+                       IFNULL(ALERT_GRP_TBL.LAST_MODIFIED_ON, ALERT_GRP_TBL.CREATE_ON) AS MODIFIED_TIME,
+                       ALERT_GRP_TBL.RESOURCE_CATEGORY as RESOURCE_CATEGORY
+                FROM &quot;sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group&quot; AS ALERT_GRP_TBL
+                INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_visibility_type&quot; T3 ON T3.CODE = ALERT_GRP_TBL.ALLOWED_USAGE
+                LEFT OUTER JOIN ( SELECT V_TYPE.ID,V_TYPE.DESC
+                                  FROM &quot;sap.tm.trp.db.systemmanagement::t_visibility_type_t&quot; V_TYPE
+                                  INNER JOIN &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot; LANG
+                                  ON (V_TYPE.SPRAS = LANG.SPRAS)
+                                 ) T4 ON T4.ID = T3.ID
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_category&quot; AS GRP_CATEGORY_TBL
+                ON ALERT_GRP_TBL.ALERT_RULE_GROUP_CATEGORY_ID = GRP_CATEGORY_TBL.ALERT_RULE_GROUP_CATEGORY_ID
+                LEFT OUTER JOIN (SELECT ALERT_CAT.ID,ALERT_CAT.DESC
+                                 FROM &quot;sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_category_t&quot; ALERT_CAT
+                                 INNER JOIN &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot; LANG
+                                 ON (ALERT_CAT.SPRAS = LANG.SPRAS)) AS CATEGORY_T_TBL
+                ON CATEGORY_T_TBL.ID = GRP_CATEGORY_TBL.ALERT_RULE_GROUP_CATEGORY_ID
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.objectregistration::t_object_type&quot; AS OBJ_TYPE_TBL
+                ON GRP_CATEGORY_TBL.CONTAINING_OBJECT_TYPE_ID = OBJ_TYPE_TBL.ID
+                LEFT OUTER JOIN (SELECT ALERT_GROUP.ID,ALERT_GROUP.DESC
+                                 FROM &quot;sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_t&quot; ALERT_GROUP
+                                 INNER JOIN &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot; LANG
+                                 ON (ALERT_GROUP.SPRAS = LANG.SPRAS)) AS I18N_TEXT_TBL
+                ON ALERT_GRP_TBL.ALERT_RULE_GROUP_ID = I18N_TEXT_TBL.ID
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; AS USER_TBL_CREATE
+                ON ALERT_GRP_TBL.CREATE_BY = USER_TBL_CREATE.ID
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; AS USER_TBL_MODIFY
+                ON ALERT_GRP_TBL.LAST_MODIFIED_BY = USER_TBL_MODIFY.ID
+                LEFT JOIN &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot; T1 ON T1.USERNAME = USER_TBL_CREATE.USERNAME
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T9  ON USER_TBL_CREATE.USERNAME = T9.USERNAME
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T10  ON USER_TBL_MODIFY.USERNAME = T10.USERNAME
+                CROSS JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege&quot; PRIVILEGE
+                WHERE (ALERT_GRP_TBL.ALLOWED_USAGE = 'G' OR T1.USERNAME IS NOT NULL);
+	END IF;
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ALERT_REASON"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="NAME" order="3">
+        <descriptions defaultDescription="PLAN_EXECUTION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="DESC" order="4">
+        <descriptions defaultDescription="FILTER_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+      <attribute id="CATEGORY_ID" order="5">
+        <descriptions defaultDescription="PLAN_MODEL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="CATEGORY_ID"/>
+      </attribute>
+      <attribute id="CATEGORY_NAME" order="6">
+        <descriptions defaultDescription="PIPELINE_MODEL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="CATEGORY_NAME"/>
+      </attribute>
+      <attribute id="CONTAINING_OBJECT_TYPE_ID" order="7">
+        <descriptions defaultDescription="NODE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="CONTAINING_OBJECT_TYPE_ID"/>
+      </attribute>
+      <attribute id="CONTAINING_OBJECT_TYPE_NAME" order="8">
+        <descriptions defaultDescription="NODE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="CONTAINING_OBJECT_TYPE_NAME"/>
+      </attribute>
+      <attribute id="VISIBILITY" order="9">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY"/>
+      </attribute>
+      <attribute id="VISIBILITY_DESC" order="10">
+        <descriptions defaultDescription="LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY_DESC"/>
+      </attribute>
+      <attribute id="CREATED_BY" order="11">
+        <descriptions defaultDescription="EQUIP_TYPE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATED_BY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="CODE" order="2" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ALERT_SCORE"/>
+        <measureMapping columnObjectName="Script_View" columnName="CODE"/>
+      </measure>
+      <measure id="CREATED_TIME" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="SEQUENCE"/>
+        <measureMapping columnObjectName="Script_View" columnName="CREATED_TIME"/>
+      </measure>
+      <measure id="MODIFIED_BY" order="13" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="MODIFIED_BY"/>
+      </measure>
+      <measure id="MODIFIED_TIME" order="14" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="MODIFIED_TIME"/>
+      </measure>
+      <measure id="RESOURCE_CATEGORY" order="15" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="SUPPLY"/>
+        <measureMapping columnObjectName="Script_View" columnName="RESOURCE_CATEGORY"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

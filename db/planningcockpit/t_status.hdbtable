@@ -1,0 +1,10 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "STATUS"; sqlType = BIGINT; nullable = false;},
+    {name = "CATEGORY"; sqlType = VARCHAR; length = 2; nullable = false; comment = "please refer to the table: t_status_category";},
+    {name = "DESC"; sqlType = NVARCHAR; length = 500; nullable = true;},
+    {name = "NAME"; sqlType = NVARCHAR;length = 50; nullable = true;}
+ ]; 
+ 
+table.primaryKey.pkcolumns = ["STATUS", "CATEGORY"];    

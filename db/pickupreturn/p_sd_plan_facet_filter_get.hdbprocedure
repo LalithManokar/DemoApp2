@@ -1,0 +1,78 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_sd_plan_facet_filter_get" (
+    IN FUZZYSEARCH_TEXT VARCHAR(500),
+    IN LOC_FILTER_ID BIGINT,
+    IN EQUIP_FILTER_ID BIGINT,
+    IN PLAN_TYPE_LIST_INPUT "sap.tm.trp.db.pickupreturn::tt_id_list",
+    IN TIME_FILTER_LIST_INPUT "sap.tm.trp.db.pickupreturn::tt_id_list",
+    IN VISIBILITY_LIST_INPUT "sap.tm.trp.db.pickupreturn::tt_str_list",
+    OUT PLAN_TYPE_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_id_str_list",
+    OUT EQUIP_FILTER_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_id_str_list",
+    OUT LOC_FILTER_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_id_str_list",
+    OUT TIME_FILTER_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_id_str_list",
+    OUT VISIBILITY_LIST_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_str_str_list"
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP"
+READS SQL DATA 
+AS
+    PLAN_TYPE_LIST_CNT INTEGER;
+    TIME_FILTER_LIST_CNT INTEGER;
+    VISIBILITY_LIST_CNT INTEGER;
+BEGIN
+    SD_PLAN_DATA = SELECT * FROM "_SYS_BIC"."sap.tm.trp.db.pickupreturn/cv_sd_plan_get_by_filters" (
+            placeholder."$$IN_LOCATION_FILTER_ID$$" => :LOC_FILTER_ID,
+            placeholder."$$IN_EQUIPMENT_FILTER_ID$$" => :EQUIP_FILTER_ID
+        )
+        WHERE
+        (
+            LOWER("NAME") LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%' 
+            OR LOWER("DESC") LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+        )
+    ;
+
+    SELECT COUNT(*) INTO PLAN_TYPE_LIST_CNT FROM :PLAN_TYPE_LIST_INPUT;
+    SELECT COUNT(*) INTO TIME_FILTER_LIST_CNT FROM :TIME_FILTER_LIST_INPUT;
+    SELECT COUNT(*) INTO VISIBILITY_LIST_CNT FROM :VISIBILITY_LIST_INPUT;
+
+    IF PLAN_TYPE_LIST_CNT = 0
+        THEN PLAN_TYPE_LIST_INPUT = SELECT DISTINCT PLAN_TYPE_ID AS ID FROM :SD_PLAN_DATA;
+    END IF;
+    IF TIME_FILTER_LIST_CNT = 0
+        THEN TIME_FILTER_LIST_INPUT = SELECT DISTINCT TIME_FILTER_ID AS ID FROM :SD_PLAN_DATA;
+    END IF;
+    IF VISIBILITY_LIST_CNT = 0
+        THEN VISIBILITY_LIST_INPUT = SELECT DISTINCT VISIBILITY AS STR FROM :SD_PLAN_DATA;
+    END IF;
+
+    FILTERED_OUTPUT = SELECT 
+        MASTER_TBL.*
+        FROM :SD_PLAN_DATA AS MASTER_TBL
+        INNER JOIN :PLAN_TYPE_LIST_INPUT AS PLAN_TYPE_LIST_TBL
+            ON (IFNULL(MASTER_TBL.PLAN_TYPE_ID, -1) = IFNULL(PLAN_TYPE_LIST_TBL.ID, -1))
+        INNER JOIN :TIME_FILTER_LIST_INPUT AS TIME_FILTER_LIST_TBL
+            ON (IFNULL(MASTER_TBL.TIME_FILTER_ID, -1) = IFNULL(TIME_FILTER_LIST_TBL.ID, -1))
+        INNER JOIN :VISIBILITY_LIST_INPUT AS VISIBILITY_LIST_TBL
+            ON (IFNULL(MASTER_TBL.VISIBILITY, '') = IFNULL(VISIBILITY_LIST_TBL.STR, ''))
+    ;
+    
+    PLAN_TYPE_LIST_OUTPUT = SELECT DISTINCT PLAN_TYPE_ID AS KEY, PLAN_TYPE_NAME AS TEXT 
+                            FROM :FILTERED_OUTPUT
+                            ORDER BY KEY;
+                            
+    EQUIP_FILTER_LIST_OUTPUT = SELECT DISTINCT EQUIPMENT_FILTER_ID AS KEY, EQUIPMENT_FILTER_NAME AS TEXT 
+                               FROM :FILTERED_OUTPUT
+                               ORDER BY KEY;
+                               
+    LOC_FILTER_LIST_OUTPUT = SELECT DISTINCT LOCATION_FILTER_ID AS KEY, LOCATION_FILTER_NAME AS TEXT
+                             FROM :FILTERED_OUTPUT
+                             ORDER BY KEY;
+                             
+    TIME_FILTER_LIST_OUTPUT = SELECT DISTINCT TIME_FILTER_ID AS KEY, TIME_FILTER_NAME AS TEXT
+                              FROM :FILTERED_OUTPUT
+                              ORDER BY KEY;
+                              
+    VISIBILITY_LIST_OUTPUT = SELECT DISTINCT VISIBILITY AS KEY, VISIBILITY AS TEXT
+                             FROM :FILTERED_OUTPUT
+                             ORDER BY KEY;
+END;

@@ -1,0 +1,10 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "used for afm node metadata";
+table.columns = [
+  {name = "ID"; sqlType = INTEGER;},
+  {name = "PARENT_ID"; sqlType = INTEGER;},
+  {name = "NODE_NAME"; sqlType = VARCHAR; length = 255;},
+  {name = "KEY"; sqlType = VARCHAR; length = 255;},
+  {name = "VALUE"; sqlType = NCLOB;}
+]; 

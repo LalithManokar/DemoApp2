@@ -1,0 +1,78 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_lease_contract_type_save" (
+    IN CONNECTION_ID VARCHAR(100),
+    OUT EXECUTION_RESULTS "sap.tm.trp.db.massupload::tt_massupload_execution_result"
+     ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+
+	--Declarations
+	DECLARE CRTD_REC_CNT integer;
+	DECLARE UPDT_REC_CNT integer;
+	DECLARE TOTAL_REC_CNT integer;
+	
+	SOURCE_ALL = SELECT DISTINCT
+				TYPE_ID,
+				LEASE_CONTRACT_TYPE,
+				DESCRIPTION,
+				IND_UPD
+     			FROM "sap.tm.trp.db.massupload::t_lease_contract_type_temporary"    			 
+     			WHERE CONNECTION_ID = :CONNECTION_ID;
+     			
+   	SOURCE = SELECT
+   		     	CASE WHEN TYPE_ID IS NULL 
+	   	        THEN "sap.tm.trp.db.leasecontract::s_lease_contract_type".NEXTVAL
+                ELSE TYPE_ID
+                END AS TYPE_ID,
+				LEASE_CONTRACT_TYPE,
+				DESCRIPTION,
+				IND_UPD
+     			FROM :SOURCE_ALL   			 
+     			WHERE CONNECTION_ID = :CONNECTION_ID;
+     			
+    --Upsert Lease Contract Type
+    UPSERT "sap.tm.trp.db.leasecontract::t_lease_contract_type"
+		(ID,TYPE,CODE)
+    SELECT
+    	TYPE_ID, 
+    	DESCRIPTION, 
+    	LEASE_CONTRACT_TYPE 
+       	FROM :SOURCE WHERE IND_UPD=1;
+       	
+       	
+    UPSERT "sap.tm.trp.db.leasecontract::t_lease_contract_type"
+		(ID,TYPE,CODE)
+    SELECT
+    	TYPE_ID, 
+    	DESCRIPTION, 
+    	LEASE_CONTRACT_TYPE 
+       	FROM :SOURCE WHERE IND_UPD=0;
+       	
+     --Get records inserted/updated
+	SELECT 
+    COUNT(LEASE_CONTRACT_TYPE) INTO CRTD_REC_CNT FROM :source
+    WHERE ind_upd = 0;
+    
+    SELECT
+	COUNT(LEASE_CONTRACT_TYPE) INTO UPDT_REC_CNT FROM :source
+    WHERE ind_upd = 1;	       
+    
+    --Get total records
+    SELECT COUNT(LEASE_CONTRACT_TYPE) INTO TOTAL_REC_CNT FROM :SOURCE;
+     
+     
+	--Delete the records in temporary table.
+ 	DELETE FROM "sap.tm.trp.db.massupload::t_lease_contract_type_temporary" 
+    WHERE CONNECTION_ID = :CONNECTION_ID;
+    
+   
+    --Update Mass Upload Execution History table
+    EXECUTION_RESULTS = 
+		SELECT 
+			:CRTD_REC_CNT AS REC_CRTD,
+			:UPDT_REC_CNT AS REC_upd,
+			:TOTAL_REC_CNT AS RECORD_CNT from dummy;
+
+END;

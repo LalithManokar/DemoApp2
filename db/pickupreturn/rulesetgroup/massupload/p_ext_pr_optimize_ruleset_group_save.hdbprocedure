@@ -1,0 +1,191 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup.massupload::p_ext_pr_optimize_ruleset_group_save" (
+    IN CONNECTION_ID VARCHAR(100),
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),
+    OUT SCHEDULE_DETAILS "sap.tm.trp.db.pickupreturn.rulesetgroup.massupload::tt_pickup_return_ruleset_group_schedule",
+    OUT EXECUTION_RESULTS "sap.tm.trp.db.massupload::tt_massupload_execution_result"
+)
+	LANGUAGE SQLSCRIPT 
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+  DECLARE V_USER_ID BIGINT;
+  DECLARE V_SPRAS VARCHAR(10);
+  DECLARE V_TIMESTAMP_START  DATETIME  := CURRENT_UTCTIMESTAMP;
+  DECLARE V_AFFECTED_ROWS INTEGER;
+  DECLARE RULE_ITEM_COUNT INTEGER;
+
+  DECLARE MINUTES VARCHAR(20) := 'MINUTES';
+  DECLARE HOURS VARCHAR(20) := 'HOURS';
+  DECLARE DAYS VARCHAR(20) := 'DAYS';
+  DECLARE WEEKS VARCHAR(20) := 'WEEKS';
+
+  CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(V_USER_ID);
+
+  SELECT IFNULL ( MAX (SPRAS),'') INTO V_SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+
+
+ --Generate Unique Rule Group Id
+    RULE_GRP_ID   = 
+                SELECT  
+                CASE WHEN RULE_GROUP_ID IS NULL 
+                THEN "sap.tm.trp.db.pickupreturn.rulesetgroup::s_ruleset_schedule_group".NEXTVAL
+                ELSE RULE_GROUP_ID
+                END AS ID,
+                RULE_GROUP_NAME
+                FROM
+                (SELECT DISTINCT ID AS RULE_GROUP_ID, RULE_GROUP_NAME
+                FROM "sap.tm.trp.db.pickupreturn.rulesetgroup.massupload::t_pickup_return_ruleset_group_temporary" AS TMP 
+                LEFT OUTER JOIN "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group" AS RULESET
+                ON (UPPER(TMP.RULE_GROUP_NAME) = RULESET.NAME)
+                WHERE CONNECTION_ID = :CONNECTION_ID 
+                AND TMP.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID);
+
+--Refactored code start
+	SOURCE = SELECT  RG_ID.ID,
+		 CASE WHEN RULESET.ID IS NULL THEN 0 ELSE 1
+		 END AS IF_UPDATE,
+		 UPPER(A.RULE_GROUP_NAME) AS CODE, 
+		 UPPER(A.RULE_GROUP_NAME) AS RULE_GROUP_NAME, 
+		 :V_SPRAS AS SPRAS, 
+		 A.DESC,
+		 MAP(UPPER(A.RULE_TYPE_NAME),'RETURN',2,1) AS RULESET_TYPE,
+		 TO_INTEGER(A.EXECUTE_INTERVAL_NAME) AS EXECUTE_INTERVAL,
+		 CASE WHEN UPPER(A.EXECUTE_TIME_UNIT_NAME) =  :MINUTES THEN 'MINUTE'
+		 	  WHEN UPPER(A.EXECUTE_TIME_UNIT_NAME) =  :HOURS  THEN 'HOUR'
+		 	  WHEN UPPER(A.EXECUTE_TIME_UNIT_NAME) =  :DAYS THEN 'DAY'
+		 END AS EXECUTE_TIME_UNIT,
+		 0 AS  EXECUTE_DAY,
+		 TO_TIMESTAMP(A.START_DATE_TIME) AS START_DATE_TIME,
+		 TO_TIMESTAMP(A.END_DATE_TIME) AS END_DATE_TIME,
+		 CASE WHEN RULESET.ID IS NULL THEN :V_USER_ID
+		        ELSE RULESET.CREATED_BY
+		 END AS CREATED_BY,
+		  CASE WHEN RULESET.ID IS NULL THEN :V_TIMESTAMP_START
+		        ELSE RULESET.CREATED_ON
+		 END AS CREATED_ON,
+		 CASE WHEN RULESET.ID IS NOT NULL 
+		          THEN 'JOB_UPDATE'
+		      WHEN RULESET.ID IS NULL 
+		         THEN 'JOB_CREATE'
+		      ELSE ''		       	 
+		 END AS JOB_ACTION,		
+		  :V_USER_ID AS MODIFIED_BY,
+		  :V_TIMESTAMP_START AS MODIFIED_ON,
+		 0 AS STATUS,
+		 :RESOURCE_CATEGORY_ID AS RESOURCE_CATEGORY,
+		 A.EXECUTE_IN_WORKING_HOUR,
+		 A.START_WORKING_TIME,
+		 A.END_WORKING_TIME,
+		 A.RULE_TYPE_NAME,
+		 A.CONNECTION_ID,
+		 A.TIMEZONES,
+		 A.RULE_NAME,
+		 C.ID AS RULE_ID
+        FROM "sap.tm.trp.db.pickupreturn.rulesetgroup.massupload::t_pickup_return_ruleset_group_temporary" AS A
+        LEFT OUTER JOIN :RULE_GRP_ID AS RG_ID ON UPPER(RG_ID.RULE_GROUP_NAME) = UPPER(A.RULE_GROUP_NAME)
+        INNER JOIN "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" C on UPPER(A.RULE_NAME) = (C.RULE_NAME)
+		LEFT OUTER JOIN "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group" AS RULESET
+		 ON UPPER(A.RULE_GROUP_NAME) = RULESET.NAME AND RULESET.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID;
+	    
+			
+    UPSERT "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group"
+    (  ID,
+       NAME,
+	   CODE,
+	   RULESET_TYPE,
+	   JOB_PROCESS,
+	   CREATED_BY,
+	   CREATED_ON,
+	   MODIFIED_BY,
+	   MODIFIED_ON,
+	   RESOURCE_CATEGORY
+    )
+    SELECT DISTINCT(ID),
+           RULE_GROUP_NAME,
+           CODE,
+           RULESET_TYPE,
+           2,
+           CREATED_BY,
+           CREATED_ON,
+           MODIFIED_BY,
+           MODIFIED_ON,
+           :RESOURCE_CATEGORY_ID
+    FROM :SOURCE;
+
+    UPSERT "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_t"(ID, SPRAS, DESC)
+    SELECT ID, SPRAS, DESC FROM :SOURCE;
+     
+    SELECT COUNT(RULE_ID) INTO RULE_ITEM_COUNT FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item"
+    WHERE RULE_GROUP_ID IN (SELECT ID FROM :SOURCE);
+    
+    IF RULE_ITEM_COUNT > 0 THEN
+      DELETE FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" A
+      WHERE A.RULE_GROUP_ID IN (SELECT ID FROM :SOURCE) ;
+    END IF;
+    
+    INSERT INTO "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item"
+    (
+        RULE_GROUP_ID,
+        RULE_ID
+    )
+    SELECT
+        ID,
+        RULE_ID
+        FROM :SOURCE;
+    
+     UPSERT "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_group_schedule"
+    (
+        GROUP_ID,
+        START_TIME,
+        EXPIRY_TIME,
+        RECURRENCE_TYPE,
+        RECURRENCE_INTERVAL,
+        RECURRENCE_DAY,
+		EXECUTE_WORKING_HOUR,
+        START_WORKING_HOUR_TIME,
+        END_WORKING_HOUR_TIME,
+        TIMEZONES
+    )
+    SELECT
+        DISTINCT ID,
+        LOCALTOUTC(START_DATE_TIME, IFNULL(TIMEZONES,'UTC'), 'platform'),
+        LOCALTOUTC(END_DATE_TIME, IFNULL(TIMEZONES,'UTC'), 'platform'),
+        EXECUTE_TIME_UNIT,
+        EXECUTE_INTERVAL,
+        EXECUTE_DAY,
+		EXECUTE_IN_WORKING_HOUR,
+        LOCALTOUTC(TO_SECONDDATE(TO_VARCHAR(START_DATE_TIME, 'YYYY-MM-DD') || ' '  || START_WORKING_TIME, 'YYYY-MM-DD HH24:MI:SS'), TIMEZONES, 'platform') AS START_WORKING_HOUR_TIME,
+    	LOCALTOUTC(TO_SECONDDATE(TO_VARCHAR(END_DATE_TIME, 'YYYY-MM-DD') || ' ' || END_WORKING_TIME, 'YYYY-MM-DD HH24:MI:SS'), TIMEZONES, 'platform') AS END_WORKING_HOUR_TIME,
+    	TIMEZONES
+        FROM :SOURCE;
+      
+    
+
+  --- return schedule details
+  SCHEDULE_DETAILS =
+     SELECT DISTINCT ID, JOB_ACTION, RULE_GROUP_NAME, EXECUTE_INTERVAL, EXECUTE_TIME_UNIT,
+        REPLACE(TO_VARCHAR(LOCALTOUTC(START_DATE_TIME, TIMEZONES, 'platform'),'YYYY-MM-DD HH24:MI:SS'),' ','T')||'.000Z'  AS START_DATE_TIME,
+        REPLACE(TO_VARCHAR(LOCALTOUTC(END_DATE_TIME, TIMEZONES, 'platform'),'YYYY-MM-DD HH24:MI:SS'),' ','T')||'.000Z'  AS END_DATE_TIME,
+		EXECUTE_IN_WORKING_HOUR,
+    	START_WORKING_TIME,
+    	END_WORKING_TIME,
+    	TIMEZONES
+       FROM  :SOURCE AS A
+       WHERE CONNECTION_ID = :CONNECTION_ID AND RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID
+          AND JOB_ACTION <> '';
+
+    ---return execution history details
+    EXECUTION_RESULTS =
+		SELECT
+			T1.CNT AS REC_CRTD,
+			T2.CNT AS REC_UPD,
+			T1.CNT + T2.CNT AS RECORD_CNT
+		FROM (SELECT COUNT(*) AS CNT FROM :SOURCE WHERE IF_UPDATE = 0) T1,
+			(SELECT	COUNT(*) AS CNT FROM :SOURCE WHERE IF_UPDATE = 1) T2;
+
+    ---Clean pick-up return ruleset temporary table
+   CALL "sap.tm.trp.db.pickupreturn.rulesetgroup.massupload::p_pickup_return_ruleset_group_temporary_data_clean"(:CONNECTION_ID);
+
+
+END;

@@ -1,0 +1,16 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_t_sequence_initial"()
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE V_TOTAL_SEQUENCE BIGINT := 999999;
+    DECLARE I_COUNT INTEGER := 0;
+
+    DELETE FROM "sap.tm.trp.db.planningcockpit::t_sequence";
+
+    WHILE I_COUNT < :V_TOTAL_SEQUENCE DO
+       INSERT INTO "sap.tm.trp.db.planningcockpit::t_sequence" SELECT :I_COUNT FROM DUMMY;
+       I_COUNT := I_COUNT + 1;
+    END WHILE;
+END;

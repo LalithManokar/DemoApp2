@@ -1,0 +1,14 @@
+table.schemaName = "SAP_TM_ROUTING_TEST";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = NVARCHAR; length = 100; nullable = false; },
+    {name = "EXTERNAL_ID"; sqlType = NVARCHAR; length = 100; nullable = false; },
+    {name = "PATH_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "RULE_NUMBER"; sqlType = SMALLINT; nullable = false;},
+    {name = "MTR"; sqlType = NVARCHAR; length = 10; nullable = false;},
+    {name = "FROM_LOCATION"; sqlType = NVARCHAR; length = 50; },
+    {name = "TO_LOCATION"; sqlType = NVARCHAR; length = 50; },
+    {name = "DEPARTURE_TIME"; sqlType = TIMESTAMP; },
+    {name = "ARRIVAL_TIME"; sqlType = TIMESTAMP; }
+];
+table.primaryKey.pkcolumns = ["ID"];

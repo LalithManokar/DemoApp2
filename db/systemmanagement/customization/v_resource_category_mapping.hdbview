@@ -1,0 +1,12 @@
+schema = "SAP_TM_TRP";
+query = "SELECT T1.CODE,
+                T1.MAPPING_CODE AS RESOURCE_GROUP,
+                T2.RESOURCE_GROUP_DESC AS RESOURCE_GROUP_DESC,
+                T2.RESOURCE_CLASS,
+                T2.RES_CLASS_DESC
+         FROM \"sap.tm.trp.db.semantic.resource::t_resource_category\" T1 
+         LEFT JOIN \"sap.tm.trp.db.semantic.resource::v_resource_groups\" T2
+         ON (T1.MAPPING_CODE = T2.RESOURCE_GROUP)";
+                
+depends_on_table = ["sap.tm.trp.db.semantic.resource::t_resource_category"];
+depends_on_view = ["sap.tm.trp.db.semantic.resource::v_resource_groups"];               

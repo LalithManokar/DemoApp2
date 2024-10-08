@@ -1,0 +1,19 @@
+schema="SAP_TM_TRP";
+query = "SELECT T1.*, 
+				T2.CALCULATION_MODEL_ID, 
+				T2.CALCULATION_MODEL_NAME, 
+				T2.TIME_FILTER_ID, 
+				T2.TIME_FILTER_NAME, 
+				T2.TIME_FILTER_OFFSET, 
+				T2.ATTRIBUTE_GROUP_ID, 
+				T2.ATTRIBUTE_GROUP_NAME
+		FROM \"sap.tm.trp.db.pickupreturn::v_role_check_location_rule\" T1
+		LEFT JOIN \"sap.tm.trp.db.pipeline::cv_get_plan_list_with_schedule_wrapper\" T2
+			ON T1.SD_PLAN_ID = T2.ID
+			WHERE T1.SCHEDULE_TIME_TYPE = 1;
+        ";
+
+depends_on_view = [
+					"sap.tm.trp.db.pickupreturn::v_role_check_location_rule",
+					"sap.tm.trp.db.pipeline::cv_get_plan_list_with_schedule_wrapper"
+                    ];      

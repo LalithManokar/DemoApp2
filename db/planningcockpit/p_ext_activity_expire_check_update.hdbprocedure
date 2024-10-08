@@ -1,0 +1,168 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_ext_activity_expire_check_update"      
+   (IN SIMULATION_ID BIGINT,
+    OUT MESSAGE VARCHAR(200)
+    )  
+       LANGUAGE SQLSCRIPT
+       SQL SECURITY INVOKER 
+       DEFAULT SCHEMA "SAP_TM_TRP"   
+        AS     
+BEGIN
+
+    DECLARE USER_ID BIGINT;
+    DECLARE V_TIMESTAMP_START  DATETIME  := CURRENT_UTCTIMESTAMP;  
+    DECLARE V_PLAN_STATUS INT;
+    DECLARE LOCATION_NUM INTEGER := 0;
+  
+   DECLARE STATUS_OK TINYINT :=0;
+   DECLARE STATUS_ACTIVITY_TIME_INVALID TINYINT :=1;
+   DECLARE STATUS_ACTIVITY_LOCATION_INVALID TINYINT :=2;
+   DECLARE STATUS_BOTH_TIME_AND_LOCATION_ARE_INVALID TINYINT :=3;
+   
+   DECLARE SCENARIO_STATUS_OK TINYINT :=0;
+   DECLARE SCENARIO_STATUS_INVALID TINYINT :=1;
+       
+             
+    -- get user info 
+       CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+    
+    
+    SELECT IFNULL(MAX(PLAN_STATUS),0) INTO V_PLAN_STATUS
+    FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" WHERE ID=:SIMULATION_ID;  
+    
+    
+    IF V_PLAN_STATUS = 0 THEN --(the plan status is not 'Finalized', it is Draft.)
+     
+            --If the location of the activity do not have intersection with the location list of the execution result of the simulation plan
+            --then set the status of the activity to 1 (invalid)
+            UPDATE T0 
+                 SET T0.STATUS= T8.STATUS,
+                 T0.MODIFIED_ON=:V_TIMESTAMP_START,
+                 T0.MODIFIED_BY=:USER_ID 
+            FROM "sap.tm.trp.db.planningcockpit::t_activity" T0
+            INNER JOIN
+            (
+	            SELECT T8.ID,CASE WHEN T7.ACTIVITY_ID IS NOT NULL AND T6.ACTIVITY_ID IS NULL THEN :STATUS_ACTIVITY_TIME_INVALID 
+	            WHEN T6.ACTIVITY_ID IS NOT NULL AND T7.ACTIVITY_ID IS NULL THEN :STATUS_ACTIVITY_LOCATION_INVALID 
+	            WHEN T6.ACTIVITY_ID IS NOT NULL AND T7.ACTIVITY_ID IS NOT NULL THEN :STATUS_BOTH_TIME_AND_LOCATION_ARE_INVALID
+	            ELSE :STATUS_OK END AS STATUS
+	            FROM "sap.tm.trp.db.planningcockpit::t_activity" T8 
+	            LEFT OUTER JOIN
+	             (      --Get the activity which the location (both from_location and to_location ) have no intersection with the location list
+	                  -- of the exectuion result of the simulation plan. for those kind of activity, the status should NOT be 0 (valid)
+	                   --Note: if there are one locatoin of the activity have intersetion, then the location check should be valid
+			             SELECT DISTINCT T4.ACTIVITY_ID
+			             FROM
+			             (
+				             SELECT T1.ID AS ACTIVITY_ID,T1.FROM_LOC_ID AS LOCATION_ID
+				             FROM "sap.tm.trp.db.planningcockpit::t_activity" T1
+				             INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" T2 ON (T1.REL_SCENARIO_ID = T2.ID)
+				             INNER JOIN "sap.tm.trp.db.planningcockpit::t_simulation_plan" T3 ON (T2.REL_SM_PLAN_ID = T3.ID)
+				             WHERE T3.ID = :SIMULATION_ID AND T1.FROM_LOC_ID IS NOT NULL
+				             UNION
+				             SELECT T1.ID,T1.TO_LOC_ID AS LOCATION_ID
+				             FROM "sap.tm.trp.db.planningcockpit::t_activity" T1
+				             INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" T2 ON (T1.REL_SCENARIO_ID = T2.ID)
+				             INNER JOIN "sap.tm.trp.db.planningcockpit::t_simulation_plan" T3 ON (T2.REL_SM_PLAN_ID = T3.ID)
+				             WHERE T3.ID = :SIMULATION_ID AND T1.TO_LOC_ID IS NOT NULL
+			             )T4
+			             INNER JOIN 
+			             (
+				             SELECT DISTINCT T1.ID AS ACTIVITY_ID,T4.LOCATION_ID
+				             FROM "sap.tm.trp.db.planningcockpit::t_activity" T1
+				             INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" T2 ON (T1.REL_SCENARIO_ID = T2.ID)
+				             INNER JOIN "sap.tm.trp.db.planningcockpit::t_simulation_plan" T3 ON (T2.REL_SM_PLAN_ID = T3.ID)
+				             INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T4 ON (T3.EXCUTE_ID = T4.PLAN_EXECUTION_ID)
+				             WHERE T3.ID =:SIMULATION_ID
+			             )T5 ON (T4.ACTIVITY_ID = T5.ACTIVITY_ID AND T4.LOCATION_ID = T5.LOCATION_ID)
+			             GROUP BY T4.ACTIVITY_ID
+			             HAVING COUNT(T4.LOCATION_ID) =0
+	             )T6 ON (T8.ID = T6.ACTIVITY_ID)
+	             LEFT OUTER JOIN 
+	             ( --Get the activities which the activity time is not valid
+	               SELECT T1.ID AS ACTIVITY_ID
+	               FROM "sap.tm.trp.db.planningcockpit::t_activity" T1
+		             INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" T2 ON (T1.REL_SCENARIO_ID = T2.ID)
+		             INNER JOIN "sap.tm.trp.db.planningcockpit::t_simulation_plan" T3 ON (T2.REL_SM_PLAN_ID = T3.ID)
+		             INNER JOIN "sap.tm.trp.db.planningcockpit::v_time_filter_by_plan" T4 ON (T4.SM_PLAN_ID = T3.ID)
+		             WHERE T3.ID = :SIMULATION_ID AND (T1.START_TIME < T4.CUR_DATE OR T1.START_TIME> T4.END_DATE)
+	             )T7 ON (T8.ID = T7.ACTIVITY_ID)
+	            -- WHERE T6.ACTIVITY_ID IS NOT NULL OR T7.ACTIVITY_ID IS NOT NULL
+             
+             )T8 ON (T0.ID = T8.ID)
+             WHERE T0.STATUS <>T8.STATUS;
+             
+             /*
+             
+            UPDATE T0
+            SET T0.FRESH_FLAG = -1,T0.ACTIVITY_STATUS = IFNULL(T5.SCENARIO_STATUS,0)
+            FROM "sap.tm.trp.db.planningcockpit::t_scenario" T0
+            LEFT OUTER JOIN 
+            (
+	            SELECT T4.SCENARIO_ID, CASE WHEN SUM_STATUS = 1 THEN 1 WHEN SUM_STATUS = 2 THEN 2
+	            WHEN SUM_STATUS >=3 THEN 3 ELSE 0 END AS SCENARIO_STATUS
+	            FROM 
+	            (
+		            SELECT T3.SCENARIO_ID,SUM(T3.STATUS) AS SUM_STATUS
+		            FROM 
+		            (  SELECT DISTINCT T2.ID AS SCENARIO_ID,IFNULL(T1.STATUS,0) AS STATUS
+		               FROM "sap.tm.trp.db.planningcockpit::t_activity" T1
+		               INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" T2 ON  (T1.REL_SCENARIO_ID = T2.ID)
+		               WHERE T2.REL_SM_PLAN_ID = :SIMULATION_ID AND T1.STATUS = 1
+		               UNION 
+		                SELECT T2.ID AS SCENARIO_ID,IFNULL(T1.STATUS,0) AS STATUS
+		                FROM "sap.tm.trp.db.planningcockpit::t_activity" T1
+		                INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" T2 ON  (T1.REL_SCENARIO_ID = T2.ID)
+		                WHERE T2.REL_SM_PLAN_ID = :SIMULATION_ID AND T1.STATUS = 2
+		               UNION
+		                SELECT T2.ID AS SCENARIO_ID,IFNULL(T1.STATUS,0) AS STATUS
+		                FROM "sap.tm.trp.db.planningcockpit::t_activity" T1
+		                INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" T2 ON  (T1.REL_SCENARIO_ID = T2.ID)
+		                WHERE T2.REL_SM_PLAN_ID = :SIMULATION_ID AND T1.STATUS = 3
+		                UNION
+		                SELECT T2.ID AS SCENARIO_ID,IFNULL(T1.STATUS,0) AS STATUS
+		                FROM "sap.tm.trp.db.planningcockpit::t_activity" T1
+		                INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" T2 ON  (T1.REL_SCENARIO_ID = T2.ID)
+		                WHERE T2.REL_SM_PLAN_ID = :SIMULATION_ID AND T1.STATUS = 0
+		             )T3
+		             GROUP BY T3.SCENARIO_ID
+	              )T4
+	             )T5 ON (T0.ID = T5.SCENARIO_ID)
+	             WHERE T0.ACTIVITY_STATUS <> IFNULL(T5.SCENARIO_STATUS,0) AND T0.REL_SM_PLAN_ID = :SIMULATION_ID;
+	             */
+	             
+	        UPDATE T0
+            SET T0.FRESH_FLAG = -1,
+            T0.ACTIVITY_STATUS = IFNULL(T5.SCENARIO_STATUS,0)
+            FROM "sap.tm.trp.db.planningcockpit::t_scenario" T0
+            LEFT OUTER JOIN 
+            (
+	            SELECT T4.SCENARIO_ID, CASE WHEN STATUS_SUM >0 THEN :SCENARIO_STATUS_INVALID ELSE :SCENARIO_STATUS_OK END AS SCENARIO_STATUS
+	            FROM 
+	            (
+		                SELECT T3.SCENARIO_ID, SUM(T3.STATUS) AS STATUS_SUM
+		                FROM
+		                (
+			              SELECT DISTINCT T11.ID AS SCENARIO_ID,IFNULL(T1.STATUS,0) AS STATUS
+			               FROM "sap.tm.trp.db.planningcockpit::t_activity" T1
+			               INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" T11 ON  (T1.REL_SCENARIO_ID = T11.ID)
+			               WHERE T11.REL_SM_PLAN_ID = :SIMULATION_ID
+			               --AND T1.STATUS IN (:STATUS_ACTIVITY_TIME_INVALID, :STATUS_ACTIVITY_LOCATION_INVALID,:STATUS_BOTH_TIME_AND_LOCATION_ARE_INVALID)
+			             )T3
+			             GROUP BY T3.SCENARIO_ID
+	              )T4
+	           )T5 ON (T0.ID = T5.SCENARIO_ID)
+	           WHERE T0.REL_SM_PLAN_ID = :SIMULATION_ID;
+	           --AND T0.ACTIVITY_STATUS <> IFNULL(T5.SCENARIO_STATUS,0);
+	             
+	             
+       
+           MESSAGE := 'MSG_SUCCESS_STATUS';
+           
+       ELSE 
+       
+        MESSAGE := 'MSG_SIMULAITON_PLAN_IS_FINALIZED';
+    
+    END IF;        
+   
+     
+END; 

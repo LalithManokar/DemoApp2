@@ -1,0 +1,173 @@
+schema="SAP_TM_TRP"; 
+
+query="SELECT T1.ID,
+              T1.RULE_NAME,
+              T1.DESCRIPTION,
+              T1.RULE_TYPE,
+              T3.DESC AS RULE_TYPE_DESC,
+              T1.SD_PLAN_ID,
+              T1.SUPPLY_DEMAND_PLAN,
+              T1.TIME_RANGE,
+              T1.TIME_RANGE_INTERVAL,
+              T1.TIME_RANGE_UNIT,
+              T5.DESC AS TIME_RANGE_UNIT_DESC,
+              T1.RESOURCE_FILTER_ID,
+              T1.RESOURCE_FILTER_DESC,
+              T1.LOCATION_FILTER_ID,
+              T1.LOCATION_FILTER_DESC,
+              T1.NETWORK_SETTING_GROUP_ID,
+              T1.NETWORK_SETTING_GROUP,
+              T1.LOCATION_DETERMIN_ID,
+              T1.LOCATION_DETERMINATION_RULE,
+              T1.SCHEDULE_TIME_TYPE,
+              T4.DESC AS SCHEDULE_TIME_TYPE_DESC,
+              T1.RECURRENCE_INTERVAL,
+              T1.RECURRENCE_TYPE,
+              T1.RECURRENCE_DAY,
+              CASE
+              WHEN ( T1.START_DATETIME = '' OR T1.START_DATETIME IS NULL) THEN
+                    NULL
+	          WHEN ( T1.TIMEZONES = '' OR T1.TIMEZONES IS NULL) THEN
+	               TO_VARCHAR(UTCTOLOCAL(T1.START_DATETIME, 'UTC', 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          ELSE
+	               TO_VARCHAR(UTCTOLOCAL(T1.START_DATETIME, T1.TIMEZONES, 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          END
+	          AS START_DATETIME,
+              CASE
+              WHEN ( T1.END_DATETIME = '' OR T1.END_DATETIME IS NULL ) THEN
+                    NULL
+	          WHEN ( T1.TIMEZONES = '' OR T1.TIMEZONES IS NULL) THEN
+	               TO_VARCHAR(UTCTOLOCAL(T1.END_DATETIME, 'UTC', 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          ELSE
+	               TO_VARCHAR(UTCTOLOCAL(T1.END_DATETIME, TIMEZONES, 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          END
+	          AS END_DATETIME,
+              T1.OP_SETTING_TYPE,
+              T1.OPTIMIZATION,
+              T2.DESC AS OPTIMIZATION_DESC,
+              CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                WHEN T1.CREATED_BY <> '' AND T1.CREATED_BY IS NOT NULL AND T7.USERNAME IS NOT NULL THEN T7.USERNAME
+		        WHEN T1.CREATED_BY = '' OR T1.CREATED_BY IS NULL THEN ''
+		        ELSE '***' END AS CREATED_BY,
+              T1.CREATED_ON,
+              CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                WHEN T1.MODIFIED_BY <> '' AND T1.MODIFIED_BY IS NOT NULL AND T8.USERNAME IS NOT NULL THEN T8.USERNAME
+		        WHEN T1.MODIFIED_BY = '' OR T1.MODIFIED_BY IS NULL THEN ''
+		        ELSE '***' END AS MODIFIED_BY,
+              T1.MODIFIED_ON,
+              CASE
+              WHEN ( T1.LAST_EXECUTION_TIME = '' OR T1.LAST_EXECUTION_TIME IS NULL ) THEN
+                    NULL
+	          WHEN ( T1.TIMEZONES = '' OR T1.TIMEZONES IS NULL) THEN
+	               TO_VARCHAR(UTCTOLOCAL(T1.LAST_EXECUTION_TIME, 'UTC', 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          ELSE
+	               TO_VARCHAR(UTCTOLOCAL(T1.LAST_EXECUTION_TIME, TIMEZONES, 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          END
+	          AS LAST_EXECUTION_TIME,
+              T1.LAST_EXECUTION_STATUS,
+              CASE
+              WHEN ( T1.NEXT_EXECUTION_TIME = '' OR T1.NEXT_EXECUTION_TIME IS NULL ) THEN
+                    NULL
+	          WHEN ( T1.TIMEZONES = '' OR T1.TIMEZONES IS NULL) THEN
+	               TO_VARCHAR(UTCTOLOCAL(T1.NEXT_EXECUTION_TIME, 'UTC', 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          ELSE
+	               TO_VARCHAR(UTCTOLOCAL(T1.NEXT_EXECUTION_TIME, TIMEZONES, 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          END
+	          AS NEXT_EXECUTION_TIME,
+	          T1.LAST_MODIFIED_TIME,
+              T1.VISIBILITY,
+              T1.CURRENCY,
+              T1.FILTER_EXECUTION,
+              T6.DESC AS FILTER_EXECUTION_DESC,
+              T1.EXCLUSIVE_RULE_ID,
+              T1.EXCLUSIVE_RULE,
+              T1.TIME_WINDOW,
+              T1.RANK_NUMBER,
+              T1.RESOURCE_CATEGORY,
+              T1.SELECTION_DATE,
+              T1.KEEP_EXECUTION_RUNS,
+              T1.EXECUTE_WORKING_HOUR,
+              CASE
+              WHEN ( T1.START_WORKING_HOUR_TIME = '' OR T1.START_WORKING_HOUR_TIME IS NULL ) THEN
+                    NULL
+	          WHEN ( T1.TIMEZONES = '' OR T1.TIMEZONES IS NULL) THEN
+	               TO_VARCHAR(UTCTOLOCAL(T1.START_WORKING_HOUR_TIME, 'UTC', 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          ELSE
+	               TO_VARCHAR(UTCTOLOCAL(T1.START_WORKING_HOUR_TIME, TIMEZONES, 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          END
+	          AS START_WORKING_HOUR_TIME,
+              CASE
+              WHEN ( T1.END_WORKING_HOUR_TIME = '' OR T1.END_WORKING_HOUR_TIME IS NULL ) THEN
+                    NULL
+	          WHEN ( T1.TIMEZONES = '' OR T1.TIMEZONES IS NULL) THEN
+	               TO_VARCHAR(UTCTOLOCAL(T1.END_WORKING_HOUR_TIME, 'UTC', 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          ELSE
+	               TO_VARCHAR(UTCTOLOCAL(T1.END_WORKING_HOUR_TIME, TIMEZONES, 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          END
+	          AS END_WORKING_HOUR_TIME,
+	          T1.TIMEZONES,
+              T9.DESC AS TIMEZONES_DESC,
+			  IFNULL(JOB1.RULE_GROUP_ID,-1) AS ASSIGNED_GROUP_FETCH_TU,
+			  IFNULL(JOB1.NAME,'') AS ASSIGNED_GROUP_FETCH_TU_NAME,
+			  IFNULL(JOB2.RULE_GROUP_ID,-1) AS ASSIGNED_GROUP_OPTIMIZE_TU,
+			  IFNULL(JOB2.NAME,'') AS ASSIGNED_GROUP_OPTIMIZE_TU_NAME,
+			  IFNULL(JOB3.RULE_GROUP_ID,-1) AS ASSIGNED_GROUP_UPDATE_TU,
+			  IFNULL(JOB3.NAME,'') AS ASSIGNED_GROUP_UPDATE_TU_NAME
+       FROM \"sap.tm.trp.db.pickupreturn::cv_role_check_location_rule\"  T1
+       LEFT OUTER JOIN
+       (SELECT T1.ID,T1.DESC
+        FROM \"sap.tm.trp.db.pickupreturn::t_optimization_t\" T1
+        INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE_T
+        ON T1.SPRAS = LANGUAGE_T.SPRAS) T2
+       ON T1.OPTIMIZATION = T2.ID
+       LEFT OUTER JOIN
+       (SELECT T1.ID,T1.DESC
+        FROM \"sap.tm.trp.db.pickupreturn::t_rule_type_t\" T1
+        INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE_T
+        ON T1.SPRAS = LANGUAGE_T.SPRAS) T3
+       ON T1.RULE_TYPE = T3.ID
+       LEFT OUTER JOIN
+       (SELECT T1.ID,T1.DESC
+        FROM \"sap.tm.trp.db.pickupreturn::t_schedule_time_type_t\" T1
+        INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE_T
+        ON T1.SPRAS = LANGUAGE_T.SPRAS) T4
+       ON T1.SCHEDULE_TIME_TYPE = T4.ID
+       LEFT OUTER JOIN
+       (SELECT T1.ID,T1.DESC
+        FROM \"sap.tm.trp.db.pickupreturn::t_time_range_unit_t\" T1
+        INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE_T
+        ON T1.SPRAS = LANGUAGE_T.SPRAS) T5
+       ON T1.TIME_RANGE_UNIT = T5.ID
+       LEFT OUTER JOIN
+       (SELECT T1.ID,T1.DESC
+        FROM \"sap.tm.trp.db.pickupreturn::t_filter_execution_t\" T1
+        INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE_T
+        ON T1.SPRAS = LANGUAGE_T.SPRAS) T6
+       ON T1.FILTER_EXECUTION = T6.ID
+       LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T7 ON T1.CREATED_BY = T7.USERNAME
+       LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T8 ON T1.MODIFIED_BY = T8.USERNAME
+       INNER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE ON 1=1
+       LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::v_time_zone\" T9 ON T9.CODE = T1.TIMEZONES
+		LEFT JOIN \"sap.tm.trp.db.pickupreturn.rulesetgroup::v_ruleset_assigned_group\" JOB1 
+			ON T1.ID = JOB1.RULE_ID AND JOB1.JOB_PROCESS = 1
+		LEFT JOIN \"sap.tm.trp.db.pickupreturn.rulesetgroup::v_ruleset_assigned_group\" JOB2 
+			ON T1.ID = JOB2.RULE_ID AND JOB2.JOB_PROCESS = 2
+		LEFT JOIN \"sap.tm.trp.db.pickupreturn.rulesetgroup::v_ruleset_assigned_group\" JOB3 
+			ON T1.ID = JOB3.RULE_ID AND JOB3.JOB_PROCESS = 3
+";
+
+depends_on_table=[
+    "sap.tm.trp.db.pickupreturn::t_optimization_t",
+    "sap.tm.trp.db.pickupreturn::t_rule_type_t",
+    "sap.tm.trp.db.pickupreturn::t_schedule_time_type_t",
+    "sap.tm.trp.db.pickupreturn::t_time_range_unit_t",
+    "sap.tm.trp.db.pickupreturn::t_filter_execution_t"
+];
+depends_on_view=[
+	"sap.tm.trp.db.pickupreturn::cv_role_check_location_rule",
+    "sap.tm.trp.db.semantic.common::v_lang_code",
+    "sap.tm.trp.db.dataprotectionprivacy::v_unblock_users",
+    "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege",
+    "sap.tm.trp.db.systemmanagement.user::v_time_zone",
+    "sap.tm.trp.db.pickupreturn.rulesetgroup::v_ruleset_assigned_group"
+];

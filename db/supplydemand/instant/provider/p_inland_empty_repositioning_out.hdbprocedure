@@ -1,0 +1,17 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant.provider::p_inland_empty_repositioning_out" (
+   IN BASIC_DATASET "sap.tm.trp.db.supplydemand.instant::tt_sd_output",
+	OUT DATASET "sap.tm.trp.db.supplydemand.instant::tt_sd_output"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+	
+	DATASET = SELECT NODE_ID,GEO_ID,GEO_NAME,GEO_FILTER_TYPE, EQUIP_TYPE,EQUIP_NAME,EQUIP_FILTER_TYPE,
+           TIME_INTERVAL_ID,SEQUENCE,START_TIME,END_TIME,INTER_SECONDS,
+           'DEMAND' AS OUTPUT_KEY, IFNULL(OUTPUT_VALUE,0) AS OUTPUT_VALUE,UNIT
+            FROM :BASIC_DATASET
+			WHERE NODE_ID = 'INLAND_EMPTY_RP_OUT';
+	
+END;

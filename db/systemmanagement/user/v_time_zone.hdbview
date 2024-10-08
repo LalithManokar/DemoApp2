@@ -1,0 +1,20 @@
+schema="SAP_TM_TRP";
+query= "SELECT T1.CODE,T1.OFFSET,IFNULL(T2.DESC,T1.DESC) AS DESC
+        FROM
+            (
+                SELECT
+                    CODE,
+                    TO_INT(SECONDS_BETWEEN(current_utctimestamp,UTCTOLOCAL (current_utctimestamp, timezone_name,'platform') )/60) OFFSET,
+                    MAPPINGS DESC
+                FROM \"sap.tm.trp.db.systemmanagement.user::t_time_zone_mapping\" AS T0
+                JOIN timezones ON T0.CODE=timezones.timezone_name
+                WHERE timezones.TIMEZONE_DATASET='platform'
+
+            ) T1
+        LEFT OUTER JOIN  \"sap.tm.trp.db.systemmanagement.user::t_time_zone_t\" AS T2
+        ON T1.CODE = T2.TIME_ZONE_CODE
+        ";
+
+depends_on = ["sap.tm.trp.db.systemmanagement.user::t_time_zone_t",
+"sap.tm.trp.db.systemmanagement.user::t_time_zone_mapping"
+];

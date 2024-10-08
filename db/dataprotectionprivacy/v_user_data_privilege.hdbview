@@ -1,0 +1,9 @@
+schema="SAP_TM_TRP";
+
+query="SELECT IFNULL(T2.USER_DATA_PRIVILEGE_FLAG,0) AS USER_DATA_PRIVILEGE_FLAG  
+       FROM \"sap.tm.trp.db.systemmanagement.user::cv_get_username\" T1
+       LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::t_user_data_privilege\" T2 
+       ON T1.USERNAME = T2.USERNAME";
+                       
+depends_on_table = ["sap.tm.trp.db.dataprotectionprivacy::t_user_data_privilege"];
+depends_on_table = ["sap.tm.trp.db.systemmanagement.user::cv_get_username"];

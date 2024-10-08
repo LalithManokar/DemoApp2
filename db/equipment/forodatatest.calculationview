@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.2" id="forodatatest" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="false">
+  <descriptions defaultDescription="forodatatest"/>
+  <localVariables>
+    <variable id="colA" parameter="true">
+      <descriptions defaultDescription="colA"/>
+      <variableProperties datatype="VARCHAR" length="1" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="colb" parameter="true">
+      <descriptions defaultDescription="colb"/>
+      <variableProperties datatype="VARCHAR" length="1" mandatory="true">
+        <valueDomain type="AttributeValue">
+          <attribute name="B"/>
+        </valueDomain>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="colC">
+      <descriptions defaultDescription="colC"/>
+      <variableProperties mandatory="false">
+        <valueDomain type="AttributeValue">
+          <attribute name="A"/>
+        </valueDomain>
+        <selection multiLine="true" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="B" length="1"/>
+        <viewAttribute datatype="VARCHAR" id="A" length="1"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#colA</localVariable>
+      <localVariable>#colb</localVariable>
+      <definition> 
+  
+ BEGIN 
+  DECLARE V_A varchar(1);
+  DECLARE V_B varchar(1);
+  
+
+ 	 var_out = select :colb as b, :cola as a from dummy;
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <attributes>
+      <attribute id="B" order="1">
+        <descriptions defaultDescription="B"/>
+        <keyMapping columnObjectName="Script_View" columnName="B"/>
+      </attribute>
+      <attribute id="A" hidden="false" order="2">
+        <descriptions defaultDescription="A"/>
+        <localVariable>#colC</localVariable>
+        <keyMapping columnObjectName="Script_View" columnName="A"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

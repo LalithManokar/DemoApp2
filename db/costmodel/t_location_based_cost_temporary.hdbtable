@@ -1,0 +1,18 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ROW_NUM"; sqlType = INTEGER;  },
+    {name = "FROM_LOCATION_NAME"; sqlType = VARCHAR; length = 200; nullable = true;},
+    {name = "TO_LOCATION_NAME"; sqlType = VARCHAR; length = 200; nullable = true;},
+    {name = "RESOURCE_TYPE"; sqlType = NVARCHAR; length = 20; nullable = true;},
+    {name = "TRANSPORTATION_MODE_CODE"; sqlType = NVARCHAR; length = 20; nullable = true;},
+    {name = "UOM_CODE"; sqlType = NVARCHAR; length = 20; nullable = true;},
+    {name = "COST"; sqlType = DECIMAL; precision = 13; scale = 3;nullable = true;},
+    {name = "WILD_STAR_COUNT"; sqlType = INTEGER; }, 
+    {name = "CARRIER_ID"; sqlType = NVARCHAR; length = 20; nullable = true;},
+    {name = "ACTION_CODE"; sqlType = NVARCHAR; length = 20; nullable = true; comment = "APPEND / OVERWRITE";},  
+    {name = "SEQUENCE"; sqlType = INTEGER; nullable = true;},
+    {name = "ACTION_TIME"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "CONNECTION_ID"; sqlType = VARCHAR; length = 100; nullable = true;}      
+];
+

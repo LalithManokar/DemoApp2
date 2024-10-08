@@ -1,0 +1,291 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_plan_list_wrapper" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_plan_list"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="VARCHAR" id="NAME" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="DESC" length="500"/>
+        <viewAttribute datatype="INTEGER" id="PLAN_TYPE_ID"/>
+        <viewAttribute datatype="VARCHAR" id="PLAN_TYPE_NAME" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="VISIBILITY" length="10"/>
+        <viewAttribute datatype="VARCHAR" id="VISIBILITY_DESC" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="CREATED_BY" length="60"/>
+        <viewAttribute datatype="TIMESTAMP" id="CREATED_TIME"/>
+        <viewAttribute datatype="VARCHAR" id="MODIFIED_BY" length="60"/>
+        <viewAttribute datatype="TIMESTAMP" id="MODIFIED_TIME"/>
+        <viewAttribute datatype="BIGINT" id="RESOURCE_FILTER_ID"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_FILTER_NAME" length="50"/>
+        <viewAttribute datatype="BIGINT" id="LOCATION_FILTER_ID"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_FILTER_NAME" length="50"/>
+        <viewAttribute datatype="INTEGER" id="LOCATION_FILTER_TYPE"/>
+        <viewAttribute datatype="BIGINT" id="TIME_FILTER_ID"/>
+        <viewAttribute datatype="VARCHAR" id="TIME_FILTER_NAME" length="50"/>
+        <viewAttribute datatype="INTEGER" id="TIME_FILTER_OFFSET"/>
+        <viewAttribute datatype="VARCHAR" id="TIMEZONE_ID" length="50"/>
+        <viewAttribute datatype="BIGINT" id="CALCULATION_MODEL_ID"/>
+        <viewAttribute datatype="VARCHAR" id="CALCULATION_MODEL_NAME" length="50"/>
+        <viewAttribute datatype="BIGINT" id="NODE_ID"/>
+        <viewAttribute datatype="BIGINT" id="ALERT_RULE_GROUP_ID"/>
+        <viewAttribute datatype="VARCHAR" id="ALERT_RULE_GROUP_NAME" length="50"/>
+        <viewAttribute datatype="BIGINT" id="ATTRIBUTE_GROUP_ID"/>
+        <viewAttribute datatype="VARCHAR" id="ATTRIBUTE_GROUP_NAME" length="50"/>
+        <viewAttribute datatype="SMALLINT" id="PLAN_STATUS"/>
+        <viewAttribute datatype="VARCHAR" id="PLAN_STATUS_DESC" length="200"/>
+        <viewAttribute datatype="NVARCHAR" id="RESOURCE_CATEGORY" length="20"/>
+        <viewAttribute datatype="BIGINT" id="KEEP_EXECUTION_RUNS"/>
+        <viewAttribute datatype="SMALLINT" id="HAS_SUPPLY_DEMAND"/>
+        <viewAttribute id="USAGE" datatype="VARCHAR" length="1"/>
+        <viewAttribute datatype="VARCHAR" id="USAGE_CODE" length="4"/>
+        <viewAttribute id="USAGE_DESC" datatype="VARCHAR" length="50"/>
+        <viewAttribute id="ASSIGNED_TO_VIRTUAL" datatype="VARCHAR" length="1"/>
+        <viewAttribute datatype="VARCHAR" id="INSTANT_ENABLED" length="1"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> /********* Begin Procedure Script ************/ 
+ BEGIN    
+      
+	DECLARE LANGUAGE_CODE VARCHAR(1);      
+ -- GET LANGUAGE CODE
+	 SELECT IFNULL(MAX(SPRAS),'E') INTO LANGUAGE_CODE FROM &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot;;
+	 
+ var_out = SELECT                       
+                A.ID,
+                A.NAME,
+                A.DESC,
+                A.PLAN_TYPE_ID,
+                A.PLAN_TYPE_NAME,
+                A.VISIBILITY,
+                A.VISIBILITY_DESC,
+                CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;&gt; 1 THEN '***'
+                     WHEN A.CREATED_BY &lt;&gt; '' AND A.CREATED_BY IS NOT NULL AND E.USERNAME IS NOT NULL THEN E.USERNAME
+		             WHEN A.CREATED_BY = '' OR A.CREATED_BY IS NULL THEN ''
+		             ELSE '***' END AS CREATED_BY,
+                A.CREATED_TIME,
+                CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;&gt; 1 THEN '***'
+                     WHEN A.MODIFIED_BY &lt;&gt; '' AND A.MODIFIED_BY IS NOT NULL AND F.USERNAME IS NOT NULL THEN F.USERNAME
+		             WHEN A.MODIFIED_BY = '' OR A.MODIFIED_BY IS NULL THEN ''
+		             ELSE '***' END AS MODIFIED_BY,
+                A.MODIFIED_TIME,
+                A.RESOURCE_FILTER_ID,
+                A.RESOURCE_FILTER_NAME,
+                A.LOCATION_FILTER_ID,
+                A.LOCATION_FILTER_NAME, 
+                A.LOCATION_FILTER_TYPE,
+                A.TIME_FILTER_ID,
+                A.TIME_FILTER_NAME,
+                A.TIME_FILTER_OFFSET,
+                A.TIMEZONE_ID,
+                A.CALCULATION_MODEL_ID,
+                A.CALCULATION_MODEL_NAME,
+                A.NODE_ID,
+                A.ALERT_RULE_GROUP_ID,
+                A.ALERT_RULE_GROUP_NAME,                             
+                A.ATTRIBUTE_GROUP_ID,
+                A.ATTRIBUTE_GROUP_NAME,
+                --A.STATUS,
+                A.PLAN_STATUS,
+                A.PLAN_STATUS_DESC,
+                A.RESOURCE_CATEGORY,
+                A.KEEP_EXECUTION_RUNS,
+                A.HAS_SUPPLY_DEMAND,
+                A.USAGE,
+                A.USAGE_CODE,
+                B.DESC AS USAGE_DESC,
+                A.ASSIGNED_TO_VIRTUAL,
+                C.INSTANT_ENABLED
+                FROM &quot;sap.tm.trp.db.pipeline::cv_get_plan_list&quot; A 
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.pipeline::t_pipeline_model&quot; C ON A.CALCULATION_MODEL_ID = C.ID                                        
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  E ON (A.CREATED_BY = E.USERNAME)
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  F ON (A.MODIFIED_BY = F.USERNAME)
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.pipeline::t_plan_usage_t&quot; AS B ON (B.USAGE_CODE = A.USAGE_CODE
+                                                                              AND B.SPRAS = :LANGUAGE_CODE)
+                CROSS JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege&quot; PRIVILEGE
+                ;
+         
+     
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="NAME" order="2">
+        <descriptions defaultDescription="NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="DESC" order="3">
+        <descriptions defaultDescription="DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+      <attribute id="PLAN_TYPE_ID" order="4">
+        <descriptions defaultDescription="PLAN_TYPE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_TYPE_ID"/>
+      </attribute>
+      <attribute id="PLAN_TYPE_NAME" order="5">
+        <descriptions defaultDescription="PLAN_TYPE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_TYPE_NAME"/>
+      </attribute>
+      <attribute id="VISIBILITY" order="6">
+        <descriptions defaultDescription="VISIBILITY"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY"/>
+      </attribute>
+      <attribute id="VISIBILITY_DESC" order="7">
+        <descriptions defaultDescription="VISIBILITY_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY_DESC"/>
+      </attribute>
+      <attribute id="CREATED_BY" order="8">
+        <descriptions defaultDescription="CREATED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATED_BY"/>
+      </attribute>
+      <attribute id="MODIFIED_BY" order="10">
+        <descriptions defaultDescription="MODIFIED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="MODIFIED_BY"/>
+      </attribute>
+      <attribute id="RESOURCE_FILTER_NAME" order="13">
+        <descriptions defaultDescription="RESOURCE_FILTER_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_FILTER_NAME"/>
+      </attribute>
+      <attribute id="LOCATION_FILTER_ID" order="14">
+        <descriptions defaultDescription="LOCATION_FILTER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_FILTER_ID"/>
+      </attribute>
+      <attribute id="LOCATION_FILTER_NAME" order="15">
+        <descriptions defaultDescription="LOCATION_FILTER_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_FILTER_NAME"/>
+      </attribute>
+      <attribute id="TIME_FILTER_ID" order="17">
+        <descriptions defaultDescription="TIME_FILTER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_FILTER_ID"/>
+      </attribute>
+      <attribute id="TIME_FILTER_NAME" order="18">
+        <descriptions defaultDescription="TIME_FILTER_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_FILTER_NAME"/>
+      </attribute>
+      <attribute id="TIMEZONE_ID" order="20">
+        <descriptions defaultDescription="TIMEZONE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIMEZONE_ID"/>
+      </attribute>
+      <attribute id="CALCULATION_MODEL_ID" order="21">
+        <descriptions defaultDescription="CALCULATION_MODEL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="CALCULATION_MODEL_ID"/>
+      </attribute>
+      <attribute id="CALCULATION_MODEL_NAME" order="22">
+        <descriptions defaultDescription="CALCULATION_MODEL_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="CALCULATION_MODEL_NAME"/>
+      </attribute>
+      <attribute id="ALERT_RULE_GROUP_NAME" order="25">
+        <descriptions defaultDescription="ALERT_RULE_GROUP_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="ALERT_RULE_GROUP_NAME"/>
+      </attribute>
+      <attribute id="ATTRIBUTE_GROUP_NAME" order="27">
+        <descriptions defaultDescription="ATTRIBUTE_GROUP_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="ATTRIBUTE_GROUP_NAME"/>
+      </attribute>
+      <attribute id="PLAN_STATUS_DESC" order="29">
+        <descriptions defaultDescription="PLAN_STATUS_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_STATUS_DESC"/>
+      </attribute>
+      <attribute id="RESOURCE_CATEGORY" order="30">
+        <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_CATEGORY"/>
+      </attribute>
+      <attribute id="USAGE" order="32">
+        <descriptions defaultDescription="USAGE"/>
+        <keyMapping columnObjectName="Script_View" columnName="USAGE"/>
+      </attribute>
+      <attribute id="USAGE_CODE" order="33">
+        <descriptions defaultDescription="USAGE_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="USAGE_CODE"/>
+      </attribute>
+      <attribute id="USAGE_DESC" order="34">
+        <descriptions defaultDescription="USAGE DESCRIPTION"/>
+        <keyMapping columnObjectName="Script_View" columnName="USAGE_DESC"/>
+      </attribute>
+      <attribute id="ASSIGNED_TO_VIRTUAL" order="35">
+        <descriptions defaultDescription="ASSIGNED_TO_VIRTUAL"/>
+        <keyMapping columnObjectName="Script_View" columnName="ASSIGNED_TO_VIRTUAL"/>
+      </attribute>
+	  <attribute id="INSTANT_ENABLED" order="36">
+        <descriptions defaultDescription="INSTANT_ENABLED"/>
+        <keyMapping columnObjectName="Script_View" columnName="INSTANT_ENABLED"/>
+      </attribute>      
+      <attribute id="HAS_SUPPLY_DEMAND" order="37">
+        <descriptions defaultDescription="HAS_SUPPLY_DEMAND"/>
+        <keyMapping columnObjectName="Script_View" columnName="HAS_SUPPLY_DEMAND"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="CREATED_TIME" order="9" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="CREATED_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="CREATED_TIME"/>
+      </measure>
+      <measure id="MODIFIED_TIME" order="11" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="MODIFIED_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="MODIFIED_TIME"/>
+      </measure>
+      <measure id="RESOURCE_FILTER_ID" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="RESOURCE_FILTER_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="RESOURCE_FILTER_ID"/>
+      </measure>
+      <measure id="LOCATION_FILTER_TYPE" order="16" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LOCATION_FILTER_TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="LOCATION_FILTER_TYPE"/>
+      </measure>
+      <measure id="TIME_FILTER_OFFSET" order="19" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TIME_FILTER_OFFSET"/>
+        <measureMapping columnObjectName="Script_View" columnName="TIME_FILTER_OFFSET"/>
+      </measure>
+      <measure id="NODE_ID" order="23" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="NODE_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="NODE_ID"/>
+      </measure>
+      <measure id="ALERT_RULE_GROUP_ID" order="24" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ALERT_RULE_GROUP_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="ALERT_RULE_GROUP_ID"/>
+      </measure>
+      <measure id="ATTRIBUTE_GROUP_ID" order="26" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ATTRIBUTE_GROUP_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="ATTRIBUTE_GROUP_ID"/>
+      </measure>
+      <measure id="PLAN_STATUS" order="28" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="PLAN_STATUS"/>
+        <measureMapping columnObjectName="Script_View" columnName="PLAN_STATUS"/>
+      </measure>
+      <measure id="KEEP_EXECUTION_RUNS" order="31" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="KEEP_EXECUTION_RUNS"/>
+        <measureMapping columnObjectName="Script_View" columnName="KEEP_EXECUTION_RUNS"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

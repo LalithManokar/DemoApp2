@@ -1,0 +1,153 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_new_selected_persisted_plans_intersection_check" (
+	IN in_new_persisted_plan_ids "sap.tm.trp.db.pipeline::tt_plan_model_location_filter",
+	IN in_selected_persisted_plan_ids "sap.tm.trp.db.pipeline::tt_plan_model_location_filter",
+	IN in_full_check_flag SMALLINT,
+	OUT intersection_plan_info "sap.tm.trp.db.pipeline::tt_plan_model_info" ,
+	OUT node_no_intersection_error_flag SMALLINT,
+	OUT time_filter_inconsistent_error_flag SMALLINT,
+	OUT schedule_inconsistent_error_flag SMALLINT
+	) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+
+ 
+DECLARE CURSOR CUR_PLAN_MODEL FOR 
+SELECT PLAN_MODEL_ID,LOCATION_FILTER_ID 
+FROM :in_new_persisted_plan_ids ;
+DECLARE VAR_PERSISTED_PLAN_MODEL_ID BIGINT;
+DECLARE VAR_LOCATION_FILTER_ID BIGINT;
+DECLARE FULL_CHECK SMALLINT := 1 ;
+DECLARE NON_FULL_CHECK SMALLINT := 0;
+DECLARE I_COUNT INTEGER :=0 ;
+
+--default: no error
+node_no_intersection_error_flag := 0;
+time_filter_inconsistent_error_flag := 0;
+schedule_inconsistent_error_flag := 0;
+
+
+PP_ID_LIST = SELECT PLAN_MODEL_ID AS ID
+              FROM :in_new_persisted_plan_ids 
+              UNION ALL SELECT PLAN_MODEL_ID 
+              FROM :in_selected_persisted_plan_ids;
+
+--Check if the time filter of the persisted plans is the same or not, if it is not the same, then return error:
+
+SELECT COUNT(1) AS NUM INTO I_COUNT
+FROM :PP_ID_LIST;
+
+
+--DO NOT NEED TO DO CHECK, RETURN:
+IF I_COUNT <2  THEN 
+  RETURN;
+END IF; 
+
+CALL "sap.tm.trp.db.pipeline::p_persisted_plans_time_filter_check"(:PP_ID_LIST,time_filter_inconsistent_error_flag);
+IF :time_filter_inconsistent_error_flag = 1 THEN
+  RETURN;
+END IF;
+
+---subplans should have same schedule details & plan usage
+CALL "sap.tm.trp.db.pipeline::p_persisted_plans_schedule_details_check"(:PP_ID_LIST, schedule_inconsistent_error_flag);
+IF :schedule_inconsistent_error_flag > 0 THEN
+  RETURN;
+END IF;
+--Check if the persisted plans' node have intersection, if no, return error:
+--CALL "sap.tm.trp.db.pipeline::p_persisted_plans_node_intersection_check"(:in_new_persisted_plan_ids,:in_selected_persisted_plan_ids,node_no_intersection_error_flag);
+CALL "sap.tm.trp.db.pipeline::p_get_intersection_name_of_nodes_for_plan_model"(:PP_ID_LIST,SQL_INTERSECTION_NAME_LIST);
+
+ SELECT COUNT(1) AS NUM INTO I_COUNT
+ FROM :SQL_INTERSECTION_NAME_LIST
+ WHERE NAME IS NOT NULL;
+ 
+IF I_COUNT = 0 THEN
+  node_no_intersection_error_flag := 1 ;
+  RETURN;
+END IF;
+
+
+IF :in_full_check_flag = FULL_CHECK THEN
+	
+	FOR PLAN_MODEL_INFO as CUR_PLAN_MODEL DO
+	  --Get one of the persisted plan from the pps to check the intersection with the rest of other pps:
+	  VAR_PERSISTED_PLAN_MODEL_ID := PLAN_MODEL_INFO.PLAN_MODEL_ID;
+	  VAR_LOCATION_FILTER_ID :=  PLAN_MODEL_INFO.LOCATION_FILTER_ID;
+	  
+	  SQL_PPS_WITHOUT_THE_PP = SELECT * FROM :in_new_persisted_plan_ids WHERE PLAN_MODEL_ID <> :VAR_PERSISTED_PLAN_MODEL_ID
+	  UNION ALL SELECT * FROM :in_selected_persisted_plan_ids ;
+	  
+	 
+	  CALL "sap.tm.trp.db.pipeline::p_persisted_plans_intersect_to_persisted_plan_with_locationfilter" (
+	    :VAR_PERSISTED_PLAN_MODEL_ID, 
+	    :VAR_LOCATION_FILTER_ID, 
+		:SQL_PPS_WITHOUT_THE_PP, 
+		SQL_PERSISTED_PLANS_WITH_INTERSECTION
+		);
+		
+	  
+	   intersection_plan_info = SELECT PLAN_MODEL_ID1,NAME1,PLAN_MODEL_ID2,NAME2 FROM :intersection_plan_info
+	              UNION ALL SELECT PLAN_MODEL_ID1,NAME1,PLAN_MODEL_ID2,NAME2 FROM  :SQL_PERSISTED_PLANS_WITH_INTERSECTION;
+	  
+	END FOR;
+	
+	
+  intersection_plan_info = SELECT T3.* FROM :intersection_plan_info T3
+  LEFT OUTER JOIN 
+  (
+      SELECT T2.PLAN_MODEL_ID1,T2.PLAN_MODEL_ID2
+	  FROM :intersection_plan_info T1
+	  LEFT OUTER JOIN :intersection_plan_info T2 ON (T1.PLAN_MODEL_ID1 = T2.PLAN_MODEL_ID2 AND T1.PLAN_MODEL_ID2 = T2.PLAN_MODEL_ID1
+	  AND T1.PLAN_MODEL_ID1 < T2.PLAN_MODEL_ID1)
+	  WHERE T2.PLAN_MODEL_ID1 IS NOT NULL
+  )T4 ON (T3.PLAN_MODEL_ID1 = T4.PLAN_MODEL_ID1 AND T3.PLAN_MODEL_ID2 = T4.PLAN_MODEL_ID2)
+  WHERE T4.PLAN_MODEL_ID1 IS NULL;
+  
+  RETURN;
+	
+ELSEIF :in_full_check_flag = NON_FULL_CHECK THEN
+	FOR PLAN_MODEL_INFO as CUR_PLAN_MODEL DO
+		  --Get one of the persisted plan from the pps to check the intersection with the rest of other pps:
+		  VAR_PERSISTED_PLAN_MODEL_ID := PLAN_MODEL_INFO.PLAN_MODEL_ID;
+		  VAR_LOCATION_FILTER_ID :=  PLAN_MODEL_INFO.LOCATION_FILTER_ID;
+		  
+		  SQL_PPS_WITHOUT_THE_PP = SELECT * FROM :in_new_persisted_plan_ids WHERE PLAN_MODEL_ID <> :VAR_PERSISTED_PLAN_MODEL_ID
+		  UNION ALL SELECT * FROM :in_selected_persisted_plan_ids ;
+		  
+		 
+		  CALL "sap.tm.trp.db.pipeline::p_persisted_plans_intersect_to_persisted_plan_with_locationfilter" (
+		    :VAR_PERSISTED_PLAN_MODEL_ID, 
+		    :VAR_LOCATION_FILTER_ID, 
+			:SQL_PPS_WITHOUT_THE_PP, 
+			SQL_PERSISTED_PLANS_WITH_INTERSECTION
+			);
+			
+		  
+		   intersection_plan_info = SELECT PLAN_MODEL_ID1,NAME1,PLAN_MODEL_ID2,NAME2 FROM :intersection_plan_info
+		              UNION ALL SELECT PLAN_MODEL_ID1,NAME1,PLAN_MODEL_ID2,NAME2 FROM  :SQL_PERSISTED_PLANS_WITH_INTERSECTION;
+		            
+		              
+		  SELECT COUNT(1) INTO I_COUNT  FROM :intersection_plan_info;
+		  
+		  IF I_COUNT >0 THEN
+		     intersection_plan_info = SELECT TOP 1 PLAN_MODEL_ID1,NAME1,PLAN_MODEL_ID2,NAME2 FROM :intersection_plan_info;
+		   RETURN;
+		  END IF;
+		  
+		END FOR;
+ELSE
+    intersection_plan_info = SELECT NULL AS PLAN_MODEL_ID1,NULL AS NAME1, NULL AS PLAN_MODEL_ID2,NULL AS NAME2 
+    FROM DUMMY;
+END IF;
+	
+
+
+ 
+
+ intersection_plan_info = SELECT NULL AS PLAN_MODEL_ID1,NULL AS NAME1, NULL AS PLAN_MODEL_ID2,NULL AS NAME2 
+    FROM DUMMY;
+ 
+ 
+END;

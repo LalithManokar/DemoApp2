@@ -1,0 +1,60 @@
+schema = "SAP_TM_TRP";
+query = "
+select 
+     PLAN_EXECUTION_ID,
+     T2.PLAN_MODEL_ID,
+     T3.PLAN_MODEL_TYPE_ID,
+     T3.PLAN_MODEL_CATEGORY_ID,
+     CASE T7.LOCATION_TYPE || T7.EQUI_TYPE
+                  WHEN '11' THEN 1
+                  WHEN '31' THEN 2
+                  WHEN '51' THEN 3
+                  WHEN '21' THEN 4
+                  WHEN '41' THEN 5
+                  WHEN '61' THEN 6
+                  WHEN '12' THEN 7
+                  WHEN '32' THEN 8
+                  WHEN '52' THEN 9
+                  WHEN '22' THEN 10
+                  WHEN '42' THEN 11
+                  WHEN '62' THEN 12
+     END AS FILTER_TYPE,
+     T3.FILTER_GROUP_ID,
+     T3.PIPELINE_MODEL_ID,
+     NODE_ID,
+     T4.NAME as NODE_NAME,
+     T4.RESULT_VISIBLE as NODE_VISIBLE,
+     T8.DATA_OBJECT_ID,
+     T8.DATA_OBJECT_FORMAT,
+     LOCATION_ID,
+     EQUIP_TYPE_ID,  
+     T1.TIME_INTERVAL_ID,
+     T5.TIME_FILTER_ID,
+     T6.DESC as TIME_FILTER_DESC,
+     T5.SEQUENCE,
+     T5.START_OFFSET,
+     T5.END_OFFSET,
+     add_seconds(T2.EXECUTE_ON,T5.START_OFFSET) as START_TIME,
+     CEIL((END_OFFSET-START_OFFSET)/3600) as TIME_STEP,
+     OUTPUT_KEY,
+     OUTPUT_VALUE
+from \"sap.tm.trp.db.pipeline::t_pipeline_output_dataset\" T1
+inner join \"sap.tm.trp.db.pipeline::t_plan_execution\" T2
+on (T1.PLAN_EXECUTION_ID = T2.ID and 
+    T1.PLAN_EXECUTION_ID is not null)
+inner join \"sap.tm.trp.db.pipeline::t_plan_model\" T3
+on T2.PLAN_MODEL_ID = T3.ID
+inner join \"sap.tm.trp.db.pipeline::t_pipeline_node\" T4
+on T1.NODE_ID = T4.ID
+inner join  \"sap.tm.trp.db.filter::t_time_filter_interval\" T5
+on (T1.TIME_INTERVAL_ID = T5.ID )
+inner join \"sap.tm.trp.db.filter::t_time_filter\" T6
+on (T5.TIME_FILTER_ID = T6.ID)
+INNER JOIN \"sap.tm.trp.db.filter::v_filter_group\" AS T7
+ON (T3.FILTER_GROUP_ID = T7.ID)
+LEFT OUTER JOIN \"sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_dataObject_map_nodeName\" T8
+on (T4.NAME = T8.PIPELINE_NODE_NAME)
+order by PLAN_EXECUTION_ID, NODE_ID,LOCATION_ID,EQUIP_TYPE_ID,T5.SEQUENCE,OUTPUT_KEY";
+ 
+depends_on_table = ["sap.tm.trp.db.pipeline::t_pipeline_output_dataset","sap.tm.trp.db.pipeline::t_plan_execution","sap.tm.trp.db.pipeline::t_plan_model","sap.tm.trp.db.pipeline::t_pipeline_node","sap.tm.trp.db.filter::t_time_filter_interval","sap.tm.trp.db.filter::t_time_filter","sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_dataObject_map_nodeName"];
+depends_on_view  = ["sap.tm.trp.db.filter::v_filter_group"];

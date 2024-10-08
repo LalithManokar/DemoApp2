@@ -1,0 +1,119 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_ext_execution_id_change_for_simulation_plan"
+   (IN SIMULATION_ID  BIGINT,
+    OUT RETURN_CODE INTEGER,
+    OUT MESSAGE "sap.tm.trp.routing.db.common::tt_message",
+	OUT LOG "sap.tm.trp.routing.db.common::tt_message"
+   )
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE MAX_EXECUTION_ID BIGINT := -1;
+    DECLARE PROPOSED_REPO_ACTIVITY_TYPE INTEGER := 2;
+    DECLARE MANUAL_REPO_ACTIVITY_TYPE INTEGER := 1;
+    DECLARE USER_ID BIGINT;
+    DECLARE V_FROM_TIME TIMESTAMP;
+    DECLARE V_END_TIME TIMESTAMP;
+    DECLARE SCENARIO_NUM INTEGER;
+    DECLARE CURSOR CUR_SCENARIO_ID FOR SELECT ID FROM "sap.tm.trp.db.planningcockpit::t_scenario" WHERE REL_SM_PLAN_ID = :SIMULATION_ID;
+    DECLARE OUT_MESSAGE VARCHAR(50);
+    DECLARE DATASET_CODE VARCHAR(50);
+    DECLARE NETWORK_CODE VARCHAR(50);
+    DECLARE NODE_ID BIGINT;
+    DECLARE ALERT_NUM INTEGER;
+    
+    --When click Edit button in resource banlancing, UI will call p_simulation_plan_execution_check to check 
+    --If the execution Id is the newest one. If it is not, UI will popup a window to ask user if he wanted to 
+    --use the newest exectution. If the user choose to convert to the newest execution, then need to call this procedure
+    --to update the simulation plan's execute id to the newest.
+    
+     --Get the newest execution Id of the simulation plan:
+		CALL "sap.tm.trp.db.planningcockpit::p_get_newest_execution_id_for_simulation_plan"(:SIMULATION_ID,MAX_EXECUTION_ID);
+     
+     
+     ---Begin roll_forward_dataset_trip and Gernerate route code -------------------------------------------
+      CALL "sap.tm.trp.db.planningcockpit::p_get_dataset_code_by_simulation_scenario_id"(:SIMULATION_ID,0,DATASET_CODE,OUT_MESSAGE);
+      CALL "sap.tm.trp.db.planningcockpit::p_get_networkcode_by_simulation_scenario_id"(:SIMULATION_ID,0,NETWORK_CODE);
+      CALL "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid" (:MAX_EXECUTION_ID, NODE_ID);
+     
+       TIME_RANGE = SELECT DISTINCT START_TIME AS FROM_TIME, END_TIME AS TO_TIME
+       FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"
+       WHERE PLAN_EXECUTION_ID = :MAX_EXECUTION_ID AND NODE_ID = :NODE_ID;  
+       
+       SELECT MIN(FROM_TIME), MAX(TO_TIME) INTO V_FROM_TIME,V_END_TIME
+       FROM :TIME_RANGE;
+       
+	   SELECT COUNT(1) INTO SCENARIO_NUM
+	   FROM "sap.tm.trp.db.planningcockpit::t_scenario" WHERE REL_SM_PLAN_ID = :SIMULATION_ID;
+	   
+	    CALL  "sap.tm.trp.routing.db.dataset::p_roll_forward_dataset_trip"(:V_FROM_TIME,:V_END_TIME,:DATASET_CODE,RETURN_CODE,MESSAGE,LOG);
+		IF :RETURN_CODE <> 0 THEN
+		   RETURN;
+		END IF;
+	
+	   COMPOSITE_PATH_ID = SELECT 0 AS ID FROM DUMMY WHERE 1=2;
+	
+	    CALL "sap.tm.trp.routing.db.path::p_generate_route"(:NETWORK_CODE,:TIME_RANGE,:COMPOSITE_PATH_ID,RETURN_CODE,MESSAGE,LOG);
+	    IF :RETURN_CODE <> 0 THEN
+	       RETURN;
+	    END IF;
+    
+   
+   IF SCENARIO_NUM >0 THEN
+   
+     FOR SCENARIO_ID AS CUR_SCENARIO_ID DO
+        
+        CALL "sap.tm.trp.db.planningcockpit::p_get_dataset_code_by_simulation_scenario_id"(:SIMULATION_ID,SCENARIO_ID.ID,DATASET_CODE,OUT_MESSAGE);
+        CALL "sap.tm.trp.db.planningcockpit::p_get_networkcode_by_simulation_scenario_id"(:SIMULATION_ID,SCENARIO_ID.ID,NETWORK_CODE);
+        
+        CALL  "sap.tm.trp.routing.db.dataset::p_roll_forward_dataset_trip"(:V_FROM_TIME,:V_END_TIME,:DATASET_CODE,RETURN_CODE,MESSAGE,LOG);
+		IF :RETURN_CODE <> 0 THEN
+		   RETURN;
+		END IF;
+		 COMPOSITE_PATH_ID = SELECT 0 AS ID FROM DUMMY WHERE 1=2;
+	    CALL "sap.tm.trp.routing.db.path::p_generate_route"(:NETWORK_CODE,:TIME_RANGE,:COMPOSITE_PATH_ID,RETURN_CODE,MESSAGE,LOG);
+	    IF :RETURN_CODE <> 0 THEN
+	       RETURN;
+	    END IF;
+        
+        -- Delete the previpus proposed repo actitity as the route may not exist 
+        -- TODO: propse way to handle manual created repo activity with route  
+        DELETE FROM "sap.tm.trp.db.planningcockpit::t_activity"
+        WHERE rel_scenario_id = SCENARIO_ID.ID AND ACTIVITY_TYPE_ID = :PROPOSED_REPO_ACTIVITY_TYPE;
+        
+     END FOR;
+     
+   
+   END IF;
+	
+    
+      ---End roll_forward_dataset_trip and Gernerate route code -------------------------------------------
+		
+		
+		--Change the execution ID of the simulation plan
+		 CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+	    
+	    UPDATE "sap.tm.trp.db.planningcockpit::t_simulation_plan" 
+	    SET EXCUTE_ID = :MAX_EXECUTION_ID,
+	    MODIFIED_ON=CURRENT_UTCTIMESTAMP,
+		MODIFIED_BY=:USER_ID
+	    WHERE ID = :SIMULATION_ID;
+	    
+	  
+		
+		SELECT IFNULL(SUM(ALERT_STATUS),0) INTO ALERT_NUM
+		FROM 
+		(
+			SELECT CASE LOWER(T1.MESSAGE) WHEN 'alert' THEN 1 ELSE 0 END AS ALERT_STATUS 
+			FROM  "sap.tm.trp.db.hrf::v_SD_KPI_rules" T1
+			WHERE T1.NODE_ID = :NODE_ID AND T1.PLAN_EXECUTION_ID = :MAX_EXECUTION_ID
+		 )T_OLD_ALERT;
+		 
+		 --FRESH_FLAG = -1: Need refresh , SYNC_FLAG = 0: Need to get the alert accroding to the OLD original supply demand /KPI　alert
+		UPDATE  "sap.tm.trp.db.planningcockpit::t_scenario"
+		SET FRESH_FLAG = -1, SYNC_FLAG = 0,ALERT_NUM = :ALERT_NUM
+		WHERE REL_SM_PLAN_ID = :SIMULATION_ID;
+  
+   
+END;

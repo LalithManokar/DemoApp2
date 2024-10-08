@@ -1,0 +1,508 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_all_plan_data_with_alert" applyPrivilegeType="ANALYTIC_PRIVILEGE" cacheInvalidationPeriod="NONE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_all_plan_data_with_alert"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="IN_EXECUTION_ID" parameter="true">
+      <descriptions defaultDescription="IN_EXECUTION_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="PLAN_EXECUTION_ID"/>
+        <viewAttribute datatype="BIGINT" id="PLAN_MODEL_ID"/>
+        <viewAttribute datatype="INTEGER" id="PLAN_MODEL_TYPE_ID"/>
+        <viewAttribute datatype="INTEGER" id="PLAN_MODEL_CATEGORY_ID"/>
+        <viewAttribute datatype="INTEGER" id="FILTER_TYPE"/>
+        <viewAttribute datatype="BIGINT" id="FILTER_GROUP_ID"/>
+        <viewAttribute datatype="BIGINT" id="PIPELINE_MODEL_ID"/>
+        <viewAttribute datatype="BIGINT" id="NODE_ID"/>
+        <viewAttribute datatype="VARCHAR" id="NODE_NAME" length="255"/>
+        <viewAttribute datatype="SMALLINT" id="NODE_VISIBLE"/>
+        <viewAttribute datatype="VARCHAR" id="NODE_OUTPUT_KEYS" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="METADATA_NODE_ID" length="500"/>
+        <viewAttribute datatype="VARCHAR" id="DATA_OBJECT_FORMAT" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_ID" length="32"/>
+        <viewAttribute datatype="INTEGER" id="LOCATION_TYPE"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_NAME" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="EQUIP_TYPE_ID" length="32"/>
+        <viewAttribute datatype="INTEGER" id="EQUIP_TYPE_TYPE"/>
+        <viewAttribute datatype="VARCHAR" id="EQUIP_TYPE_NAME" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="TIME_FILTER_DESC" length="50"/>
+        <viewAttribute datatype="BIGINT" id="TIME_INTERVAL_ID"/>
+        <viewAttribute datatype="INTEGER" id="SEQUENCE"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_TIME"/>
+        <viewAttribute datatype="DECIMAL" id="TIME_STEP"/>
+        <viewAttribute datatype="DOUBLE" id="STOCK"/>
+        <viewAttribute datatype="DOUBLE" id="SUPPLY"/>
+        <viewAttribute datatype="DOUBLE" id="DEMAND"/>
+        <viewAttribute datatype="DOUBLE" id="BALANCE_STOCK_SUPPLY_DEMAND"/>
+        <viewAttribute datatype="DOUBLE" id="BALANCE_SUPPLY_DEMAND"/>
+        <viewAttribute datatype="DOUBLE" id="MIN_SAFETY_STOCK"/>
+        <viewAttribute datatype="DOUBLE" id="MAX_SAFETY_STOCK"/>
+        <viewAttribute datatype="DOUBLE" id="MAX_CAPACITY"/>
+        <viewAttribute datatype="VARCHAR" id="UNIT" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="ROW_ID" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="MESSAGE" length="8"/>
+        <viewAttribute datatype="VARCHAR" id="ALERT_REASON" length="500"/>
+        <viewAttribute datatype="DOUBLE" id="ALERT_SCORE_IMP"/>
+        <viewAttribute datatype="DOUBLE" id="ALERT_SCORE_EMER"/>
+        <viewAttribute datatype="DOUBLE" id="MIN_SAFETY_STOCK_HEADER"/>
+        <viewAttribute datatype="DOUBLE" id="MAX_SAFETY_STOCK_HEADER"/>
+        <viewAttribute datatype="DOUBLE" id="MAX_CAPACITY_HEADER"/>
+        <viewAttribute datatype="DOUBLE" id="STOCK_BALANCE_HEADER"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_EXECUTION_ID</localVariable>
+      <definition> 
+  
+ BEGIN 
+ 	  DECLARE NODE_ID BIGINT;
+ 	  DECLARE  MIN_SAFETY_KEY VARCHAR(20) := 'MIN_SAFETY_STOCK';
+      DECLARE MAX_SAFETY_KEY VARCHAR(20) := 'MAX_SAFETY_STOCK';
+      DECLARE MAX_CAPACITY_KEY VARCHAR(20) := 'MAX_CAPACITY';
+      DECLARE MIN_SAFETY_DEFAULT INTEGER;
+      DECLARE MAX_SAFETY_DEFAULT INTEGER;
+      DECLARE MAX_CAPACITY_DEFAULT INTEGER;
+
+	 
+	  --get the default node id of the execution
+	  CALL &quot;sap.tm.trp.db.pipeline::p_get_default_node_by_executionid&quot;(:IN_EXECUTION_ID, NODE_ID);	
+    
+      -- get the default stock threshold  
+      SELECT IFNULL(MAX(T1.DEFAULT_VALUE),0) INTO MIN_SAFETY_DEFAULT
+      FROM &quot;sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity&quot; T1
+      WHERE T1.DEFAULT_KEY = :MIN_SAFETY_KEY;
+    
+      SELECT IFNULL(MAX(T1.DEFAULT_VALUE),999999) INTO MAX_SAFETY_DEFAULT
+      FROM &quot;sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity&quot; T1
+      WHERE T1.DEFAULT_KEY = :MAX_SAFETY_KEY; 
+    
+      SELECT IFNULL(MAX(T1.DEFAULT_VALUE),999999) into MAX_CAPACITY_DEFAULT
+      FROM &quot;sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity&quot; T1
+      WHERE T1.DEFAULT_KEY = :MAX_CAPACITY_KEY;
+    
+      -- get initial plan execution results
+      SQL1 = SELECT T1.PLAN_EXECUTION_ID,
+                              T1.NODE_ID,
+                              T1.LOCATION_ID,
+                              T1.LOCATION_NAME,
+                              T1.LOCATION_FILTER_TYPE AS LOCATION_TYPE,
+                              T1.EQUIP_TYPE_ID,
+                              T1.EQUIP_TYPE_NAME,
+                              T1.EQUIP_FILTER_TYPE AS EQUIP_TYPE_TYPE,
+                              T1.OUTPUT_KEY,
+                              TO_DOUBLE(T1.OUTPUT_VALUE) AS OUTPUT_VALUE,
+                              T1.TIME_INTERVAL_ID,
+                              T1.UNIT,
+                              T1.START_TIME,
+                              T1.END_TIME,
+                              T1.TIME_INTERVAL as TIME_STEP,
+                              T1.SEQUENCE
+                       FROM &quot;sap.tm.trp.db.pipeline::t_pipeline_output_dataset&quot; T1
+                       WHERE T1.PLAN_EXECUTION_ID = :IN_EXECUTION_ID
+                       AND T1.NODE_ID = :NODE_ID;/*anna add*/
+                        
+      
+       SQL2 =           SELECT PLAN_EXECUTION_ID,
+                              NODE_ID,
+                              LOCATION_ID,
+                              LOCATION_NAME,
+                              LOCATION_TYPE,
+                              EQUIP_TYPE_ID,
+                              EQUIP_TYPE_NAME,
+                              EQUIP_TYPE_TYPE,
+                              CASE  WHEN OUTPUT_KEY = 'DEMAND' 
+                                	      THEN 'SUPPLY' 
+                    	            ELSE 'DEMAND' 
+                    	      END  AS OUTPUT_KEY,
+                              0 AS OUTPUT_VALUE,
+                              TIME_INTERVAL_ID,
+                              UNIT,
+                              START_TIME,
+                              END_TIME,
+                              TIME_STEP,
+                              SEQUENCE
+                        FROM :SQL1
+                        UNION ALL
+                        SELECT PLAN_EXECUTION_ID,
+                              NODE_ID,
+                              LOCATION_ID,
+                              LOCATION_NAME,
+                              LOCATION_TYPE,
+                              EQUIP_TYPE_ID,
+                              EQUIP_TYPE_NAME,
+                              EQUIP_TYPE_TYPE,
+                              OUTPUT_KEY,
+                              OUTPUT_VALUE,
+                              TIME_INTERVAL_ID,
+                              UNIT,
+                              START_TIME,
+                              END_TIME,
+                              TIME_STEP,
+                              SEQUENCE
+                        FROM :SQL1;
+                        
+       init_plan_data = SELECT PLAN_EXECUTION_ID,
+                              NODE_ID,
+                              LOCATION_ID,
+                              LOCATION_NAME,
+                              LOCATION_TYPE,
+                              EQUIP_TYPE_ID,
+                              EQUIP_TYPE_NAME,
+                              EQUIP_TYPE_TYPE,
+                              OUTPUT_KEY,
+                              SUM(OUTPUT_VALUE) AS OUTPUT_VALUE,
+                              TIME_INTERVAL_ID,
+                              UNIT,
+                              START_TIME,
+                              END_TIME,
+                              TIME_STEP,
+                              SEQUENCE
+                        FROM :SQL2
+                        GROUP BY
+                              PLAN_EXECUTION_ID,
+                              NODE_ID,
+                              LOCATION_ID, 
+                              LOCATION_NAME,
+                              LOCATION_TYPE,
+                              EQUIP_TYPE_ID,
+                              EQUIP_TYPE_NAME,
+                              EQUIP_TYPE_TYPE,
+                              OUTPUT_KEY,
+                              TIME_INTERVAL_ID,
+                              UNIT,
+                              START_TIME,
+                              END_TIME,
+                              TIME_STEP,
+                              SEQUENCE;
+                              
+       convert_plan_data = SELECT T1.PLAN_EXECUTION_ID,
+                                 T1.NODE_ID,
+                                 T1.LOCATION_ID,
+                                 T1.LOCATION_NAME,
+                                 T1.LOCATION_TYPE,
+                                 T1.EQUIP_TYPE_ID,
+                                 T1.EQUIP_TYPE_NAME,
+                                 T1.EQUIP_TYPE_TYPE,
+                                 IFNULL(T3.OUTPUT_VALUE,0) AS STOCK,
+                                 T1.OUTPUT_VALUE AS SUPPLY, 
+                                 T2.OUTPUT_VALUE AS DEMAND,
+                                 T1.TIME_INTERVAL_ID,
+                                 T1.UNIT,
+                                 T1.START_TIME,
+                                 T1.END_TIME,
+                                 T1.TIME_STEP,
+                                 T1.SEQUENCE
+                          FROM (SELECT * FROM :init_plan_data
+                                WHERE OUTPUT_KEY = 'SUPPLY'
+                                ) T1
+                          INNER JOIN 
+                               (SELECT * FROM :init_plan_data
+                                WHERE OUTPUT_KEY = 'DEMAND'
+                                ) T2
+                          ON (T1.PLAN_EXECUTION_ID = T2.PLAN_EXECUTION_ID
+                              AND T1.NODE_ID = T2.NODE_ID
+                              AND T1.LOCATION_ID = T2.LOCATION_ID
+                              AND T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID
+                              AND T1.TIME_INTERVAL_ID = T2.TIME_INTERVAL_ID) 
+                          LEFT JOIN(SELECT * FROM :init_plan_data STOCK
+                                    INNER JOIN &quot;sap.tm.trp.db.pipeline::t_pipeline_node_misc_info&quot; NODE
+                                    ON (STOCK.NODE_ID = NODE.NODE_ID 
+                                        AND NODE.KEY = 'nodeType'
+                                        AND NODE.VALUE = 'INITIAL_STOCK')
+                                    WHERE STOCK.OUTPUT_KEY = 'STOCK') T3
+                          ON (T1.PLAN_EXECUTION_ID = T3.PLAN_EXECUTION_ID
+                             AND T1.LOCATION_ID = T3.LOCATION_ID
+                             AND T1.EQUIP_TYPE_ID = T3.EQUIP_TYPE_ID
+                             AND T1.TIME_INTERVAL_ID = T3.TIME_INTERVAL_ID);
+                             
+       stock_balance_by_location = SELECT T1.LOCATION_ID,
+	                                      T1.TIME_INTERVAL_ID,
+	                                      T1.NODE_ID,
+	                                      SUM(T1.STOCK + T1.SUPPLY - T1.DEMAND) AS BALANCE_STOCK
+	                                FROM :convert_plan_data T1
+	                                GROUP BY T1.LOCATION_ID,T1.TIME_INTERVAL_ID,T1.NODE_ID;
+	                                
+            
+	   var_out =         SELECT T1.PLAN_EXECUTION_ID,
+	                            T2.PLAN_MODEL_ID,
+	                            T3.PLAN_MODEL_TYPE_ID,
+	                            T3.PLAN_MODEL_TYPE_ID as PLAN_MODEL_CATEGORY_ID,
+	                            T4.FILTER_TYPE,
+	                            T3.FILTER_GROUP_ID,
+	                            T3.PIPELINE_MODEL_ID,
+	                            T1.NODE_ID,
+	                            T5.NAME AS NODE_NAME, 
+                                T5.RESULT_VISIBLE AS NODE_VISIBLE,
+                                T6.NODE_OUTPUT_KEYS,
+                                T6.METADATA_NODE_ID, 
+                                T6.DATA_OBJECT_FORMAT, 
+	                            T1.LOCATION_ID,
+	                            T1.LOCATION_TYPE,
+                                T1.LOCATION_NAME,
+	                            T1.EQUIP_TYPE_ID,
+	                            T1.EQUIP_TYPE_TYPE,
+                                T1.EQUIP_TYPE_NAME,
+	                            T42.DESC AS TIME_FILTER_DESC,
+	                            T1.TIME_INTERVAL_ID,
+                                T1.SEQUENCE,
+                                T1.START_TIME,
+                                T1.END_TIME,
+                                T1.TIME_STEP,
+                                T1.STOCK,
+                                T1.SUPPLY,
+                                T1.DEMAND,
+                                (T1.STOCK + T1.SUPPLY - T1.DEMAND) AS BALANCE_STOCK_SUPPLY_DEMAND,
+                                (T1.SUPPLY - T1.DEMAND) AS BALANCE_SUPPLY_DEMAND,
+                                IFNULL(T7.MIN_SAFETY,:MIN_SAFETY_DEFAULT) AS MIN_SAFETY_STOCK,
+                                IFNULL(T7.MAX_SAFETY,:MAX_SAFETY_DEFAULT) AS MAX_SAFETY_STOCK,
+                                IFNULL(T7.MAX_CAPACITY,:MAX_CAPACITY_DEFAULT) AS MAX_CAPACITY,
+                                T1.UNIT,
+                                IFNULL(T9.ROW_ID,'') AS ROW_ID,
+                                IFNULL(T9.MESSAGE,'Normal') AS MESSAGE,
+                                IFNULL(T9.ALERT_REASON,'') AS ALERT_REASON,
+                                IFNULL(T9.ALERT_SCORE_IMP,0) AS ALERT_SCORE_IMP,
+                                IFNULL(T9.ALERT_SCORE_EMER,0) AS ALERT_SCORE_EMER,
+                                IFNULL(T10.MIN_SAFETY,:MIN_SAFETY_DEFAULT) AS MIN_SAFETY_STOCK_HEADER,
+                                IFNULL(T10.MAX_SAFETY,:MAX_SAFETY_DEFAULT) AS MAX_SAFETY_STOCK_HEADER,
+                                IFNULL(T10.MAX_CAPACITY,:MAX_CAPACITY_DEFAULT) AS MAX_CAPACITY_HEADER,
+                                IFNULL(T11.BALANCE_STOCK,0) AS STOCK_BALANCE_HEADER
+                FROM :convert_plan_data T1
+                INNER JOIN &quot;sap.tm.trp.db.pipeline::t_plan_execution&quot; T2 ON (T1.PLAN_EXECUTION_ID = T2.ID)
+                INNER JOIN &quot;sap.tm.trp.db.hrf::v_plan_model&quot; T3 ON (T1.PLAN_EXECUTION_ID = T3.EXECUTION_ID)
+               INNER JOIN &quot;sap.tm.trp.db.filter::t_filter_group&quot; AS T4 ON (T3.FILTER_GROUP_ID = T4.ID)
+               INNER JOIN &quot;sap.tm.trp.db.filter::t_time_filter&quot; AS T42 ON (T4.TIME_FILTER_ID = T42.ID)
+                INNER JOIN &quot;sap.tm.trp.db.pipeline::t_pipeline_node&quot; T5 ON (T1.NODE_ID = T5.ID and T5.RESULT_VISIBLE = 1)
+                INNER JOIN &quot;sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID&quot; T6
+                ON (T5.METADATA_NODE_ID = T6.METADATA_NODE_ID and T5.PIPELINE_MODEL_ID = T6.PIPELINE_MODEL_ID)
+                 LEFT OUTER JOIN 
+                 (  SELECT  T1.LOCATION_ID,T1.LOCATION_TYPE,
+                     T1.EQUIP_CODE,T1.EQUIP_CODE_TYPE,
+                     T1.MIN_SAFETY,T1.MAX_SAFETY,T1.MAX_CAPACITY,
+                     T1.RESOURCE_CATEGORY
+                    FROM &quot;sap.tm.trp.db.stock::v_stock_config_for_container&quot; T1
+                 )T7 ON (T1.LOCATION_ID = T7.LOCATION_ID AND T1.EQUIP_TYPE_ID = T7.EQUIP_CODE AND T7.RESOURCE_CATEGORY=T4.RESOURCE_CATEGORY)
+                LEFT JOIN &quot;sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_DeltaFlag&quot; T9
+                ON (T1.PLAN_EXECUTION_ID = T9.PLAN_EXECUTION_ID AND T1.NODE_ID = T9.NODE_ID AND T1.TIME_INTERVAL_ID = T9.TIME_INTERVAL_ID
+                    AND T1.LOCATION_ID = T9.LOCATION_ID AND T1.EQUIP_TYPE_ID = T9.EQUIP_TYPE_ID)
+                LEFT OUTER JOIN 
+                 (  SELECT  T1.LOCATION_ID,T1.LOCATION_TYPE,
+                     T1.EQUIP_CODE,T1.EQUIP_CODE_TYPE,
+                     T1.MIN_SAFETY,T1.MAX_SAFETY,T1.MAX_CAPACITY,
+                     T1.RESOURCE_CATEGORY
+                    FROM &quot;sap.tm.trp.db.stock::v_stock_config_for_container&quot; T1 WHERE LOCATION_HEAD_FLAG = 1
+                 )T10 ON (T1.LOCATION_ID = T10.LOCATION_ID AND T10.RESOURCE_CATEGORY=T4.RESOURCE_CATEGORY)
+                 LEFT OUTER JOIN :stock_balance_by_location T11
+                 ON (T1.LOCATION_ID = T11.LOCATION_ID AND T1.TIME_INTERVAL_ID = T11.TIME_INTERVAL_ID AND T1.NODE_ID = T11.NODE_ID);
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="PLAN_EXECUTION_ID" order="1">
+        <descriptions defaultDescription="PLAN_EXECUTION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_EXECUTION_ID"/>
+      </attribute>
+      <attribute id="PLAN_MODEL_ID" order="2">
+        <descriptions defaultDescription="PLAN_MODEL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_MODEL_ID"/>
+      </attribute>
+      <attribute id="PLAN_MODEL_TYPE_ID" order="3">
+        <descriptions defaultDescription="PLAN_MODEL_TYPE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_MODEL_TYPE_ID"/>
+      </attribute>
+      <attribute id="PLAN_MODEL_CATEGORY_ID" order="4">
+        <descriptions defaultDescription="PLAN_MODEL_CATEGORY_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_MODEL_CATEGORY_ID"/>
+      </attribute>
+      <attribute id="FILTER_TYPE" order="5">
+        <descriptions defaultDescription="FILTER_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="FILTER_TYPE"/>
+      </attribute>
+      <attribute id="FILTER_GROUP_ID" order="6">
+        <descriptions defaultDescription="FILTER_GROUP_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="FILTER_GROUP_ID"/>
+      </attribute>
+      <attribute id="PIPELINE_MODEL_ID" order="7">
+        <descriptions defaultDescription="PIPELINE_MODEL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PIPELINE_MODEL_ID"/>
+      </attribute>
+      <attribute id="NODE_ID" order="8">
+        <descriptions defaultDescription="NODE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="NODE_ID"/>
+      </attribute>
+      <attribute id="NODE_NAME" order="9">
+        <descriptions defaultDescription="NODE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NODE_NAME"/>
+      </attribute>
+      <attribute id="NODE_VISIBLE" order="10">
+        <descriptions defaultDescription="NODE_VISIBLE"/>
+        <keyMapping columnObjectName="Script_View" columnName="NODE_VISIBLE"/>
+      </attribute>
+      <attribute id="NODE_OUTPUT_KEYS" order="11">
+        <descriptions defaultDescription="NODE_OUTPUT_KEYS"/>
+        <keyMapping columnObjectName="Script_View" columnName="NODE_OUTPUT_KEYS"/>
+      </attribute>
+      <attribute id="METADATA_NODE_ID" order="12">
+        <descriptions defaultDescription="METADATA_NODE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="METADATA_NODE_ID"/>
+      </attribute>
+      <attribute id="DATA_OBJECT_FORMAT" order="13">
+        <descriptions defaultDescription="DATA_OBJECT_FORMAT"/>
+        <keyMapping columnObjectName="Script_View" columnName="DATA_OBJECT_FORMAT"/>
+      </attribute>
+      <attribute id="LOCATION_ID" order="14">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_ID"/>
+      </attribute>
+      <attribute id="LOCATION_TYPE" order="15">
+        <descriptions defaultDescription="LOCATION_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_TYPE"/>
+      </attribute>
+      <attribute id="LOCATION_NAME" order="16">
+        <descriptions defaultDescription="LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_NAME"/>
+      </attribute>
+      <attribute id="EQUIP_TYPE_ID" order="17">
+        <descriptions defaultDescription="EQUIP_TYPE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_TYPE_ID"/>
+      </attribute>
+      <attribute id="EQUIP_TYPE_TYPE" order="18">
+        <descriptions defaultDescription="EQUIP_TYPE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_TYPE_TYPE"/>
+      </attribute>
+      <attribute id="EQUIP_TYPE_NAME" order="19">
+        <descriptions defaultDescription="EQUIP_TYPE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_TYPE_NAME"/>
+      </attribute>
+      <attribute id="TIME_FILTER_DESC" order="20">
+        <descriptions defaultDescription="TIME_FILTER_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_FILTER_DESC"/>
+      </attribute>
+      <attribute id="TIME_INTERVAL_ID" order="21">
+        <descriptions defaultDescription="TIME_INTERVAL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_INTERVAL_ID"/>
+      </attribute>
+      <attribute id="SEQUENCE" order="22">
+        <descriptions defaultDescription="SEQUENCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SEQUENCE"/>
+      </attribute>
+      <attribute id="START_TIME" order="23">
+        <descriptions defaultDescription="START_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </attribute>
+      <attribute id="TIME_STEP" order="25">
+        <descriptions defaultDescription="TIME_STEP"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_STEP"/>
+      </attribute>
+      <attribute id="STOCK" order="26">
+        <descriptions defaultDescription="STOCK"/>
+        <keyMapping columnObjectName="Script_View" columnName="STOCK"/>
+      </attribute>
+      <attribute id="SUPPLY" order="27">
+        <descriptions defaultDescription="SUPPLY"/>
+        <keyMapping columnObjectName="Script_View" columnName="SUPPLY"/>
+      </attribute>
+      <attribute id="DEMAND" order="28">
+        <descriptions defaultDescription="DEMAND"/>
+        <keyMapping columnObjectName="Script_View" columnName="DEMAND"/>
+      </attribute>
+      <attribute id="BALANCE_STOCK_SUPPLY_DEMAND" order="29">
+        <descriptions defaultDescription="BALANCE_STOCK_SUPPLY_DEMAND"/>
+        <keyMapping columnObjectName="Script_View" columnName="BALANCE_STOCK_SUPPLY_DEMAND"/>
+      </attribute>
+      <attribute id="BALANCE_SUPPLY_DEMAND" order="30">
+        <descriptions defaultDescription="BALANCE_SUPPLY_DEMAND"/>
+        <keyMapping columnObjectName="Script_View" columnName="BALANCE_SUPPLY_DEMAND"/>
+      </attribute>
+      <attribute id="MIN_SAFETY_STOCK" order="31">
+        <descriptions defaultDescription="MIN_SAFETY_STOCK"/>
+        <keyMapping columnObjectName="Script_View" columnName="MIN_SAFETY_STOCK"/>
+      </attribute>
+      <attribute id="MAX_SAFETY_STOCK" order="32">
+        <descriptions defaultDescription="MAX_SAFETY_STOCK"/>
+        <keyMapping columnObjectName="Script_View" columnName="MAX_SAFETY_STOCK"/>
+      </attribute>
+      <attribute id="MAX_CAPACITY" order="33">
+        <descriptions defaultDescription="MAX_CAPACITY"/>
+        <keyMapping columnObjectName="Script_View" columnName="MAX_CAPACITY"/>
+      </attribute>
+      <attribute id="ROW_ID" order="35">
+        <descriptions defaultDescription="ROW_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ROW_ID"/>
+      </attribute>
+      <attribute id="MESSAGE" order="36">
+        <descriptions defaultDescription="MESSAGE"/>
+        <keyMapping columnObjectName="Script_View" columnName="MESSAGE"/>
+      </attribute>
+      <attribute id="ALERT_REASON" order="37">
+        <descriptions defaultDescription="ALERT_REASON"/>
+        <keyMapping columnObjectName="Script_View" columnName="ALERT_REASON"/>
+      </attribute>
+      <attribute id="ALERT_SCORE_IMP" order="38">
+        <descriptions defaultDescription="ALERT_SCORE_IMP"/>
+        <keyMapping columnObjectName="Script_View" columnName="ALERT_SCORE_IMP"/>
+      </attribute>
+      <attribute id="ALERT_SCORE_EMER" order="39">
+        <descriptions defaultDescription="ALERT_SCORE_EMER"/>
+        <keyMapping columnObjectName="Script_View" columnName="ALERT_SCORE_EMER"/>
+      </attribute>
+      <attribute id="MIN_SAFETY_STOCK_HEADER" order="40">
+        <descriptions defaultDescription="MIN_SAFETY_STOCK_HEADER"/>
+        <keyMapping columnObjectName="Script_View" columnName="MIN_SAFETY_STOCK_HEADER"/>
+      </attribute>
+      <attribute id="MAX_SAFETY_STOCK_HEADER" order="41">
+        <descriptions defaultDescription="MAX_SAFETY_STOCK_HEADER"/>
+        <keyMapping columnObjectName="Script_View" columnName="MAX_SAFETY_STOCK_HEADER"/>
+      </attribute>
+      <attribute id="MAX_CAPACITY_HEADER" order="42">
+        <descriptions defaultDescription="MAX_CAPACITY_HEADER"/>
+        <keyMapping columnObjectName="Script_View" columnName="MAX_CAPACITY_HEADER"/>
+      </attribute>
+      <attribute id="STOCK_BALANCE_HEADER" order="43">
+        <descriptions defaultDescription="STOCK_BALANCE_HEADER"/>
+        <keyMapping columnObjectName="Script_View" columnName="STOCK_BALANCE_HEADER"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="END_TIME" order="24" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="END_TIMESTAMP"/>
+        <measureMapping columnObjectName="Script_View" columnName="END_TIME"/>
+      </measure>
+      <measure id="UNIT" order="34" aggregationType="count" measureType="simple">
+        <descriptions defaultDescription="UNIT"/>
+        <measureMapping columnObjectName="Script_View" columnName="UNIT"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

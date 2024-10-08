@@ -1,0 +1,16 @@
+//To define the HDB view file use the following syntax: 
+schema = "SAP_TM_TRP";
+query = "SELECT ALERT_RULE_GROUP_ID, 
+                NAME AS ALERT_RULE_GROUP_NAME,
+                ALERT_RULE_GROUP_CATEGORY_ID
+         FROM  \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group\" AS ALERT_GRP_TBL
+         LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_user\" AS USER_TBL_CREATE
+         ON ALERT_GRP_TBL.CREATE_BY = USER_TBL_CREATE.ID
+         LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_user\" AS USER_TBL_MODIFY
+         ON ALERT_GRP_TBL.LAST_MODIFIED_BY = USER_TBL_MODIFY.ID
+         LEFT JOIN \"sap.tm.trp.db.systemmanagement.user::cv_get_username\" AS T1 
+         ON T1.USERNAME = USER_TBL_CREATE.USERNAME
+	     WHERE ALERT_GRP_TBL.ALLOWED_USAGE = 'G' OR T1.USERNAME IS NOT NULL";
+
+depends_on_table = ["sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group","sap.tm.trp.db.systemmanagement.user::t_user"];
+depends_on_view = ["sap.tm.trp.db.systemmanagement.user::cv_get_username"];

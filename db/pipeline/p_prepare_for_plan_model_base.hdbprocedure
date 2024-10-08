@@ -1,0 +1,45 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_prepare_for_plan_model_base" (
+IN FILTER_GROUP_ID BIGINT,
+IN PIPELINE_MODEL_ID BIGINT,
+IN ATTRIBUTE_GROUP_ID BIGINT,
+OUT CONNECTIONID VARCHAR(22),
+OUT SCHEMA_NAME VARCHAR(32),
+OUT OBJECT_NAME VARCHAR(500),
+OUT CATEGORY_ID INTEGER)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+DECLARE COST_MODEL_ID BIGINT;
+
+--prerpare the metadata
+CALL "sap.tm.trp.db.pipeline::p_prepare_for_plan_metadata"(:PIPELINE_MODEL_ID,:CONNECTIONID,:SCHEMA_NAME,:OBJECT_NAME,:CATEGORY_ID);
+
+SELECT IFNULL(MAX(COST_MODEL_ID), -1) INTO COST_MODEL_ID FROM "sap.tm.trp.db.pipeline::t_pipeline_model_cost_model"
+WHERE PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;
+
+--FOR WORKAROUND
+--Calculate the filtered locations/equip types/time intervals and put the result into global temporary tables
+-- these are only calculated once for the whole pipeline instead of computing in every data provider
+CALL "sap.tm.trp.db.pipeline::p_prepare_filterinfo_for_pipeline" (:FILTER_GROUP_ID);
+
+IF :ATTRIBUTE_GROUP_ID > -1 THEN
+--FOR WORKAROUND
+INSERT INTO "sap.tm.trp.db.pipeline::t_pipeline_datasrc_input_params"
+SELECT 'In_Attribute_Group_ID' AS PARAM, :ATTRIBUTE_GROUP_ID AS VALUE, :CONNECTIONID FROM DUMMY;
+END IF;
+
+IF :COST_MODEL_ID > -1 THEN 
+INSERT INTO "sap.tm.trp.db.pipeline::t_pipeline_datasrc_input_params"
+VALUES('In_Cost_Model_ID', :COST_MODEL_ID, :CONNECTIONID);
+END IF;
+
+INSERT INTO "sap.tm.trp.db.pipeline::t_pipeline_datasrc_input_params"
+SELECT 'In_RESOURCE_CATEGORY' AS PARAM ,  RESOURCE_CATEGORY AS VALUE ,:CONNECTIONID    FROM  "sap.tm.trp.db.filter::t_filter_group" WHERE ID =:FILTER_GROUP_ID;
+
+
+    
+
+END;

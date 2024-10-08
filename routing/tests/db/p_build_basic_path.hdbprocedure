@@ -1,0 +1,40 @@
+procedure "SAP_TM_ROUTING_TEST"."sap.tm.trp.routing.tests.db::p_build_basic_path" (
+    in from_time timestamp,
+    in to_time timestamp,
+    --in options "sap.tm.trp.routing.db.adaptor::tt_option",
+    out return_code tinyint,
+    out paths table (
+        ID NVARCHAR(50),
+        NAME NVARCHAR(100),
+        TYPE NVARCHAR(10),
+        MTR NVARCHAR(10),
+        CARRIER NVARCHAR(50),
+        FROM_LOCATION NVARCHAR(50),
+        TO_LOCATION NVARCHAR(50)
+    ),
+    out path_connection table (
+        PATH_ID NVARCHAR(50),
+        SEQUENCE INTEGER,
+        FROM_LOCATION NVARCHAR(50),
+        TO_LOCATION NVARCHAR(50),
+        DISTANCE DOUBLE, 
+        DURATION INTEGER,
+        STAY_TIME INTEGER,
+        CUTOFF_OFFSET INTEGER,
+        AVAILABILITY_OFFSET INTEGER
+    ),
+    out message "sap.tm.trp.routing.db.common::tt_message"
+   ) 
+    language sqlscript
+    sql security invoker
+    default schema "SAP_TM_ROUTING_TEST"
+    as
+begin
+    -- Fill the source location
+    paths = select ID, NAME, TYPE, MTR, CARRIER, FROM_LOCATION, TO_LOCATION from "sap.tm.trp.routing.tests.db::t_path";
+    path_connection = select * from "sap.tm.trp.routing.tests.db::t_path_connection";
+    
+    select 0 into return_code from dummy;
+    message = select '' as severity, '' as message from dummy where 1 <> 1;
+    
+end;

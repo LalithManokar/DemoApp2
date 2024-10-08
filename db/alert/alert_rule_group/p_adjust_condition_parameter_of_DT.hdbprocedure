@@ -1,0 +1,32 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert.alert_rule_group::p_adjust_condition_parameter_of_DT" (
+IN ALERT_RULE_ID BIGINT,
+IN IN_PARAM_VALUE DOUBLE,
+OUT SUCCESS_FLAG INTEGER  
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    DECLARE EXIST_FLAG INTEGER;
+    DECLARE PARAM_KEY VARCHAR(50);
+    
+    PARAM_KEY := 'THRESHOLD';
+    select count(*) into EXIST_FLAG
+    from "sap.tm.trp.db.alert.alert_rule_group::t_DT_params" T1
+    where T1.ALERT_RULE_ID = :ALERT_RULE_ID;
+    
+    IF ( :EXIST_FLAG = 1 )
+    THEN
+        delete from "sap.tm.trp.db.alert.alert_rule_group::t_DT_params" T1 where T1.ALERT_RULE_ID = :ALERT_RULE_ID;
+        
+        insert into "sap.tm.trp.db.alert.alert_rule_group::t_DT_params" values( ALERT_RULE_ID, PARAM_KEY, IN_PARAM_VALUE); 
+         
+        select count(*)-1 into SUCCESS_FLAG
+        from "sap.tm.trp.db.alert.alert_rule_group::t_DT_params" T1
+        where T1.ALERT_RULE_ID = :ALERT_RULE_ID and 
+              T1.ALERT_RULE_PARAM_VALUE = :IN_PARAM_VALUE;
+    ELSE
+        SUCCESS_FLAG := -1;
+    END IF;
+END;

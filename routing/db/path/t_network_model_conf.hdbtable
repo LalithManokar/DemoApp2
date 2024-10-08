@@ -1,0 +1,9 @@
+table.schemaName = "SAP_TM_ROUTING";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "NETWORK_MODEL_ID"; sqlType = BIGINT; },
+    {name = "SEQUENCE"; sqlType = INTEGER;},
+    {name = "NAME"; sqlType = NVARCHAR; length = 50;},
+    {name = "VALUE";sqlType = NVARCHAR; length = 50;}
+];
+table.primaryKey.pkcolumns = ["NETWORK_MODEL_ID", "SEQUENCE"];

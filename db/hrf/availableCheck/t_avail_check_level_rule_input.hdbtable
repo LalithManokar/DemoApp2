@@ -1,0 +1,27 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "used as input for supply demand rule";
+table.columns = [
+    {name = "REQUEST_LOCATION_NAME"; sqlType = VARCHAR; length = 50;},
+    {name = "REQUEST_LOCATION_XPOS"; sqlType =  DOUBLE;},
+    {name = "REQUEST_LOCATION_YPOS"; sqlType =  DOUBLE;},
+    {name = "REQUEST_EQUIP_TYPE"; sqlType = VARCHAR; length = 50;},
+    {name = "REQUEST_TIME"; sqlType = TIMESTAMP;},
+    {name = "REQUEST_QUANTITY"; sqlType = INTEGER; },
+    {name = "REQUEST_CHECK_TYPE"; sqlType = VARCHAR; length = 20;},
+    
+    {name = "LOCATION_NAME"; sqlType = VARCHAR; length = 50;},
+    {name = "LOCATION_XPOS"; sqlType =  DOUBLE;},
+    {name = "LOCATION_YPOS"; sqlType =  DOUBLE;},
+    {name = "EQUIP_TYPE"; sqlType = VARCHAR; length = 50;},
+    {name = "START_TIME"; sqlType = TIMESTAMP;},
+    {name = "END_TIME"; sqlType = TIMESTAMP;},    
+    {name = "STOCK"; sqlType = DOUBLE; },
+    {name = "SUPPLY"; sqlType = DOUBLE; },
+    {name = "DEMAND"; sqlType = DOUBLE; },
+    {name = "BALANCE_SUPPLY_DEMAND"; sqlType = DOUBLE; },
+    {name = "BALANCE_STOCK_SUPPLY_DEMAND"; sqlType = DOUBLE; },
+    {name = "MIN_SAFETY_STOCK"; sqlType = DOUBLE; },
+    {name = "MAX_SAFETY_STOCK"; sqlType = DOUBLE; },
+    {name = "MAX_CAPACITY"; sqlType = DOUBLE; }
+];

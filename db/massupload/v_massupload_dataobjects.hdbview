@@ -1,0 +1,12 @@
+schema = "SAP_TM_TRP";
+
+query = "SELECT T1.DATA_OBJ, IFNULL(B.DESC,T1.DESC) AS DESC
+FROM \"sap.tm.trp.db.massupload::t_massupload_dataobjects\" T1
+LEFT OUTER JOIN (
+SELECT T2.DATA_OBJ, T2.DESC FROM \"sap.tm.trp.db.massupload::t_massupload_dataobjects_t\" T2
+INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" LANG_CODE ON (T2.SPRAS = LANG_CODE.SPRAS) 
+) B ON T1.DATA_OBJ = B.DATA_OBJ "; 
+
+depends_on_table = ["sap.tm.trp.db.massupload::t_massupload_dataobjects",
+					"sap.tm.trp.db.massupload::t_massupload_dataobjects_t"];
+depends_on_view = ["sap.tm.trp.db.semantic.common::v_lang_code"]; 

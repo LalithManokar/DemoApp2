@@ -1,0 +1,27 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_ext_estimate_cost_for_reposition"(
+    IN  QUANTITY BIGINT,
+    OUT MESSAGE VARCHAR(200),
+    OUT COST DECIMAL(13,2)
+)
+  LANGUAGE SQLSCRIPT
+  SQL SECURITY INVOKER 
+  DEFAULT SCHEMA "SAP_TM_TRP"
+  AS
+BEGIN
+    DECLARE COST_COUNT INTEGER;
+    
+    SELECT COUNT(COST) INTO COST_COUNT
+    FROM "sap.tm.trp.db.costmodel::t_transportation_cost_global_temporary";
+    
+    IF :COST_COUNT = 0 THEN
+        MESSAGE := 'MSG_ERROR_COST_CALCULATION_NO_COST';
+    ELSE
+        MESSAGE := 'MSG_SUCCESS';
+        
+        SELECT TOP 1 COST INTO COST
+        FROM "sap.tm.trp.db.costmodel::t_transportation_cost_global_temporary";
+        
+        SELECT COST * QUANTITY INTO COST
+        FROM DUMMY;
+    END IF;
+END;

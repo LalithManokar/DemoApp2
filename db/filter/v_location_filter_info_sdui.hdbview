@@ -1,0 +1,79 @@
+schema = "SAP_TM_TRP";
+query = "-- List All Geo Infos Belonged to Filters (Select Type Mixed)
+         SELECT DISTINCT T1.LOCATION_FILTER_ID,
+                T1.LOCATION_ID AS GEO_ID,
+                T2.NAME AS GEO_NAME,
+                1 AS USER_TYPE
+                ,T2.NAME AS DISPLAY_NAME
+                ,T2.DESC
+           FROM \"sap.tm.trp.db.filter::t_location_filter_location\" AS T1
+           INNER JOIN \"sap.tm.trp.db.filter::cv_role_check_location_filter\" T0 ON (T1.LOCATION_FILTER_ID = T0.ID)
+           INNER JOIN \"sap.tm.trp.db.semantic.location::v_location\" AS T2 ON T1.LOCATION_ID = T2.ID
+          UNION 
+         SELECT DISTINCT T1.LOCATION_FILTER_ID,
+                --TO_VARCHAR(T1.LOCATION_GROUP_ID) AS GEO_ID,
+                T1.LOCATION_GROUP_ID AS GEO_ID,
+                T2.DESC AS GEO_NAME,
+                2 AS USER_TYPE
+                ,T2.DESC AS DISPLAY_NAME
+                ,T3.DESC
+           FROM \"sap.tm.trp.db.filter::t_location_filter_location\" AS T1
+           INNER JOIN \"sap.tm.trp.db.filter::cv_role_check_location_filter\" T0 ON (T1.LOCATION_FILTER_ID = T0.ID)
+           INNER JOIN \"sap.tm.trp.db.systemmanagement::t_location_group\" AS T2 ON T1.LOCATION_GROUP_ID = T2.ID
+           INNER JOIN \"sap.tm.trp.db.systemmanagement::t_location_group_t\" AS T3 ON T2.ID = T3.ID
+                
+          UNION
+         SELECT DISTINCT T1.LOCATION_FILTER_ID,
+                T1.ZONE_ID AS GEO_ID,
+                T2.NAME AS GEO_NAME,
+                3 AS USER_TYPE
+                ,T2.NAME AS DISPLAY_NAME
+                ,T2.DESC
+           FROM \"sap.tm.trp.db.filter::t_location_filter_zone\" AS T1
+           INNER JOIN \"sap.tm.trp.db.filter::cv_role_check_location_filter\" T0 ON (T1.LOCATION_FILTER_ID = T0.ID)
+                INNER JOIN \"sap.tm.trp.db.semantic.location::v_zone\" AS T2
+                ON T1.ZONE_ID = T2.ID
+          UNION
+         SELECT DISTINCT T1.LOCATION_FILTER_ID,
+                --TO_VARCHAR(T1.ZONE_GROUP_ID) AS GEO_ID,
+                T1.ZONE_GROUP_ID AS GEO_ID,
+                T2.DESC AS GEO_NAME,
+                4 AS USER_TYPE
+                ,T2.DESC AS DISPLAY_NAME
+                ,T3.DESC
+           FROM \"sap.tm.trp.db.filter::t_location_filter_zone\" AS T1
+           INNER JOIN \"sap.tm.trp.db.filter::cv_role_check_location_filter\" T0 ON (T1.LOCATION_FILTER_ID = T0.ID)
+                INNER JOIN \"sap.tm.trp.db.systemmanagement::t_zone_group\" AS T2
+                ON T1.ZONE_GROUP_ID = T2.ID
+                INNER JOIN \"sap.tm.trp.db.systemmanagement::t_zone_group_t\" AS T3
+                ON T2.ID = T3.ID
+          UNION
+         SELECT DISTINCT T1.LOCATION_FILTER_ID,
+                T1.ZONE_ID AS GEO_ID,
+                T2.NAME AS GEO_NAME,
+                5 AS USER_TYPE
+                ,T2.NAME AS DISPLAY_NAME
+                ,T2.DESC
+           FROM \"sap.tm.trp.db.filter::t_location_filter_region\" AS T1
+           INNER JOIN \"sap.tm.trp.db.filter::cv_role_check_location_filter\" T0 ON (T1.LOCATION_FILTER_ID = T0.ID)
+                INNER JOIN \"sap.tm.trp.db.semantic.location::v_zone\" AS T2
+                ON T1.ZONE_ID = T2.ID
+          UNION
+         SELECT DISTINCT T1.LOCATION_FILTER_ID,
+                --TO_VARCHAR(T1.REGION_GROUP_ID) AS GEO_ID,
+                T1.REGION_GROUP_ID AS GEO_ID,
+                T2.DESC AS GEO_NAME,
+                6 AS USER_TYPE
+                ,T2.DESC AS DISPLAY_NAME
+                ,T3.DESC
+           FROM \"sap.tm.trp.db.filter::t_location_filter_region\" AS T1
+           INNER JOIN \"sap.tm.trp.db.filter::cv_role_check_location_filter\" T0 ON (T1.LOCATION_FILTER_ID = T0.ID)
+                INNER JOIN\"sap.tm.trp.db.systemmanagement::t_region_group\" AS T2
+                ON T1.REGION_GROUP_ID = T2.ID
+                INNER JOIN \"sap.tm.trp.db.systemmanagement::t_region_group_t\" AS T3
+                ON T2.ID = T3.ID
+            
+       ORDER BY LOCATION_FILTER_ID";
+       
+depends_on_table = ["sap.tm.trp.db.filter::t_location_filter_location","sap.tm.trp.db.filter::t_location_filter_zone","sap.tm.trp.db.filter::t_location_filter_region", "sap.tm.trp.db.systemmanagement::t_location_group", "sap.tm.trp.db.systemmanagement::t_zone_group", "sap.tm.trp.db.systemmanagement::t_region_group", "sap.tm.trp.db.systemmanagement::t_location_group_t", "sap.tm.trp.db.systemmanagement::t_zone_group_t", "sap.tm.trp.db.systemmanagement::t_region_group_t"];
+depends_on_view  = ["sap.tm.trp.db.semantic.location::v_location", "sap.tm.trp.db.semantic.location::v_zone","sap.tm.trp.db.filter::cv_role_check_location_filter"];

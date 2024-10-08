@@ -1,0 +1,55 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT DISTINCT T1.RULE_ID AS ID,
+                 T1.CODE,
+                 T1.NAME,
+                 IFNULL(T3.DESC, T1.DESC) AS DESC,
+                 SUBSTR_BEFORE(REPLACE(SP, '\"', ''), '.') AS SCHEMA_NAME,
+                 SUBSTR_AFTER(REPLACE(SP, '\"', ''), '.') AS STORED_PROCEDURE_NAME,
+                 T7.ID AS TYPE_ID,
+                 T7.NAME AS TYPE,
+                 T1.RULE_TYPE_ID AS CATEGORY_ID,
+                 T8.DESC AS CATEGORY,
+                 CASE T1.RULE_TYPE_ID
+                     WHEN 18 THEN 1
+                     WHEN 19 THEN 2
+                 END AS RULE_TYPE,
+                 T4.USERNAME AS CREATED_BY,
+                 T1.CREATE_ON AS CREATED_ON,
+                 T5.USERNAME AS MODIFIED_BY,
+                 T1.LAST_MODIFIED_ON AS MODIFIED_ON,
+                 IFNULL(T1.LAST_MODIFIED_ON, T1.CREATE_ON) AS MODIFIED_TIME,
+                 IFNULL(T5.USERNAME, T4.USERNAME) AS LAST_MODIFIED_BY,
+                 T11.CODE AS RESOURCE_CATEGORY
+            FROM \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule\" AS T1
+            LEFT OUTER JOIN \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule_t\" AS T3
+            ON T1.RULE_ID = T3.ID
+            LEFT OUTER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE
+            ON T3.SPRAS = LANGUAGE.SPRAS
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS T4
+            ON T1.CREATE_BY = T4.ID
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS T5
+            ON T1.LAST_MODIFIED_BY = T5.ID
+            LEFT OUTER JOIN \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData\" AS T6
+            ON T1.RULE_TYPE_ID = T6.RULE_TYPE_ID
+            LEFT OUTER JOIN \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData_t\" AS T8
+            ON T6.RULE_TYPE_ID = T8.ID
+            LEFT OUTER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE_T
+            ON T8.SPRAS = LANGUAGE_T.SPRAS
+            LEFT OUTER JOIN \"sap.tm.trp.db.objectregistration::t_object_type\" AS T7
+            ON T6.OBJECT_TYPE_ID = T7.ID
+            INNER JOIN \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_object_registration\" T10
+            ON T1.RULE_ID = T10.OBJECT_ID
+            INNER JOIN \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings\" T11
+            ON T10.RESOURCE_CATEGORY_ID = T11.ID
+           WHERE T7.TYPE = 8";
+
+depends_on_table = ["sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData_t",
+                    "sap.tm.trp.db.objectregistration::t_object_type",
+                    "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule_t",
+                    "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData",
+                    "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule",
+                    "sap.tm.trp.db.systemmanagement.customization::t_resource_category_object_registration",
+                    "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings"
+                    ];
+depends_on_view  = ["sap.tm.trp.db.semantic.common::v_lang_code",
+                    "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

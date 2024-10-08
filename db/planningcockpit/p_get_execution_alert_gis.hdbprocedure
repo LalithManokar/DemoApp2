@@ -1,0 +1,110 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_execution_alert_gis" (
+  IN XMIN DOUBLE,
+  IN XMAX DOUBLE,
+  IN YMIN DOUBLE,
+  IN YMAX DOUBLE,
+  IN ID BIGINT,
+  IN SCENARIO_ID BIGINT,
+  OUT OUTPUT_ALERT_DATA "sap.tm.trp.db.planningcockpit::tt_alert_gis_data_output",
+  OUT OUT_LOCATIONS_XPOS_YPOS_INVALID  "sap.tm.trp.db.pipeline::tt_location_info_list" 
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    READS SQL DATA
+AS
+BEGIN
+ 
+ DECLARE OUTPUT_ALERT_RECORDS INTEGER;
+ DECLARE EXECUTION_ID BIGINT;
+ DECLARE TMP_NODE_ID BIGINT;
+ DECLARE SUPPLY_DEMAND_PLAN_ID BIGINT;
+ DECLARE START_TIME TIMESTAMP;
+ DECLARE OUT_PLAN_STATUS SMALLINT;
+ --DECLARE SIMULATION_SYNC_FLAG INTEGER;
+ DECLARE NEW_ALERT_COUNT_NUM INTEGER;  
+ DECLARE LOCATION_FILTER_ID BIGINT;
+ DECLARE LOCATION_FILTER_TYPE INTEGER;
+
+ SELECT IFNULL(MAX(EXCUTE_ID), 0) INTO EXECUTION_ID
+ FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan"
+ WHERE ID = :ID;
+     
+ CALL "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid"(:EXECUTION_ID,TMP_NODE_ID);
+
+
+ SELECT COUNT(1) INTO NEW_ALERT_COUNT_NUM
+     FROM "sap.tm.trp.db.planningcockpit::t_simulationModel_alert_forUI" T1 
+     WHERE T1.SCENARIO_ID = :SCENARIO_ID 
+     AND T1.PLAN_EXECUTION_ID = :EXECUTION_ID AND T1.NODE_ID = :TMP_NODE_ID;
+ 
+ CALL "sap.tm.trp.db.planningcockpit::p_get_loc_primaryloc_by_executionId"(:EXECUTION_ID, GEO_LOCATION_MAP);
+  
+-- IF :SCENARIO_ID = 0 OR :SIMULATION_SYNC_FLAG = 0  THEN
+ IF :SCENARIO_ID = 0 OR :NEW_ALERT_COUNT_NUM = 0  THEN
+ 
+   CALL "sap.tm.trp.db.pipeline::p_get_alert_for_sim_plan_location_by_executionId"(:EXECUTION_ID,:TMP_NODE_ID,ALERT_BY_GEO);
+       
+   TMP_OUTPUT_ALERT_DATA = SELECT * FROM 
+                      (
+                       SELECT T2.GEO_ID, T2.GEO_NAME, T2.LOCATION_ID, T2.LOCATION_NAME, T3.XPOS AS LATITUDE,   
+                              T3.YPOS AS LONGITUDE, T1.ALERT_NUM, T1.ALERT_SCORE,:LOCATION_FILTER_TYPE AS GEO_TYPE
+                       FROM :ALERT_BY_GEO T1
+                       INNER JOIN :GEO_LOCATION_MAP T2 ON (T1.LOCATION_ID = T2.GEO_ID)
+                       INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T3 ON (T2.LOCATION_ID = T3.ID)
+                      
+                      )
+                      WHERE (LATITUDE BETWEEN :XMIN AND :XMAX) AND (LONGITUDE BETWEEN :YMIN AND :YMAX);
+     
+     OUTPUT_ALERT_DATA = SELECT GEO_ID,GEO_NAME,LOCATION_ID,LOCATION_NAME,LATITUDE,LONGITUDE,
+     ALERT_NUM,ALERT_SCORE,GEO_TYPE
+      FROM :TMP_OUTPUT_ALERT_DATA T3
+     WHERE T3.LATITUDE IS NOT NULL AND T3.LONGITUDE IS NOT NULL AND (ABS(T3.LATITUDE) + ABS(T3.LONGITUDE)) >0;
+     
+     OUT_LOCATIONS_XPOS_YPOS_INVALID = SELECT LOCATION_ID,LOCATION_NAME,LATITUDE AS XPOS,LONGITUDE AS YPOS
+     FROM :TMP_OUTPUT_ALERT_DATA T2
+     WHERE (T2.LATITUDE IS NULL OR T2.LONGITUDE IS NULL) OR (ABS(T2.LATITUDE) + ABS(T2.LONGITUDE) =0);
+
+
+ --ELSEIF :SCENARIO_ID <> 0 THEN
+ ELSE
+ 
+   TMP_OUTPUT_ALERT_DATA = 
+               SELECT * FROM 
+               (
+                SELECT  T1.GEO_ID, T1.GEO_NAME, T2.LOCATION_ID, T2.LOCATION_NAME, T3.XPOS AS LATITUDE, 
+                        T3.YPOS AS LONGITUDE, T1.ALERT_NUM, T1.ALERT_SCORE, :LOCATION_FILTER_TYPE AS GEO_TYPE
+	              FROM 
+	                (   SELECT T0.GEO_ID, T0.GEO_NAME,
+	                           SUM(T0.ALERT_NUM) AS ALERT_NUM, 
+	                           MAX(ALERT_SCORE) AS ALERT_SCORE 
+	                      FROM
+	                      (
+		                      SELECT  A.LOCATION_ID AS GEO_ID,A.LOCATION_NAME AS GEO_NAME,
+		                      CASE LOWER(A.MESSAGE) WHEN 'alert' THEN 1 ELSE 0 END AS ALERT_NUM,
+		                      CASE LOWER(A.MESSAGE) WHEN 'alert' THEN ALERT_SCORE ELSE 0 END AS ALERT_SCORE
+			                  --FROM "sap.tm.trp.db.planningcockpit::v_alert_normal_quantity_location_simulation"
+			                  FROM "sap.tm.trp.db.planningcockpit::t_simulationModel_alert_forUI" A
+			                  WHERE A.SCENARIO_ID = :SCENARIO_ID 
+			                  AND A.PLAN_EXECUTION_ID = :EXECUTION_ID
+			                  AND A.NODE_ID = :TMP_NODE_ID
+		                  )T0
+	                    GROUP BY T0.GEO_ID, T0.GEO_NAME
+	              )  T1
+                INNER JOIN :GEO_LOCATION_MAP T2 ON (T1.GEO_ID = T2.GEO_ID)
+	            INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T3 ON (T2.LOCATION_ID = T3.ID)
+	            --WHERE T3.XPOS IS NOT NULL AND T3.YPOS IS NOT NULL AND (ABS(T3.XPOS) + ABS(T3.YPOS)) >0
+               )
+               WHERE (LATITUDE BETWEEN :XMIN AND :XMAX) AND (LONGITUDE BETWEEN :YMIN AND :YMAX);
+               
+       OUTPUT_ALERT_DATA = SELECT GEO_ID,GEO_NAME,LOCATION_ID,LOCATION_NAME,LATITUDE,LONGITUDE,
+     ALERT_NUM,ALERT_SCORE,GEO_TYPE
+      FROM :TMP_OUTPUT_ALERT_DATA T3
+     WHERE T3.LATITUDE IS NOT NULL AND T3.LONGITUDE IS NOT NULL AND (ABS(T3.LATITUDE) + ABS(T3.LONGITUDE)) >0;
+     
+     OUT_LOCATIONS_XPOS_YPOS_INVALID = SELECT LOCATION_ID,LOCATION_NAME,LATITUDE AS XPOS,LONGITUDE AS YPOS
+     FROM :TMP_OUTPUT_ALERT_DATA T2
+     WHERE (T2.LATITUDE IS NULL OR T2.LONGITUDE IS NULL) OR (ABS(T2.LATITUDE) + ABS(T2.LONGITUDE) =0);
+
+ END IF ;
+END;

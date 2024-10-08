@@ -1,0 +1,9 @@
+schema = "SAP_TM_TRP";
+query = "SELECT LOCATION_ID AS ID, B.NAME, B.DESC,B.XPOS AS LATITUDE, B.YPOS AS LONGITUDE,1 AS ALERT_NO, OUTPUT_VALUE AS STOCK
+FROM \"sap.tm.trp.db.pipeline::t_pipeline_output_dataset\" AS A
+LEFT JOIN \"sap.tm.trp.db.semantic.location::v_location\" AS B
+ON A.LOCATION_ID = B.ID
+WHERE OUTPUT_KEY = 'STOCK' AND PLAN_EXECUTION_ID = 1";
+
+depends_on_view = ["sap.tm.trp.db.semantic.location::v_location"];
+depends_on_table = ["sap.tm.trp.db.pipeline::t_pipeline_output_dataset"];

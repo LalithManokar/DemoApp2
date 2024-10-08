@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_loc_or_primaryloc_by_simplanId" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_role_check_simulation_plan"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="SIM_PLAN_ID" parameter="true">
+      <descriptions defaultDescription="SIM_PLAN_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="GEO_ID" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="GEO_NAME" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_ID" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_NAME" length="100"/>
+        <viewAttribute datatype="INTEGER" id="GEO_TYPE"/>
+        <viewAttribute datatype="DOUBLE" id="XPOS"/>
+        <viewAttribute datatype="DOUBLE" id="YPOS"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#SIM_PLAN_ID</localVariable>
+      <definition>
+ 
+ BEGIN
+  
+  -- wrapper of the following procedure for OData
+  CALL &quot;sap.tm.trp.db.planningcockpit::p_get_loc_primaryloc_by_simplanId&quot; (:SIM_PLAN_ID,loc_list);
+  
+  -- return the both aggregate location and primary location information ID&amp;NMAE, the X,Y are of primary location  
+  var_out = SELECT T1.*, T2.XPOS, T2.YPOS
+            FROM :loc_list T1
+            INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; T2 ON (T1.LOCATION_ID = T2.ID);
+
+
+END 
+</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="GEO_ID" order="1">
+        <descriptions defaultDescription="GEO_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="GEO_ID"/>
+      </attribute>
+      <attribute id="GEO_NAME" order="2">
+        <descriptions defaultDescription="GEO_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="GEO_NAME"/>
+      </attribute>
+      <attribute id="LOCATION_ID" order="3">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_ID"/>
+      </attribute>
+      <attribute id="LOCATION_NAME" order="4">
+        <descriptions defaultDescription="LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_NAME"/>
+      </attribute>
+      <attribute id="GEO_TYPE" order="5">
+        <descriptions defaultDescription="GEO_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="GEO_TYPE"/>
+      </attribute>
+      <attribute id="XPOS" order="6">
+        <descriptions defaultDescription="XPOS"/>
+        <keyMapping columnObjectName="Script_View" columnName="XPOS"/>
+      </attribute>
+      <attribute id="YPOS" order="7">
+        <descriptions defaultDescription="YPOS"/>
+        <keyMapping columnObjectName="Script_View" columnName="YPOS"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

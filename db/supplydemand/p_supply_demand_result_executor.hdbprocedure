@@ -1,0 +1,140 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand::p_supply_demand_result_executor" (
+	IN PLAN_ID BIGINT,
+	IN LOCATION_FILTER_ID BIGINT,
+	IN RESOURCE_FILTER_ID BIGINT,
+	IN TIME_FILTER_ID BIGINT,
+	IN IM_PIPELINE_MODEL_ID BIGINT,
+	IN ATTRIBUTE_FILTER_ID BIGINT,
+	IN ALERT_RULE_GROUP_ID BIGINT,
+	IN USAGE VARCHAR(1),
+	OUT EXEC_ID BIGINT,
+	OUT EXEC_TIMESTAMP TIMESTAMP
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+ 	AS 
+BEGIN
+	--p_prepare_for_schedule_plan
+	--p_prepare_for_adhoc_plan
+	--p_batch_store_pipeline_output_insert_looply_for_plan
+	
+	DECLARE SCHEDULED_PLAN_ID BIGINT;
+	
+	--pipeline model info
+	DECLARE PIPELINE_MODEL_ID BIGINT;
+	DECLARE PIPELINE_MODEL VARCHAR(200);
+	DECLARE INSTANT_ENABLED CHAR(1) DEFAULT '';
+	
+	DECLARE ATTRIBUTE_FILTER NVARCHAR(500);
+	
+	DECLARE CATEGORY_ID INTEGER;
+	DECLARE LOCATION_FILTER_TYPE INTEGER;
+	DECLARE FILTER_GROUP_ID BIGINT;
+	DECLARE PLAN_MODEL_TYPE_ID INTEGER;
+	
+	DECLARE RESOURCE_CATEGORY VARCHAR(20);
+	
+	-- temp use
+	DECLARE CONNECTIONID VARCHAR(22);
+	DECLARE SCHEMA_NAME VARCHAR(32);
+	DECLARE OBJECT_NAME VARCHAR(500);
+	
+	
+	-- get basic info
+	IF PLAN_ID IS NOT NULL THEN
+		CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_filterid_by_plan"(:PLAN_ID,LOCATION_FILTER_ID,RESOURCE_FILTER_ID,TIME_FILTER_ID,ATTRIBUTE_FILTER_ID);
+		
+		CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_scheduled_plan_id"(:PLAN_ID, SCHEDULED_PLAN_ID);
+		CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_pipeline_model_by_plan"(:SCHEDULED_PLAN_ID, PIPELINE_MODEL_ID, PIPELINE_MODEL, INSTANT_ENABLED);
+	
+		CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_resource_category"(:RESOURCE_FILTER_ID, RESOURCE_CATEGORY);
+		
+		SELECT
+			T1.FILTER_GROUP_ID, 
+			T1.PLAN_MODEL_TYPE_ID, 
+			T1.ALERT_RULE_GROUP_ID, 
+			T1.USAGE, 
+			IFNULL(T3.PARENT_ID, T3.ID), 
+			T5.LOCATION_TYPE
+		INTO 
+			FILTER_GROUP_ID, 
+			PLAN_MODEL_TYPE_ID, 
+			ALERT_RULE_GROUP_ID, 
+			USAGE, 
+			CATEGORY_ID,
+			LOCATION_FILTER_TYPE 
+		FROM "sap.tm.trp.db.pipeline::t_plan_model" AS T1
+		INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_model" AS T4 ON T1.PIPELINE_MODEL_ID = T4.ID
+		INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_model_type" AS T3 ON T4.PIPELINE_MODEL_TYPE_ID = T3.ID
+		LEFT  JOIN "sap.tm.trp.db.filter::t_filter_location_filter" AS T2 ON T1.FILTER_GROUP_ID = T2.FILTER_GROUP_ID
+		LEFT  JOIN "sap.tm.trp.db.filter::t_location_filter" AS T5 ON T2.LOCATION_FILTER_ID = T5."ID"
+		WHERE T1."ID" = :PLAN_ID;
+	
+	ELSE
+	
+		SELECT ID, NAME, IFNULL (INSTANT_ENABLED,'') INTO PIPELINE_MODEL_ID, PIPELINE_MODEL, INSTANT_ENABLED
+		FROM "sap.tm.trp.db.pipeline::t_pipeline_model"
+		WHERE ID = :IM_PIPELINE_MODEL_ID;
+		
+		--GET PLAN_MODEL_TYPE_ID
+		SELECT IFNULL(MAX(ID),-1) INTO PLAN_MODEL_TYPE_ID FROM "sap.tm.trp.db.pipeline::t_plan_model_type" WHERE DESC = 'Adhoc_Plan';
+	
+		--GET RESOURCE CAGETORY
+		CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_resource_category"(:RESOURCE_FILTER_ID, RESOURCE_CATEGORY);
+		
+		--CREATE NEW FILTER_GROUP
+		CALL "sap.tm.trp.db.filter::p_ext_filter_group_create"(:RESOURCE_FILTER_ID, :TIME_FILTER_ID, :LOCATION_FILTER_ID, :RESOURCE_CATEGORY, FILTER_GROUP_ID);
+	
+		-- GET LOCATION_FILTER_TYPE
+		SELECT LOCATION_TYPE INTO LOCATION_FILTER_TYPE
+		FROM "sap.tm.trp.db.filter::t_location_filter"
+		WHERE ID = :LOCATION_FILTER_ID;
+	END IF;
+
+	IF INSTANT_ENABLED = 'X' THEN
+		
+		LOCATION = SELECT * FROM "sap.tm.trp.db.supplydemand.instant::t_cm_execution_parameter_location_temp";
+		RESOURCE = SELECT * FROM "sap.tm.trp.db.supplydemand.instant::t_cm_execution_parameter_resource_temp";
+		CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_node_list_by_plan"(:PIPELINE_MODEL_ID, NODE_LIST);
+		CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_location_by_plan"(:LOCATION_FILTER_ID, :LOCATION, LT_LOCATIONS);
+		CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_resource_by_plan"(:RESOURCE_FILTER_ID, :RESOURCE, LT_RESOURCES);
+		CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_time_period_by_plan"(:TIME_FILTER_ID, NULL, LT_TIMES);
+		CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_attribute_filter"(:ATTRIBUTE_FILTER_ID, ATTRIBUTE_FILTER);
+		
+	ELSE
+		
+		NODE_LIST = SELECT * FROM "sap.tm.trp.db.supplydemand.instant::t_cm_execution_parameter_node_temp";
+		LT_LOCATIONS = SELECT * FROM "sap.tm.trp.db.supplydemand.instant::t_cm_execution_parameter_location_temp";
+		LT_RESOURCES = SELECT * FROM "sap.tm.trp.db.supplydemand.instant::t_cm_execution_parameter_resource_temp";
+		LT_TIMES = SELECT * FROM "sap.tm.trp.db.supplydemand.instant::t_cm_execution_parameter_time_period_temp";
+		
+		-- perpare parameter into temporary table
+		IF PLAN_ID IS NOT NULL THEN
+			CALL "sap.tm.trp.db.pipeline::p_prepare_for_schedule_plan"(:PLAN_ID,CONNECTIONID,SCHEMA_NAME,OBJECT_NAME,CATEGORY_ID,LOCATION_FILTER_TYPE,FILTER_GROUP_ID,PIPELINE_MODEL_ID,PLAN_MODEL_TYPE_ID,ALERT_RULE_GROUP_ID,USAGE);
+		ELSE
+			CALL "sap.tm.trp.db.pipeline::p_prepare_for_adhoc_plan"(:RESOURCE_FILTER_ID,:TIME_FILTER_ID,:LOCATION_FILTER_ID,:PIPELINE_MODEL_ID,:ATTRIBUTE_FILTER_ID,CONNECTIONID,SCHEMA_NAME,OBJECT_NAME,CATEGORY_ID,LOCATION_FILTER_TYPE,FILTER_GROUP_ID,PLAN_MODEL_TYPE_ID);
+		END IF;
+	END IF;
+	
+	CALL "sap.tm.trp.db.supplydemand.instant::p_pipeline_procedure_wrapper"(:PIPELINE_MODEL, :RESOURCE_CATEGORY, :LT_LOCATIONS,:LT_RESOURCES,:LT_TIMES,:NODE_LIST,:ATTRIBUTE_FILTER, DATASET);
+	
+	CALL "sap.tm.trp.db.pipeline::p_generate_execution_id"(EXEC_ID, EXEC_TIMESTAMP);
+	
+	CALL "sap.tm.trp.db.pipeline::p_batch_store_pipeline_output_insert_looply_for_plan"(
+		:PLAN_ID,
+		:LOCATION_FILTER_TYPE,
+		:PIPELINE_MODEL_ID,
+		:CATEGORY_ID,
+		:FILTER_GROUP_ID,
+		:ALERT_RULE_GROUP_ID,
+		:PLAN_MODEL_TYPE_ID,
+		:USAGE,
+		:DATASET,
+		:EXEC_ID,
+		:EXEC_TIMESTAMP
+	);
+	
+	CALL "sap.tm.trp.db.pipeline::p_plan_execution_run_delete"(:PLAN_ID);
+
+END;

@@ -1,0 +1,85 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::p_pr_extr_controller" ( 
+	--   in iv_delay_buffer     BIGINT default 30,		            --> Seconds delay for the upper cutoff time
+	--   in iv_min_start_tmstmp nvarchar(15) default '20140101000000' --> Minimum timestamp to start, for the first execution
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	--DEFAULT SCHEMA <default_schema_name>
+	--READS SQL DATA 
+	AS
+BEGIN
+ 
+ 	--Pickup & Return Redesign: Delta Extractor Controller
+ 	--Only to be used for the Delta Loads Scenario
+ 	--Pre-requisite execution of initial load "p_pr_extr_controller_initial_wrapper"
+ 	
+	declare lv_tu_count     bigint;
+	declare lv_from_tmstmp  decimal(15, 0) default 0; 
+	declare lv_from_tmstmp_hrm decimal(15, 0) default 0; 
+	declare lv_to_tmstmp    decimal(15, 0) default 0;
+	declare iv_delay_buffer bigint default 30;                        --Seconds delay for the upper cutoff time
+	declare iv_min_start_tmstmp nvarchar(15) default '20140101000000'; --Minimum timestamp to start, for the first time
+	declare tolerance VARCHAR(500);
+
+	SELECT CASE WHEN VALUE='X' THEN '-3' ELSE VALUE END AS tolerance INTO tolerance FROM "sap.tm.trp.db.systemmanagement.customization::t_general_parameters" 
+	WHERE NAME='PR_HARMONIZED_TOLERANCE';
+
+	--> Step 1: Check Pre-requisite and validation
+	lv_tu_count := record_count("SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::t_pr_harmonized_tu_list");
+	
+	--If no data in harmonized store, then assume current date as starting point
+	--Delta should not fetch the whole data set (memory allocation error)
+	iv_min_start_tmstmp := to_varchar(CURRENT_UTCDATE, 'YYYYMMDDHH24MISS');
+	
+	--To timestamp can be delayed with buffer
+	lv_to_tmstmp := TO_VARCHAR(ADD_SECONDS(current_utctimestamp, -1 * :iv_delay_buffer), 'YYYYMMDDHH24MISS');
+	
+	if lv_tu_count > 0 then
+	--nth execution scenario
+	--some TU update would be missed if booking was changed while job is running.
+	--Therefore greatest of delta date will not be used
+/*		select greatest( TO_VARCHAR(ifnull(max(CD_CHANGE_DATE_LEADING_TU), iv_min_start_tmstmp), 'YYYYMMDDHH24MISS'),
+					     TO_VARCHAR(ifnull(max(CD_CHANGE_DATE_BOOKING),    iv_min_start_tmstmp), 'YYYYMMDDHH24MISS'),
+					     TO_VARCHAR(ifnull(max(CD_CHANGE_DATE_EP_ER_TU),   iv_min_start_tmstmp), 'YYYYMMDDHH24MISS'))
+			 into lv_from_tmstmp from "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::t_pr_harmonized_tu_list";*/
+
+		select TO_VARCHAR(ifnull(max(CD_UPDATED_DATE), iv_min_start_tmstmp), 'YYYYMMDDHH24MISS')
+		    into lv_from_tmstmp_hrm from "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::t_pr_harmonized_tu_list";
+		 
+		SELECT TO_VARCHAR(add_days(TO_TIMESTAMP(lv_from_tmstmp_hrm), :tolerance),'YYYYMMDDHH24MISS') INTO lv_from_tmstmp FROM DUMMY;
+
+		begin parallel execution
+			CALL "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::p_pr_extr_get_dep_leading_tu"(lv_from_tmstmp, lv_to_tmstmp, lt_tu1);
+			CALL "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::p_pr_extr_get_dep_booking"(lv_from_tmstmp, lv_to_tmstmp, lt_tu2);
+			CALL "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::p_pr_extr_get_dep_delete"(lv_from_tmstmp, lv_to_tmstmp, lt_tu_tobe_deleted);
+		end;
+		lt_tu_dep = select * from :lt_tu1 union all 
+					select * from :lt_tu2;
+	else
+	--1st execution scenario (Main TU will take care of extraction)
+		lv_from_tmstmp := iv_min_start_tmstmp;
+
+	end if;
+	
+	--> Step 2: Main Extractor with TU Details
+	call "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::p_pr_extr_get_main_tu_detail"(lv_from_tmstmp, lv_to_tmstmp, :lt_tu_dep, lt_tu_delta);
+	
+	
+	--> Step 3: TU Detail update to Harmonized store
+	UPSERT "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::t_pr_harmonized_tu_list"
+              SELECT * FROM :lt_tu_delta;
+	
+	--Update TU Delete Flag for the nth execution scenario only
+	if lv_tu_count > 0 then
+		UPDATE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::t_pr_harmonized_tu_list" tu_existing
+		   SET tu_existing.cd_updated_date = current_utctimestamp,
+		       tu_existing.cd_delete_flag = 'X'
+		  FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::t_pr_harmonized_tu_list" tu_existing, 
+				:lt_tu_tobe_deleted tu_tobe_deleted 
+			WHERE tu_existing.tu_key = tu_tobe_deleted.tu_key;	
+	end if;
+	
+	--> Step 4: Customer Enhancements below
+	--CALL CUSTOM_ENHANCEMENT(lt_tu_delta);
+ 
+END;

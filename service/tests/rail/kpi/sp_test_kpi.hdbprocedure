@@ -1,0 +1,64 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.service.tests.rail.kpi::sp_test_kpi" ( 
+OUT CNT_IDLE INTEGER,
+OUT CNT_IP   INTEGER,
+OUT CNT_XP   INTEGER) 
+LANGUAGE SQLSCRIPT 
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+/***************************** 
+	Write your procedure logic 
+ *****************************/
+ 
+INSERT INTO "sap.tm.trp.db.pipeline::t_equipinfo_for_pipeline_GlobalTemp" VALUES('RC_20HC','RC_20HC','RC_20HC',1);     
+INSERT INTO "sap.tm.trp.db.pipeline::t_locationinfo_for_pipeline_GlobalTemp" VALUES('w3arCFj27jMznv1e4zAAam','w3arCFj27jMznv1e4zAAam',1,'w3arCFj27jMznv1e4zAAam','RC_BJ');
+INSERT INTO "sap.tm.trp.db.pipeline::t_locationinfo_for_pipeline_GlobalTemp" VALUES('w3arCFj27jMznukTpB5AUG','w3arCFj27jMznukTpB5AUG',1,'w3arCFj27jMznukTpB5AUG','RC_SH');    
+INSERT INTO "sap.tm.trp.db.pipeline::t_timefilterinfo_for_pipeline_GlobalTemp"  
+     SELECT TIME_INTERVAL_ID, SEQUENCE, ADD_DAYS(START_TIMESTAMP,0), ADD_DAYS(END_TIMESTAMP,0), INTER_SECONDS 
+       FROM "_SYS_BIC"."sap.tm.trp.db.pipeline/cv_get_timefilters_by_filtergroupid"(placeholder."$$In_Filter_Group_ID$$"=>2065);
+INSERT INTO "sap.tm.trp.db.pipeline::t_pipeline_datasrc_input_params" values ('In_RESOURCE_CATEGORY','RC',CURRENT_CONNECTION);
+
+
+ 
+ 
+                 
+                   SELECT --t4.EQUIP_CODE AS EQUIP_TYPE, t4.EQUIP_GROUP_ID, t5.GEO_GROUP_ID, t5.LOCATION_ID, t1.RESOURCE_ID AS EQUIP_ID,
+                          --t1.TRK_LOG_TIME AS EVENT_TIME, t1.VALUE_NEW
+                          count(*) into CNT_IDLE
+                     FROM "sap.tm.trp.db.semantic.event::v_gateinout_tracking_history" t1
+                     INNER JOIN "sap.tm.trp.db.pipeline::t_locationinfo_for_pipeline_GlobalTemp" t5 ON (t1.LOCATION_ID = t5.LOCATION_ID)
+                     INNER JOIN "sap.tm.trp.db.pipeline::t_equipinfo_for_pipeline_GlobalTemp" t4 ON (t1.RESOURCE_TYPE = t4.EQUIP_CODE)               
+                     WHERE RESOURCE_CATEGORY = 'RC'
+                     AND (EVENT_TIME = TO_TIMESTAMP('2016-04-12 00:00:00') OR EVENT_TIME = TO_TIMESTAMP('2016-05-08 12:00:00')); 
+                    
+ 
+     	        SELECT count(*) into CNT_XP
+                FROM "sap.tm.trp.db.pipeline::t_equipinfo_for_pipeline_GlobalTemp"  t0 
+                INNER JOIN  "sap.tm.trp.db.semantic.order::v_transportation_unit_item" t1 ON (t1.RESOURCE_TYPE = t0.EQUIP_CODE)
+                INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stage" t2 ON (t2.TU_KEY = t1.TU_KEY  -- AND t2.MOT_CAT = :VAL_MOT_CAT 
+                                                                                                       AND t2.PLAN_STATUS='X')
+                INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 ON (t3.DB_KEY = t2.FROM_STOP_KEY)
+                INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit" t5 ON (t5.DB_KEY = t1.TU_KEY AND t5.TOR_CAT = 'TU' AND t5.MOVEMENT_CAT <> 'RP')
+                -- WHERE t3.LOCATION_ID IN (SELECT LOCATION_ID FROM :filtered_locations)
+                 --  AND (TO_TIMESTAMP(T3.SEL_TIME) >= :START_TIME AND TO_TIMESTAMP(T3.SEL_TIME) < :END_TIME)
+                    ;
+     
+                SELECT count(*) into CNT_IP
+                FROM "sap.tm.trp.db.pipeline::t_equipinfo_for_pipeline_GlobalTemp"  t0 
+                INNER JOIN  "sap.tm.trp.db.semantic.order::v_transportation_unit_item" t1 ON (t1.RESOURCE_TYPE = t0.EQUIP_CODE)
+                INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stage" t2 ON (t2.TU_KEY = t1.TU_KEY   --AND t2.MOT_CAT = :VAL_MOT_CAT
+                                                                                                           AND t2.PLAN_STATUS='X')
+                INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 ON (t4.DB_KEY = t2.TO_STOP_KEY)
+                INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit" t5 ON (t5.DB_KEY = t1.TU_KEY AND t5.TOR_CAT = 'TU' AND t5.MOVEMENT_CAT <> 'RP')
+              --  WHERE t4.LOCATION_ID IN (SELECT LOCATION_ID FROM :filtered_locations)
+                 -- AND (TO_TIMESTAMP(T4.SEL_TIME) >= :START_TIME AND TO_TIMESTAMP(T4.SEL_TIME) < :END_TIME)
+                     ;
+    
+ 
+ 
+ 
+ 
+ 
+ 
+END;

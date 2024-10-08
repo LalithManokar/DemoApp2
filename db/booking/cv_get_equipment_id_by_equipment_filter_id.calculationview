@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_equipment_id_by_equipment_filter_id" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_equipment_filter"/>
+  <localVariables>
+    <variable id="EQUIPMENT_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="EQUIPMENT_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="EQUIPMENT_TYPE" parameter="true">
+      <descriptions defaultDescription="EQUIPMENT_TYPE"/>
+      <variableProperties datatype="VARCHAR" length="10" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="EQUIPMENT_ID" length="10"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#EQUIPMENT_FILTER_ID</localVariable>
+      <localVariable>#EQUIPMENT_TYPE</localVariable>
+      <definition>BEGIN&#xD;
+  &#xD;
+  DECLARE GEO_FLAG INT;&#xD;
+  DECLARE EQUIP_FLAG INT;&#xD;
+  DECLARE RES_CAT NVARCHAR(20); -- CURRENT RESOURCE CATEGORY ACCORDING TO EQUIP FILTER &#xD;
+  DECLARE RES_CAT_TYPE NVARCHAR(10);&#xD;
+  DECLARE ITEM_CAT NVARCHAR(50); -- TU ITEM CATEGORY&#xD;
+   DECLARE lv_inp_plan_id INT := 0;&#xD;
+      &#xD;
+   --Prepare Equipment and Location filter parameters.&#xD;
+&#xD;
+  SELECT IFNULL(MAX(FILTER_TYPE),1) INTO EQUIP_FLAG &#xD;
+  FROM (SELECT FILTER_TYPE &#xD;
+        FROM &quot;sap.tm.trp.db.filter::t_equipment_filter&quot; T1&#xD;
+        WHERE ID = :EQUIPMENT_FILTER_ID&#xD;
+        );&#xD;
+                  &#xD;
+  --CURRENT RESOURCE CATEGORY BY EQUIP ID&#xD;
+  SELECT RESOURCE_CATEGORY INTO RES_CAT&#xD;
+  FROM &quot;sap.tm.trp.db.filter::t_equipment_filter&quot; T1&#xD;
+  WHERE ID = :EQUIPMENT_FILTER_ID;&#xD;
+  &#xD;
+  -- GET RESOURCE CATEGORY TYPE&#xD;
+  SELECT RESOURCE_CATEGORY_TYPE INTO RES_CAT_TYPE &#xD;
+  FROM &quot;sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings&quot;&#xD;
+  WHERE CODE = :RES_CAT;  &#xD;
+  &#xD;
+  --ITEM CATEGORY BY RESOURCE CATEGORY&#xD;
+  SELECT VALUE INTO ITEM_CAT from &quot;sap.tm.trp.db.systemmanagement::t_config_cust&quot; where code =:RES_CAT and KEY = 'ITEM_CAT';&#xD;
+    &#xD;
+ -- The EQUIPMENT_TYPE passed in depends on the filter type&#xD;
+  -- if it's of type resource, the exact equip code is passed in &#xD;
+  -- if it's of type resource group, the resource group name is passed in &#xD;
+  IF :EQUIP_FLAG = 1  THEN     &#xD;
+    IF LENGTH(:EQUIPMENT_TYPE) > 0 THEN&#xD;
+      var_out = SELECT :EQUIPMENT_TYPE AS EQUIPMENT_ID FROM DUMMY;&#xD;
+    ELSE    &#xD;
+      var_out = SELECT DISTINCT EQUIP_CODE AS EQUIPMENT_ID&#xD;
+                     FROM &quot;sap.tm.trp.db.booking::cv_auth_equip_code_by_equip_filter_id&quot;&#xD;
+    									(PLACEHOLDER.&quot;$$IV_EQUIPMENT_FILTER_ID$$&quot;=> :EQUIPMENT_FILTER_ID); &#xD;
+    END IF;                &#xD;
+  ELSEIF :EQUIP_FLAG = 2 THEN&#xD;
+    IF LENGTH(:EQUIPMENT_TYPE) > 0 THEN&#xD;
+      var_out = SELECT DISTINCT t2.EQUI_CODE AS EQUIPMENT_ID&#xD;
+                     FROM &quot;sap.tm.trp.db.systemmanagement::t_equipment_group&quot; T1&#xD;
+                     INNER JOIN &quot;sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth&quot; T2&#xD;
+                     ON (T1.ID = T2.EQUIPMENT_GROUP_ID)&#xD;
+                     WHERE T1.DESC = :EQUIPMENT_TYPE;  &#xD;
+    ELSE&#xD;
+      var_out = SELECT DISTINCT EG1.EQUI_CODE AS EQUIPMENT_ID &#xD;
+                     FROM &quot;sap.tm.trp.db.systemmanagement::t_equipment_group_item&quot;  EG1&#xD;
+                     INNER JOIN (SELECT * FROM &quot;sap.tm.trp.db.booking::cv_auth_equip_code_by_equip_filter_id&quot;&#xD;
+    									(PLACEHOLDER.&quot;$$IV_EQUIPMENT_FILTER_ID$$&quot;=> :EQUIPMENT_FILTER_ID)&#xD;
+                                 ) EF1 &#xD;
+                     ON (EF1.EQUIP_GROUP_ID=EG1.EQUIPMENT_GROUP_ID AND EG1.RESOURCE_CATEGORY = EF1.RESOURCE_CATEGORY);&#xD;
+    END IF;&#xD;
+  END IF; &#xD;
+  &#xD;
+  &#xD;
+END;</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes/>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="EQUIPMENT_ID" order="1" aggregationType="max" measureType="simple">
+        <descriptions defaultDescription="EQUIPMENT_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="EQUIPMENT_ID"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

@@ -1,0 +1,18 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.dashboard::p_ext_tile_delete" (
+    IN TILE_ID BIGINT
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+
+DECLARE RESOURCE_CATEGORY NVARCHAR(20) :='';
+
+    CALL "sap.tm.trp.db.dashboard::p_tile_item_delete"(:TILE_ID);
+    CALL "sap.tm.trp.db.dashboard::p_tile_delete"(:TILE_ID);
+    
+    CALL "sap.tm.trp.db.dashboard::p_ext_tile_get"(:RESOURCE_CATEGORY, TILES, TILE_ITEMS);
+    CALL "sap.tm.trp.db.dashboard::p_ext_tile_update_sequence"(:TILES);
+
+END

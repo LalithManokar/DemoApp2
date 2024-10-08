@@ -1,0 +1,93 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_data_archive_parent_child"
+(IN RULE_ID BIGINT,
+ IN TABLE_ID BIGINT,
+ IN EXE_DETAIL_SEQ BIGINT,
+ IN DATE_FROM TIMESTAMP,
+ IN DATE_TO TIMESTAMP,
+ IN ARCHIVE_FLAG TINYINT,
+ IN IS_TM TINYINT,
+ IN DATE_COLUMN_NAME NVARCHAR(250),
+ IN DATE_FROM_TM NVARCHAR(8),
+ IN DATE_TO_TM NVARCHAR(8)) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP" AS 
+	V_MIN_LEVEL BIGINT;
+	V_MAX_LEVEL BIGINT;
+	V_LEVEL_COUNT_MIN BIGINT;
+	V_LEVEL_COUNT_MAX BIGINT;
+	V_TABLE_ID BIGINT;
+	TABLE_ROW_NUM BIGINT;
+	MAX_TABLE_ROW_NUM BIGINT;
+	TABLE_NAME_HOT NVARCHAR(500);
+BEGIN
+	--Insert the data starting from parent and end with leaf level child. 
+	--Delete the data strting from leaf level child and end with parent.
+	
+	--Inserting into parent
+	TABLE_ROW_NUM:=1;
+	MAX_TABLE_ROW_NUM:=1;
+	CALL "sap.tm.trp.db.archive::sp_data_archive_insert"(:RULE_ID,:TABLE_ID,:EXE_DETAIL_SEQ,:DATE_FROM,:DATE_TO,:DATE_COLUMN_NAME,1,:ARCHIVE_FLAG,:IS_TM,:DATE_FROM_TM,:DATE_TO_TM,:TABLE_ROW_NUM,:MAX_TABLE_ROW_NUM);
+	
+	--Inserting into child using top to bottom approch.
+	V_MIN_LEVEL := 1;
+	SELECT IFNULL(MAX(LEVEL),0) INTO V_MAX_LEVEL FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE ULTIMATE_PARENT_ID = :TABLE_ID; 
+	WHILE :V_MIN_LEVEL <= :V_MAX_LEVEL DO 
+		V_LEVEL_COUNT_MIN := 1;
+		LEVEL_DATASET=SELECT *,ROW_NUMBER() over (partition by LEVEL order by TABLE_CODE) as ROW_NUM,
+					  ROW_NUMBER() over (partition by TABLE_CODE order by PARENT_ID) as TABLE_ROW_NUM 
+					  FROM "sap.tm.trp.db.archive::t_archive_metadata" 
+					  WHERE ULTIMATE_PARENT_ID = :TABLE_ID AND LEVEL = :V_MIN_LEVEL;  
+		SELECT COUNT(1) INTO V_LEVEL_COUNT_MAX FROM :LEVEL_DATASET;
+		WHILE :V_LEVEL_COUNT_MIN <= :V_LEVEL_COUNT_MAX DO 
+			SELECT ID INTO V_TABLE_ID FROM :LEVEL_DATASET WHERE ROW_NUM=:V_LEVEL_COUNT_MIN;
+			SELECT TABLE_ROW_NUM INTO TABLE_ROW_NUM FROM :LEVEL_DATASET WHERE ROW_NUM=:V_LEVEL_COUNT_MIN;
+			SELECT TABLE_NAME INTO TABLE_NAME_HOT FROM :LEVEL_DATASET WHERE ID = :V_TABLE_ID;
+			SELECT COUNT(1) INTO MAX_TABLE_ROW_NUM FROM :LEVEL_DATASET WHERE TABLE_NAME = :TABLE_NAME_HOT;
+			CALL "sap.tm.trp.db.archive::sp_data_archive_insert"(:RULE_ID,:V_TABLE_ID,:EXE_DETAIL_SEQ,:DATE_FROM,:DATE_TO,:DATE_COLUMN_NAME,0,:ARCHIVE_FLAG,:IS_TM,:DATE_FROM_TM,:DATE_TO_TM,:TABLE_ROW_NUM,:MAX_TABLE_ROW_NUM);
+			V_LEVEL_COUNT_MIN := :V_LEVEL_COUNT_MIN+1;
+		END WHILE;
+		V_MIN_LEVEL := :V_MIN_LEVEL+1;
+	END WHILE;
+	
+	--Delete from child using bottom to top approch.
+	V_MIN_LEVEL := 1;
+	SELECT MAX(LEVEL) INTO V_MAX_LEVEL FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE ULTIMATE_PARENT_ID = :TABLE_ID; 
+	WHILE :V_MAX_LEVEL >= :V_MIN_LEVEL DO 
+		V_LEVEL_COUNT_MIN := 1;
+		LEVEL_DATASET = SELECT *,ROW_NUMBER() over (partition by LEVEL order by TABLE_CODE) as ROW_NUM,
+					  ROW_NUMBER() over (partition by TABLE_CODE order by PARENT_ID) as TABLE_ROW_NUM 
+					  FROM "sap.tm.trp.db.archive::t_archive_metadata" 
+					  WHERE ULTIMATE_PARENT_ID = :TABLE_ID AND LEVEL = :V_MAX_LEVEL;  
+		SELECT COUNT(1) INTO V_LEVEL_COUNT_MAX FROM :LEVEL_DATASET;
+		WHILE :V_LEVEL_COUNT_MIN <= :V_LEVEL_COUNT_MAX DO 
+			SELECT ID INTO V_TABLE_ID FROM :LEVEL_DATASET WHERE ROW_NUM=:V_LEVEL_COUNT_MIN;
+			IF :ARCHIVE_FLAG = 1 THEN 
+				IF :IS_TM = 0 THEN 
+					--Call the procedure to delete the data from HOT
+					CALL "sap.tm.trp.db.archive::sp_data_archive_delete"(:V_TABLE_ID,:EXE_DETAIL_SEQ,:DATE_FROM,:DATE_TO,:DATE_COLUMN_NAME,0,:ARCHIVE_FLAG,:IS_TM,:DATE_FROM_TM,:DATE_TO_TM);
+				ELSE 
+					--Call the interface provided by Shanghai Team
+				END IF;
+			ELSE 
+				--Call the procedure to delete the data from WARM
+				CALL "sap.tm.trp.db.archive::sp_data_archive_delete"(:V_TABLE_ID,:EXE_DETAIL_SEQ,:DATE_FROM,:DATE_TO,:DATE_COLUMN_NAME,0,:ARCHIVE_FLAG,:IS_TM,:DATE_FROM_TM,:DATE_TO_TM);
+			END IF;
+			V_LEVEL_COUNT_MIN := :V_LEVEL_COUNT_MIN+1;
+		END WHILE;
+		V_MAX_LEVEL := :V_MAX_LEVEL-1;
+	END WHILE;
+	
+	--Deleting from parent
+	IF :ARCHIVE_FLAG = 1 THEN 
+		IF :IS_TM = 0 THEN 
+			--Call the procedure to delete the data from HOT
+			CALL "sap.tm.trp.db.archive::sp_data_archive_delete"(:TABLE_ID,:EXE_DETAIL_SEQ,:DATE_FROM,:DATE_TO,:DATE_COLUMN_NAME,1,:ARCHIVE_FLAG,:IS_TM,:DATE_FROM_TM,:DATE_TO_TM);
+		ELSE 
+			--Call the interface provided by Shanghai Team
+		END IF;
+	ELSE 
+		--Call the procedure to delete the data from WARM
+		CALL "sap.tm.trp.db.archive::sp_data_archive_delete"(:TABLE_ID,:EXE_DETAIL_SEQ,:DATE_FROM,:DATE_TO,:DATE_COLUMN_NAME,1,:ARCHIVE_FLAG,:IS_TM,:DATE_FROM_TM,:DATE_TO_TM);
+	END IF;
+END;

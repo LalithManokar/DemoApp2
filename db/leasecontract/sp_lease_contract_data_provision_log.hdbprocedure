@@ -1,0 +1,77 @@
+procedure "SAP_TM_TRP"."sap.tm.trp.db.leasecontract::sp_lease_contract_data_provision_log" 
+(in VALIDATION_ID bigint,
+ in STATUS tinyint,
+ in MASTER_TABLE_NAME nvarchar(256),
+ in CHILD_TABLE_NAME nvarchar(256),
+ in COLUMN_NAME nvarchar(256),
+ in TYPE integer,
+ in WHERE_CLAUSE nvarchar(250),
+ in MESSAGE nvarchar(500)) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+SQL_TEXT nvarchar(2000);
+L_MESSAGE nvarchar(500);
+L_SUB_QUERY nvarchar(500);
+BEGIN
+	
+	
+	IF :STATUS = 0 THEN 
+		
+		IF :VALIDATION_ID <= 6 THEN 
+			L_MESSAGE:='Referential Integrity failed between '||:MASTER_TABLE_NAME||' and '||:CHILD_TABLE_NAME;
+		ELSE IF :VALIDATION_ID > 6 AND :VALIDATION_ID <=24 THEN 
+			L_MESSAGE:=:MESSAGE||' are missing';
+		ELSE 
+			L_MESSAGE:=:MESSAGE||' are invalid';
+		END IF;
+		END IF;
+		
+		IF :VALIDATION_ID=25 OR :VALIDATION_ID=27 THEN 
+			L_SUB_QUERY:='1,2,3,4,5,6';
+		ELSE IF :VALIDATION_ID=26 OR :VALIDATION_ID=28 OR :VALIDATION_ID=29 THEN 
+			L_SUB_QUERY:='1,2';
+		ELSE
+			L_SUB_QUERY:='select "CODE" from "sap.tm.trp.db.leasecontract::global_tmp_lease_contract_code"';
+		END IF;
+		END IF;
+		
+		insert into "sap.tm.trp.db.leasecontract::t_lease_contract_import_log"
+		("ID","STATUS","MESSAGE")
+		values(:VALIDATION_ID,:STATUS,:L_MESSAGE); 
+		
+		SQL_TEXT:='insert into "sap.tm.trp.db.leasecontract::t_lease_contract_import_errors" 
+				("ID","LOG_ID","TABLE_NAME","COLUMN_NAME","CODE","TYPE")
+				select
+					"sap.tm.trp.db.leasecontract::s_lease_contract_import_errors".NEXTVAL as "ID",
+					'||:VALIDATION_ID||' as "LOG_ID",
+					'''||escape_single_quotes(:CHILD_TABLE_NAME)||''' as "TABLE_NAME",
+					'''||escape_single_quotes(:COLUMN_NAME)||''' as "COLUMN_NAME",
+					"'||escape_double_quotes(:COLUMN_NAME)||'" as "CODE",
+					'||:TYPE||' as "TYPE"  
+				from "sap.tm.trp.db.dataprovisioning::'||escape_single_quotes(:CHILD_TABLE_NAME)||'"
+				where '||escape_single_quotes(:WHERE_CLAUSE)||' NOT IN 
+				('||:L_SUB_QUERY||')';
+		--INSERT INTO "DEBUG_LOG" VALUES(:VALIDATION_ID,:SQL_TEXT);
+		--EXEC('COMMIT');
+		EXECUTE IMMEDIATE :SQL_TEXT;
+	
+		
+	ELSE 
+	
+		IF :VALIDATION_ID <= 6 THEN 
+			L_MESSAGE:='Referential Integrity Successful between '||:MASTER_TABLE_NAME||' and '||:CHILD_TABLE_NAME;
+		ELSE IF :VALIDATION_ID > 6 AND :VALIDATION_ID <=24 THEN 
+			L_MESSAGE:=:MESSAGE||' are exist';
+		ELSE 
+			L_MESSAGE:=:MESSAGE||' are valid';
+		END IF;
+		END IF;
+		
+		insert into "sap.tm.trp.db.leasecontract::t_lease_contract_import_log"(ID,STATUS,MESSAGE)
+		values(:VALIDATION_ID,:STATUS,:L_MESSAGE);
+	
+	END IF;
+	
+END; 

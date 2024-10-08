@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_load_discharge_by_voyage" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_load_discharge_by_voyage"/>
+  <localVariables>
+    <variable id="IN_SIM_PLAN_ID" parameter="true">
+      <descriptions defaultDescription="IN_SIM_PLAN_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_SCENARIO_ID" parameter="true">
+      <descriptions defaultDescription="IN_SCENARIO_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_TRIP_ID" parameter="true">
+      <descriptions defaultDescription="IN_TRIP_ID"/>
+      <variableProperties datatype="NVARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_RESOURCE_TYPE" parameter="true">
+      <descriptions defaultDescription="IN_RESOURCE_TYPE"/>
+      <variableProperties datatype="NVARCHAR" length="10" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_ACTIVITY_ID" parameter="true">
+      <descriptions defaultDescription="IN_ACTIVITY_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="false">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="TRIP_ID" length="40"/>
+        <viewAttribute datatype="VARCHAR" id="VOYAGE" length="40"/>
+        <viewAttribute datatype="VARCHAR" id="SCHEDULE" length="40"/>
+        <viewAttribute datatype="VARCHAR" id="VEHICLE" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="VEHICLE_TYPE" length="10"/>
+        <viewAttribute datatype="INTEGER" id="SEQUENCE"/>
+        <viewAttribute datatype="NVARCHAR" id="STOP_ID" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="STOP" length="50"/>
+        <viewAttribute datatype="TIMESTAMP" id="PLAN_ARRIVAL_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="PLAN_DEPARTURE_TIME"/>
+        <viewAttribute datatype="INTEGER" id="LOAD_QUANTITY"/>
+        <viewAttribute datatype="DECIMAL" id="LOAD_QUANTITY_TEU"/>
+        <viewAttribute datatype="INTEGER" id="UPDATED_LOAD_QUANTITY"/>
+        <viewAttribute datatype="INTEGER" id="DISCHARGE_QUANTITY"/>
+        <viewAttribute datatype="DECIMAL" id="DISCHARGE_QUANTITY_TEU"/>
+        <viewAttribute datatype="INTEGER" id="UPDATED_DISCHARGE_QUANTITY"/>
+        <viewAttribute datatype="INTEGER" id="EMPTY_STOCK"/>
+        <viewAttribute datatype="DECIMAL" id="EMPTY_STOCK_TEU"/>
+        <viewAttribute datatype="INTEGER" id="REMAINING_CAPACITY"/>
+        <viewAttribute datatype="DECIMAL" id="REMAINING_CAPACITY_TEU"/>
+        <viewAttribute datatype="INTEGER" id="TOTAL_CAPACITY"/>
+        <viewAttribute datatype="DECIMAL" id="TOTAL_CAPACITY_TEU"/>
+        <viewAttribute datatype="INTEGER" id="STATUS"/>
+        <viewAttribute datatype="DECIMAL" id="TEU_COUNT"/>
+        <viewAttribute datatype="INTEGER" id="TEU_COUNT_INVALID"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_SIM_PLAN_ID</localVariable>
+      <localVariable>#IN_SCENARIO_ID</localVariable>
+      <localVariable>#IN_TRIP_ID</localVariable>
+      <localVariable>#IN_RESOURCE_TYPE</localVariable>
+      <localVariable>#IN_ACTIVITY_ID</localVariable>
+      <definition> /********* Begin Procedure Script ************/ 
+ BEGIN 
+  
+   DECLARE EDIT_SAME_VOYAGE INTEGER;
+   DECLARE RESOURCE_CATEGORY NVARCHAR(10);
+   DECLARE TEU_COUNT DECIMAL;
+   DECLARE V_TEU_COUNT_INVALID INTEGER := 0;
+      
+   SELECT COUNT(1) INTO EDIT_SAME_VOYAGE
+   FROM &quot;sap.tm.trp.db.planningcockpit::t_load_discharge_activity_detail&quot;
+   WHERE ACTIVITY_ID = :IN_ACTIVITY_ID AND TRIP_ID = :IN_TRIP_ID;
+   
+   SELECT IFNULL(MAX(RESOURCE_CATEGORY),'CN') INTO RESOURCE_CATEGORY
+   FROM &quot;sap.tm.trp.db.planningcockpit::t_simulation_plan&quot;
+   WHERE ID = :IN_SIM_PLAN_ID;
+   
+   RESOURCE_TYPES = SELECT DISTINCT T1.RESOURCE_TYPE_CODE, T2.TEU_COUNT
+                FROM &quot;sap.tm.trp.db.semantic.resource::v_resource_type_with_category&quot; T1
+                INNER JOIN &quot;sap.tm.trp.db.semantic.resource::v_resource_type&quot; T2
+                ON (T1.RESOURCE_TYPE_CODE = T2.RESOURCE_TYPE_CODE)
+                WHERE T1.RESOURCE_CATEGORY = :RESOURCE_CATEGORY
+                AND T1.RESOURCE_TYPE_CODE = :IN_RESOURCE_TYPE;
+   
+   TRIP_ID = SELECT :IN_TRIP_ID AS TRIP_ID FROM DUMMY;              
+   -- Get capacity / reamin capacity 
+   CALL &quot;sap.tm.trp.db.planningcockpit::p_calculate_voyage_location_capcities&quot;
+   (:IN_SIM_PLAN_ID,:IN_SCENARIO_ID,:TRIP_ID,CAPACITY); 
+   
+   -- convert TEU capacity to PCs to match with Load/Discharge
+       SELECT IFNULL(MAX(TEU_COUNT),1) INTO TEU_COUNT FROM :RESOURCE_TYPES;       
+       IF TEU_COUNT &lt;= 0 THEN
+         TEU_COUNT = 1;
+         V_TEU_COUNT_INVALID = 1;
+       END IF;
+       
+   -- Create activity or not same voyage/schedule is selected 
+   IF :EDIT_SAME_VOYAGE = 0 THEN
+        
+       -- Get load/discharge/stock        
+       CALL &quot;sap.tm.trp.db.planningcockpit::p_get_load_discharge_stock_by_voyage&quot; 
+       (:IN_RESOURCE_TYPE,:RESOURCE_CATEGORY,:TRIP_ID,LOAD_DISCHARGE_STOCK);
+              
+     
+      var_out = SELECT t1.TRIP_ID, t1.VOYAGE,t1.SCHEDULE,t1.VESSEL AS VEHICLE,'VESSEL' AS VEHICLE_TYPE,
+                 t1.SEQUENCE,t1.LOCATION_ID AS STOP_ID, t1.LOCATION_NAME AS STOP,
+                 t1.ARRIVAL_UTC AS PLAN_ARRIVAL_TIME, t1.DEPARTURE_UTC AS PLAN_DEPARTURE_TIME,
+                 t1.LOAD_QUANTITY, t1.LOAD_QUANTITY * :TEU_COUNT AS LOAD_QUANTITY_TEU,
+                 NULL AS UPDATED_LOAD_QUANTITY,
+                 t1.DISCHARGE_QUANTITY, t1.DISCHARGE_QUANTITY * :TEU_COUNT AS DISCHARGE_QUANTITY_TEU,
+                  NULL AS UPDATED_DISCHARGE_QUANTITY,
+                 t1.EMPTY_STOCK, t1.EMPTY_STOCK * :TEU_COUNT AS EMPTY_STOCK_TEU,
+                 t2.REMAIN_CAPACITY / :TEU_COUNT AS REMAINING_CAPACITY, 
+                 t2.REMAIN_CAPACITY AS REMAINING_CAPACITY_TEU,
+                 t2.TOTAL_CAPACITY / :TEU_COUNT AS TOTAL_CAPACITY,
+                 t2.TOTAL_CAPACITY AS TOTAL_CAPACITY_TEU,
+                  0 AS STATUS,
+                  :TEU_COUNT AS TEU_COUNT,
+                  :V_TEU_COUNT_INVALID AS TEU_COUNT_INVALID
+                 FROM :LOAD_DISCHARGE_STOCK t1
+                 LEFT OUTER JOIN :CAPACITY t2 ON(t1.TRIP_ID = t2.TRIP_ID AND t1.SEQUENCE = t2.SEQUENCE); 
+                                
+    -- Edit activity
+     ELSE 
+       var_out = SELECT t1.TRIP_ID, t1.VOYAGE,t1.SCHEDULE,VEHICLE,VEHICLE_TYPE,t1.SEQUENCE,STOP_ID, STOP_NAME AS STOP,
+                 ARRIVAL_TIME AS PLAN_ARRIVAL_TIME, DEPARTURE_TIME AS PLAN_DEPARTURE_TIME,
+                 ORIGINAL_LOAD AS LOAD_QUANTITY, ORIGINAL_LOAD_TEU AS LOAD_QUANTITY_TEU,
+                 UPDATED_LOAD AS UPDATED_LOAD_QUANTITY,
+                 ORIGINAL_DISCHARGE AS DISCHARGE_QUANTITY,
+                 ORIGINAL_DISCHARGE_TEU AS DISCHARGE_QUANTITY_TEU,
+                 UPDATED_DISCHARGE AS UPDATED_DISCHARGE_QUANTITY,
+                 EMPTY_STOCK, EMPTY_STOCK_TEU AS EMPTY_STOCK_TEU,
+                 t2.REMAIN_CAPACITY / :TEU_COUNT AS REMAINING_CAPACITY,
+                 t2.REMAIN_CAPACITY AS REMAINING_CAPACITY_TEU, 
+                 t1.TOTAL_CAPACITY,
+                 t1.TOTAL_CAPACITY_TEU AS TOTAL_CAPACITY_TEU,STATUS,
+                 :TEU_COUNT AS TEU_COUNT,
+                 :V_TEU_COUNT_INVALID AS TEU_COUNT_INVALID
+                 FROM &quot;sap.tm.trp.db.planningcockpit::t_load_discharge_activity_detail&quot; t1
+                 LEFT OUTER JOIN :CAPACITY t2 ON(t1.TRIP_ID = t2.TRIP_ID AND t1.SEQUENCE = t2.SEQUENCE) 
+                 WHERE ACTIVITY_ID = :IN_ACTIVITY_ID; 
+                 
+     END IF;
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="TRIP_ID" order="1">
+        <descriptions defaultDescription="TRIP_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TRIP_ID"/>
+      </attribute>
+      <attribute id="VOYAGE" order="2">
+        <descriptions defaultDescription="VOYAGE"/>
+        <keyMapping columnObjectName="Script_View" columnName="VOYAGE"/>
+      </attribute>
+      <attribute id="SCHEDULE" order="3">
+        <descriptions defaultDescription="SCHEDULE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SCHEDULE"/>
+      </attribute>
+      <attribute id="VEHICLE" order="4">
+        <descriptions defaultDescription="VEHICLE"/>
+        <keyMapping columnObjectName="Script_View" columnName="VEHICLE"/>
+      </attribute>
+      <attribute id="VEHICLE_TYPE" order="5">
+        <descriptions defaultDescription="VEHICLE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="VEHICLE_TYPE"/>
+      </attribute>
+      <attribute id="SEQUENCE" order="6">
+        <descriptions defaultDescription="SEQUENCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SEQUENCE"/>
+      </attribute>
+      <attribute id="STOP_ID" order="7">
+        <descriptions defaultDescription="STOP_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="STOP_ID"/>
+      </attribute>
+      <attribute id="STOP" order="8">
+        <descriptions defaultDescription="STOP"/>
+        <keyMapping columnObjectName="Script_View" columnName="STOP"/>
+      </attribute>
+      <attribute id="PLAN_ARRIVAL_TIME" order="9">
+        <descriptions defaultDescription="PLAN_ARRIVAL_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_ARRIVAL_TIME"/>
+      </attribute>
+      <attribute id="PLAN_DEPARTURE_TIME" order="10">
+        <descriptions defaultDescription="PLAN_DEPARTURE_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_DEPARTURE_TIME"/>
+      </attribute>
+      <attribute id="TEU_COUNT_INVALID" order="25">
+        <descriptions defaultDescription="TEU_COUNT_INVALID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TEU_COUNT_INVALID"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="LOAD_QUANTITY" order="11" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LOAD_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="LOAD_QUANTITY"/>
+      </measure>
+      <measure id="LOAD_QUANTITY_TEU" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LOAD_QUANTITY_TEU"/>
+        <measureMapping columnObjectName="Script_View" columnName="LOAD_QUANTITY_TEU"/>
+      </measure>
+      <measure id="UPDATED_LOAD_QUANTITY" order="13" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="NEW_LOAD_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="UPDATED_LOAD_QUANTITY"/>
+      </measure>
+      <measure id="DISCHARGE_QUANTITY" order="14" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DISCHARGE_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="DISCHARGE_QUANTITY"/>
+      </measure>
+      <measure id="DISCHARGE_QUANTITY_TEU" order="15" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DISCHARGE_QUANTITY_TEU"/>
+        <measureMapping columnObjectName="Script_View" columnName="DISCHARGE_QUANTITY_TEU"/>
+      </measure>
+      <measure id="UPDATED_DISCHARGE_QUANTITY" order="16" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="NEW_DISCHARGE_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="UPDATED_DISCHARGE_QUANTITY"/>
+      </measure>
+      <measure id="EMPTY_STOCK" order="17" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="EMPTY_STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="EMPTY_STOCK"/>
+      </measure>
+      <measure id="EMPTY_STOCK_TEU" order="18" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="EMPTY_STOCK_TEU"/>
+        <measureMapping columnObjectName="Script_View" columnName="EMPTY_STOCK_TEU"/>
+      </measure>
+      <measure id="REMAINING_CAPACITY" order="19" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="REMAINING_CAPACITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="REMAINING_CAPACITY"/>
+      </measure>
+      <measure id="REMAINING_CAPACITY_TEU" order="20" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="REMAINING_CAPACITY_TEU"/>
+        <measureMapping columnObjectName="Script_View" columnName="REMAINING_CAPACITY_TEU"/>
+      </measure>
+      <measure id="TOTAL_CAPACITY" order="21" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TOTAL_CAPACITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="TOTAL_CAPACITY"/>
+      </measure>
+      <measure id="TOTAL_CAPACITY_TEU" order="22" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TOTAL_CAPACITY_TEU"/>
+        <measureMapping columnObjectName="Script_View" columnName="TOTAL_CAPACITY_TEU"/>
+      </measure>
+      <measure id="STATUS" order="23" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="STATUS"/>
+        <measureMapping columnObjectName="Script_View" columnName="STATUS"/>
+      </measure>
+      <measure id="TEU_COUNT" order="24" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TEU_COUNT"/>
+        <measureMapping columnObjectName="Script_View" columnName="TEU_COUNT"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

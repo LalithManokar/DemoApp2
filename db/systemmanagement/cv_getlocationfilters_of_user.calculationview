@@ -1,0 +1,487 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_getlocationfilters_of_user" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_anna_privilege_check"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="LOCATION_FILTER_ID"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> 
+  
+ BEGIN
+     DECLARE VAR_USER_TYPE INTEGER;
+     DECLARE VAR_USER_NAME VARCHAR(60);
+     DECLARE DEPOT_MANAGER INTEGER := 1;
+     DECLARE LOCAL_PLANNER INTEGER := 2;
+     DECLARE REGIONAL_PLANNER INTEGER := 3;
+     --DECLARE USER_TYPE_ADMIN INTEGER :=99;
+     DECLARE VAR_USER_ID INTEGER;
+     
+      DECLARE LOCATION_TYPE_LOCATION INTEGER :=1;
+	  DECLARE LOCATION_TYPE_LOCATION_GROUP INTEGER :=2;
+	  DECLARE LOCATION_TYPE_ZONE INTEGER :=3;   
+	  DECLARE LOCATION_TYPE_ZONE_GROUP INTEGER :=4;  
+	  DECLARE LOCATION_TYPE_REGION INTEGER :=5; 
+	  DECLARE LOCATION_TYPE_REGION_GROUP INTEGER :=6; 
+	  DECLARE HAS_AUTHORIZATION_FLAG TINYINT; 
+      call &quot;sap.tm.trp.db.systemmanagement::p_check_location_full_authorization&quot; (
+		 	HAVE_AUTHORIZATION_FLAG => HAS_AUTHORIZATION_FLAG
+		 ); 
+      SELECT IFNULL(MAX(USERNAME),'') into VAR_USER_NAME
+      FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+      
+      CALL &quot;sap.tm.trp.db.systemmanagement.user::p_get_user_id_by_username&quot; ( 
+	    :VAR_USER_NAME,
+	    VAR_USER_ID
+       );
+  
+      
+     SELECT IFNULL(MAX(USER_TYPE_ID),-1) INTO VAR_USER_TYPE
+     FROM &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot;
+     WHERE USERNAME = :VAR_USER_NAME;
+   
+  IF :HAS_AUTHORIZATION_FLAG = 1 THEN
+     var_out = SELECT LOCATION_FILTER_ID 
+               FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot;
+               UNION ALL SELECT LOCATION_FILTER_ID
+               FROM &quot;sap.tm.trp.db.filter::t_location_filter_zone&quot;
+               UNION ALL SELECT LOCATION_FILTER_ID
+               FROM &quot;sap.tm.trp.db.filter::t_location_filter_region&quot;;
+    --DEPOT_PLANNER
+   ELSEIF VAR_USER_TYPE = :DEPOT_MANAGER THEN
+   
+      --depot manager can only see location filter &amp; location group filter:
+       LOCATION_OF_FILTER =  
+       --LOCATION: 
+        SELECT T1.LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.LOCATION_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'G' 
+         UNION ALL
+         SELECT T1.LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.LOCATION_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'P' 
+         AND T2.CREATE_BY =:VAR_USER_ID;
+    
+        
+        LOCATION_GROUP_OF_FILTER =  
+        SELECT T1.LOCATION_GROUP_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+         WHERE T1.LOCATION_GROUP_ID IS NOT NULL 
+         AND T2.VISIBLE_FLAG = 'G' 
+         UNION ALL
+         SELECT T1.LOCATION_GROUP_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+         WHERE T1.LOCATION_GROUP_ID IS NOT NULL 
+           AND T2.VISIBLE_FLAG = 'P' 
+         AND T2.CREATE_BY =:VAR_USER_ID;
+        
+             
+       WHITE_LIST_LOCATION_OF_THE_USER = SELECT LOCATION_ID FROM &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(
+    placeholder.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_LOCATION); 
+    
+      WHITE_LIST_LOCATION_GROUP_OF_THE_USER = SELECT LOCATION_ID FROM &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(
+    placeholder.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_LOCATION_GROUP); 
+    
+    LOCATION_FILTER_WHITELIST_ID =
+       SELECT T10.LOCATION_FILTER_ID   
+       FROM 
+       (
+	       SELECT T1.LOCATION_FILTER_ID,CASE WHEN T2.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+	      FROM :LOCATION_OF_FILTER T1
+	      LEFT JOIN :WHITE_LIST_LOCATION_OF_THE_USER T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+       )T10
+       GROUP BY T10.LOCATION_FILTER_ID
+       HAVING SUM(NUM) = 0 ;
+       
+       LOCATION_GROUP_FILTER_WHITELIST_ID =
+       SELECT T10.LOCATION_FILTER_ID   
+       FROM 
+       (
+	       SELECT T1.LOCATION_FILTER_ID,CASE WHEN T2.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+	      FROM :LOCATION_GROUP_OF_FILTER T1
+	      LEFT JOIN :WHITE_LIST_LOCATION_GROUP_OF_THE_USER T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+       )T10
+       GROUP BY T10.LOCATION_FILTER_ID
+       HAVING SUM(NUM) = 0 ;
+       
+       
+    
+    var_out = SELECT LOCATION_FILTER_ID 
+               FROM :LOCATION_FILTER_WHITELIST_ID
+               UNION ALL SELECT LOCATION_FILTER_ID
+               FROM :LOCATION_GROUP_FILTER_WHITELIST_ID;
+          
+   --'LOCAL_PLANNER'
+   ELSEIF VAR_USER_TYPE = :LOCAL_PLANNER THEN
+ 
+     --local planner can only see 
+     -- location filter &amp; location group filter &amp; zone filter &amp; zone group filter
+    
+       LOCATION_OF_FILTER =  
+       --LOCATION: 
+        SELECT T1.LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.LOCATION_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'G' 
+         UNION ALL
+         SELECT T1.LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.LOCATION_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'P' 
+         AND T2.CREATE_BY =:VAR_USER_ID;
+    
+        
+        LOCATION_GROUP_OF_FILTER =  
+        SELECT T1.LOCATION_GROUP_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+         WHERE T1.LOCATION_GROUP_ID IS NOT NULL 
+         AND T2.VISIBLE_FLAG = 'G' 
+         UNION ALL
+         SELECT T1.LOCATION_GROUP_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+         WHERE T1.LOCATION_GROUP_ID IS NOT NULL 
+           AND T2.VISIBLE_FLAG = 'P' 
+         AND T2.CREATE_BY =:VAR_USER_ID;
+         
+         ZONE_OF_FILTER =  
+        SELECT T1.ZONE_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_zone&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.ZONE_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'G' 
+         UNION ALL
+         SELECT T1.ZONE_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_zone&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.ZONE_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'P' 
+         AND T2.CREATE_BY =:VAR_USER_ID;
+         
+         ZONE_GROUP_OF_FILTER =  
+        SELECT T1.ZONE_GROUP_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_zone&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.ZONE_GROUP_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'G' 
+         UNION ALL
+         SELECT T1.ZONE_GROUP_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_zone&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.ZONE_GROUP_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'P' 
+         AND T2.CREATE_BY =:VAR_USER_ID;
+        
+             
+       WHITE_LIST_LOCATION_OF_THE_USER = SELECT LOCATION_ID FROM &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(
+    placeholder.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_LOCATION); 
+    
+      WHITE_LIST_LOCATION_GROUP_OF_THE_USER = SELECT LOCATION_ID FROM &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(
+    placeholder.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_LOCATION_GROUP); 
+    
+     WHITE_LIST_ZONE_OF_THE_USER = SELECT LOCATION_ID FROM &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(
+    placeholder.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_ZONE); 
+    
+     WHITE_LIST_ZONE_GROUP_OF_THE_USER = SELECT LOCATION_ID FROM &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(
+    placeholder.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_ZONE_GROUP); 
+    
+    LOCATION_FILTER_WHITELIST_ID =
+       SELECT T10.LOCATION_FILTER_ID   
+       FROM 
+       (
+	       SELECT T1.LOCATION_FILTER_ID,CASE WHEN T2.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+	      FROM :LOCATION_OF_FILTER T1
+	      LEFT JOIN :WHITE_LIST_LOCATION_OF_THE_USER T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+       )T10
+       GROUP BY T10.LOCATION_FILTER_ID
+       HAVING SUM(NUM) = 0 ;
+       
+       LOCATION_GROUP_FILTER_WHITELIST_ID =
+       SELECT T10.LOCATION_FILTER_ID   
+       FROM 
+       (
+	       SELECT T1.LOCATION_FILTER_ID,CASE WHEN T2.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+	      FROM :LOCATION_GROUP_OF_FILTER T1
+	      LEFT JOIN :WHITE_LIST_LOCATION_GROUP_OF_THE_USER T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+       )T10
+       GROUP BY T10.LOCATION_FILTER_ID
+       HAVING SUM(NUM) = 0 ;
+       
+        ZONE_FILTER_WHITELIST_ID =
+       SELECT T10.LOCATION_FILTER_ID   
+       FROM 
+       (
+	       SELECT T1.LOCATION_FILTER_ID,CASE WHEN T2.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+	      FROM :ZONE_OF_FILTER T1
+	      LEFT JOIN :WHITE_LIST_ZONE_OF_THE_USER T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+       )T10
+       GROUP BY T10.LOCATION_FILTER_ID
+       HAVING SUM(NUM) = 0 ;
+       
+       ZONE_GROUP_FILTER_WHITELIST_ID =
+       SELECT T10.LOCATION_FILTER_ID   
+       FROM 
+       (
+	       SELECT T1.LOCATION_FILTER_ID,CASE WHEN T2.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+	      FROM :ZONE_GROUP_OF_FILTER T1
+	      LEFT JOIN :WHITE_LIST_ZONE_GROUP_OF_THE_USER T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+       )T10
+       GROUP BY T10.LOCATION_FILTER_ID
+       HAVING SUM(NUM) = 0 ;
+       
+    
+    var_out = SELECT LOCATION_FILTER_ID 
+               FROM :LOCATION_FILTER_WHITELIST_ID
+               UNION ALL SELECT LOCATION_FILTER_ID
+               FROM :LOCATION_GROUP_FILTER_WHITELIST_ID
+               UNION ALL SELECT LOCATION_FILTER_ID
+               FROM :ZONE_FILTER_WHITELIST_ID
+               UNION ALL SELECT LOCATION_FILTER_ID
+               FROM :ZONE_GROUP_FILTER_WHITELIST_ID;
+ 
+   ELSEIF VAR_USER_TYPE = :REGIONAL_PLANNER THEN
+ 
+     --local planner can only see 
+     -- location filter &amp; location group filter 
+      --&amp; zone filter &amp; zone group filter
+      --&amp; region filter &amp; region group filter
+    
+       LOCATION_OF_FILTER =  
+       --LOCATION: 
+        SELECT T1.LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.LOCATION_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'G' 
+         UNION ALL
+         SELECT T1.LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.LOCATION_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'P' 
+         AND T2.CREATE_BY =:VAR_USER_ID;
+    
+        
+        LOCATION_GROUP_OF_FILTER =  
+        SELECT T1.LOCATION_GROUP_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+         WHERE T1.LOCATION_GROUP_ID IS NOT NULL 
+         AND T2.VISIBLE_FLAG = 'G' 
+         UNION ALL
+         SELECT T1.LOCATION_GROUP_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+         WHERE T1.LOCATION_GROUP_ID IS NOT NULL 
+           AND T2.VISIBLE_FLAG = 'P' 
+         AND T2.CREATE_BY =:VAR_USER_ID;
+         
+         ZONE_OF_FILTER =  
+        SELECT T1.ZONE_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_zone&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.ZONE_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'G' 
+         UNION ALL
+         SELECT T1.ZONE_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_zone&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.ZONE_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'P' 
+         AND T2.CREATE_BY =:VAR_USER_ID;
+         
+         ZONE_GROUP_OF_FILTER =  
+        SELECT T1.ZONE_GROUP_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_zone&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.ZONE_GROUP_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'G' 
+         UNION ALL
+         SELECT T1.ZONE_GROUP_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_zone&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.ZONE_GROUP_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'P' 
+         AND T2.CREATE_BY =:VAR_USER_ID;
+         
+         REGION_OF_FILTER =  
+        SELECT T1.ZONE_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_region&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.ZONE_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'G' 
+         UNION ALL
+         SELECT T1.ZONE_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_region&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.ZONE_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'P' 
+         AND T2.CREATE_BY =:VAR_USER_ID;
+        
+          REGION_GROUP_OF_FILTER =  
+        SELECT T1.REGION_GROUP_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_region&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.REGION_GROUP_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'G' 
+         UNION ALL
+         SELECT T1.REGION_GROUP_ID AS LOCATION_ID,T1.LOCATION_FILTER_ID
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter_region&quot; T1
+        INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+        WHERE T1.REGION_GROUP_ID IS NOT NULL  
+         AND T2.VISIBLE_FLAG = 'P' 
+         AND T2.CREATE_BY =:VAR_USER_ID;
+             
+       WHITE_LIST_LOCATION_OF_THE_USER = SELECT LOCATION_ID FROM &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(
+    placeholder.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_LOCATION); 
+    
+      WHITE_LIST_LOCATION_GROUP_OF_THE_USER = SELECT LOCATION_ID FROM &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(
+    placeholder.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_LOCATION_GROUP); 
+    
+    /*
+     WHITE_LIST_ZONE_OF_THE_USER = SELECT LOCATION_ID FROM &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(
+    placeholder.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_ZONE); 
+    
+     WHITE_LIST_ZONE_GROUP_OF_THE_USER = SELECT LOCATION_ID FROM &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(
+    placeholder.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_ZONE_GROUP); 
+    */
+     WHITE_LIST_REGION_OF_THE_USER = SELECT LOCATION_ID FROM &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(
+    placeholder.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_REGION);
+    
+      WHITE_LIST_REGION_GROUP_OF_THE_USER = SELECT LOCATION_ID FROM &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(
+    placeholder.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_REGION_GROUP);  
+    
+    LOCATION_FILTER_WHITELIST_ID =
+       SELECT T10.LOCATION_FILTER_ID   
+       FROM 
+       (
+	       SELECT T1.LOCATION_FILTER_ID,CASE WHEN T2.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+	      FROM :LOCATION_OF_FILTER T1
+	      LEFT JOIN :WHITE_LIST_LOCATION_OF_THE_USER T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+       )T10
+       GROUP BY T10.LOCATION_FILTER_ID
+       HAVING SUM(NUM) = 0 ;
+       
+       LOCATION_GROUP_FILTER_WHITELIST_ID =
+       SELECT T10.LOCATION_FILTER_ID   
+       FROM 
+       (
+	       SELECT T1.LOCATION_FILTER_ID,CASE WHEN T2.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+	      FROM :LOCATION_GROUP_OF_FILTER T1
+	      LEFT JOIN :WHITE_LIST_LOCATION_GROUP_OF_THE_USER T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+       )T10
+       GROUP BY T10.LOCATION_FILTER_ID
+       HAVING SUM(NUM) = 0 ;
+       
+       /*
+        ZONE_FILTER_WHITELIST_ID =
+       SELECT T10.LOCATION_FILTER_ID   
+       FROM 
+       (
+	       SELECT T1.LOCATION_FILTER_ID,CASE WHEN T2.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+	      FROM :ZONE_OF_FILTER T1
+	      LEFT JOIN :WHITE_LIST_ZONE_OF_THE_USER T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+       )T10
+       GROUP BY T10.LOCATION_FILTER_ID
+       HAVING SUM(NUM) = 0 ;
+       
+       ZONE_GROUP_FILTER_WHITELIST_ID =
+       SELECT T10.LOCATION_FILTER_ID   
+       FROM 
+       (
+	       SELECT T1.LOCATION_FILTER_ID,CASE WHEN T2.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+	      FROM :ZONE_GROUP_OF_FILTER T1
+	      LEFT JOIN :WHITE_LIST_ZONE_GROUP_OF_THE_USER T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+       )T10
+       GROUP BY T10.LOCATION_FILTER_ID
+       HAVING SUM(NUM) = 0 ;
+       */
+         REGION_FILTER_WHITELIST_ID =
+       SELECT T10.LOCATION_FILTER_ID   
+       FROM 
+       (
+	       SELECT T1.LOCATION_FILTER_ID,CASE WHEN T2.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+	      FROM :REGION_OF_FILTER T1
+	      LEFT JOIN :WHITE_LIST_REGION_OF_THE_USER T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+       )T10
+       GROUP BY T10.LOCATION_FILTER_ID
+       HAVING SUM(NUM) = 0 ;
+       
+        REGION_GROUP_FILTER_WHITELIST_ID =
+       SELECT T10.LOCATION_FILTER_ID   
+       FROM 
+       (
+	       SELECT T1.LOCATION_FILTER_ID,CASE WHEN T2.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+	      FROM :REGION_GROUP_OF_FILTER T1
+	      LEFT JOIN :WHITE_LIST_REGION_GROUP_OF_THE_USER T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+       )T10
+       GROUP BY T10.LOCATION_FILTER_ID
+       HAVING SUM(NUM) = 0 ;
+       
+    
+    var_out = SELECT LOCATION_FILTER_ID 
+               FROM :LOCATION_FILTER_WHITELIST_ID
+               UNION ALL SELECT LOCATION_FILTER_ID
+               FROM :LOCATION_GROUP_FILTER_WHITELIST_ID
+               --UNION ALL SELECT LOCATION_FILTER_ID
+               --FROM :ZONE_FILTER_WHITELIST_ID
+               --UNION ALL SELECT LOCATION_FILTER_ID
+               --FROM :ZONE_GROUP_FILTER_WHITELIST_ID
+               UNION ALL SELECT LOCATION_FILTER_ID
+               FROM :REGION_FILTER_WHITELIST_ID
+               UNION ALL SELECT LOCATION_FILTER_ID
+               FROM :REGION_GROUP_FILTER_WHITELIST_ID;
+         
+    ELSE
+    
+    var_out = SELECT NULL AS LOCATION_FILTER_ID FROM DUMMY;
+      
+    END IF;
+  
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="LOCATION_FILTER_ID" order="1">
+        <descriptions defaultDescription="LOCATION_FILTER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_FILTER_ID"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

@@ -1,0 +1,30 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_ext_equi_group_delete"(
+    IN ID VARCHAR(22)
+
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+	declare has_auth  tinyint;
+
+	select COUNT (1) into has_auth from "sap.tm.trp.db.systemmanagement::v_equipment_group_id_auth"
+	where equipment_group_id = :ID; -- authorization check
+
+	if :has_auth > 0 then
+
+    DELETE FROM "sap.tm.trp.db.systemmanagement::t_equipment_group_item"
+    WHERE EQUIPMENT_GROUP_ID = :ID;
+
+
+    DELETE FROM "sap.tm.trp.db.systemmanagement::t_equipment_group"
+    WHERE ID = :ID;
+
+    DELETE FROM "sap.tm.trp.db.systemmanagement::t_user_equipment_group"
+    WHERE EQUIPMENT_GROUP_ID = :ID;
+
+    end if;
+
+END;

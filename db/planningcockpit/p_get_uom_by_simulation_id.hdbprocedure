@@ -1,0 +1,32 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_uom_by_simulation_id" ( 
+IN SIMULATION_ID BIGINT, 
+OUT UOM VARCHAR(10)) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	READS SQL DATA AS
+BEGIN
+
+   DECLARE RESOURCE_CATEGORY_TYPE VARCHAR(10);
+   
+   
+   SELECT DISTINCT B.RESOURCE_CATEGORY INTO RESOURCE_CATEGORY_TYPE
+     FROM "sap.tm.trp.db.semantic.resource::v_resource_category" A
+    INNER JOIN "sap.tm.trp.db.planningcockpit::t_simulation_plan" B ON A.CODE=B.RESOURCE_CATEGORY
+    INNER JOIN "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings" C ON A.CODE=C.CODE
+    WHERE B.ID = :SIMULATION_ID;
+     
+     
+   IF UPPER(:RESOURCE_CATEGORY_TYPE) ='RC'
+   THEN UOM := 'PCS';
+   END IF;
+   
+   IF UPPER(:RESOURCE_CATEGORY_TYPE) ='CN'
+   THEN UOM := 'TEU';
+   END IF;  
+   
+   
+   IF UPPER(:RESOURCE_CATEGORY_TYPE) ='GE'
+   THEN UOM := 'PCS';
+   END IF; 
+
+END;

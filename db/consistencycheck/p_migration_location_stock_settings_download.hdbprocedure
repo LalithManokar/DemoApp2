@@ -1,0 +1,56 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.consistencycheck::p_migration_location_stock_settings_download" (
+	IN RESOURCE_CATEGORY VARCHAR(20),
+	OUT LOCATION_STOCK_SETTINGS "sap.tm.trp.db.consistencycheck::tt_location_stock_settings_download_migrate"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+
+	LOCATION_STOCK_SETTINGS =
+		SELECT * FROM 
+		(
+			SELECT  T1.NAME AS LOCATION_NAME,		-- To get stock setting thresholds of the location whose resource thresholds doesn't exist
+				    'TEUS' AS RESOURCE_NAME,
+					'0' AS LEVEL,
+					IFNULL(CAST(T1.MIN_SAFETY_STOCK AS NVARCHAR(20)), '') AS MIN_SAFETY_STOCK,
+					IFNULL(CAST(T1.MAX_SAFETY_STOCK AS NVARCHAR(20)), '') AS MAX_SAFETY_STOCK,
+					IFNULL(CAST(T1.MAX_PHYSICAL_STOCK AS NVARCHAR(20)), '') AS MAX_STOCK_CAPACITY,
+					IFNULL(CAST(T1.HANDLING_CAPACITY AS NVARCHAR(20)), '') AS HANDLING_CAPACITY
+			FROM "sap.tm.trp.db.systemmanagement.location::cv_get_locations_with_stocksettings"(PLACEHOLDER."$$RESOURCE_CATEGORY$$"=>:RESOURCE_CATEGORY) AS T1
+			INNER JOIN (
+				SELECT DISTINCT ID AS LOCATION_ID 
+				FROM "sap.tm.trp.db.stock::cv_role_check_location_stock_location") AS T2
+			ON T1.ID = T2.LOCATION_ID
+
+			UNION	
+				
+			SELECT  T1.NAME AS LOCATION_NAME,		-- To get the stock setting thresholds of resources of locations covered above and remaining locations
+				CASE WHEN T2.RESOURCE_NAME IS NULL 
+					THEN 'TEUS'
+					ELSE T2.RESOURCE_NAME
+					END AS RESOURCE_NAME,
+				CASE WHEN T2.RESOURCE_NAME IS NULL 
+					THEN '0'
+					ELSE IFNULL(CAST(T2.RESOURCE_TYPE AS NVARCHAR(1)),'')
+					END AS LEVEL,
+				CASE WHEN T2.RESOURCE_NAME IS NULL 
+					THEN IFNULL(CAST(T1.MIN_SAFETY_STOCK AS NVARCHAR(20)), '')
+					ELSE IFNULL(CAST(T2.MIN_SAFETY_STOCK AS NVARCHAR(20)), '')
+					END AS MIN_SAFETY_STOCK,
+				CASE WHEN T2.RESOURCE_NAME IS NULL 
+					THEN IFNULL(CAST(T1.MAX_SAFETY_STOCK AS NVARCHAR(20)), '')
+					ELSE IFNULL(CAST(T2.MAX_SAFETY_STOCK AS NVARCHAR(20)), '')
+					END AS MAX_SAFETY_STOCK,
+				CASE WHEN T2.RESOURCE_NAME IS NULL 
+					THEN IFNULL(CAST(T1.MAX_PHYSICAL_STOCK AS NVARCHAR(20)), '')
+					ELSE IFNULL(CAST(T2.MAX_PHYSICAL_STOCK AS NVARCHAR(20)), '')
+					END AS MAX_STOCK_CAPACITY,
+				'' AS HANDLING_CAPACITY
+		FROM "sap.tm.trp.db.systemmanagement.location::cv_get_locations_with_stocksettings"(PLACEHOLDER."$$RESOURCE_CATEGORY$$"=>:RESOURCE_CATEGORY) AS T1
+		LEFT OUTER JOIN "sap.tm.trp.db.stock::cv_role_check_location_stock_location" AS T2
+		ON T1.ID = T2.ID
+		) ORDER BY LOCATION_NAME;
+	
+END;

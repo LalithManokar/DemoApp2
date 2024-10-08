@@ -1,0 +1,28 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_filter_group_items_check"(
+    IN EQUIPMENT_GROUP_ID VARCHAR(22),
+    IN EQUIPMENT_TYPE_ID VARCHAR(22),
+    IN GIS_GROUP_ID VARCHAR(20),
+    IN GIS_ITEMS "sap.tm.trp.db.filter::tt_gis_id",
+    OUT RECORD_NUM INTEGER
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+    DECLARE USER_ID BIGINT;
+    DECLARE ERR_FLAG INTEGER;
+    DECLARE GIS_ITEM_NUMBER INTEGER;
+    
+    SELECT COUNT(*) INTO GIS_ITEM_NUMBER FROM :GIS_ITEMS;
+    
+    SELECT IFNULL(MAX(ID),-100) INTO USER_ID FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+    IF :EQUIPMENT_GROUP_ID = 0 AND (:EQUIPMENT_TYPE_ID IS NULL OR :EQUIPMENT_TYPE_ID = '') THEN
+        RECORD_NUM := 1;
+    END IF;
+    IF :GIS_GROUP_ID = 0 AND :GIS_ITEM_NUMBER = 0 THEN
+        RECORD_NUM := 2;
+    END IF;
+END;

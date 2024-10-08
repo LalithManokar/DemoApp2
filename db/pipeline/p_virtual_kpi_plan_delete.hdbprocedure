@@ -1,0 +1,43 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_virtual_kpi_plan_delete"  (IN PLAN_MODEL_ID BIGINT) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	--READS SQL DATA 
+AS
+    FILTER_GROUP_ID BIGINT;
+BEGIN
+ 
+
+
+
+-- GET FILTER GROUP ID
+SELECT IFNULL(MAX(FILTER_GROUP_ID),0) INTO FILTER_GROUP_ID FROM "sap.tm.trp.db.pipeline::t_plan_model"
+WHERE ID = :PLAN_MODEL_ID
+;
+
+-- DELETE THE FILTER GROUP
+CALL "sap.tm.trp.db.filter::p_ext_filter_group_delete"(:FILTER_GROUP_ID)
+;
+
+-- DELETE THE VIRTUAL PLAN METADATA
+DELETE FROM "sap.tm.trp.db.pipeline::t_plan_model"
+WHERE ID = :PLAN_MODEL_ID
+;
+
+--Remove the assigned flag of sub-plan before deletion
+UPDATE "sap.tm.trp.db.pipeline::t_plan_model"
+SET ASSIGNED_TO_VIRTUAL = ''
+WHERE ID IN (
+              SELECT DISTINCT PERSISTED_PLAN_MODEL_ID 
+                FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan"
+               WHERE VIRTUAL_PLAN_MODEL_ID = :PLAN_MODEL_ID 
+             );
+             
+-- DELETE THE PERSISTED PLAN LIST
+DELETE FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" WHERE VIRTUAL_PLAN_MODEL_ID = :PLAN_MODEL_ID
+;
+
+-- DELETE VIRTUAL TREE INFO
+CALL "sap.tm.trp.db.pipeline::p_delete_virtual_tree"(:PLAN_MODEL_ID);
+
+END;

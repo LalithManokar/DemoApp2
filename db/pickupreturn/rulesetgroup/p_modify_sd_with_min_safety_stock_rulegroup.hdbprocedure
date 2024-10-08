@@ -1,0 +1,66 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_modify_sd_with_min_safety_stock_rulegroup" ( 
+IN it_supply_demand "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_supply_demand_range_rulegroup",
+IN it_stock_conf "sap.tm.trp.db.pickupreturn.algorithm::tt_stock_configure",
+out et_supply_demand "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_supply_demand_range_rulegroup"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+	
+	DECLARE lv_shortage INT;
+	DECLARE lv_pure_sd INT;	
+	
+	--define cursor for depot which current stock less than min safety stock	
+	DECLARE CURSOR lc_stock FOR 
+	SELECT *,MIN_STOCK-CURRENT_STOCK AS SHORGATE 
+		FROM :it_stock_conf WHERE CURRENT_STOCK < MIN_STOCK;
+	
+	--get the structure for output.
+	lt_result = select top 0 * from :it_supply_demand;
+	
+	--loop all of the depot which current stock less than min safety stock
+	FOR cur_stock AS lc_stock DO		
+		--define cursor for the SD which specific for the depot and container type
+		DECLARE CURSOR lc_sd(v_location nvarchar(50),v_container_type nvarchar(50)) FOR 
+							SELECT *,SUPPLY-DEMAND AS PURE_SUPPLY
+								FROM :it_supply_demand 
+								WHERE SUPPLY-DEMAND >0 
+								AND LOCATION = :v_location
+								AND CONTAINER_TYPE = :v_container_type
+								ORDER BY START_TIME;
+		
+		lv_shortage := cur_stock.SHORGATE;	
+		-- loop at the SD			
+		FOR cur_sd AS lc_sd(cur_stock.LOCATION,cur_stock.CONTAINER_TYPE) DO
+		 	lv_pure_sd := cur_sd.PURE_SUPPLY;
+		 	--if min safety stock shortage is greate than currently supply, then all the supply should be kept as min safety stock
+		  	IF :lv_shortage >= :lv_pure_sd THEN
+		  		lv_shortage := :lv_shortage - :lv_pure_sd; 			
+			  	lt_result = SELECT * FROM :lt_result 
+			  				UNION
+			  				SELECT PLAN_ID,START_TIME,END_TIME,LOCATION,LOCATION_ID,CONTAINER_TYPE,DEMAND AS SUPPLY,DEMAND FROM :it_supply_demand
+			  				WHERE START_TIME = cur_sd.START_TIME AND END_TIME = cur_sd.END_TIME 
+			  				AND LOCATION_ID = cur_sd.LOCATION_ID AND CONTAINER_TYPE = cur_sd.CONTAINER_TYPE;
+			ELSE
+			--if min safety stock shortage is less than currently supply, then keep the shortage from supply.			
+				lt_result = SELECT * FROM :lt_result 
+			  				UNION
+			  				SELECT PLAN_ID,START_TIME,END_TIME,LOCATION,LOCATION_ID,CONTAINER_TYPE, SUPPLY - lv_shortage AS SUPPLY,DEMAND FROM :it_supply_demand
+			  				WHERE START_TIME = cur_sd.START_TIME AND END_TIME = cur_sd.END_TIME 
+			  				AND LOCATION_ID = cur_sd.LOCATION_ID AND CONTAINER_TYPE = cur_sd.CONTAINER_TYPE;
+			  	lv_shortage := 0;			  	
+		  	END IF;
+		END FOR;
+	END FOR;
+	
+	et_supply_demand = SELECT * FROM :it_supply_demand
+					   UNION ALL
+					   SELECT * FROM :lt_result;
+					   
+	--the calcualted supply should be less than original supply				   
+	et_supply_demand = SELECT PLAN_ID,START_TIME, END_TIME,LOCATION,LOCATION_ID,CONTAINER_TYPE,MIN (SUPPLY) AS SUPPLY,MIN (DEMAND) AS DEMAND
+					   FROM :et_supply_demand
+					   GROUP BY PLAN_ID,START_TIME,END_TIME,LOCATION,LOCATION_ID,CONTAINER_TYPE;	   
+END;

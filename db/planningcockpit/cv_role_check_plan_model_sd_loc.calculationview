@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_role_check_plan_model_sd_loc" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true" hierarchiesSQLEnabled="false" translationRelevant="true">
+  <descriptions defaultDescription="cv_role_check_plan_model_sd"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables/>
+  <variableMappings/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="VARCHAR" id="NAME" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="DESC" length="500"/>
+        <viewAttribute datatype="BIGINT" id="FILTER_GROUP_ID"/>
+        <viewAttribute datatype="BIGINT" id="TIME_FILTER_ID"/>
+        <viewAttribute datatype="VARCHAR" id="TIME_FILTER_NAME" length="50"/>
+        <viewAttribute datatype="INTEGER" id="PLAN_TYPE_ID"/>
+        <viewAttribute datatype="BIGINT" id="ALERT_RULE_GROUP_ID"/>
+        <viewAttribute datatype="VARCHAR" id="ALERT_RULE_GROUP_NAME" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="PLAN_TYPE_NAME" length="32"/>
+        <viewAttribute datatype="BIGINT" id="PIPELINE_MODEL_ID"/>
+        <viewAttribute datatype="BIGINT" id="EQUIPMENT_FILTER_ID"/>
+        <viewAttribute datatype="VARCHAR" id="EQUIPMENT_FILTER_NAME" length="50"/>
+        <viewAttribute datatype="BIGINT" id="LOCATION_FILTER_ID"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_FILTER_NAME" length="50"/>
+        <viewAttribute datatype="BIGINT" id="LOCATION_FILTER_TYPE"/>
+        <viewAttribute datatype="BIGINT" id="EXECUTION_ID"/>
+        <viewAttribute datatype="BIGINT" id="EXCUTE_ID"/>
+        <viewAttribute datatype="TIMESTAMP" id="LAST_EXECUTION_TIME"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> 
+  
+ BEGIN 
+ 
+ 
+     DECLARE USERID BIGINT;
+     DECLARE NAME VARCHAR(60);
+     
+     DECLARE USERTYPE INTEGER;
+     
+     CALL &quot;sap.tm.trp.db.systemmanagement.user::p_get_current_user_id&quot;(USERID);
+     
+     SELECT USERNAME INTO NAME FROM &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot;
+     WHERE ID = :USERID;
+     
+     SELECT USER_TYPE_ID INTO USERTYPE FROM &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot;
+     WHERE ID = :USERID;
+     
+     --USERTYPE := 99;
+     
+     IF :USERTYPE = 99 THEN
+     
+     var_out = select DISTINCT T1.ID,
+                      T1.NAME,
+                      T1.DESC,
+                      PLAN.FILTER_GROUP_ID,
+                      T1.TIME_FILTER_ID,
+                      T1.TIME_FILTER_NAME,
+                      T1.PLAN_TYPE_ID,
+                      T1.ALERT_RULE_GROUP_ID,
+                      T1.ALERT_RULE_GROUP_NAME,
+                      T1.PLAN_TYPE_NAME,
+                      T1.CALCULATION_MODEL_ID AS PIPELINE_MODEL_ID,
+                      T1.RESOURCE_FILTER_ID AS EQUIPMENT_FILTER_ID,
+                      T1.RESOURCE_FILTER_NAME AS EQUIPMENT_FILTER_NAME,
+                      T1.LOCATION_FILTER_ID,
+                      T1.LOCATION_FILTER_NAME,
+                      T1.LOCATION_FILTER_TYPE,
+                      T1.EXECUTION_ID,
+                      T1.EXECUTION_ID AS EXCUTE_ID,
+                      T1.LAST_EXECUTION_TIME
+                      from &quot;sap.tm.trp.db.pipeline::t_plan_model&quot; PLAN
+                           inner join &quot;sap.tm.trp.db.pipeline::cv_get_plan_list_with_schedule&quot; T1
+                           on PLAN.ID = T1.ID
+                      WHERE T1.PLAN_TYPE_ID = 1;
+     
+     ELSE 
+     
+     var_out = select DISTINCT T1.ID,
+                      T1.NAME,
+                      T1.DESC,
+                      PLAN.FILTER_GROUP_ID,
+                      T1.TIME_FILTER_ID,
+                      T1.TIME_FILTER_NAME,
+                      T1.PLAN_TYPE_ID,
+                      T1.ALERT_RULE_GROUP_ID,
+                      T1.ALERT_RULE_GROUP_NAME,
+                      T1.PLAN_TYPE_NAME,
+                      T1.CALCULATION_MODEL_ID AS PIPELINE_MODEL_ID,
+                      T1.RESOURCE_FILTER_ID AS EQUIPMENT_FILTER_ID,
+                      T1.RESOURCE_FILTER_NAME AS EQUIPMENT_FILTER_NAME,
+                      T1.LOCATION_FILTER_ID,
+                      T1.LOCATION_FILTER_NAME,
+                      T1.LOCATION_FILTER_TYPE,
+                      T1.EXECUTION_ID, 
+                      T1.EXECUTION_ID AS EXCUTE_ID,
+                      T1.LAST_EXECUTION_TIME
+                      from &quot;sap.tm.trp.db.pipeline::t_plan_model&quot; PLAN
+                           inner join &quot;sap.tm.trp.db.pipeline::cv_get_plan_list_with_schedule&quot; T1
+                           on PLAN.ID = T1.ID
+                      inner join &quot;sap.tm.trp.db.filter::t_filter_location_filter&quot; T2 on PLAN.FILTER_GROUP_ID = T2.FILTER_GROUP_ID
+                      inner join &quot;_SYS_BIC&quot;.&quot;sap.tm.trp.db.systemmanagement/cv_getlocationfilters_by_user&quot;(placeholder.&quot;$$IN_USER_NAME$$&quot;=>:NAME) T3 ON T3.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID
+                      WHERE T1.PLAN_TYPE_ID = 1; 
+
+      END IF;
+END 
+</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="NAME" order="2">
+        <descriptions defaultDescription="NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="DESC" order="3">
+        <descriptions defaultDescription="DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+      <attribute id="FILTER_GROUP_ID" order="4">
+        <descriptions defaultDescription="FILTER_GROUP_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="FILTER_GROUP_ID"/>
+      </attribute>
+      <attribute id="TIME_FILTER_ID" order="5">
+        <descriptions defaultDescription="TIME_FILTER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_FILTER_ID"/>
+      </attribute>
+      <attribute id="TIME_FILTER_NAME" order="6">
+        <descriptions defaultDescription="TIME_FILTER_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_FILTER_NAME"/>
+      </attribute>
+      <attribute id="PLAN_TYPE_ID" order="7">
+        <descriptions defaultDescription="PLAN_TYPE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_TYPE_ID"/>
+      </attribute>
+      <attribute id="ALERT_RULE_GROUP_ID" order="8">
+        <descriptions defaultDescription="ALERT_RULE_GROUP_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ALERT_RULE_GROUP_ID"/>
+      </attribute>
+      <attribute id="ALERT_RULE_GROUP_NAME" order="9">
+        <descriptions defaultDescription="ALERT_RULE_GROUP_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="ALERT_RULE_GROUP_NAME"/>
+      </attribute>
+      <attribute id="PLAN_TYPE_NAME" order="10">
+        <descriptions defaultDescription="PLAN_TYPE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_TYPE_NAME"/>
+      </attribute>
+      <attribute id="PIPELINE_MODEL_ID" order="11">
+        <descriptions defaultDescription="PIPELINE_MODEL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PIPELINE_MODEL_ID"/>
+      </attribute>
+      <attribute id="EQUIPMENT_FILTER_ID" order="12">
+        <descriptions defaultDescription="EQUIPMENT_FILTER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_FILTER_ID"/>
+      </attribute>
+      <attribute id="EQUIPMENT_FILTER_NAME" order="13">
+        <descriptions defaultDescription="EQUIPMENT_FILTER_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_FILTER_NAME"/>
+      </attribute>
+      <attribute id="LOCATION_FILTER_ID" order="14">
+        <descriptions defaultDescription="LOCATION_FILTER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_FILTER_ID"/>
+      </attribute>
+      <attribute id="LOCATION_FILTER_NAME" order="15">
+        <descriptions defaultDescription="LOCATION_FILTER_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_FILTER_NAME"/>
+      </attribute>
+      <attribute id="EXECUTION_ID" order="17">
+        <descriptions defaultDescription="EXECUTION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="EXECUTION_ID"/>
+      </attribute>
+      <attribute id="EXCUTE_ID" order="18">
+        <descriptions defaultDescription="EXCUTE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="EXCUTE_ID"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="LOCATION_FILTER_TYPE" order="16" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LOCATION_TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="LOCATION_FILTER_TYPE"/>
+      </measure>
+      <measure id="LAST_EXECUTION_TIME" order="19" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="LAST_EXECUTION_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="LAST_EXECUTION_TIME"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

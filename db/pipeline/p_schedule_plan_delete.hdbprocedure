@@ -1,0 +1,45 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_schedule_plan_delete" (IN PLAN_MODEL_ID BIGINT) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	--READS SQL DATA 
+AS
+    FILTER_GROUP_ID BIGINT;
+BEGIN
+  
+
+
+-- GET PLAN FILTR_GROUP_ID
+SELECT IFNULL(MAX(FILTER_GROUP_ID),0) INTO FILTER_GROUP_ID FROM "sap.tm.trp.db.pipeline::t_plan_model"
+WHERE ID = :PLAN_MODEL_ID
+;
+
+-- GET EXECUTION ID LIST
+EXECUTION_IDS = SELECT ID FROM "sap.tm.trp.db.pipeline::t_plan_execution" WHERE PLAN_MODEL_ID = :PLAN_MODEL_ID;
+
+-- DELETE FILTER
+CALL "sap.tm.trp.db.filter::p_ext_filter_group_delete"(:FILTER_GROUP_ID);
+
+-- DELETE EXECUTION INPUT DATASET
+DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_input_dataset" WHERE PLAN_MODEL_ID = :PLAN_MODEL_ID;
+
+-- DELETE EXECUTION OUTPUT DATASET
+DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" WHERE PLAN_EXECUTION_ID IN (SELECT ID FROM :EXECUTION_IDS);
+
+-- DELETE EXECUTION LOG
+DELETE FROM "sap.tm.trp.db.pipeline::t_plan_execution" WHERE ID IN (SELECT ID FROM :EXECUTION_IDS);
+
+-- DELETE ALERT RULE GROUP ASSIGN
+DELETE FROM "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_assign_plan_model"
+WHERE PLAN_MODEL_ID = :PLAN_MODEL_ID;
+
+-- DELETE ALERT RESULT
+DELETE FROM "sap.tm.trp.db.alert::t_alert_DT_output_timeInterval" WHERE PLAN_EXECUTION_ID IN (SELECT ID FROM :EXECUTION_IDS);
+DELETE FROM "sap.tm.trp.db.alert::t_alert_DT_output_alertScore_timeInterval" WHERE PLAN_EXECUTION_ID IN (SELECT ID FROM :EXECUTION_IDS);
+DELETE FROM "sap.tm.trp.db.alert::t_planModel_alert_forUI_timeInterval" WHERE PLAN_EXECUTION_ID IN (SELECT ID FROM :EXECUTION_IDS);
+
+-- DELETE PLAN MODEL
+DELETE FROM "sap.tm.trp.db.pipeline::t_plan_model"
+WHERE ID = :PLAN_MODEL_ID;
+ 
+END;

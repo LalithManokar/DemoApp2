@@ -1,0 +1,175 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT T1.ID,
+                 T1.CODE,
+                 T1.NAME,
+                 T1.INSTANT_ENABLED,
+                 T1.DESC,
+                 T1.STORED_PROCEDURE_NAME,
+                 T1.META_DATA_TABLE_NAME,
+                 T1.SCHEMA_NAME,
+                 T1.TYPE_ID,
+                 T1.TYPE,
+                 T1.TYPE_NAME,
+                 T1.CATEGORY_ID,
+                 T1.CATEGORY,
+                 CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                   WHEN T1.CREATED_BY <> '' AND T1.CREATED_BY IS NOT NULL AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+		           WHEN T1.CREATED_BY = '' OR T1.CREATED_BY IS NULL THEN ''
+		           ELSE '***' END AS CREATED_BY,
+                 T1.CREATED_ON,
+                 CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                   WHEN T1.MODIFIED_BY <> '' AND T1.MODIFIED_BY IS NOT NULL AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+		           WHEN T1.MODIFIED_BY = '' OR T1.MODIFIED_BY IS NULL THEN ''
+		           ELSE '***' END AS MODIFIED_BY,
+                 T1.MODIFIED_ON,
+                 T1.MODIFIED_TIME,
+                 T1.COST_MODEL_FILTER_ID,
+                 T1.COST_MODEL_FILTER_NAME,
+                 0 AS ACTIVATION_STATUS
+            FROM \"sap.tm.trp.db.objectregistration::v_calculation_model_ui\" AS T1
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T9  ON T1.CREATED_BY = T9.USERNAME
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T10  ON T1.MODIFIED_BY = T10.USERNAME
+            CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE
+           UNION
+          SELECT T1.ID,
+                 T1.CODE,
+                 T1.NAME,
+                 NULL AS INSTANT_ENABLED,
+                 T1.DESC,
+                 T1.STORED_PROCEDURE_NAME,
+                 NULL AS META_DATA_TABLE_NAME,
+                 T1.SCHEMA_NAME,
+                 T1.TYPE_ID,
+                 T1.TYPE,
+                 T1.TYPE_NAME,
+                 T1.CATEGORY_ID,
+                 T1.CATEGORY,
+                 CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                   WHEN T1.CREATED_BY <> '' AND T1.CREATED_BY IS NOT NULL AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+		           WHEN T1.CREATED_BY = '' OR T1.CREATED_BY IS NULL THEN ''
+		           ELSE '***' END AS CREATED_BY,
+                 T1.CREATED_ON,
+                 CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                   WHEN T1.MODIFIED_BY <> '' AND T1.MODIFIED_BY IS NOT NULL AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+		           WHEN T1.MODIFIED_BY = '' OR T1.MODIFIED_BY IS NULL THEN ''
+		           ELSE '***' END AS MODIFIED_BY,
+                 T1.MODIFIED_ON,
+                 T1.MODIFIED_TIME,
+                 NULL AS COST_MODEL_FILTER_ID,
+                 NULL AS COST_MODEL_FILTER_NAME,
+                 0 AS ACTIVATION_STATUS
+            FROM \"sap.tm.trp.db.objectregistration::v_alert_rule_ui\" AS T1
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T9  ON T1.CREATED_BY = T9.USERNAME
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T10  ON T1.MODIFIED_BY = T10.USERNAME
+            CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE
+            UNION
+			SELECT 
+				T1.ID,
+                T1.CODE,
+                T1.NAME,
+                NULL AS INSTANT_ENABLED,
+                T1.DESC,
+                T1.STORED_PROCEDURE_NAME,
+                NULL AS META_DATA_TABLE_NAME,
+                T1.SCHEMA_NAME,
+                T1.TYPE_ID,
+                T1.TYPE,
+                T1.TYPE_NAME,
+                NULL AS CATEGORY_ID,
+                NULL AS CATEGORY,
+                CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+					WHEN T1.CREATED_BY <> '' AND T1.CREATED_BY IS NOT NULL AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+		            WHEN T1.CREATED_BY = '' OR T1.CREATED_BY IS NULL THEN ''
+		            ELSE '***' END AS CREATED_BY,
+                T1.CREATED_ON,
+                CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+					WHEN T1.MODIFIED_BY <> '' AND T1.MODIFIED_BY IS NOT NULL AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+		            WHEN T1.MODIFIED_BY = '' OR T1.MODIFIED_BY IS NULL THEN ''
+		            ELSE '***' END AS MODIFIED_BY,
+                T1.MODIFIED_ON, 
+                T1.MODIFIED_TIME,
+                NULL AS COST_MODEL_FILTER_ID,
+                NULL AS COST_MODEL_FILTER_NAME,
+                0 AS ACTIVATION_STATUS
+            FROM \"sap.tm.trp.db.pickupreturn::v_pickupret_sel_date_object_ui\" AS T1
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T9  ON T1.CREATED_BY = T9.USERNAME
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T10  ON T1.MODIFIED_BY = T10.USERNAME
+            CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE
+            
+             UNION
+			SELECT 
+				T1.ID,
+                T1.CODE,
+                T1.NAME,
+                NULL AS INSTANT_ENABLED,
+                T1.DESC,
+                T1.STORED_PROCEDURE_NAME,
+                NULL AS META_DATA_TABLE_NAME,
+                T1.SCHEMA_NAME,
+                T1.TYPE_ID,
+                T1.TYPE,
+                T1.TYPE_NAME,
+                NULL AS CATEGORY_ID,
+                NULL AS CATEGORY,
+                CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+					WHEN T1.CREATED_BY <> '' AND T1.CREATED_BY IS NOT NULL AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+		            WHEN T1.CREATED_BY = '' OR T1.CREATED_BY IS NULL THEN ''
+		            ELSE '***' END AS CREATED_BY,
+                T1.CREATED_ON,
+                CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+					WHEN T1.MODIFIED_BY <> '' AND T1.MODIFIED_BY IS NOT NULL AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+		            WHEN T1.MODIFIED_BY = '' OR T1.MODIFIED_BY IS NULL THEN ''
+		            ELSE '***' END AS MODIFIED_BY,
+                T1.MODIFIED_ON, 
+                T1.MODIFIED_TIME,
+                NULL AS COST_MODEL_FILTER_ID,
+                NULL AS COST_MODEL_FILTER_NAME,
+                T1.ACTIVATION_STATUS
+            FROM \"sap.tm.trp.db.pickupreturn::v_exclude_processed_tu_ui\" AS T1
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T9  ON T1.CREATED_BY = T9.USERNAME
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T10  ON T1.MODIFIED_BY = T10.USERNAME
+            CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE
+            
+			UNION
+			SELECT 
+				T1.ID,
+                T1.CODE,
+                T1.NAME,
+                NULL AS INSTANT_ENABLED,
+                T1.DESC,
+                T1.STORED_PROCEDURE_NAME,
+                T1.META_DATA_TABLE_NAME,
+                T1.SCHEMA_NAME,
+                T1.TYPE_ID,
+                T1.TYPE,
+                T1.TYPE_NAME,
+                NULL AS CATEGORY_ID,
+                NULL AS CATEGORY,
+                CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+					WHEN T1.CREATED_BY <> '' AND T1.CREATED_BY IS NOT NULL AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+		            WHEN T1.CREATED_BY = '' OR T1.CREATED_BY IS NULL THEN ''
+		            ELSE '***' END AS CREATED_BY,
+                T1.CREATED_ON,
+                CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+					WHEN T1.MODIFIED_BY <> '' AND T1.MODIFIED_BY IS NOT NULL AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+		            WHEN T1.MODIFIED_BY = '' OR T1.MODIFIED_BY IS NULL THEN ''
+		            ELSE '***' END AS MODIFIED_BY,
+                T1.MODIFIED_ON, 
+                T1.MODIFIED_TIME,
+                NULL AS COST_MODEL_FILTER_ID,
+                NULL AS COST_MODEL_FILTER_NAME,
+                T1.ACTIVATION_STATUS 
+            FROM \"sap.tm.trp.db.objectregistration::v_pickupret_reg_object_ui\" AS T1
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T9  ON T1.CREATED_BY = T9.USERNAME
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T10  ON T1.MODIFIED_BY = T10.USERNAME
+            CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE"
+          
+            ;
+
+depends_on_view = ["sap.tm.trp.db.objectregistration::v_calculation_model_ui", 
+                   "sap.tm.trp.db.pickupreturn::v_pickupret_sel_date_object_ui",
+                   "sap.tm.trp.db.objectregistration::v_alert_rule_ui",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_unblock_users",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege",
+                   "sap.tm.trp.db.pickupreturn::v_exclude_processed_tu_ui",
+                   "sap.tm.trp.db.objectregistration::v_pickupret_reg_object_ui"];

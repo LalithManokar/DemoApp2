@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_base_equip_type_status" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_base_quip_type_status"/>
+  <localVariables>
+    <variable id="RESOURCE_CATEGORY" parameter="true">
+      <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+      <variableProperties datatype="VARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="INTEGER" id="STATUS"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#RESOURCE_CATEGORY</localVariable>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+BEGIN 
+DECLARE RESOURCE_TYPE_CODE VARCHAR(10);
+DECLARE TEU_COUNT INTEGER;
+DECLARE CNT INTEGER;
+
+RESOURCE_TYPES = SELECT DISTINCT T1.RESOURCE_TYPE_CODE, T1.RESOURCE_TYPE_DESC, T2.TEU_COUNT
+                FROM &quot;sap.tm.trp.db.semantic.resource::v_resource_type_with_category&quot; T1
+                INNER JOIN &quot;sap.tm.trp.db.semantic.resource::v_resource_type&quot; T2
+                ON (T1.RESOURCE_TYPE_CODE = T2.RESOURCE_TYPE_CODE)
+                WHERE T1.RESOURCE_CATEGORY = :RESOURCE_CATEGORY;
+
+TMP =
+	SELECT
+		T0.BASE_RESOURCE_TYPE
+		,T1.RESOURCE_TYPE_CODE
+		,T1.TEU_COUNT
+	FROM  &quot;sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings&quot; T0
+	LEFT JOIN :RESOURCE_TYPES T1 ON T1.RESOURCE_TYPE_CODE = T0.BASE_RESOURCE_TYPE
+	WHERE T0.CODE = :RESOURCE_CATEGORY
+	;
+
+SELECT COUNT(*) INTO CNT FROM :TMP;
+
+OUT_TMP = SELECT 0 AS STATUS FROM DUMMY;
+
+IF :CNT != 1
+THEN
+	OUT_TMP = SELECT 1 AS STATUS FROM DUMMY;
+ELSE
+	SELECT MAX(RESOURCE_TYPE_CODE),MAX(TEU_COUNT) INTO RESOURCE_TYPE_CODE,TEU_COUNT FROM :TMP;
+	IF :TEU_COUNT != 1
+	THEN
+		OUT_TMP = SELECT 3 AS STATUS FROM DUMMY;
+	END IF;
+	IF :RESOURCE_TYPE_CODE IS NULL
+	THEN
+		OUT_TMP = SELECT 2 AS STATUS FROM DUMMY;
+	END IF;
+END IF;
+ 	 var_out = SELECT STATUS FROM :OUT_TMP;
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes/>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="STATUS" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="STATUS"/>
+        <measureMapping columnObjectName="Script_View" columnName="STATUS"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

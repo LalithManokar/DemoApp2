@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_quantity_cost_model_resource_type_explode" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_quantity_cost_model_resource_type_explode"/>
+  <localVariables>
+    <variable id="IP_COST_MODEL_ID" parameter="true">
+      <descriptions defaultDescription="IP_COST_MODEL_ID"/>
+      <variableProperties datatype="BIGINT" defaultValue="0" mandatory="false">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IP_COST_DATASET_ID" parameter="true">
+      <descriptions defaultDescription="IP_COST_DATASET_ID"/>
+      <variableProperties datatype="BIGINT" defaultValue="0" mandatory="false">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="COST_DATASET_ID"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_NAME" length="200"/>
+        <viewAttribute datatype="NVARCHAR" id="RESOURCE_TYPE" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="FREE_POOL_TYPE" length="10"/>
+        <viewAttribute datatype="INTEGER" id="START_AT"/>
+        <viewAttribute datatype="VARCHAR" id="START_TIME" length="50"/>
+        <viewAttribute datatype="INTEGER" id="THRESHOLD_FROM"/>
+        <viewAttribute datatype="INTEGER" id="THRESHOLD_TO"/>
+        <viewAttribute datatype="VARCHAR" id="UOM_CODE" length="20"/>
+        <viewAttribute datatype="DECIMAL" id="PER_DIEM_COST" length="13" scale="3"/>
+        <viewAttribute datatype="NVARCHAR" id="DATA_SOURCE_CODE" length="20"/>
+        <viewAttribute datatype="INTEGER" id="WILD_STAR_COUNT"/>
+        <viewAttribute datatype="TIMESTAMP" id="LAST_MODIFIED_ON"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IP_COST_MODEL_ID</localVariable>
+      <localVariable>#IP_COST_DATASET_ID</localVariable>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+ BEGIN 
+ 
+ 	IF(:IP_COST_DATASET_ID &lt;> 0) THEN
+ 	    
+ 	    QUANTITY_COST_RESOURCE_TYPES = 	   
+ 	           SELECT   T1.COST_DATASET_ID, 
+ 	                 	T1.LOCATION_NAME, 	                  	
+                 		CASE WHEN T1.RESOURCE_TYPE = '*'
+                         	 THEN T1.RESOURCE_TYPE
+                      	ELSE T2.RESOURCE_TYPE_CODE
+                 		END  AS RESOURCE_TYPE,
+                 		T1.FREE_POOL_TYPE,
+                 		T1.START_AT,
+                 		T1.START_TIME,
+                 		T1.THRESHOLD_FROM,
+                 		T1.THRESHOLD_TO,
+                 		T1.UOM_CODE,
+                 		T1.PER_DIEM_COST,                 		
+                 		T1.DATA_SOURCE_CODE,                 	
+                 		T1.WILD_STAR_COUNT,                 		
+                 		T1.LAST_MODIFIED_ON
+				FROM (  SELECT  COST_DATASET_ID,
+				                LOCATION_NAME, 	                 	                      					
+             					CASE WHEN RESOURCE_TYPE = '*' 
+             					 		THEN '*'
+                					 ELSE REPLACE(RESOURCE_TYPE, '*', '%')
+             					END AS RESOURCE_TYPE,
+             					FREE_POOL_TYPE,
+                 				START_AT,
+                 				START_TIME,
+             					THRESHOLD_FROM,
+		                 		THRESHOLD_TO,
+		                 		UOM_CODE,
+		                 		PER_DIEM_COST,                 		
+		                 		DATA_SOURCE_CODE,                 	
+		                 		WILD_STAR_COUNT,                 		
+		                 		LAST_MODIFIED_ON 
+      					FROM &quot;sap.tm.trp.db.costmodel::t_quantity_based_storage_cost&quot;
+      					WHERE COST_DATASET_ID = :IP_COST_DATASET_ID) T1     					  
+				LEFT OUTER JOIN (SELECT DISTINCT  RESOURCE_TYPE_CODE 
+				                 FROM &quot;sap.tm.trp.db.semantic.resource::v_resource_type&quot;) T2
+    				   ON T2.RESOURCE_TYPE_CODE LIKE T1.RESOURCE_TYPE; 
+ 	
+ 	ELSEIF (:IP_COST_MODEL_ID &lt;> 0) THEN 
+ 	
+ 	   QUANTITY_COST_RESOURCE_TYPES = 	   
+ 	           SELECT   T2.COST_DATASET_ID, 
+ 	                 	T2.LOCATION_NAME, 	                 		
+                 		CASE WHEN T2.RESOURCE_TYPE = '*'
+                         	 THEN T2.RESOURCE_TYPE
+                      	ELSE T3.RESOURCE_TYPE_CODE
+                 		END  AS RESOURCE_TYPE,
+                 		T2.FREE_POOL_TYPE,
+                 		T2.START_AT,
+                 		T2.START_TIME,
+                 		T2.THRESHOLD_FROM,
+                 		T2.THRESHOLD_TO,                 		
+                 		T2.UOM_CODE,
+                 		T2.PER_DIEM_COST,
+                 		T2.DATA_SOURCE_CODE,
+                 		T2.WILD_STAR_COUNT,
+                 		T2.LAST_MODIFIED_ON
+                FROM  &quot;sap.tm.trp.db.costmodel::t_cost_model_dataset&quot; T1
+                INNER JOIN (SELECT  COST_DATASET_ID,
+				                    LOCATION_NAME, 	                 	                      					
+             					CASE WHEN RESOURCE_TYPE = '*' 
+             					 		THEN '*'
+                					 ELSE REPLACE(RESOURCE_TYPE, '*', '%')
+             					END AS RESOURCE_TYPE,
+             					THRESHOLD_FROM,
+             					FREE_POOL_TYPE,
+                 				START_AT,
+                 				START_TIME,
+		                 		THRESHOLD_TO,
+		                 		UOM_CODE,
+		                 		PER_DIEM_COST,                 		
+		                 		DATA_SOURCE_CODE,                 	
+		                 		WILD_STAR_COUNT,                 		
+		                 		LAST_MODIFIED_ON   
+      					FROM &quot;sap.tm.trp.db.costmodel::t_quantity_based_storage_cost&quot;) T2
+      			ON T1.COST_DATASET_ID = T2.COST_DATASET_ID AND 
+      			   T1.COST_MODEL_ID = :IP_COST_MODEL_ID		     					  
+				LEFT OUTER JOIN (SELECT DISTINCT  RESOURCE_TYPE_CODE 
+				                 FROM &quot;sap.tm.trp.db.semantic.resource::v_resource_type&quot;) T3
+    				   ON T3.RESOURCE_TYPE_CODE LIKE T2.RESOURCE_TYPE; 
+ 	    
+ 	END IF; 
+ 	
+ 	VAR_OUT = SELECT * FROM :QUANTITY_COST_RESOURCE_TYPES; 	 
+ 
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="LOCATION_NAME" order="2">
+        <descriptions defaultDescription="LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_NAME"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE" order="3">
+        <descriptions defaultDescription="RESOURCE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE"/>
+      </attribute>
+      <attribute id="FREE_POOL_TYPE" order="4">
+        <descriptions defaultDescription="FREE_POOL_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="FREE_POOL_TYPE"/>
+      </attribute>
+      <attribute id="START_TIME" order="6">
+        <descriptions defaultDescription="START_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </attribute>
+      <attribute id="UOM_CODE" order="9">
+        <descriptions defaultDescription="UOM_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="UOM_CODE"/>
+      </attribute>
+      <attribute id="DATA_SOURCE_CODE" order="11">
+        <descriptions defaultDescription="DATA_SOURCE_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="DATA_SOURCE_CODE"/>
+      </attribute>
+      <attribute id="LAST_MODIFIED_ON" order="13">
+        <descriptions defaultDescription="LAST_MODIFIED_ON"/>
+        <keyMapping columnObjectName="Script_View" columnName="LAST_MODIFIED_ON"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="COST_DATASET_ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="COST_DATASET_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="COST_DATASET_ID"/>
+      </measure>
+      <measure id="START_AT" order="5" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="START_AT"/>
+        <measureMapping columnObjectName="Script_View" columnName="START_AT"/>
+      </measure>
+      <measure id="THRESHOLD_FROM" order="7" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="THRESHOLD_FROM"/>
+        <measureMapping columnObjectName="Script_View" columnName="THRESHOLD_FROM"/>
+      </measure>
+      <measure id="THRESHOLD_TO" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="THRESHOLD_TO"/>
+        <measureMapping columnObjectName="Script_View" columnName="THRESHOLD_TO"/>
+      </measure>
+      <measure id="PER_DIEM_COST" order="10" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="PER_DIEM_COST"/>
+        <measureMapping columnObjectName="Script_View" columnName="PER_DIEM_COST"/>
+      </measure>
+      <measure id="WILD_STAR_COUNT" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="WILD_STAR_COUNT"/>
+        <measureMapping columnObjectName="Script_View" columnName="WILD_STAR_COUNT"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

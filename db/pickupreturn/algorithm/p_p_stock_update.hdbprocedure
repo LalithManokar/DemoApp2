@@ -1,0 +1,287 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.algorithm::p_p_stock_update" ( 
+IN t_current_stock  "sap.tm.trp.db.pickupreturn.algorithm::tt_p_stock",
+IN t_surplus  "sap.tm.trp.db.pickupreturn.algorithm::tt_p_stock_surplus",
+IN t_depot_cost "sap.tm.trp.db.pickupreturn.algorithm::tt_depot_cost_trp11",
+IN t_customer_merchant "sap.tm.trp.db.pickupreturn.algorithm::tt_customer",
+IN t_customer_carrier "sap.tm.trp.db.pickupreturn.algorithm::tt_customer",
+IN t_trans_merchant "sap.tm.trp.db.pickupreturn.algorithm::tt_trans_types",
+IN t_trans_carrier "sap.tm.trp.db.pickupreturn.algorithm::tt_trans_types",
+OUT t_fulfill_booking "sap.tm.trp.db.pickupreturn.algorithm::tt_res_haulage",
+OUT t_stage_01_customer_merchant "sap.tm.trp.db.pickupreturn.algorithm::tt_customer",
+OUT t_stage_01_customer_carrier "sap.tm.trp.db.pickupreturn.algorithm::tt_customer",
+OUT t_stage_01_current_stock  "sap.tm.trp.db.pickupreturn.algorithm::tt_p_stock"
+) 
+LANGUAGE SQLSCRIPT 
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN 
+
+t_stage_00_surplus = SELECT A."NODE_ID",
+						   A."LOCATION",
+						   A."CONTAINER_TYPE",
+						   A."SURPLUS",
+						   IFNULL(B."STORAGE_COSTUNIT",0) AS "STORAGE_COST",
+						   IFNULL(B."HANDLING_COSTUNIT",0) AS "HANDLING_COST"
+					FROM :t_surplus A
+					LEFT JOIN :t_depot_cost B
+					ON A."LOCATION"=B."LOCATION"
+					AND A."CONTAINER_TYPE"=B."CONTAINER_TYPE";
+
+
+
+--generate <V,E>
+t_stage_00_node = SELECT "NODE_ID",
+						-"QUANTITY" AS "SUPPLY_DEMAND"
+				 FROM :t_customer_merchant
+				 UNION ALL
+				 SELECT "NODE_ID",
+						-"QUANTITY" AS "SUPPLY_DEMAND"
+				 FROM :t_customer_carrier
+				 UNION ALL
+				 SELECT "NODE_ID",
+				 	    "SURPLUS" AS "SUPPLY_DEMAND"
+				 FROM :t_stage_00_surplus;			  
+				 
+t_stage_00_arc_merchant = SELECT A."NODE_ID" AS "FROM_ID",
+								B."NODE_ID" AS "TO_ID",
+								--begin handling capacity
+								0 AS "LOWER",
+								1000000 AS "CAPACITY",
+								--B.QUANTITY AS "LOWER",
+								--B.QUANTITY AS "CAPACITY",
+								--end handling capacity
+								CASE WHEN C."COST" IS NULL THEN 1
+									 WHEN C."COST"=0 THEN 1
+									 ELSE C."COST" END AS "COST",
+								A."STORAGE_COST",
+								A."HANDLING_COST",
+								B."BOOKING_ID",
+								A."LOCATION" AS "DEPOT_LOCATION",
+								B."CUSTOMER_LOCATION",
+								A."CONTAINER_TYPE",
+								B."START_TIME",
+								B."BOOKING_TIME",
+								0 AS "HAULAGE_TYPE",
+								C."MTR"
+						  FROM :t_trans_merchant C
+						  INNER JOIN :t_stage_00_surplus A
+						  ON A."LOCATION"=C."FROM_LOCATION"
+						  AND A."CONTAINER_TYPE"=C."CONTAINER_TYPE"
+						  INNER JOIN :t_customer_merchant B
+						  ON B."CUSTOMER_LOCATION"=C."TO_LOCATION"
+						  AND B."CONTAINER_TYPE"=C."CONTAINER_TYPE";
+
+								
+t_stage_00_arc_carrier = SELECT A."NODE_ID" AS "FROM_ID",
+								B."NODE_ID" AS "TO_ID",
+								--begin handling capacity
+								0 AS "LOWER",
+								1000000 AS "CAPACITY",
+								--B.QUANTITY AS "LOWER",
+								--B.QUANTITY AS "CAPACITY",
+								--end handling capacity
+								CASE WHEN C."COST" IS NULL THEN 1
+									 WHEN C."COST"=0 THEN 1
+									 ELSE C."COST" END AS "COST",
+								A."STORAGE_COST",
+								A."HANDLING_COST",
+								B."BOOKING_ID",
+								A."LOCATION" AS "DEPOT_LOCATION",
+								B."CUSTOMER_LOCATION",
+								A."CONTAINER_TYPE",
+								B."START_TIME",
+								B."BOOKING_TIME",
+								1 AS "HAULAGE_TYPE",
+								C."MTR"
+						  FROM :t_trans_carrier C
+						  INNER JOIN :t_stage_00_surplus A
+						  ON A."LOCATION"=C."FROM_LOCATION"
+						  AND A."CONTAINER_TYPE"=C."CONTAINER_TYPE"
+						  INNER JOIN :t_customer_carrier B
+						  ON B."CUSTOMER_LOCATION"=C."TO_LOCATION"
+						  AND B."CONTAINER_TYPE"=C."CONTAINER_TYPE"
+						  AND SECONDS_BETWEEN(B."START_TIME",B."BOOKING_TIME")>= C."DURATION";
+
+/* Consider handling capacity, check the remain handling capacity if available for pickup
+otherwise, need to filter out the TUs which already exceed the remain hanling capacity 
+based on the start time.
+*/
+--handling capacity already be consider as suplus in node t_stage_00_node
+/*
+IF HANDLING_CAPA = 1 THEN  --Consider handling capacity
+--summerize those TUs' quantity based on the start time are in one calendar day
+    t_stage_00_arc_verify = SELECT *, SUM(QUANTITY) OVER(PARTITION BY FROM_ID, TO_DATE(START_TIME)) AS SUM_QUANTITY
+                              FROM (
+                                    SELECT  A."FROM_ID",
+            								A."TO_ID",
+            								A."LOWER",
+            								A."CAPACITY",
+            								A."COST",
+            								A."STORAGE_COST",
+            								A."HANDLING_COST",
+            								A."BOOKING_ID",
+            								A."DEPOT_LOCATION",
+            								A."CUSTOMER_LOCATION",
+            								A."CONTAINER_TYPE",
+            								A."START_TIME",
+            								A."BOOKING_TIME",
+            								A."HAULAGE_TYPE",
+            								A."MTR" ,
+            								B."QUANTITY"
+                                      FROM :t_stage_00_arc_merchant A
+                                      INNER JOIN :t_customer_merchant B ON B.NODE_ID = A.TO_ID
+                                    UNION ALL
+                                    SELECT A."FROM_ID",
+            								A."TO_ID",
+            								A."LOWER",
+            								A."CAPACITY",
+            								A."COST",
+            								A."STORAGE_COST",
+            								A."HANDLING_COST",
+            								A."BOOKING_ID",
+            								A."DEPOT_LOCATION",
+            								A."CUSTOMER_LOCATION",
+            								A."CONTAINER_TYPE",
+            								A."START_TIME",
+            								A."BOOKING_TIME",
+            								A."HAULAGE_TYPE",
+            								A."MTR" , 
+            								B.QUANTITY
+                                      FROM :t_stage_00_arc_carrier A
+                                      INNER JOIN :t_customer_carrier B ON B.NODE_ID = A.TO_ID
+                                     );
+    --filter out thoese records which quantity larger                      
+    t_stage_00_arc_temp = SELECT   
+                                A."FROM_ID",
+								A."TO_ID",
+								A."LOWER",
+								LEAST (A."CAPACITY",IFNULL (B.HANDLING_CAPACITY,999999)) AS CAPACITY,
+								A."COST",
+								A."STORAGE_COST",
+								A."HANDLING_COST",
+								A."BOOKING_ID",
+								A."DEPOT_LOCATION",
+								A."CUSTOMER_LOCATION",
+								A."CONTAINER_TYPE",
+								A."START_TIME",
+								A."BOOKING_TIME",
+								A."HAULAGE_TYPE",
+								A."MTR" 
+							FROM :t_stage_00_arc_verify AS A
+							LEFT JOIN :t_handling_capacity AS B ON B.LOCATION_NAME = A.DEPOT_LOCATION AND 
+																    B.START_TIME <= A.START_TIME AND B.END_TIME > A.START_TIME;
+
+ELSE
+
+t_stage_00_arc_temp =  SELECT * FROM :t_stage_00_arc_merchant
+					   UNION ALL
+					   SELECT * FROM :t_stage_00_arc_carrier;
+					 
+END IF;
+*/
+
+t_stage_00_arc_temp =  SELECT * FROM :t_stage_00_arc_merchant
+					   UNION ALL
+					   SELECT * FROM :t_stage_00_arc_carrier;
+
+t_stage_00_arc = SELECT "FROM_ID",
+					    "TO_ID",
+					    "LOWER",
+					    "CAPACITY",
+					    "COST"+"STORAGE_COST"+"HANDLING_COST" AS "COST" 
+			 	 FROM :t_stage_00_arc_temp; 
+				
+CALL "_SYS_AFL"."OFL_AREA_NETWORK_SIMPLEX_SOLVE_PROC"(:t_stage_00_node, :t_stage_00_arc, t_stage_00_flow);
+
+/*
+-->Consider handling capacity:Filter thoes TUs which supply+demand has been greater than handling capacity
+t_stage_00_flow_temp = SELECT A.FROM_ID,
+                              A.FLOW,
+                              TO_DATE(B.START_TIME) AS START_TIME
+                         FROM :t_stage_00_flow A
+                         INNER JOIN :t_stage_00_arc_temp B 
+                         ON A."FROM_ID"=B."FROM_ID" AND
+					        A."TO_ID"=B."TO_ID";
+
+t_stage_00_flow_temp = SELECT A.FROM_ID,
+                              SUM(A.FLOW)  AS FLOW,
+                              A.START_TIME AS START_TIME
+                         FROM :t_stage_00_flow_temp A
+                         GROUP BY FROM_ID,
+                                  START_TIME;
+					
+--<
+*/
+
+t_fulfill_booking = SELECT B."BOOKING_ID",
+						   B."DEPOT_LOCATION" AS "FROM_LOCATION",
+						   B."CUSTOMER_LOCATION" AS "TO_LOCATION",
+						   B."START_TIME" AS "FROM_TIME",
+						   B."BOOKING_TIME" AS "TO_TIME",
+						   B."CONTAINER_TYPE",
+						   A."FLOW" AS "QUANTITY",
+						   B."STORAGE_COST",
+						   B."HANDLING_COST",
+						   B."COST" AS "TRANSPORTATION_COST",
+						   B."COST"+B."STORAGE_COST"+B."HANDLING_COST" AS "TOTAL_COST",
+						   'PICKUP' AS "MODE",
+						   B."HAULAGE_TYPE"
+					FROM :t_stage_00_flow A
+					INNER JOIN :t_stage_00_arc_temp B
+					ON A."FROM_ID"=B."FROM_ID"
+					AND A."TO_ID"=B."TO_ID";
+
+--remaining bookings
+t_demand_in = SELECT "TO_ID",
+					  SUM("FLOW") AS "FLOWIN"
+			   FROM :t_stage_00_flow
+			   GROUP BY "TO_ID";
+			   
+t_stage_01_customer_merchant = SELECT A."NODE_ID",
+									  A."BOOKING_ID",
+									  A."START_TIME",
+									  A."BOOKING_TIME",
+									  A."CUSTOMER_LOCATION",
+									  A."CONTAINER_TYPE",
+									  IFNULL(A."QUANTITY"-B."FLOWIN",A."QUANTITY") AS "QUANTITY",
+									  A."HAULAGE_TYPE"
+								FROM :t_customer_merchant A
+								LEFT JOIN :t_demand_in B
+								ON A."NODE_ID"=B."TO_ID";
+
+t_stage_01_customer_merchant = SELECT * FROM :t_stage_01_customer_merchant WHERE "QUANTITY">0;
+			   
+t_stage_01_customer_carrier = SELECT A."NODE_ID",
+									  A."BOOKING_ID",
+									  A."START_TIME",
+									  A."BOOKING_TIME",
+									  A."CUSTOMER_LOCATION",
+									  A."CONTAINER_TYPE",
+									  IFNULL(A."QUANTITY"-B."FLOWIN",A."QUANTITY") AS "QUANTITY",
+									  A."HAULAGE_TYPE"
+								FROM :t_customer_carrier A
+								LEFT JOIN :t_demand_in B
+								ON A."NODE_ID"=B."TO_ID";
+
+t_stage_01_customer_carrier = SELECT * FROM :t_stage_01_customer_carrier WHERE "QUANTITY">0;
+
+
+--updated current stock
+t_supply_out = SELECT "FROM_ID", 
+					  SUM("FLOW") AS "FLOWOUT"
+			   FROM :t_stage_00_flow 
+			   GROUP BY "FROM_ID";
+			    
+t_stage_01_current_stock = SELECT A."NODE_ID",
+                  		  A."LOCATION",
+                  		  A."CONTAINER_TYPE",
+                  		  IFNULL(A."SURPLUS"-B."FLOWOUT",A."SURPLUS") AS "SURPLUS",
+                  		  A."MIN_STOCK",
+						  A."MAX_STOCK",
+						  A."MAX_PHY_CAPACITY"
+              		FROM :t_current_stock A
+              		LEFT JOIN :t_supply_out B
+              		ON A."NODE_ID"=B."FROM_ID";
+
+END;

@@ -1,0 +1,41 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_archive_rule_head_facet_filter" (IN SEARCH VARCHAR(500),
+																		IN FILTERS "sap.tm.trp.db.archive::tt_id_list",
+																		OUT FILTERED_OUTPUT "sap.tm.trp.db.archive::t_archive_rule_type" ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+	
+	TYPE_LIST_CNT TINYINT;
+	STATUS_LIST_CNT TINYINT;
+	
+BEGIN 
+    
+    DECLARE LINE_COUNT TINYINT;
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    SELECT ::SQL_ERROR_CODE, ::SQL_ERROR_MESSAGE FROM DUMMY;
+    
+    SELECT COUNT(1) INTO LINE_COUNT FROM :FILTERS;
+    IF ( LINE_COUNT = 0 ) THEN
+        FILTERS = SELECT TYPE AS ID FROM "sap.tm.trp.db.archive::t_archive_rule_type";
+    END IF;
+	ARCHIVE_OUTPUT= SELECT TYPE, 0 AS STATUS FROM "_SYS_BIC"."sap.tm.trp.db.archive/cv_archive_rule" 
+	WHERE (
+	        LOWER(NAME) LIKE '%'||LOWER(:SEARCH)||'%'
+	        OR LOWER(DESC) LIKE '%'||LOWER(:SEARCH)||'%'
+	        OR LOWER(TABLE_NAME) LIKE '%'||LOWER(:SEARCH)||'%'
+	    );
+
+   
+     FILTERED_OUTPUT = SELECT DISTINCT
+        --MASTER_TBL.*
+        MASTER_TBL.TYPE AS TYPE,
+        RULE_TYPE.TYPE_DESC AS TYPE_DESC
+        FROM "sap.tm.trp.db.archive::t_archive_rule_type" AS RULE_TYPE
+        INNER JOIN :ARCHIVE_OUTPUT AS MASTER_TBL
+        ON RULE_TYPE.TYPE = MASTER_TBL.TYPE
+        INNER JOIN :FILTERS AS TYPE_TBL
+            ON MASTER_TBL.TYPE = TYPE_TBL.ID;
+
+	    
+END

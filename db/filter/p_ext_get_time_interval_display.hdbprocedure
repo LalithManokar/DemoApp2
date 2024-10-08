@@ -1,0 +1,455 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_ext_get_time_interval_display"(
+    IN DIRECTION_FLAG INTEGER,
+    IN OFFSET_FLAG INTEGER,
+    IN TIMEZONE_ID VARCHAR(50),
+    IN HOUR_START_FROM INTEGER,
+    IN MINUTE_START_FROM INTEGER,
+    IN WEEK_START_FROM INTEGER,
+    IN MONTH_START_FROM INTEGER,
+    IN ITEM_LIST "sap.tm.trp.db.filter::tt_time_filter_item_value",
+    OUT VAR_OUT "sap.tm.trp.db.filter::tt_time_window_interval_display"
+)
+  LANGUAGE SQLSCRIPT
+  SQL SECURITY INVOKER
+  DEFAULT SCHEMA SAP_TM_TRP
+AS BEGIN
+
+    DECLARE USER_ID BIGINT;
+    DECLARE TIME_FILTER_ID BIGINT;
+    DECLARE TIME_FILTER_ITEM_ID BIGINT;
+    DECLARE ITEM_SEQ INTEGER;
+    DECLARE V_INDEX INTEGER;
+    DECLARE SECONDS BIGINT;
+    
+    DECLARE HOUR_START INTEGER;
+    DECLARE MINUTE_START INTEGER;
+    DECLARE WEEK_START INTEGER;
+    DECLARE MONTH_START INTEGER;
+    DECLARE TIME_ZONE VARCHAR(50);
+    DECLARE FLAG INTEGER;
+    DECLARE OFFSET INTEGER;
+    DECLARE ITEM_ID BIGINT; 
+    DECLARE UNIT_ID BIGINT;-- 0:hour 1:day 2:week 3:month 4:year
+    DECLARE UTC_START_FROM TIMESTAMP;
+    DECLARE REPEAT INTEGER;
+    
+
+    DECLARE CURSOR ITEMS FOR
+	SELECT T1.ID AS TIME_DIMENSION_UNIT_ID, T0.VALUE AS TIME_INTERVAL, T0.REPEAT_TIME AS REPEAT_TIMES, T0.UNIT AS UNIT_CODE
+	FROM :ITEM_LIST T0
+	LEFT JOIN "sap.tm.trp.db.filter::t_time_dimension_unit" T1 ON T1.CODE = T0.UNIT
+	ORDER BY SEQUENCE
+	;
+
+    -- GET CURRENT USER_ID
+    SELECT IFNULL(MAX(ID),-1) INTO USER_ID
+    FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+    -- GENERATE TIME FILTER ID
+    SELECT "sap.tm.trp.db.filter::s_time_filter".NEXTVAL INTO TIME_FILTER_ID FROM DUMMY;
+
+    IF TIMEZONE_ID IS NULL OR TIMEZONE_ID = '' THEN
+        TIMEZONE_ID='UTC';
+    END IF;
+
+    -- INSERT TIME FILTER METADATA
+    INSERT INTO "sap.tm.trp.db.filter::tt_time_filter"
+    (ID,DIRECTION_FLAG,OFFSET_FLAG,TIMEZONE_ID,HOUR_START_FROM,MINUTE_START_FROM,WEEK_START_FROM,MONTH_START_FROM,CREATED_BY,CREATED_ON,MODIFIED_BY,MODIFIED_ON)
+    VALUES (:TIME_FILTER_ID,:DIRECTION_FLAG,:OFFSET_FLAG,:TIMEZONE_ID,:HOUR_START_FROM,:MINUTE_START_FROM,:WEEK_START_FROM,:MONTH_START_FROM,:USER_ID,CURRENT_UTCTIMESTAMP,:USER_ID,CURRENT_UTCTIMESTAMP)
+    ;
+          
+    -- INSERT INTO TIME FILTER ITEM
+	ITEM_SEQ := 1; -- SET START VALUE
+	SECONDS := 0;
+	IF :DIRECTION_FLAG = 1 THEN		-- Past Time Filter
+	FOR CUR_ROW AS ITEMS DO
+		-- GENERATE ITEM_ID
+		SELECT "sap.tm.trp.db.filter::s_time_filter_item".NEXTVAL INTO TIME_FILTER_ITEM_ID FROM DUMMY;     
+        
+        -- INSERT ITEMS
+		INSERT INTO "sap.tm.trp.db.filter::tt_time_filter_item"
+		(ID,TIME_DIMENSION_UNIT_ID,TIME_INTERVAL,REPEAT_TIMES,TIME_FILTER_ID)
+		VALUES (:TIME_FILTER_ITEM_ID,CUR_ROW.TIME_DIMENSION_UNIT_ID,CUR_ROW.TIME_INTERVAL,CUR_ROW.REPEAT_TIMES,:TIME_FILTER_ID)
+		;
+        -- INSERT ITEM INTERVAL
+		FOR V_INDEX IN 1 .. CUR_ROW.REPEAT_TIMES DO
+			INSERT INTO "sap.tm.trp.db.filter::tt_time_filter_interval"
+			(ID,TIME_FILTER_ID,TIME_FILTER_ITEM_ID,CODE,SEQUENCE,START_OFFSET,END_OFFSET)
+			SELECT	"sap.tm.trp.db.filter::s_time_filter_interval".NEXTVAL,
+					:TIME_FILTER_ID,
+					:TIME_FILTER_ITEM_ID,
+					NULL,
+					:ITEM_SEQ,
+					CASE WHEN CUR_ROW.UNIT_CODE = 'HOUR' THEN (:V_INDEX) * 60*60*CUR_ROW.TIME_INTERVAL *(-1) + :SECONDS
+						 WHEN CUR_ROW.UNIT_CODE = 'DAY' THEN (:V_INDEX) * 24*60*60*CUR_ROW.TIME_INTERVAL *(-1) + :SECONDS
+						 WHEN CUR_ROW.UNIT_CODE = 'WEEK' THEN (:V_INDEX) * 7*24*60*60*CUR_ROW.TIME_INTERVAL *(-1) + :SECONDS
+						 WHEN CUR_ROW.UNIT_CODE = 'MONTH' THEN (:V_INDEX) * 30*24*60*60*CUR_ROW.TIME_INTERVAL *(-1) + :SECONDS
+					END AS START_OFFSET,
+					CASE WHEN CUR_ROW.UNIT_CODE = 'HOUR' THEN (:V_INDEX - 1) * 60*60*CUR_ROW.TIME_INTERVAL *(-1) + :SECONDS
+						 WHEN CUR_ROW.UNIT_CODE = 'DAY' THEN (:V_INDEX - 1) * 24*60*60*CUR_ROW.TIME_INTERVAL *(-1) + :SECONDS
+						 WHEN CUR_ROW.UNIT_CODE = 'WEEK' THEN (:V_INDEX - 1) * 7*24*60*60*CUR_ROW.TIME_INTERVAL *(-1) + :SECONDS
+						 WHEN CUR_ROW.UNIT_CODE = 'MONTH' THEN (:V_INDEX - 1) * 30*24*60*60*CUR_ROW.TIME_INTERVAL *(-1) + :SECONDS
+					END AS END_OFFSET
+			FROM DUMMY
+			;
+			ITEM_SEQ := :ITEM_SEQ + 1;	-- ITEM_SEQ ++
+		END FOR;
+       -- ADD LAST ITEM INTERVAL TO SECONDS
+	SELECT
+		CASE WHEN CUR_ROW.UNIT_CODE = 'HOUR' THEN (CUR_ROW.TIME_INTERVAL * CUR_ROW.REPEAT_TIMES) * 60*60 *(-1) + :SECONDS
+			 WHEN CUR_ROW.UNIT_CODE = 'DAY' THEN (CUR_ROW.TIME_INTERVAL * CUR_ROW.REPEAT_TIMES) * 24*60*60 *(-1) + :SECONDS
+			 WHEN CUR_ROW.UNIT_CODE = 'WEEK' THEN (CUR_ROW.TIME_INTERVAL * CUR_ROW.REPEAT_TIMES) * 7*24*60*60 *(-1) + :SECONDS
+			 WHEN CUR_ROW.UNIT_CODE = 'MONTH' THEN (CUR_ROW.TIME_INTERVAL * CUR_ROW.REPEAT_TIMES) * 30*24*60*60 *(-1) + :SECONDS
+		END AS SECONDS INTO SECONDS
+	FROM DUMMY;
+  END FOR;
+
+    ELSEIF :DIRECTION_FLAG = 2 THEN     -- Future Time Filter
+       
+         FOR CUR_ROW AS ITEMS DO
+			-- GENERATE ITEM_ID
+			SELECT "sap.tm.trp.db.filter::s_time_filter_item".NEXTVAL INTO TIME_FILTER_ITEM_ID FROM DUMMY;
+			-- INSERT ITEMS
+			INSERT INTO "sap.tm.trp.db.filter::tt_time_filter_item"
+			(ID,TIME_DIMENSION_UNIT_ID,TIME_INTERVAL,REPEAT_TIMES,TIME_FILTER_ID)
+			VALUES (:TIME_FILTER_ITEM_ID,CUR_ROW.TIME_DIMENSION_UNIT_ID,CUR_ROW.TIME_INTERVAL,CUR_ROW.REPEAT_TIMES,:TIME_FILTER_ID)
+			;
+	
+	
+            -- INSERT ITEM INTERVAL
+			FOR V_INDEX IN 1 .. CUR_ROW.REPEAT_TIMES DO
+				INSERT INTO "sap.tm.trp.db.filter::tt_time_filter_interval"
+				(ID,TIME_FILTER_ID,TIME_FILTER_ITEM_ID,CODE,SEQUENCE,START_OFFSET,END_OFFSET)
+				SELECT	"sap.tm.trp.db.filter::s_time_filter_interval".NEXTVAL,
+						:TIME_FILTER_ID,
+						:TIME_FILTER_ITEM_ID,
+						NULL,
+						:ITEM_SEQ,
+						CASE WHEN CUR_ROW.UNIT_CODE = 'HOUR' THEN (:V_INDEX - 1) * 60*60*CUR_ROW.TIME_INTERVAL + :SECONDS
+							 WHEN CUR_ROW.UNIT_CODE = 'DAY' THEN (:V_INDEX - 1) * 24*60*60*CUR_ROW.TIME_INTERVAL + :SECONDS
+							 WHEN CUR_ROW.UNIT_CODE = 'WEEK' THEN (:V_INDEX - 1) * 7*24*60*60*CUR_ROW.TIME_INTERVAL + :SECONDS
+							 WHEN CUR_ROW.UNIT_CODE = 'MONTH' THEN (:V_INDEX - 1) * 30*24*60*60*CUR_ROW.TIME_INTERVAL + :SECONDS
+						END AS START_OFFSET,
+						CASE WHEN CUR_ROW.UNIT_CODE = 'HOUR' THEN (:V_INDEX) * 60*60*CUR_ROW.TIME_INTERVAL + :SECONDS
+							 WHEN CUR_ROW.UNIT_CODE = 'DAY' THEN (:V_INDEX) * 24*60*60*CUR_ROW.TIME_INTERVAL + :SECONDS
+							 WHEN CUR_ROW.UNIT_CODE = 'WEEK' THEN (:V_INDEX) * 7*24*60*60*CUR_ROW.TIME_INTERVAL + :SECONDS
+							 WHEN CUR_ROW.UNIT_CODE = 'MONTH' THEN (:V_INDEX) * 30*24*60*60*CUR_ROW.TIME_INTERVAL + :SECONDS
+						END AS END_OFFSET
+				FROM DUMMY
+				;
+				ITEM_SEQ := :ITEM_SEQ + 1;	-- ITEM_SEQ ++
+			END FOR;
+				-- ADD LAST ITEM INTERVAL TO SECONDS
+	    SELECT
+		CASE WHEN CUR_ROW.UNIT_CODE = 'HOUR' THEN (CUR_ROW.TIME_INTERVAL * CUR_ROW.REPEAT_TIMES) * 60*60 + :SECONDS
+			 WHEN CUR_ROW.UNIT_CODE = 'DAY' THEN (CUR_ROW.TIME_INTERVAL * CUR_ROW.REPEAT_TIMES) * 24*60*60 + :SECONDS
+			 WHEN CUR_ROW.UNIT_CODE = 'WEEK' THEN (CUR_ROW.TIME_INTERVAL * CUR_ROW.REPEAT_TIMES) * 7*24*60*60 + :SECONDS
+			 WHEN CUR_ROW.UNIT_CODE = 'MONTH' THEN (CUR_ROW.TIME_INTERVAL * CUR_ROW.REPEAT_TIMES) * 30*24*60*60 + :SECONDS
+		END AS SECONDS INTO SECONDS
+	   FROM DUMMY;
+    END FOR;
+
+    END IF;
+
+   -- call "sap.tm.trp.db.filter::p_ext_utc_start_time_get_for_display"(utc_start_time);
+   --begin get utc start time
+   
+ sql_UTC1 = SELECT  
+                 A.ID,
+                 B.ID AS ITEM_ID,                 
+                 A.TIMEZONE_ID,
+                 UTCTOLOCAL(CURRENT_UTCTIMESTAMP,A.TIMEZONE_ID,'platform') AS LOCAL_TIMESTAMP_NOW,
+                 SUBSTRING(TO_VARCHAR(UTCTOLOCAL(CURRENT_UTCTIMESTAMP,A.TIMEZONE_ID,'platform'),'YYYY-MM-DD HH24:MI:SS'),1,10) AS LOCAL_TIMESTAMP_STR,
+                 B.TIME_DIMENSION_UNIT_ID AS UNIT_ID,
+                 A.HOUR_START_FROM,
+                 A.MINUTE_START_FROM,
+                 A.WEEK_START_FROM,
+                 A.MONTH_START_FROM,
+                 A.DIRECTION_FLAG,
+                 A.OFFSET_FLAG
+                 FROM "sap.tm.trp.db.filter::tt_time_filter" A
+                 INNER JOIN "sap.tm.trp.db.filter::tt_time_filter_interval" 
+				 C ON A.ID = C.TIME_FILTER_ID AND C.SEQUENCE = 1         
+                 INNER JOIN "sap.tm.trp.db.filter::tt_time_filter_item" B
+                 ON C.TIME_FILTER_ITEM_ID = B.ID
+                 WHERE A.ID = :TIME_FILTER_ID
+                 ORDER BY A.ID;
+                    
+    sql_UTC2 = SELECT 
+                  A.ID,
+                  A.ITEM_ID, 
+                  A.TIMEZONE_ID,  
+                  A.LOCAL_TIMESTAMP_NOW,                
+                  A.UNIT_ID,
+                  A.HOUR_START_FROM,
+                  A.MINUTE_START_FROM,
+                  A.WEEK_START_FROM,
+                  A.MONTH_START_FROM,
+                  A.DIRECTION_FLAG,
+                  A.OFFSET_FLAG,
+                  CASE 
+                  	WHEN A.UNIT_ID = 4 THEN  --MONTH TYPE
+	                    --sometimes the MONTH START DAY is 31 while current month doesn't contain this day
+					    --change automatically to the last day of the month
+	                    --get month day of current month
+	                    CASE WHEN A.MONTH_START_FROM <= DAYOFMONTH(LAST_DAY(LOCAL_TIMESTAMP_NOW)) 
+	                  	  then CONCAT (SUBSTRING(A.LOCAL_TIMESTAMP_STR,1,8), TO_VARCHAR(A.MONTH_START_FROM))
+	                    ELSE
+	                  	  CONCAT (SUBSTRING(A.LOCAL_TIMESTAMP_STR,1,8), TO_VARCHAR(DAYOFMONTH(LAST_DAY(LOCAL_TIMESTAMP_NOW))))
+                  	    END
+                  	WHEN A.UNIT_ID = 3 THEN  
+                  	    -- TRP WEEK TYPE WEEK_START_FROM:Range 0 ~ 6. 0:SUNDAY 1:MONDAY 2:Tuesday 3:Wednesday 4:Thursday 5:Friday 6:Saturday
+                        -- HANA WEEKDAY RETURN: Range 0 ~ 6.          6:SUNDAY 0:MONDAY 1:Tuesday 2:Wednesday 3:Thursday 4:Friday 5:Saturday
+                        -- Way to do mapping between them is: MOD(WEEKDAY(TIME)+1,7)  
+                  		--get week day of this week
+                  		SUBSTRING(TO_VARCHAR(ADD_DAYS(A.LOCAL_TIMESTAMP_NOW,(A.WEEK_START_FROM-MOD(WEEKDAY(A.LOCAL_TIMESTAMP_NOW)+1,7))),'YYYY-MM-DD HH24:MI:SS'),1,10)
+                  	WHEN A.UNIT_ID = 2 THEN  --DAY TYPE
+                  		SUBSTRING(TO_VARCHAR(A.LOCAL_TIMESTAMP_NOW,'YYYY-MM-DD HH24:MI:SS'),1,10)
+                  END
+                  AS MONTH_AND_DAY                                 
+                  FROM :sql_UTC1 A 
+                  WHERE A.UNIT_ID = 4 OR A.UNIT_ID = 3 OR A.UNIT_ID = 2 ; 
+                  
+          
+    sql_UTC9 = SELECT 
+                 A.ID,
+                 A.ITEM_ID, 
+                 A.UNIT_ID,
+                 A.TIMEZONE_ID,
+                 A.LOCAL_TIMESTAMP_NOW,   
+                 A.DIRECTION_FLAG,
+                 A.OFFSET_FLAG, 
+                 A.MONTH_START_FROM,
+                 TO_TIMESTAMP(MONTH_AND_DAY || ' ' || TO_VARCHAR(A.HOUR_START_FROM) || ':' || TO_VARCHAR(A.MINUTE_START_FROM)|| ':00',
+                 	'YYYY-MM-DD HH24:MI:SS') AS LOCAL_START_TIMESTAMP
+                 FROM :sql_UTC2 A
+           UNION ALL
+           -- hout type(UNIT_ID = 1) : UTC_START_TIMESTAMP IS NULL
+              SELECT 
+                 A.ID,     
+                 A.ITEM_ID, 
+                 A.UNIT_ID,          
+                 A.TIMEZONE_ID,
+                 A.LOCAL_TIMESTAMP_NOW,   
+                 A.DIRECTION_FLAG,
+                 A.OFFSET_FLAG,
+                 A.MONTH_START_FROM,
+                 A.LOCAL_TIMESTAMP_NOW AS LOCAL_START_TIMESTAMP
+                 FROM :sql_UTC1 A WHERE A.UNIT_ID = 1 AND A.OFFSET_FLAG =0
+             UNION ALL--HOUR , OFFSET =1 , 
+            --To avoid the issue of the end time of the pps is not the same for the virtual plan 
+            -- when the time filter of the virtual pan's unit is hour , should set the minute and 
+           --second to 00:00.000
+              SELECT 
+                 A.ID,     
+                 A.ITEM_ID, 
+                 A.UNIT_ID,          
+                 A.TIMEZONE_ID,
+                 A.LOCAL_TIMESTAMP_NOW,   
+                 A.DIRECTION_FLAG,
+                 A.OFFSET_FLAG,
+                 A.MONTH_START_FROM,
+                 TO_TIMESTAMP(SUBSTRING(TO_VARCHAR(A.LOCAL_TIMESTAMP_NOW,'YYYY-MM-DD HH24:MI:SS'),1,13)|| ':00:00' ,'YYYY-MM-DD HH24:MI:SS') AS LOCAL_START_TIMESTAMP
+                 FROM :sql_UTC1 A WHERE A.UNIT_ID = 1 AND A.OFFSET_FLAG =1; 
+                 
+    
+  
+                 
+     sql_UTC10 = SELECT 
+                 ID,
+                 ITEM_ID, 
+                 UNIT_ID,
+                 TIMEZONE_ID,
+                 DIRECTION_FLAG,
+                 OFFSET_FLAG,
+                 CASE WHEN DIRECTION_FLAG = 1 AND LOCAL_START_TIMESTAMP > LOCAL_TIMESTAMP_NOW AND UNIT_ID = 2 THEN ADD_DAYS(LOCAL_START_TIMESTAMP,-1)
+                      WHEN DIRECTION_FLAG = 1 AND LOCAL_START_TIMESTAMP > LOCAL_TIMESTAMP_NOW AND UNIT_ID = 3 THEN ADD_DAYS(LOCAL_START_TIMESTAMP,-7)
+                      --MONTH_START_FROM greater than UTC_START_TIMESTAMP, then next month use day MONTH_START_FROM
+                      WHEN DIRECTION_FLAG = 1 AND LOCAL_START_TIMESTAMP > LOCAL_TIMESTAMP_NOW AND UNIT_ID = 4 THEN ADD_MONTHS(LOCAL_START_TIMESTAMP,-1)
+                      WHEN DIRECTION_FLAG = 2 AND LOCAL_START_TIMESTAMP < LOCAL_TIMESTAMP_NOW AND UNIT_ID = 2 THEN ADD_DAYS(LOCAL_START_TIMESTAMP,1)
+                      WHEN DIRECTION_FLAG = 2 AND LOCAL_START_TIMESTAMP < LOCAL_TIMESTAMP_NOW AND UNIT_ID = 3 THEN ADD_DAYS(LOCAL_START_TIMESTAMP,7)
+                      --MONTH_START_FROM greater than LOCAL_START_TIMESTAMP, then next month use day MONTH_START_FROM
+                      WHEN DIRECTION_FLAG = 2 AND LOCAL_START_TIMESTAMP < LOCAL_TIMESTAMP_NOW AND UNIT_ID = 4 THEN ADD_MONTHS(LOCAL_START_TIMESTAMP,1)                    
+                 ELSE LOCAL_START_TIMESTAMP 
+                 END AS LOCAL_START_TIMESTAMP
+                 FROM :sql_UTC9;
+                 
+     sql_cv_get_utc_start_time = SELECT 
+                 ID,
+                 ITEM_ID, 
+                 UNIT_ID,
+                 TIMEZONE_ID,
+                 DIRECTION_FLAG,
+                 OFFSET_FLAG,
+                 LOCALTOUTC (LOCAL_START_TIMESTAMP, TIMEZONE_ID,'platform') AS UTC_START_TIMESTAMP
+                 FROM :sql_UTC10;
+   
+   --end get utc start time
+
+        sql0 = SELECT
+                 B.ID AS TIME_FILTER_ID,
+                 A.SEQUENCE,
+                 A.ID AS TIME_INTERVAL_ID,
+                 A.START_OFFSET,
+                 A.END_OFFSET,
+                 B.UNIT_ID,
+                 B.TIMEZONE_ID,
+                 B.DIRECTION_FLAG,
+                 B.OFFSET_FLAG,
+                 B.UTC_START_TIMESTAMP
+                 FROM "sap.tm.trp.db.filter::tt_time_filter_interval" A
+                 --INNER JOIN :utc_start_time B
+                 INNER JOIN :sql_cv_get_utc_start_time B
+                 ON A.TIME_FILTER_ID = B.ID
+                 ORDER BY A.TIME_FILTER_ID, A.SEQUENCE;
+
+     -- no offset,history or unit type is hour
+     TIME_INTERVAL_LIST1 =
+                 SELECT
+                       A.TIME_FILTER_ID AS ID,
+                       (ROW_NUMBER() OVER (PARTITION BY A.TIME_FILTER_ID ORDER BY A.SEQUENCE DESC)) AS SEQUENCE,
+                       A.TIME_INTERVAL_ID,
+                       ADD_SECONDS(CURRENT_UTCTIMESTAMP,A.START_OFFSET) AS START_TIME,
+                       ADD_SECONDS(CURRENT_UTCTIMESTAMP,A.END_OFFSET) AS END_TIME,
+                       A.TIMEZONE_ID,
+                       A.END_OFFSET - A.START_OFFSET AS INTERVAL
+                       FROM :sql0 A
+                       WHERE (A.OFFSET_FLAG = 0 AND A.DIRECTION_FLAG = 1) -- offset = 0,history
+                 UNION
+                SELECT
+                       A.TIME_FILTER_ID AS ID,
+                       (ROW_NUMBER() OVER (PARTITION BY A.TIME_FILTER_ID ORDER BY A.SEQUENCE DESC)) AS SEQUENCE,
+                       A.TIME_INTERVAL_ID,
+                       ADD_SECONDS(CURRENT_UTCTIMESTAMP,A.START_OFFSET) AS START_TIME,
+                       ADD_SECONDS(CURRENT_UTCTIMESTAMP,A.END_OFFSET) AS END_TIME,
+                       A.TIMEZONE_ID,
+                       A.END_OFFSET - A.START_OFFSET AS INTERVAL
+                       FROM :sql0 A
+                       WHERE (A.OFFSET_FLAG = 1 AND  A.DIRECTION_FLAG = 1 AND A.UNIT_ID = 1);-- offset = 1,but unit type is hour,so ignore the offset,history
+
+     -- no offset,future or unit type is hour
+     TIME_INTERVAL_LIST2 =
+                 SELECT
+                       A.TIME_FILTER_ID AS ID,
+                       A.SEQUENCE,
+                       A.TIME_INTERVAL_ID,
+                       ADD_SECONDS(CURRENT_UTCTIMESTAMP,A.START_OFFSET) AS START_TIME,
+                       ADD_SECONDS(CURRENT_UTCTIMESTAMP,A.END_OFFSET) AS END_TIME,
+                       A.TIMEZONE_ID,
+                       A.END_OFFSET - A.START_OFFSET AS INTERVAL
+                       FROM :sql0 A
+                       WHERE (A.OFFSET_FLAG = 0 AND A.DIRECTION_FLAG = 2) -- offset = 0, future
+                 UNION
+                SELECT
+                       A.TIME_FILTER_ID AS ID,
+                       A.SEQUENCE,
+                       A.TIME_INTERVAL_ID,
+                       ADD_SECONDS(CURRENT_UTCTIMESTAMP,A.START_OFFSET) AS START_TIME,
+                       ADD_SECONDS(CURRENT_UTCTIMESTAMP,A.END_OFFSET) AS END_TIME,
+                       A.TIMEZONE_ID,
+                       A.END_OFFSET - A.START_OFFSET AS INTERVAL
+                       FROM :sql0 A
+                       WHERE (A.OFFSET_FLAG = 1 AND A.DIRECTION_FLAG = 2 AND A.UNIT_ID = 1); -- offset = 1,but unit type is hour,so ignore the offset,history
+
+     --unit type is not hour, offset is active, history
+
+         sqlA1 = SELECT
+                       A.TIME_FILTER_ID,
+                       A.SEQUENCE,
+                       A.TIME_INTERVAL_ID,
+                       A.UTC_START_TIMESTAMP AS START_TIME,
+                       CURRENT_UTCTIMESTAMP AS END_TIME,
+                       A.TIMEZONE_ID
+                       FROM :sql0 A
+                       WHERE A.OFFSET_FLAG = 1 AND A.DIRECTION_FLAG = 1 AND A.UNIT_ID != 1 AND A.SEQUENCE = 1;
+
+         sqlA2 = SELECT
+                       A.TIME_FILTER_ID ,
+                       A.SEQUENCE,
+                       A.TIME_INTERVAL_ID,
+                       ADD_SECONDS(A.UTC_START_TIMESTAMP,A.START_OFFSET - B.START_OFFSET) AS START_TIME,
+                       ADD_SECONDS(A.UTC_START_TIMESTAMP,A.END_OFFSET - B.START_OFFSET) AS END_TIME,
+                       A.TIMEZONE_ID
+                       FROM :sql0 A
+                       INNER JOIN :sql0 B
+                       ON A.TIME_FILTER_ID = B.TIME_FILTER_ID
+                       AND B.SEQUENCE = 1
+                       WHERE A.OFFSET_FLAG = 1 AND A.DIRECTION_FLAG = 1 AND A.UNIT_ID != 1 AND A.SEQUENCE != 1;
+
+         sqlA = SELECT * FROM
+                       (
+                         SELECT * FROM :sqlA1
+                         UNION
+                         SELECT * FROM :sqlA2
+                       );
+
+         TIME_INTERVAL_LIST3 = SELECT
+                       A.TIME_FILTER_ID AS ID,
+                       (ROW_NUMBER() OVER (PARTITION BY A.TIME_FILTER_ID ORDER BY A.START_TIME)) AS SEQUENCE,-- recount sequence
+                       A.TIME_INTERVAL_ID,
+                       A.START_TIME,
+                       A.END_TIME,
+                       A.TIMEZONE_ID,
+                       SECONDS_BETWEEN(A.START_TIME,A.END_TIME) AS INTERVAL
+                       FROM :sqlA A
+                       ORDER BY A.START_TIME DESC;
+
+    -- unit type is not hour, offset is active, future
+         sqlB1 = SELECT
+                       A.TIME_FILTER_ID,
+                       A.SEQUENCE,
+                       A.TIME_INTERVAL_ID,
+                       CURRENT_UTCTIMESTAMP AS START_TIME,
+                       A.UTC_START_TIMESTAMP AS END_TIME,
+                       A.TIMEZONE_ID
+                       FROM :sql0 A
+                       WHERE A.OFFSET_FLAG = 1 AND A.DIRECTION_FLAG = 2 AND A.UNIT_ID != 1 AND A.SEQUENCE = 1;
+
+         sqlB2 = SELECT
+                       A.TIME_FILTER_ID ,
+                       A.SEQUENCE,
+                       A.TIME_INTERVAL_ID,
+                       ADD_SECONDS(A.UTC_START_TIMESTAMP,A.START_OFFSET - B.END_OFFSET) AS START_TIME,
+                       ADD_SECONDS(A.UTC_START_TIMESTAMP,A.END_OFFSET - B.END_OFFSET) AS END_TIME,
+                       A.TIMEZONE_ID
+                       FROM :sql0 A
+                       INNER JOIN :sql0 B
+                       ON A.TIME_FILTER_ID = B.TIME_FILTER_ID
+                       AND B.SEQUENCE = 1
+                       WHERE A.OFFSET_FLAG = 1 AND A.DIRECTION_FLAG = 2 AND A.UNIT_ID != 1 AND A.SEQUENCE != 1;
+
+         sqlB = SELECT * FROM
+                       (
+                         SELECT * FROM :sqlB1
+                         UNION
+                         SELECT * FROM :sqlB2
+                       );
+
+         TIME_INTERVAL_LIST4 = SELECT
+                       A.TIME_FILTER_ID AS ID,
+                       (ROW_NUMBER() OVER (PARTITION BY A.TIME_FILTER_ID ORDER BY A.START_TIME)) AS SEQUENCE,-- recount sequence
+                       A.TIME_INTERVAL_ID,
+                       A.START_TIME,
+                       A.END_TIME,
+                       A.TIMEZONE_ID,
+                       SECONDS_BETWEEN(A.START_TIME, A.END_TIME) AS INTERVAL
+                       FROM :sqlB A
+                       ORDER BY A.START_TIME;
+
+         VAR_OUT = SELECT
+                        SEQUENCE,
+                        TO_VARCHAR(UTCTOLOCAL(START_TIME,TIMEZONE_ID,'platform'),'YYYY-MM-DD HH24:MI:SS') AS START_TIME,
+                        TO_VARCHAR(UTCTOLOCAL(END_TIME,TIMEZONE_ID,'platform'),'YYYY-MM-DD HH24:MI:SS') AS END_TIME
+                   FROM
+                   (
+                   SELECT * FROM :TIME_INTERVAL_LIST1 -- offset = 0, history or unit type is hour
+                   UNION
+                   SELECT * FROM :TIME_INTERVAL_LIST2 -- offset = 0, future or unit type is hour
+                   UNION
+                   SELECT * FROM :TIME_INTERVAL_LIST3 -- offset = 1 , history , unit type is not hour
+                   UNION
+                   SELECT * FROM :TIME_INTERVAL_LIST4 -- offset = 1 , future , unit type is not hour
+                   )A
+                   ORDER BY A.ID, A.SEQUENCE;
+END;

@@ -1,0 +1,47 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_create_local_dataset" (
+    IN dataset_code NVARCHAR(50),
+    IN locations "sap.tm.trp.routing.db.common::tt_location_id",
+    IN connection_list "sap.tm.trp.routing.db.dataset::tt_connection", 
+    IN connection_carrier "sap.tm.trp.routing.db.dataset::tt_connection_carrier", 
+	OUT return_code TINYINT,
+	OUT dataset_id BIGINT,
+	OUT message "sap.tm.trp.routing.db.common::tt_message",
+	OUT log "sap.tm.trp.routing.db.common::tt_message"
+	)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING"
+   AS
+BEGIN
+    /*************************************
+        Write your procedure logic 
+    *************************************/
+    DECLARE msg_param TABLE(placeholder INTEGER, value NVARCHAR(100));
+	-- Get next id
+	SELECT "sap.tm.trp.routing.db.dataset::s_dataset".nextval INTO dataset_id FROM DUMMY;
+	
+	-- Local dataset has no system path
+	paths = SELECT '' AS id, '' AS name, '' AS type, '' AS from_location, '' AS to_location, '' AS mtr, '' AS carrier
+	from dummy where 1 <> 1 ;
+	
+    path_connection = SELECT '' AS path_id, 0 AS sequence, '' AS from_location, 
+    '' AS to_location, 0 AS distance, 0 AS duration, 0 as stay_time,
+    0 AS cutoff_offset, 0 AS availability_offset
+    FROM DUMMY WHERE 1 <> 1;
+    
+    log = SELECT '' AS severity, '' AS message FROM DUMMY WHERE 1 <> 1;
+	
+	-- Create paths and connection
+	CALL "sap.tm.trp.routing.db.dataset::p_create_dataset"(
+    :dataset_id, :dataset_code, CURRENT_UTCDATE, TO_DATE('9999-01-01'), :locations, 
+    :connection_list, :connection_carrier, :paths, :path_connection, :return_code, :message);
+    
+	IF :return_code = 0 THEN
+	    msg_param = SELECT 0 AS PLACEHOLDER, :dataset_code AS VALUE FROM DUMMY;
+	    CALL "sap.tm.trp.routing.db.common::p_get_text"('MSG_DATASET_CREATED_SUCCESS',
+	    :msg_param, 'I', :message_tmp);
+	    
+	    message = SELECT * FROM :message_tmp UNION ALL SELECT * FROM :message;
+	END IF;
+	   
+END

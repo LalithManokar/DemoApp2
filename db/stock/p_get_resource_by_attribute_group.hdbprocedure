@@ -1,0 +1,22 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.stock::p_get_resource_by_attribute_group" (
+    IN ATTRIBUTE_GROUP_ID BIGINT,
+    IN NODE_ID_LIST "sap.tm.trp.db.filter::tt_attribute_group_dynamic_item_node_list",
+    OUT FILTERED_RESID "sap.tm.trp.db.stock::tt_resource_id"
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    READS SQL DATA
+    AS
+    FILTER VARCHAR(5000);
+BEGIN
+
+DECLARE VAR_RESOURCE_CATEGORY NVARCHAR(20);
+ 
+SELECT RESOURCE_CATEGORY INTO VAR_RESOURCE_CATEGORY
+FROM "sap.tm.trp.db.filter::t_attribute_group"
+WHERE ID = :ATTRIBUTE_GROUP_ID;
+
+CALL "sap.tm.trp.db.equipment::p_equipment_attribute_group" (:ATTRIBUTE_GROUP_ID, :NODE_ID_LIST, :VAR_RESOURCE_CATEGORY, FILTERED_RESOURCE);
+FILTERED_RESID = SELECT RESID FROM :FILTERED_RESOURCE;
+
+END;

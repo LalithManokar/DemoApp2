@@ -1,0 +1,77 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::p_alternative_min_cost_flow_solve" ( 
+IN t_node "sap.tm.trp.db.planningcockpit.reposition::tt_node",
+IN t_arc "sap.tm.trp.db.planningcockpit.reposition::tt_arc",
+OUT t_flow "sap.tm.trp.db.planningcockpit.reposition::tt_flow"
+) 
+LANGUAGE SQLSCRIPT 
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+
+DECLARE v_max INT;
+DECLARE v_supply INT;
+DECLARE v_demand INT;
+DECLARE v_vol INT;
+
+SELECT MAX("NODE_ID") INTO v_max FROM :t_node;
+
+t_supply = SELECT * FROM :t_node where "SUPPLY_DEMAND">=0;
+t_demand = SELECT * FROM :t_node where "SUPPLY_DEMAND"<0;
+
+SELECT SUM("SUPPLY_DEMAND") INTO v_supply FROM :t_supply;
+SELECT SUM("SUPPLY_DEMAND") INTO v_demand FROM :t_demand;
+
+IF (:v_supply+:v_demand>0) THEN
+v_vol := -:v_demand;
+ELSE
+v_vol := :v_supply;
+END IF;
+
+t_source = SELECT :v_max+1 AS "NODE_ID", 
+				  :v_vol AS "SUPPLY_DEMAND" 
+		   FROM dummy;
+		   
+t_sink = SELECT :v_max+2 AS "NODE_ID", 
+				-:v_vol AS "SUPPLY_DEMAND" 
+		 FROM dummy;
+
+t_aug_source_arc = SELECT :v_max+1 AS "FROM_ID", "NODE_ID" AS "TO_ID", 
+						  0 AS "LOWER",
+						  "SUPPLY_DEMAND" AS "CAPACITY",
+						  0 AS "COST"
+				   FROM :t_supply;
+						  
+t_aug_sink_arc = SELECT "NODE_ID" AS "FROM_ID", 
+						:v_max+2 AS "TO_ID",
+						0 AS "LOWER",
+						-"SUPPLY_DEMAND" AS "CAPACITY",
+						0 AS "COST"
+				 FROM :t_demand; 
+
+t_node = SELECT "NODE_ID",
+				0 AS "SUPPLY_DEMAND" 
+		 FROM :t_node UNION ALL
+		 SELECT * 
+		 FROM :t_source 
+		 UNION ALL
+		 SELECT * 
+		 FROM :t_sink;
+
+t_arc = SELECT * 
+		FROM :t_arc 
+		UNION ALL
+		SELECT * 
+		FROM :t_aug_source_arc 
+		UNION ALL
+		SELECT * 
+		FROM :t_aug_sink_arc;
+		
+call "_SYS_AFL"."OFL_AREA_COST_SCALING_SOLVE_PROC"(:t_node,:t_arc,t_flow);
+
+t_flow = SELECT * 
+		 FROM :t_flow 
+		 WHERE "FROM_ID"<>:v_max+1 
+		 AND "TO_ID"<>:v_max+2;
+
+END;

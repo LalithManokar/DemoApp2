@@ -1,0 +1,18 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_equip_filter_usage_check"(
+    IN ID BIGINT,
+    OUT ERR_NUM INTEGER
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE ERR INTEGER;
+    
+    SELECT COUNT(*) INTO ERR
+    FROM "sap.tm.trp.db.filter::t_filter_equipment_filter" T1
+    WHERE EQUIPMENT_FILTER_ID = :ID
+    ;
+    
+    ERR_NUM := :ERR;
+END;

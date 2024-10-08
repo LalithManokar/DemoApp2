@@ -1,0 +1,12 @@
+schema = "SAP_TM_TRP";
+query  ="SELECT 
+        A.VIRTUAL_PLAN_MODEL_ID,
+        A.PERSISTED_PLAN_MODEL_ID,
+        A.EXECUTION_ID,
+        A.EXECUTION_ON,
+        B.NAME AS PERSISTED_PLAN_MODEL_NAME
+        FROM \"sap.tm.trp.db.pipeline::t_virtual_plan_execution\" A
+        INNER JOIN \"sap.tm.trp.db.pipeline::t_plan_model\" B
+        ON A.PERSISTED_PLAN_MODEL_ID = B.ID
+        ";
+depends_on_table = ["sap.tm.trp.db.pipeline::t_virtual_plan_execution", "sap.tm.trp.db.pipeline::t_plan_model"];

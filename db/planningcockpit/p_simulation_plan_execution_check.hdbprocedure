@@ -1,0 +1,27 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_simulation_plan_execution_check"    
+    (IN SIMULATION_ID BIGINT,
+     OUT MESSAGE VARCHAR(200)
+     ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"   
+	AS
+BEGIN
+
+   DECLARE MAX_EXECUTION_ID BIGINT := -1;
+   DECLARE EXECUTE_ID_OF_THE_SMULATION_PLAN BIGINT := -2;
+   
+   --Get the newest execution ID of the plan
+	CALL "sap.tm.trp.db.planningcockpit::p_get_newest_execution_id_for_simulation_plan"(:SIMULATION_ID,MAX_EXECUTION_ID);
+	
+	SELECT EXCUTE_ID INTO EXECUTE_ID_OF_THE_SMULATION_PLAN
+	FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" 
+    WHERE ID = :SIMULATION_ID;
+    
+    IF MAX_EXECUTION_ID <> :EXECUTE_ID_OF_THE_SMULATION_PLAN THEN
+      MESSAGE :='IS_NOT_NEWEST_EXECUTION';
+    ELSE
+      MESSAGE := 'IS_NEWEST_EXECUTION';
+    END IF;
+
+END

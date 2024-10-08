@@ -1,0 +1,24 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_ext_last_used_parameters_get" (
+IN PAGE_NAME VARCHAR(50),
+OUT LAST_USED "sap.tm.trp.db.systemmanagement.user::tt_last_used_parameters"
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+	
+BEGIN
+ 
+
+
+ DECLARE USER VARCHAR(60);
+ -- GET USER
+ SELECT USERNAME 
+ INTO USER 
+ FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+ 
+ LAST_USED = SELECT PARAMETER_KEY, PARAMETER_VALUE 
+             FROM "sap.tm.trp.db.systemmanagement.user::t_last_used_parameters"
+             WHERE USER = :USER AND PAGE_NAME = :PAGE_NAME;
+ 
+END;

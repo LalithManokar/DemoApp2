@@ -1,0 +1,35 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::p_pipeline_procedure_wrapper" (
+	IN PIPELINE_NAME NVARCHAR(200),
+	IN RESOURCE_CATEGORY VARCHAR(20),
+	IN LOCATION "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_location",
+	IN RESOURCE "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_resource",
+	IN TIME_PERIOD "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_time_period",
+	IN NODE_LIST "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_node",
+	IN ATTRIBUTE_FILTER NVARCHAR(500),
+	OUT DATASET "sap.tm.trp.db.supplydemand.instant::tt_sd_output" 
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+	DECLARE V_INSTANT_ENABLED CHAR(1);
+    DECLARE V_SCHEMA_NAME VARCHAR(200);
+	DECLARE V_OBJECT_NAME  VARCHAR(500);
+	
+	SELECT DISTINCT T2.SCHEMA_NAME AS SCHEMA_NAME,
+		            T2."OBJECT_NAME" AS OBJECT_NAME,
+		            T1.INSTANT_ENABLED AS INSTANT_ENABLED 
+		   INTO V_SCHEMA_NAME, V_OBJECT_NAME, V_INSTANT_ENABLED 
+		   FROM "sap.tm.trp.db.pipeline::t_pipeline_model" T1 
+				 INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_entry_point" T2 ON T1.ENTRY_POINT_ID = T2.ID
+			     WHERE T2.ENTRY_POINT_TYPE = 'PROCEDURE' AND T1.NAME = :PIPELINE_NAME;
+	
+	IF :V_INSTANT_ENABLED = 'X' THEN
+		SCALAR_INPUTS = SELECT :PIPELINE_NAME AS PIPELINE_NAME , :RESOURCE_CATEGORY AS RESOURCE_CATEGORY, :ATTRIBUTE_FILTER AS ATTRIBUTE_FILTER FROM DUMMY;
+	    EXEC ' CALL ' || '"' || :V_SCHEMA_NAME || '".' || '"' || :V_OBJECT_NAME || '"' || '(:LOCATION,:RESOURCE,:TIME_PERIOD,:NODE_LIST,:SCALAR_INPUTS,:DATASET); ' INTO DATASET USING :LOCATION,:RESOURCE,:TIME_PERIOD,:NODE_LIST,:SCALAR_INPUTS ;
+	ELSE
+		EXEC ' CALL '|| '"' || :V_SCHEMA_NAME || '".' || '"' || :V_OBJECT_NAME || '"(:DATASET)' INTO DATASET ;
+	END IF ;				
+	
+END;

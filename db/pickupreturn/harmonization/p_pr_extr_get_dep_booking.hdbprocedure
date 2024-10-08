@@ -1,0 +1,31 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::p_pr_extr_get_dep_booking" (
+	IN  iv_from_tmstmp decimal(15, 0),
+	IN  iv_to_tmstmp   decimal(15, 0),
+    OUT OUTPUT "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::tt_pr_extr_dependent_out_str"
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	--DEFAULT SCHEMA <default_schema_name>
+	READS SQL DATA AS
+BEGIN
+
+    --Get Affected TUs because of Booking related changes
+	lt_booking = select 
+                    TU_HEADER.db_key as "TU_KEY", 
+                    TU_HEADER.movement_cat as "MOVEMENT_CAT", 
+                    BOOKING_TABLE.changed_on as "CHANGED_ON" 
+                from "sap.tm.trp.db.semantic.order::v_customer_order" BOOKING_TABLE 
+                inner join "sap.tm.trp.db.semantic.order::v_transportation_unit_item" TU_ITEM 
+                        on BOOKING_TABLE.DB_KEY = TU_ITEM.TRQ_KEY
+                inner join "sap.tm.trp.db.semantic.order::v_transportation_unit" TU_HEADER 
+                        on TU_HEADER.DB_KEY = TU_ITEM.TU_KEY AND TU_HEADER.movement_cat in ('EP', 'ER') 
+                    where (BOOKING_TABLE.changed_on > iv_from_tmstmp AND BOOKING_TABLE.changed_on <= iv_to_tmstmp)
+                    order by CHANGED_ON;
+    
+    OUTPUT = select distinct
+	                TU_KEY,
+					MOVEMENT_CAT,
+					TO_TIMESTAMP(CHANGED_ON) as "CHANGED_ON",
+					'BOOKING_TU' as "NODE"
+				from :lt_booking;
+END;

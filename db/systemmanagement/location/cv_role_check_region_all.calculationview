@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_role_check_region_all" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_role_check_region_all"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="ID" length="22"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition>  BEGIN 
+ 
+     --DECLARE USERTYPE INTEGER;
+     DECLARE LOCATION_TYPE_REGION INTEGER :=5; 
+     
+     --SELECT USERNAME INTO NAME FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+     
+     --SELECT USER_TYPE_ID INTO USERTYPE FROM &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot;
+     --WHERE USERNAME = :NAME;
+     
+     --IF :USERTYPE = 99 THEN
+     DECLARE HAS_AUTHORIZATION_FLAG TINYINT; 
+     call &quot;sap.tm.trp.db.systemmanagement::p_check_location_full_authorization&quot; (
+		 	HAVE_AUTHORIZATION_FLAG => HAS_AUTHORIZATION_FLAG
+		 ); 
+	 IF :HAS_AUTHORIZATION_FLAG = 1 THEN 
+         var_out = SELECT
+                   T1.ID
+                   FROM &quot;sap.tm.trp.db.semantic.location::v_zone&quot; T1;                                               
+     ELSE
+     
+         var_out = SELECT
+                   T1.ID
+                   FROM &quot;sap.tm.trp.db.semantic.location::v_zone&quot; T1
+                   INNER JOIN &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(PLACEHOLDER.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_REGION) T2
+                   ON T1.ID = T2.LOCATION_ID;
+     END IF;
+     
+ 	
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes/>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="ID" order="1" aggregationType="max" measureType="simple">
+        <descriptions defaultDescription="ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="ID"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

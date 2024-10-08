@@ -1,0 +1,32 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_sd_parameter_filterid_by_plan_rulegroup" (
+	IN PLAN_ID "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_sd_plan_rulegroup",
+	OUT LOCATION_FILTER_ID "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_sd_location_filter",
+	OUT RESOURCE_FILTER_ID "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_sd_resource_filter",
+	OUT TIME_FILTER_ID BIGINT,
+	OUT ATTRIBUTE_FILTER_ID BIGINT
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+
+	FILTER_GROUP_ID = SELECT FILTER_GROUP_ID FROM "sap.tm.trp.db.pipeline::t_plan_model" WHERE ID 
+	in (SELECT PLAN_ID FROM :PLAN_ID);
+	
+	LOCATION_FILTER_ID = SELECT T2.ID AS LOCATION_FILTER_ID
+		FROM "sap.tm.trp.db.filter::t_filter_location_filter" T1
+		INNER JOIN "sap.tm.trp.db.filter::t_location_filter" T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+		WHERE T1.FILTER_GROUP_ID IN (SELECT FILTER_GROUP_ID FROM :FILTER_GROUP_ID);  
+     
+    RESOURCE_FILTER_ID = SELECT EQUIPMENT_FILTER_ID AS RESOURCE_FILTER_ID
+		FROM "sap.tm.trp.db.filter::t_filter_equipment_filter"
+		WHERE FILTER_GROUP_ID IN (SELECT FILTER_GROUP_ID FROM :FILTER_GROUP_ID);
+		
+	SELECT TIME_FILTER_ID INTO TIME_FILTER_ID FROM "sap.tm.trp.db.filter::t_filter_group" 
+	WHERE ID IN (SELECT DISTINCT FILTER_GROUP_ID FROM :FILTER_GROUP_ID);  
+	
+	SELECT IFNULL (MAX(ATTRIBUTE_GROUP_ID),0) INTO ATTRIBUTE_FILTER_ID FROM "sap.tm.trp.db.pipeline::t_plan_model" 
+	WHERE ID IN (SELECT FILTER_GROUP_ID FROM :FILTER_GROUP_ID); 
+	
+END;

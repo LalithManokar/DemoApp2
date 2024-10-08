@@ -1,0 +1,28 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_unregister_pipeline_node_output_dataObject" ( 
+IN PIPELINE_MODEL_ID VARCHAR(32),
+OUT SUCCESS_FLAG INTEGER 
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+DECLARE PIPELINE_MODEL_EXISTING INTEGER;
+
+    select count(*) into PIPELINE_MODEL_EXISTING
+    from "sap.tm.trp.db.pipeline::t_pipeline_model" T1
+    where T1.ID = :PIPELINE_MODEL_ID;
+    
+    IF ( :PIPELINE_MODEL_EXISTING > 0 )
+    THEN
+        delete from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" T1
+        where T1.PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;
+        
+        select count(*) into SUCCESS_FLAG
+        from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" T1
+        where T1.PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;
+    ELSE
+        SUCCESS_FLAG := 1;
+    END IF; 
+END;
+

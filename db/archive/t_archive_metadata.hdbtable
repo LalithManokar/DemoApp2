@@ -1,0 +1,20 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "TABLE_NAME"; sqlType = NVARCHAR; length = 500; nullable = false;},
+    {name = "TABLE_CODE"; sqlType = NVARCHAR; length = 500; nullable = false;},
+    {name = "PARENT_ID"; sqlType = BIGINT; nullable = false; nullable = true;},
+    {name = "ULTIMATE_PARENT_ID"; sqlType = BIGINT; nullable = true;},
+    {name = "LEVEL"; sqlType = TINYINT; nullable = true; nullable = true;},
+	{name = "DATE_COLUMN_NAME"; sqlType = NVARCHAR; length = 500; nullable = true;},
+	{name = "IS_TM"; sqlType = TINYINT; nullable = false; },
+	{name = "PARENT_REF_COL"; sqlType = NVARCHAR; length = 500; nullable = true;},
+	{name = "CHILD_REF_COL"; sqlType = NVARCHAR; length = 500; nullable = true;},
+	{name = "PRIMARY_KEY_COL"; sqlType = NVARCHAR; length = 500; nullable = true;},
+	{name = "IS_SELECTABLE"; sqlType = TINYINT; nullable = false; }
+];
+table.primaryKey.pkcolumns = ["ID"]; 
+table.indexes = [
+  {name = "ARCHIVE_TABLE_METADATA_TABLE_NAME_INDEX"; unique = true; indexColumns = ["TABLE_NAME"];}
+];

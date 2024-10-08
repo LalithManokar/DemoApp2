@@ -1,0 +1,33 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_assign_location_check" (    
+    IN IN_LOCATION_NAME VARCHAR(20),
+    OUT OUT_LOCATION_ID VARCHAR(22)
+ ) 
+	LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+    
+BEGIN
+  
+     DECLARE LOCATION_TYPE_LOCATION INTEGER :=1;
+     DECLARE HAS_AUTHORIZATION_FLAG TINYINT;
+     
+     CALL "sap.tm.trp.db.systemmanagement::p_check_location_full_authorization" (
+		 	HAVE_AUTHORIZATION_FLAG => HAS_AUTHORIZATION_FLAG
+		 ); 
+	
+         IF(:HAS_AUTHORIZATION_FLAG=1) THEN 
+         SELECT 
+                         COALESCE  (MAX (ID),NULL) INTO OUT_LOCATION_ID   
+                         FROM "sap.tm.trp.db.systemmanagement.location::v_location_ui" T1
+                         WHERE T1.NAME=:IN_LOCATION_NAME;
+         ELSE           
+                   SELECT COALESCE  (MAX (ID),NULL) INTO OUT_LOCATION_ID
+                         FROM "sap.tm.trp.db.systemmanagement.location::v_location_ui" T1
+                         INNER JOIN "sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype"
+                         (PLACEHOLDER."$$IN_LOCATION_TYPE$$"=>:LOCATION_TYPE_LOCATION) T2
+                         ON T1.ID = T2.LOCATION_ID
+                         WHERE T1.NAME=:IN_LOCATION_NAME;
+	END IF;
+  
+END;

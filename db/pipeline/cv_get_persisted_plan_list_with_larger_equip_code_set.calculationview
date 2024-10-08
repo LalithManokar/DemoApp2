@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_persisted_plan_list_with_larger_equip_code_set" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_anna_privilege_check"/>
+  <localVariables>
+    <variable id="VP_EQUIP_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="VP_EQUIP_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_PLAN_TYPE_ID" parameter="true">
+      <descriptions defaultDescription="IN_PLAN_TYPE_ID"/>
+      <variableProperties datatype="INTEGER" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_RESOURCE_CATEGORY" parameter="true">
+      <descriptions defaultDescription="IN_RESOURCE_CATEGORY"/>
+      <variableProperties datatype="NVARCHAR" defaultValue="" length="20" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="PLAN_MODEL_ID"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#VP_EQUIP_FILTER_ID</localVariable>
+      <localVariable>#IN_PLAN_TYPE_ID</localVariable>
+      <localVariable>#IN_RESOURCE_CATEGORY</localVariable>
+      <definition>
+  
+ BEGIN 
+ 
+     DECLARE PERSISTED_PLAN_MODEL_TYPE INTEGER;
+     DECLARE V_FILTER_TYPE INTEGER;
+     DECLARE FILTER_TYPE_COMMON INTEGER :=1;
+     DECLARE FILTER_TYPE_GROUP INTEGER :=2;
+
+     PERSISTED_PLAN_MODEL_TYPE := :IN_PLAN_TYPE_ID;
+     
+    --Get the equip filter type of the VP:
+     SELECT FILTER_TYPE INTO V_FILTER_TYPE
+     FROM  &quot;sap.tm.trp.db.filter::t_equipment_filter&quot; T1
+	 WHERE ID = :VP_EQUIP_FILTER_ID
+	 ;
+     
+     PERSISTED_PLAN_IDS_AUTHORIZED = SELECT T1.ID,T1.FILTER_GROUP_ID
+         FROM  &quot;sap.tm.trp.db.pipeline::t_plan_model&quot; T1
+         INNER JOIN &quot;sap.tm.trp.db.filter::t_filter_group&quot; T2 ON T1.FILTER_GROUP_ID = T2.ID
+         WHERE T1.PLAN_MODEL_TYPE_ID = :PERSISTED_PLAN_MODEL_TYPE
+         AND T2.RESOURCE_CATEGORY = :IN_RESOURCE_CATEGORY;
+         
+     
+     IF :V_FILTER_TYPE = :FILTER_TYPE_COMMON THEN
+     
+        --Get the equip code list of the VP with the IN_VP_EQUIP_FILTER_ID
+		 VP_EQUIPMENT_CODE = SELECT EQUI_CODE 
+		 FROM &quot;sap.tm.trp.db.filter::v_equipment_filter_equipment_auth&quot; T1
+		 WHERE EQUIPMENT_FILTER_ID = :VP_EQUIP_FILTER_ID AND EQUI_CODE IS NOT NULL
+		 ;
+		 
+		 PP_EQUIPMENT_CODE = 
+		 SELECT T3.EQUI_CODE,T1.ID AS PLAN_MODEL_ID FROM  :PERSISTED_PLAN_IDS_AUTHORIZED T1 
+		 INNER JOIN &quot;sap.tm.trp.db.filter::t_filter_equipment_filter&quot; T2 ON (T1.FILTER_GROUP_ID = T2.FILTER_GROUP_ID)
+		 INNER JOIN &quot;sap.tm.trp.db.filter::v_equipment_filter_equipment_auth&quot; T3 ON (T2.EQUIPMENT_FILTER_ID = T3.EQUIPMENT_FILTER_ID)
+		 WHERE T3.EQUI_CODE IS NOT NULL;
+		 
+     --EQUIPMENT GROUP:
+     ELSE 
+         VP_EQUIPMENT_CODE = 
+		 SELECT T1.EQUIPMENT_GROUP_ID AS EQUI_CODE
+		 FROM &quot;sap.tm.trp.db.filter::v_equipment_filter_equipment_auth&quot; T1
+		 WHERE T1.EQUIPMENT_FILTER_ID = :VP_EQUIP_FILTER_ID
+		 ;
+		 
+		 PP_EQUIPMENT_CODE = 
+         SELECT T3.EQUIPMENT_GROUP_ID AS EQUI_CODE,T1.ID AS PLAN_MODEL_ID
+         FROM  :PERSISTED_PLAN_IDS_AUTHORIZED T1 
+		 INNER JOIN &quot;sap.tm.trp.db.filter::t_filter_equipment_filter&quot; T2 ON (T1.FILTER_GROUP_ID = T2.FILTER_GROUP_ID)
+		 INNER JOIN &quot;sap.tm.trp.db.filter::v_equipment_filter_equipment_auth&quot; T3 ON (T2.EQUIPMENT_FILTER_ID = T3.EQUIPMENT_FILTER_ID)
+		 ;
+		 
+
+     END IF;
+   
+ --Get the persisted plan list which the VP equip code list is the subset of it the pp's equip code list
+  WHITE_LIST_OF_PLAN_MODEL_FOR_EQUIP = 
+         SELECT T3.PLAN_MODEL_ID
+         FROM 
+         (
+             SELECT T1.PLAN_MODEL_ID,CASE WHEN T2.EQUI_CODE IS NULL THEN 0 ELSE 1 END AS NUM
+             FROM 
+             (
+	             SELECT A.EQUI_CODE,B.ID AS PLAN_MODEL_ID
+	             FROM :VP_EQUIPMENT_CODE A,:PERSISTED_PLAN_IDS_AUTHORIZED B
+             )T1
+             LEFT OUTER JOIN :PP_EQUIPMENT_CODE T2 ON (T1.EQUI_CODE = T2.EQUI_CODE AND T1.PLAN_MODEL_ID = T2.PLAN_MODEL_ID)
+         ) T3
+         GROUP BY T3.PLAN_MODEL_ID
+         HAVING SUM(NUM) > 0;
+
+     var_out = SELECT PLAN_MODEL_ID FROM :WHITE_LIST_OF_PLAN_MODEL_FOR_EQUIP ;
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="PLAN_MODEL_ID" order="1">
+        <descriptions defaultDescription="PLAN_MODEL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_MODEL_ID"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

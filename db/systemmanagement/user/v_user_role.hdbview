@@ -1,0 +1,17 @@
+schema="SAP_TM_TRP";
+
+	query="select a.id as user_id,
+	              c.id as id,
+	              c.name as name,
+	              c.desc as desc 
+	         from \"sap.tm.trp.db.systemmanagement.user::t_user\" a
+	   inner join \"sap.tm.trp.db.systemmanagement.user::t_user_role\" b
+	           on a.id = b.user_id
+	   inner join \"sap.tm.trp.db.systemmanagement.user::t_role\" c
+	           on b.role_id = c.id
+  ";
+
+
+depends_on_table = ["sap.tm.trp.db.systemmanagement.user::t_user_role","sap.tm.trp.db.systemmanagement.user::t_user",
+                    "sap.tm.trp.db.systemmanagement.user::t_role"];
+

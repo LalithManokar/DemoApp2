@@ -1,0 +1,29 @@
+schema = "SAP_TM_TRP";
+query = "SELECT DISTINCT CASE DENSE_RANK() OVER (PARTITION BY T1.XPOS, T1.YPOS ORDER BY T1.ID) WHEN 1 THEN 1 ELSE 2 END AS RANK,
+                T1.ID AS ID,
+                T1.NAME AS NAME,
+                T1.DESC AS DESC,
+                T1.LOCTYPE,
+                T11.COUNTRY_CODE,
+                T3.NAME AS COUNTRY_NAME,
+                T11.STATE_CODE AS REGION_CODE,
+                T4.NAME AS STATE_NAME,
+                T11.CITY_CODE AS CITY_ID,
+                T5.NAME  AS CITY_NAME,
+                T1.XPOS,
+                T1.YPOS,
+                T11.POSTAL_CODE 
+           FROM \"sap.tm.trp.db.semantic.location::v_location\" AS T1
+                LEFT OUTER JOIN  \"sap.tm.trp.db.semantic.location::v_address\" AS T11 ON (T1.ADDRESS_ID = T11.ID)
+                LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_country\" AS T3
+                ON T11.COUNTRY_CODE = T3.CODE
+                LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_state\" AS T4
+                ON T11.COUNTRY_CODE = T4.COUNTRY_CODE AND T4.CODE = T11.STATE_CODE
+                LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_city\" AS T5
+                ON T11.CITY_CODE = T5.CODE AND T5.COUNTRY_CODE = T11.COUNTRY_CODE "; 
+                
+ depends_on_view = ["sap.tm.trp.db.semantic.location::v_location"
+ 					,"sap.tm.trp.db.semantic.location::v_address"
+ 					,"sap.tm.trp.db.semantic.location::v_country"
+ 					,"sap.tm.trp.db.semantic.location::v_state"
+ 					,"sap.tm.trp.db.semantic.location::v_city"];

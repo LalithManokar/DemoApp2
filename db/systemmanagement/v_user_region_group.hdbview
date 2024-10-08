@@ -1,0 +1,45 @@
+schema = "SAP_TM_TRP";
+query = "SELECT DISTINCT T1.ID AS ID,
+                T1.DESC AS NAME,
+                B.DESC,
+                T1.USER_ID AS USER_ID,
+                T1.VISIBLE_FLAG,
+                T4.DESC AS VISIBILITY_DESC,
+                T1.CITY_CODE, T1.CITY_NAME,
+                T1.STATE_CODE, T1.STATE_NAME,
+                T1.COUNTRY_CODE, T1.COUNTRY_NAME,
+                T1.PRIME_LOC_ID,
+                T3.XPOS,
+                T3.YPOS,
+                T2.USERNAME AS CREATE_BY,
+                T1.CREATE_AT AS CREATE_AT,
+                T1.LAST_MODIFIED_BY,
+                T1.LAST_MODIFIED_AT AS LAST_MODIFIED_TIME,
+                T1.RESOURCE_CATEGORY
+           FROM \"sap.tm.trp.db.systemmanagement::t_region_group\" as T1
+                LEFT OUTER JOIN 
+                ( SELECT T11.ID , T11.DESC FROM \"sap.tm.trp.db.systemmanagement::t_region_group_t\" T11
+                  INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" LANGUAGE ON (T11.SPRAS = LANGUAGE.SPRAS)
+                ) AS B
+                ON T1.ID = B.ID 
+                LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS T2
+                ON T1.USER_ID = T2.ID
+                LEFT JOIN \"sap.tm.trp.db.semantic.location::v_location\" AS T3
+                ON T1.PRIME_LOC_ID = T3.ID
+                LEFT OUTER JOIN 
+                (
+                 SELECT T1.CODE,T2.DESC
+                 FROM \"sap.tm.trp.db.systemmanagement::t_visibility_type\" T1
+                 INNER JOIN \"sap.tm.trp.db.systemmanagement::t_visibility_type_t\" T2
+                 ON (T1.ID = T2.ID)
+                 INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" LANGUAGE 
+                 ON (T2.SPRAS = LANGUAGE.SPRAS)
+                ) AS T4 ON T4.CODE = T1.VISIBLE_FLAG
+                ";
+depends_on_table = ["sap.tm.trp.db.systemmanagement::t_region_group",
+                    "sap.tm.trp.db.systemmanagement::t_region_group_t",
+                    "sap.tm.trp.db.systemmanagement::t_visibility_type",
+                    "sap.tm.trp.db.systemmanagement::t_visibility_type_t"];
+depends_on_view  = ["sap.tm.trp.db.semantic.location::v_location",
+                    "sap.tm.trp.db.semantic.common::v_lang_code",
+                    "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

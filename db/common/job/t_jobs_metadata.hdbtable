@@ -1,0 +1,15 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;  
+table.description = "XS Thread meta data";
+table.columns = [ 
+	{name = "ID"; sqlType = BIGINT; nullable = false;},
+	{name = "SCHEDULE_ID"; sqlType = BIGINT; },
+	{name = "NAME"; sqlType = NVARCHAR; length = 256;},
+	{name = "CREATED_BY"; sqlType = NVARCHAR; length = 256;},
+	{name = "PKG";sqlType=VARCHAR;length=1024;},
+	{name = "LIB";sqlType=VARCHAR;length=1024;},
+	{name = "FUNCTION";sqlType=VARCHAR;length=1024;},
+	{name = "PARAMS";sqlType=VARCHAR;length=1024;},
+	{name = "STATUS";sqlType=INTEGER;}
+	];			
+table.primaryKey.pkcolumns = ["ID"];  

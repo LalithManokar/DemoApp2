@@ -1,0 +1,29 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_ext_add_virtual_plan_result" (
+    IN VIRTUAL_PLAN_ID BIGINT,
+    IN SCHEDULE_PLAN_ID BIGINT,
+    IN EXECUTION_ID BIGINT,
+    IN EXECUTION_ON BIGINT,
+    IN EXECUTE_DATE TIMESTAMP
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+    INSERT INTO "sap.tm.trp.db.pipeline::t_virtual_plan_execution"(
+           VIRTUAL_PLAN_MODEL_ID,
+           PERSISTED_PLAN_MODEL_ID,
+           EXECUTION_ID,
+           EXECUTION_ON)
+     VALUES(
+           :VIRTUAL_PLAN_ID,
+           :SCHEDULE_PLAN_ID,
+           :EXECUTION_ID,
+           :EXECUTION_ON);
+           
+    -- update t_execution_log&t_plan_execution to make sure that the execution time are the same with virtual plan's execution time
+    UPDATE "sap.tm.trp.db.pipeline::t_plan_execution" SET EXECUTE_ON = :EXECUTE_DATE WHERE ID = :EXECUTION_ID;
+    UPDATE "sap.tm.trp.db.pipeline::t_execution_log" SET EXECUTION_TIME = :EXECUTE_DATE WHERE EXECUTION_ID = :EXECUTION_ID;
+
+END;

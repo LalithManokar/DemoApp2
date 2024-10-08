@@ -1,0 +1,18 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.job::p_cancel_job_schedule"(
+    IN MODEL_ID BIGINT, 
+    IN SCHEDULE_TYPE VARCHAR(500),   
+    OUT SCHEDULE_IDS "sap.tm.trp.db.job::tt_id_list"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN 
+
+     -- update SCHEDULE_FLAG to 0, which means stopping schedule
+     UPDATE "sap.tm.trp.db.job::t_job_schedule" SET SCHEDULE_FLAG = 0 WHERE MODEL_ID = :MODEL_ID AND SCHEDULE_TYPE = :SCHEDULE_TYPE;
+     
+     --find all the job id
+     SCHEDULE_IDS = SELECT SCHEDULE_ID AS ID FROM "sap.tm.trp.db.job::t_job_schedule" WHERE MODEL_ID = :MODEL_ID AND SCHEDULE_TYPE = :SCHEDULE_TYPE;
+                
+END;

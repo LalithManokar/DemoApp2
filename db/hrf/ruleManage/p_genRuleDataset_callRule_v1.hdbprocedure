@@ -1,0 +1,76 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage::p_genRuleDataset_callRule_v1" (
+IN  PLAN_EXECUTION_ID BIGINT,
+OUT OUT_PLAN_MODEL_TYPE_ID INTEGER,
+OUT OUTPUT_RECORDS INTEGER,
+OUT OUT_REC_BUBBLE INTEGER
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+  
+    DECLARE V_PLAN_MODEL_TYPE_ID INTEGER;
+    --S&D
+    DECLARE PLAN_MODEL_TYPE_SCHEDULED_SUPPLY_DEMAND INTEGER := 1;
+    DECLARE PLAN_MODEL_TYPE_TEMPLATE_SUPPLY_DEMAND INTEGER := 2;
+    DECLARE PLAN_MODEL_TYPE_ADHOC_SUPPLY_DEMAND INTEGER := 99;
+    
+    --KPI
+    DECLARE PLAN_MODEL_TYPE_SCHEDULED_KPI INTEGER := 4;
+  
+    --get the plan model type ID
+    
+      SELECT IFNULL(MAX(T1.PLAN_MODEL_TYPE_ID),-1) INTO V_PLAN_MODEL_TYPE_ID
+    FROM "sap.tm.trp.db.hrf::v_plan_model" T1
+    INNER JOIN "sap.tm.trp.db.pipeline::t_plan_execution" T2 ON (T1.EXECUTION_ID = T2.ID)
+    WHERE T2.ID = :PLAN_EXECUTION_ID;
+    
+       -- RB will fetch the rule procedure from this table for this execution id 
+        INSERT INTO "sap.tm.trp.db.hrf.ruleManage::t_rule_dispatch_node_to_sp"
+          ( SELECT DISTINCT :PLAN_EXECUTION_ID AS PLAN_EXECUTION_ID,
+                          T4.ID AS NODE_ID, 
+                          T4.NAME AS NODE_NAME,
+                          T6.SP
+          FROM  "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T1 
+          INNER JOIN "sap.tm.trp.db.pipeline::t_plan_execution" T2 
+          ON (T1.PLAN_EXECUTION_ID = T2.ID and 
+              T1.PLAN_EXECUTION_ID = :PLAN_EXECUTION_ID)
+          INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T4 
+          ON (T1.NODE_ID = T4.ID and
+              T4.RESULT_VISIBLE = 1)
+          INNER JOIN "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" T5
+          ON (T4.METADATA_NODE_ID = T5.METADATA_NODE_ID and 
+              T4.PIPELINE_MODEL_ID = T5.PIPELINE_MODEL_ID)
+          INNER JOIN "sap.tm.trp.db.hrf.ruleManage::v_pipeline_model_rule_group_rule_dataObject" T6
+          ON (T2.ID = T6.EXECUTION_ID and 
+             T5.DATA_OBJECT_ID = T6.DATA_OBJECT_ID)
+          );  
+    
+    IF V_PLAN_MODEL_TYPE_ID = :PLAN_MODEL_TYPE_SCHEDULED_SUPPLY_DEMAND OR 
+       V_PLAN_MODEL_TYPE_ID = :PLAN_MODEL_TYPE_TEMPLATE_SUPPLY_DEMAND OR 
+       V_PLAN_MODEL_TYPE_ID = :PLAN_MODEL_TYPE_ADHOC_SUPPLY_DEMAND THEN
+       
+       --Alert:
+       CALL "sap.tm.trp.db.hrf.ruleManage::p_genRuleDataset_callRule_for_alert_for_supplydemand_v1"(:PLAN_EXECUTION_ID,OUT_PLAN_MODEL_TYPE_ID,OUTPUT_RECORDS);
+     
+      --Bubble(deficit surplus status):
+       CALL "sap.tm.trp.db.hrf.ruleManage::p_genRuleDataset_callRule_for_bubble_for_supplydemand_v1" (:PLAN_EXECUTION_ID, OUT_PLAN_MODEL_TYPE_ID,OUT_REC_BUBBLE);
+       
+    ELSEIF ( V_PLAN_MODEL_TYPE_ID = :PLAN_MODEL_TYPE_SCHEDULED_KPI ) THEN   --persistent KPI plan
+    
+       --Alert:
+      CALL "sap.tm.trp.db.hrf.ruleManage::p_genRuleDataset_callRule_for_alert_for_kpi_v1"(:PLAN_EXECUTION_ID,OUT_PLAN_MODEL_TYPE_ID,OUTPUT_RECORDS);
+      
+      --Bubble(deficit surplus status):
+      CALL "sap.tm.trp.db.hrf.ruleManage::p_genRuleDataset_callRule_for_bubble_for_kpi_v1"(:PLAN_EXECUTION_ID,OUT_PLAN_MODEL_TYPE_ID,OUT_REC_BUBBLE );
+      
+    ELSE
+       OUT_PLAN_MODEL_TYPE_ID := -1;
+       OUTPUT_RECORDS := -1;
+       OUT_REC_BUBBLE := -1;
+   END IF; 
+   
+   
+    
+END;

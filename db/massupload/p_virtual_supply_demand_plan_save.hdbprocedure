@@ -1,0 +1,185 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_virtual_supply_demand_plan_save" ( 
+    IN CONNECTION_ID VARCHAR(100),
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),
+    OUT EXECUTION_RESULTS "sap.tm.trp.db.massupload::tt_massupload_execution_result"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER  
+	DEFAULT SCHEMA SAP_TM_TRP
+	--READS SQL DATA
+AS
+USER_ID BIGINT;
+PLAN_STATUS INTEGER;
+BEGIN
+    
+    DECLARE V_COUNT INTEGER;
+    DECLARE V_I INTEGER;
+    DECLARE VAR_IND INTEGER;
+    DECLARE VAR_PLAN_MODEL_ID INTEGER :=0;
+    DECLARE STATUS_VALID SMALLINT := 0;
+    DECLARE STATUS_SUSPEND SMALLINT := 1;
+    DECLARE STATUS_INVALID SMALLINT := 2;
+
+ 
+    --Generate Unique Location Group Id
+    VSDP_ID   = 
+                SELECT  
+                CASE WHEN VSDP_ID IS NULL 
+                THEN "sap.tm.trp.db.pipeline::s_plan_model".NEXTVAL
+                ELSE VSDP_ID
+                END AS VSDP_ID,
+                VSDP_NAME,
+                CASE WHEN FILTER_GROUP_ID IS NULL
+                THEN "sap.tm.trp.db.filter::s_filter_group".NEXTVAL
+	             ELSE FILTER_GROUP_ID
+	            END AS FILTER_GROUP_ID
+                FROM
+                (SELECT DISTINCT VSDP_ID, VSDP_NAME, FILTER_GROUP_ID
+                FROM "sap.tm.trp.db.massupload::t_virtual_supply_demand_plan_temporary" AS TMP                                            
+                WHERE CONNECTION_ID = :CONNECTION_ID 
+                AND RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID);
+    
+    
+
+    --Select data from temporary table
+    SOURCE = 
+                SELECT 
+                V.VSDP_ID,
+                V.VSDP_NAME,
+                DESCRIPTION,IND_UPD,STATUS,TYPE_NAME,V.FILTER_GROUP_ID,VISIBILITY_FLAG,LOC_ID,LOCATION_FILTER_NAME,
+                CASE WHEN TMP.LOCATION_TYPE IN (1,2) THEN 1
+	             WHEN TMP.LOCATION_TYPE IN (3,4) THEN 2
+	             WHEN TMP.LOCATION_TYPE IN (5,6) THEN 3 
+	            END AS FILTER_TYPE,
+                RES_ID,RESOURCE_FILTER_NAME,TIME_FILTER_ID,SDP_ID,SDP_NAME,USER_ID,CREATE_BY,CREATE_ON,ACTION_TIME,CONNECTION_ID,RESOURCE_CATEGORY,USAGE,USAGE_CODE
+                FROM "sap.tm.trp.db.massupload::t_virtual_supply_demand_plan_temporary" AS TMP
+                LEFT OUTER JOIN :VSDP_ID AS V
+                ON UPPER(V.VSDP_NAME) = UPPER(TMP.VSDP_NAME)
+                WHERE TMP.CONNECTION_ID = :CONNECTION_ID 
+                AND TMP.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID;    
+
+    
+    -- Get User Id
+                SELECT IFNULL(MAX(ID),0) INTO USER_ID
+                FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+                WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username"); 
+
+
+	------------------- CREATE/UPDATE NEW FILTER_GROUP START -------------------
+	-- UPSERT FILTER MAIN DATA
+    UPSERT "sap.tm.trp.db.filter::t_filter_group"(ID, USER_ID, TIME_FILTER_ID, CREATE_AT, LAST_MODIFIED_AT, FILTER_TYPE, RESOURCE_CATEGORY, LAST_MODIFIED_BY)
+    SELECT
+    	DISTINCT(FILTER_GROUP_ID),
+    	CREATE_BY,--:USER_ID,
+    	TIME_FILTER_ID,
+    	CREATE_ON, --CURRENT_UTCTIMESTAMP,
+    	CURRENT_UTCTIMESTAMP,
+    	FILTER_TYPE,
+    	:RESOURCE_CATEGORY_ID,
+    	:USER_ID
+    FROM :SOURCE;
+    
+    -- UPSERT FILTER & EQUIPMENT FILTER RELATIONSHIP
+    -- Delete the data since the t_filter_equipment_filter table has no primary key, which will cause upsert working not correctly.
+	DELETE FROM "sap.tm.trp.db.filter::t_filter_equipment_filter" 
+	WHERE FILTER_GROUP_ID IN (SELECT DISTINCT(FILTER_GROUP_ID) FROM :SOURCE);
+	
+    UPSERT "sap.tm.trp.db.filter::t_filter_equipment_filter"(FILTER_GROUP_ID, EQUIPMENT_FILTER_ID, RESOURCE_CATEGORY)
+    SELECT
+    	DISTINCT(FILTER_GROUP_ID),
+    	RES_ID,
+    	:RESOURCE_CATEGORY_ID
+    FROM :SOURCE;
+    
+    -- UPSERT FILTER & LOCATION FILTER RELATIONSHIP
+    -- Delete the data since the t_filter_location_filter table has no primary key, which will cause upsert working not correctly.
+    DELETE FROM "sap.tm.trp.db.filter::t_filter_location_filter" 
+	WHERE FILTER_GROUP_ID IN (SELECT DISTINCT(FILTER_GROUP_ID) FROM :SOURCE);
+	
+    UPSERT "sap.tm.trp.db.filter::t_filter_location_filter"(FILTER_GROUP_ID, LOCATION_FILTER_ID)
+    SELECT
+    	DISTINCT(FILTER_GROUP_ID),
+    	LOC_ID
+    FROM :SOURCE;
+	
+	-- UPSERT PLAN METADATA
+	UPSERT "sap.tm.trp.db.pipeline::t_plan_model"
+	(ID, NAME, FILTER_GROUP_ID, PIPELINE_MODEL_ID, CREATE_BY, CREATE_ON, LAST_MODIFIED_BY, LAST_MODIFIED_ON, PLAN_MODEL_TYPE_ID, DESC,
+	CODE,VISIBILITY_FLAG,ALERT_RULE_GROUP_ID,EXPIRY_TIME, ATTRIBUTE_GROUP_ID,STATUS,CALMODEL_MODIFIED_ON,USAGE,USAGE_CODE)
+	SELECT
+		DISTINCT(VSDP_ID),
+		VSDP_NAME,
+		FILTER_GROUP_ID,
+		NULL,
+		CREATE_BY,--:USER_ID,
+		CREATE_ON,--CURRENT_UTCTIMESTAMP,
+		:USER_ID,
+		CURRENT_UTCTIMESTAMP,
+		3,
+		DESCRIPTION,
+		UPPER(VSDP_NAME),
+		VISIBILITY_FLAG,
+		NULL,
+		NULL,
+		NULL,
+		:STATUS_VALID,
+		NULL,
+		USAGE,
+		USAGE_CODE
+	FROM :SOURCE;
+    
+    
+    PERSISTED_PLANS =  SELECT PERSISTED_PLAN_MODEL_ID 
+                         FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" 
+                        WHERE VIRTUAL_PLAN_MODEL_ID IN ( SELECT DISTINCT VSDP_ID 
+                                                        FROM :SOURCE 
+                                                        WHERE IND_UPD = 1);
+    -- UPDATE PERSISTED PLAN LIST
+    DELETE FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" 
+    WHERE VIRTUAL_PLAN_MODEL_ID IN (SELECT VSDP_ID FROM :SOURCE WHERE IND_UPD = 1);
+    
+----   clear ASSIGNED_TO_VIRTUAL flag in t_plan_model table 
+
+    UPDATE "sap.tm.trp.db.pipeline::t_plan_model"
+    SET ASSIGNED_TO_VIRTUAL = ''
+    WHERE ID IN ( SELECT PERSISTED_PLAN_MODEL_ID
+                    FROM :PERSISTED_PLANS
+                   WHERE PERSISTED_PLAN_MODEL_ID NOT IN (SELECT DISTINCT PERSISTED_PLAN_MODEL_ID 
+                                                         FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" )
+                );
+                
+    UPSERT "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" (VIRTUAL_PLAN_MODEL_ID,PERSISTED_PLAN_MODEL_ID)
+    SELECT VSDP_ID, SDP_ID FROM :SOURCE;
+    
+
+-- After insert into t_virtual_plan_persisted_plan table, set those persited plan 
+--   ASSIGNED_TO_VIRTUAL flag with 'X' in t_plan_model table
+   /* UPDATE "sap.tm.trp.db.pipeline::t_plan_model"
+    SET ASSIGNED_TO_VIRTUAL = 'X'
+    WHERE ID IN (
+                  SELECT DISTINCT SDP_ID FROM :SOURCE 
+                 );*/
+    
+    -- UPDATE VIRTUAL TREE INFO AND PLAN STATUS
+    PLAN_MODEL_IDS = SELECT DISTINCT VSDP_ID,IND_UPD FROM :SOURCE;
+    SELECT COUNT(*) INTO V_COUNT FROM :PLAN_MODEL_IDS;
+    
+    -- BATCH DELETE FOR THE EXISTING VIRTUAL TREE DATA (UPDATE SCENARIO)
+    CALL "sap.tm.trp.db.massupload::p_batch_delete_virtual_tree"(:PLAN_MODEL_IDS);
+    
+    -- BATCH SAVE VIRTUAL TREE
+	CALL "sap.tm.trp.db.massupload::p_batch_save_virtual_tree" (:PLAN_MODEL_IDS);
+        
+    -- Delete the records in temporary table.
+ 	DELETE FROM "sap.tm.trp.db.massupload::t_virtual_supply_demand_plan_temporary" 
+    WHERE CONNECTION_ID = :CONNECTION_ID;
+
+	EXECUTION_RESULTS = 
+		SELECT 
+			T1.CNT AS REC_CRTD,
+			T2.CNT AS REC_UPD,
+			T1.CNT + T2.CNT AS RECORD_CNT
+		FROM (SELECT COUNT(*) AS CNT FROM :SOURCE WHERE IND_UPD = 0) T1, 
+			(SELECT	COUNT(*) AS CNT FROM :SOURCE WHERE IND_UPD = 1) T2; 
+
+END;

@@ -1,0 +1,92 @@
+schema = "SAP_TM_TRP";
+query = "SELECT 1 AS ID,
+                'ALL' AS RESOURCE_CATEGORY_TYPE,
+                CASE CODE WHEN 'TUR' THEN '12'
+                  WHEN 'PVR' THEN '09' END AS RESOURCE_GROUP_TYPE,
+                CODE AS PARAMETER_CODE,
+                DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.semantic.order::v_trq_item_category_t\"
+         UNION
+         SELECT 2 AS ID,
+                'ALL' AS RESOURCE_CATEGORY_TYPE,
+                '000' AS RESOURCE_GROUP_TYPE,
+                CODE AS PARAMETER_CODE,
+                DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.semantic.order::v_movement_type_t\"
+         UNION
+         SELECT 3 AS ID,
+                'ALL' AS RESOURCE_CATEGORY_TYPE,
+                '000' AS RESOURCE_GROUP_TYPE,
+                UOM AS PARAMETER_CODE,
+                UOM_DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.semantic.common::v_uom\"
+         UNION
+         SELECT 4 AS ID,
+                'ALL' AS RESOURCE_CATEGORY_TYPE,
+                '000' AS RESOURCE_GROUP_TYPE,
+                SALES_ORGNIZATION AS PARAMETER_CODE,
+                '' AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.semantic.common::v_sales_orgnization\"
+         UNION
+         SELECT 5 AS ID,
+                'ALL' AS RESOURCE_CATEGORY_TYPE,
+                '000' AS RESOURCE_GROUP_TYPE,
+                CODE AS PARAMETER_CODE,
+                DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.semantic.order::v_trq_category_t\"
+         UNION
+         SELECT 6 AS ID,
+                'ALL' AS RESOURCE_CATEGORY_TYPE,
+                '000' AS RESOURCE_GROUP_TYPE,
+                CODE AS PARAMETER_CODE,
+                DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.semantic.order::v_trq_item_type_t\"
+         UNION
+         SELECT 7 AS ID,
+                'ALL' AS RESOURCE_CATEGORY_TYPE,
+                '000' AS RESOURCE_GROUP_TYPE,
+                CODE AS PARAMETER_CODE,
+                DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.semantic.order::v_trq_type_t\"
+         UNION
+         SELECT 8 AS ID,
+                'ALL' AS RESOURCE_CATEGORY_TYPE,
+                '000' AS RESOURCE_GROUP_TYPE,
+                CODE AS PARAMETER_CODE,
+                DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.semantic.order::v_build_tu_t\"
+         UNION
+         SELECT 9 AS ID,
+                'ALL' AS RESOURCE_CATEGORY_TYPE,
+                '000' AS RESOURCE_GROUP_TYPE,
+                CODE AS PARAMETER_CODE,
+                DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.semantic.common::v_traffic_direction_t\"
+         UNION         
+         SELECT 10 AS ID,
+                'ALL' AS RESOURCE_CATEGORY_TYPE,
+                '000' AS RESOURCE_GROUP_TYPE,
+                CODE AS PARAMETER_CODE,
+                DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.semantic.order::v_transportation_mode_cat_t\"
+         UNION
+         SELECT 11 AS ID,
+                'ALL' AS RESOURCE_CATEGORY_TYPE,
+                '000' AS RESOURCE_GROUP_TYPE,
+                CODE AS PARAMETER_CODE,
+                DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.semantic.order::v_transportation_mode_t\"
+        ";
+
+depends_on_view = ["sap.tm.trp.db.semantic.order::v_trq_item_category_t"
+                   ,"sap.tm.trp.db.semantic.order::v_trq_category_t"
+                   ,"sap.tm.trp.db.semantic.order::v_build_tu_t"
+                   ,"sap.tm.trp.db.semantic.order::v_movement_type_t"
+                   ,"sap.tm.trp.db.semantic.common::v_uom"
+                   ,"sap.tm.trp.db.semantic.common::v_sales_orgnization"
+                   ,"sap.tm.trp.db.semantic.order::v_trq_item_type_t"
+                   ,"sap.tm.trp.db.semantic.order::v_trq_type_t"
+                   ,"sap.tm.trp.db.semantic.common::v_traffic_direction_t"
+                   ,"sap.tm.trp.db.semantic.order::v_transportation_mode_cat_t"
+                   ,"sap.tm.trp.db.semantic.order::v_transportation_mode_t"
+                   ];                              

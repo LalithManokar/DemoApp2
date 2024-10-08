@@ -1,0 +1,23 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+  {name = "ID"; sqlType = BIGINT;},
+  {name = "NAME"; sqlType = VARCHAR; length = 50;},
+  {name = "CODE";sqlType = VARCHAR; length = 20; nullable = false; unique = true;},
+  {name = "DESC"; sqlType = VARCHAR; length = 200; },
+  {name = "DIRECTION_FLAG"; sqlType = INTEGER;},
+  {name = "OFFSET_FLAG"; sqlType = INTEGER;},
+  {name = "TIMEZONE_ID"; sqlType = VARCHAR; length = 50;},
+  {name = "HOUR_START_FROM"; sqlType = INTEGER;},
+  {name = "MINUTE_START_FROM"; sqlType = INTEGER;},
+  {name = "WEEK_START_FROM"; sqlType = INTEGER;},
+  {name = "MONTH_START_FROM"; sqlType = INTEGER;},
+  {name = "VISIBILITY"; sqlType = CHAR; length = 1;},
+  {name = "CREATED_BY"; sqlType = BIGINT;},
+  {name = "CREATED_ON"; sqlType = TIMESTAMP;},
+  {name = "MODIFIED_BY"; sqlType = BIGINT;},
+  {name = "MODIFIED_ON"; sqlType = TIMESTAMP;} 
+ 
+];
+table.primaryKey.pkcolumns = ["ID"];
+table.indexes = [ {name = "IDX_TIMEFILTER_CODE"; unique = true; indexColumns = ["CODE"];}]; 

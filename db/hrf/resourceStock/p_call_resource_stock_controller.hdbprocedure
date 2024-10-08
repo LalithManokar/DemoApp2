@@ -1,0 +1,31 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.resourceStock::p_call_resource_stock_controller" ( 
+in IN_ALERT_BUBBLE_FLAG INTEGER,
+--in IN_RESOURCE_STOCK_ALERT_RULE_ID BIGINT,
+in IN_TBL "sap.tm.trp.db.hrf.resourceStock::t_resource_stock",
+out OUT_TBL_ALERT "sap.tm.trp.db.hrf.resourceStock.alertView::tt_trp_hrf_resourceStockAlertView_score_output",
+out OUT_TBL_BUBBLE "sap.tm.trp.db.hrf.resourceStock.bubbleView::tt_trp_hrf_resourceStockBubbleView_score_output"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    DECLARE RESOURCE_STOCK_RULE_ID BIGINT;
+    DECLARE I_COUNT INTEGER;
+   
+    select IFNULL(MAX(T1.RULE_ID),-1) into RESOURCE_STOCK_RULE_ID
+    from "sap.tm.trp.db.hrf.ruleManage::v_view_assigned_rule" T1
+    where T1.VIEW_ID = :IN_ALERT_BUBBLE_FLAG;
+    
+    IF :RESOURCE_STOCK_RULE_ID = -1 THEN
+      RETURN;
+    END IF;
+    
+    IF ( :IN_ALERT_BUBBLE_FLAG = 0 )
+    THEN 
+        call "sap.tm.trp.db.hrf.resourceStock.alertView::p_call_resource_stock_alertView_rule_normalized"(:RESOURCE_STOCK_RULE_ID,:IN_TBL,OUT_TBL_ALERT);
+    ELSEIF( :IN_ALERT_BUBBLE_FLAG = 1)
+    THEN
+        call "sap.tm.trp.db.hrf.resourceStock.bubbleView::p_call_resource_stock_bubbleView_rule_normalized"(:RESOURCE_STOCK_RULE_ID,:IN_TBL,OUT_TBL_BUBBLE);
+    END IF;
+END;

@@ -1,0 +1,25 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "CODE"; sqlType = NVARCHAR; length = 22; nullable = false;},
+	{name = "CONTRACT_CODE"; sqlType = NVARCHAR; length = 22; nullable = false;},
+	{name = "START_TIME"; sqlType = TIMESTAMP; nullable = false;},
+    {name = "END_TIME"; sqlType = TIMESTAMP; nullable = false;},
+	{name = "LOCATION_ID"; sqlType = NVARCHAR; length = 22; nullable = true; },
+	{name = "LOCATION_TYPE"; sqlType = TINYINT; nullable = true; comment = "1- depo location 2- location group 3 - Zone 4 - Zone group 5 - Region 6 - Region group";},
+	{name = "EQUIPMENT_CODE_TYPE"; sqlType = TINYINT; nullable = true;  comment = "1 - Equipment, 2 - Equipment group";},
+	{name = "EQUIPMENT_CODE"; sqlType = NVARCHAR; length = 50; nullable = true;},
+    {name = "MIN_HIRE_QUANTITY"; sqlType = INTEGER; nullable = true; comment = "Minimum quantity to be leased";},
+	{name = "MAX_HIRE_QUANTITY"; sqlType = INTEGER; nullable = true; comment = "Maximum quantity to be leased";},  
+	{name = "FEE"; sqlType = DECIMAL; precision = 13; scale = 3; nullable = true;},
+	{name = "PENALTY_FEE"; sqlType = DECIMAL; precision = 13; scale = 3; nullable = true;},
+	{name = "REMARK"; sqlType = NVARCHAR; length = 1000; nullable = true;},
+	{name = "CREATION_DATE"; sqlType = TIMESTAMP; nullable = true;},    
+    {name = "MODIFIED_DATE"; sqlType = TIMESTAMP; nullable = true; },
+    {name = "CREATED_BY"; sqlType = BIGINT; nullable = true;},
+    {name = "MODIFIED_BY"; sqlType = BIGINT; nullable = true;},
+	{name = "HIRE_TYPE"; sqlType = TINYINT;  comment = "0 -  onhire , 1 - offhire"; nullable = false;},
+	{name = "ACTIVE"; sqlType = TINYINT; nullable = false; defaultValue = "1";}
+	
+];
+table.primaryKey.pkcolumns = ["CODE"];

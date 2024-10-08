@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_query_basic_connection" applyPrivilegeType="NONE" cacheInvalidationPeriod="DAILY" checkAnalyticPrivileges="false" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="Basic connection filtered"/>
+  <localVariables>
+    <variable id="SIM_PLAN_ID" parameter="true">
+      <descriptions defaultDescription="SIMULATION_PLAN_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="SCENARIO_ID" parameter="true">
+      <descriptions defaultDescription="SCENARIO_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="FROM_LOC" parameter="true">
+      <descriptions defaultDescription="FROM_LOCATION_NAME"/>
+      <variableProperties datatype="VARCHAR" length="30" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="TO_LOC" parameter="true">
+      <descriptions defaultDescription="TO_LOCATION_NAME"/>
+      <variableProperties datatype="VARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="MTR" parameter="true">
+      <descriptions defaultDescription="MTR"/>
+      <variableProperties datatype="VARCHAR" length="20" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="USED_FLAG" parameter="true">
+      <descriptions defaultDescription="USED_FLAG"/>
+      <variableProperties datatype="INTEGER" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="CONNECTION_ID"/>
+        <viewAttribute datatype="NVARCHAR" id="FROM_LOCATION_NAME" length="50"/>
+        <viewAttribute datatype="NVARCHAR" id="TO_LOCATION_NAME" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="MTR" length="10"/>
+        <viewAttribute datatype="NVARCHAR" id="MEANS_OF_TRANSPORT" length="10"/>
+        <viewAttribute datatype="INTEGER" id="DURATION"/>
+        <viewAttribute datatype="DOUBLE" id="DISTANCE"/>
+        <viewAttribute datatype="DOUBLE" id="COST"/>
+        <viewAttribute datatype="VARCHAR" id="CURRENCY" length="10"/>
+        <viewAttribute datatype="VARCHAR" id="ACTION" length="1"/>
+        <viewAttribute datatype="CHAR" id="SOURCE" length="30"/>
+        <viewAttribute datatype="NVARCHAR" id="CARRIERS" length="500"/>
+        <viewAttribute datatype="NVARCHAR" id="CREATED_BY" length="10"/>
+        <viewAttribute datatype="TIMESTAMP" id="CREATED_ON"/>
+        <viewAttribute datatype="NVARCHAR" id="CHANGED_BY" length="10"/>
+        <viewAttribute datatype="TIMESTAMP" id="CHANGED_ON"/>
+        <viewAttribute datatype="CHAR" id="CONFLICT_FLAG" length="1"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#SIM_PLAN_ID</localVariable>
+      <localVariable>#SCENARIO_ID</localVariable>
+      <localVariable>#FROM_LOC</localVariable>
+      <localVariable>#TO_LOC</localVariable>
+      <localVariable>#MTR</localVariable>
+      <localVariable>#USED_FLAG</localVariable>
+      <definition> 
+BEGIN
+   DECLARE NETWORK_CODE VARCHAR(50); 
+   DECLARE USED_FLAG_CHAR VARCHAR(1);  
+   DECLARE NUM_AMOUNT_DECIMAL_POINT INTEGER := 2;
+
+   SELECT MAP(:USED_FLAG,1,'X',0,'','') INTO USED_FLAG_CHAR FROM DUMMY;   
+ 
+   CALL &quot;sap.tm.trp.db.planningcockpit::p_get_networkcode_by_simulation_scenario_id&quot;
+        (:SIM_PLAN_ID,:SCENARIO_ID,NETWORK_CODE);
+
+   IF NETWORK_CODE &lt;> '' THEN
+   	var_out = SELECT T1.ID AS CONNECTION_ID, T1.FROM_LOCATION AS FROM_LOCATION_NAME, T1.TO_LOCATION AS TO_LOCATION_NAME, 
+			         T1.MTR,T2.DESC AS MEANS_OF_TRANSPORT,T1.DURATION, ROUND(DISTANCE,:NUM_AMOUNT_DECIMAL_POINT) AS DISTANCE,
+			         ROUND(T1.TRANSPORT_COST,:NUM_AMOUNT_DECIMAL_POINT) AS COST, T1.CURRENCY, 
+			         T1.ACTION, T1.SOURCE, T1.CARRIERS, T1.CREATED_BY, T1.CREATED_ON, T1.CHANGED_BY, T1.CHANGED_ON, T1.CONFLICT_FLAG
+			   FROM &quot;sap.tm.trp.routing.db.path::cv_basic_connection&quot;
+			        (PLACEHOLDER.&quot;$$NETWORK_CODE$$&quot;=>:NETWORK_CODE,
+			         PLACEHOLDER.&quot;$$FROM_LOCATION$$&quot;=>:FROM_LOC,
+			         PLACEHOLDER.&quot;$$TO_LOCATION$$&quot;=>:TO_LOC,
+			         PLACEHOLDER.&quot;$$MTR$$&quot;=>:MTR,
+			         PLACEHOLDER.&quot;$$USED_ONLY$$&quot;=>:USED_FLAG_CHAR) T1
+			   LEFT OUTER JOIN &quot;sap.tm.trp.db.semantic.common::v_transportation_means&quot; T2 ON T2.CODE = T1.MTR;                                                                      
+   ELSE 
+   var_out = SELECT NULL AS CONNECTION_ID, NULL AS FROM_LOCATION_NAME, 
+                    NULL AS TO_LOCATION_NAME, NULL AS MTR,NULL MEANS_OF_TRANSPORT,
+                    NULL AS DURATION, NULL AS DISTANCE, NULL AS COST, 
+                    NULL AS CURRENCY, NULL AS ACTION, NULL AS SOURCE, 
+                    NULL AS CARRIERS, NULL AS CREATED_BY, NULL AS CREATED_ON,
+                    NULL AS CHANGED_BY, NULL AS CHANGED_ON, NULL AS CONFLICT_FLAG
+             FROM DUMMY;
+                                                       
+   END IF;                                                                 
+    
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="CONNECTION_ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="CONNECTION_ID"/>
+      </attribute>
+      <attribute id="FROM_LOCATION_NAME" order="2">
+        <descriptions defaultDescription="FROM_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="FROM_LOCATION_NAME"/>
+      </attribute>
+      <attribute id="TO_LOCATION_NAME" order="3">
+        <descriptions defaultDescription="TO_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="TO_LOCATION_NAME"/>
+      </attribute>
+      <attribute id="MTR" order="4">
+        <descriptions defaultDescription="MTR"/>
+        <keyMapping columnObjectName="Script_View" columnName="MTR"/>
+      </attribute>
+      <attribute id="MEANS_OF_TRANSPORT" order="5">
+        <descriptions defaultDescription="MTR"/>
+        <keyMapping columnObjectName="Script_View" columnName="MEANS_OF_TRANSPORT"/>
+      </attribute>
+      <attribute id="DURATION" order="6">
+        <descriptions defaultDescription="DURATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="DURATION"/>
+      </attribute>
+      <attribute id="DISTANCE" order="7">
+        <descriptions defaultDescription="DISTANCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="DISTANCE"/>
+      </attribute>
+      <attribute id="COST" order="8">
+        <descriptions defaultDescription="TRANSPORT_COST"/>
+        <keyMapping columnObjectName="Script_View" columnName="COST"/>
+      </attribute>
+      <attribute id="CURRENCY" order="9">
+        <descriptions defaultDescription="CURRENCY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CURRENCY"/>
+      </attribute>
+      <attribute id="ACTION" order="10">
+        <descriptions defaultDescription="ACTION"/>
+        <keyMapping columnObjectName="Script_View" columnName="ACTION"/>
+      </attribute>
+      <attribute id="SOURCE" order="11">
+        <descriptions defaultDescription="SOURCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SOURCE"/>
+      </attribute>
+      <attribute id="CARRIERS" order="12">
+        <descriptions defaultDescription="CARRIERS"/>
+        <keyMapping columnObjectName="Script_View" columnName="CARRIERS"/>
+      </attribute>
+      <attribute id="CREATED_BY" order="13">
+        <descriptions defaultDescription="CREATED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATED_BY"/>
+      </attribute>
+      <attribute id="CREATED_ON" order="14">
+        <descriptions defaultDescription="CREATED_ON"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATED_ON"/>
+      </attribute>
+      <attribute id="CHANGED_BY" order="15">
+        <descriptions defaultDescription="CHANGED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CHANGED_BY"/>
+      </attribute>
+      <attribute id="CHANGED_ON" order="16">
+        <descriptions defaultDescription="CHANGED_ON"/>
+        <keyMapping columnObjectName="Script_View" columnName="CHANGED_ON"/>
+      </attribute>
+      <attribute id="CONFLICT_FLAG" order="17">
+        <descriptions defaultDescription="CONFLICT_FLAG"/>
+        <keyMapping columnObjectName="Script_View" columnName="CONFLICT_FLAG"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

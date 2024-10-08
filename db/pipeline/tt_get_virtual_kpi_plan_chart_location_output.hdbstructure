@@ -1,0 +1,14 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "used for virtual kpi plan chart";
+table.columns = [
+  {name = "GEO_ID"; sqlType = VARCHAR; length = 32;},
+  {name = "GEO_NAME"; sqlType = VARCHAR; length = 200;},
+  {name = "SEQUENCE"; sqlType = INTEGER;},
+  {name = "START_TIME"; sqlType = TIMESTAMP;},
+  {name = "END_TIME"; sqlType = TIMESTAMP;},
+  {name = "OUTPUT_KEY"; sqlType = VARCHAR; length = 200;},
+  {name = "OUTPUT_VALUE"; sqlType = DECIMAL; length = 20; scale = 4;},
+  {name = "ALERT"; sqlType = INTEGER;},
+  {name = "OUTPUT_NODE_NAME"; sqlType = VARCHAR; length = 255;}  
+];

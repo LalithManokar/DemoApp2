@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_massupload_execution_history" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_massupload_execution_history"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="INTEGER" id="ID"/>
+        <viewAttribute datatype="VARCHAR" id="DESC" length="500"/>
+        <viewAttribute datatype="INTEGER" id="REC_CRTD"/>
+        <viewAttribute datatype="INTEGER" id="REC_UPD"/>
+        <viewAttribute datatype="INTEGER" id="RECORD_CNT"/>
+        <viewAttribute datatype="TIMESTAMP" id="UPLOAD_TIME"/>
+        <viewAttribute datatype="VARCHAR" id="UPLOADED_BY_NAME" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="STATUS" length="200"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+ BEGIN  
+ 
+  DECLARE NAME VARCHAR(60);       
+  DECLARE READACCESS INTEGER;
+  DECLARE HAVE_AUTHORIZATION_FLAG SMALLINT;
+  DECLARE CUSTOMCONDITION CONDITION FOR SQL_ERROR_CODE 10001;/* Custom Error Code = 10001*/
+  
+  /*User Defined exception handler */
+  
+  DECLARE EXIT HANDLER FOR CUSTOMCONDITION RESIGNAL ;
+
+	HAVE_AUTHORIZATION_FLAG := 0;
+	SELECT IFNULL(USERNAME,'') INTO NAME FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+	
+	
+	SELECT COUNT(1) INTO READACCESS FROM &quot;SYS&quot;.&quot;EFFECTIVE_APPLICATION_PRIVILEGES&quot; T1	
+		WHERE  T1.PRIVILEGE = 'sap.tm.trp.service::MassUploadExecHistoryRead'  AND T1.USER_NAME=:NAME AND IS_VALID='TRUE';
+		
+	IF READACCESS > 0 THEN
+		HAVE_AUTHORIZATION_FLAG := 1;
+	END IF;	   
+ 
+	
+	
+  IF HAVE_AUTHORIZATION_FLAG = 0 THEN
+    /* Signaling Custom error and setting the Custom Error Message */
+    SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'USER DOES NOT HAVE READ ACCESS';
+  END IF;
+  
+  VAR_OUT=
+  SELECT  T2.ID,
+      T3.DESC,
+      T2.REC_CRTD,
+      T2.REC_UPD,      
+      T2.RECORD_CNT,
+      T2.UPLOAD_TIME,
+      CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+           WHEN (T2.USER_ID &lt;> 0 AND T2.USER_ID IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+		   WHEN T2.USER_ID = 0 OR T2.USER_ID IS NULL THEN ''
+		   ELSE '***' END AS UPLOADED_BY_NAME,
+	  T5.DESC AS STATUS
+      FROM
+      &quot;sap.tm.trp.db.massupload::t_massupload_execution_history&quot; T2
+      left join
+      &quot;sap.tm.trp.db.massupload::v_massupload_dataobjects&quot; T3 on T2.DATA_OBJ = T3.DATA_OBJ
+      LEFT JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; T4
+      ON T2.USER_ID = T4.ID
+      LEFT JOIN &quot;sap.tm.trp.db.massupload::t_massupload_status_t&quot; T5 ON T2.STATUS_TYPE_ID = T5.ID
+      LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T9  ON T4.USERNAME = T9.USERNAME
+      CROSS JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege&quot; PRIVILEGE;
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="DESC" order="2">
+        <descriptions defaultDescription="DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+      <attribute id="UPLOAD_TIME" order="6">
+        <descriptions defaultDescription="UPLOAD_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="UPLOAD_TIME"/>
+      </attribute>
+      <attribute id="UPLOADED_BY_NAME" order="7">
+        <descriptions defaultDescription="UPLOADED_BY_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="UPLOADED_BY_NAME"/>
+      </attribute>
+      <attribute id="STATUS" order="8">
+        <descriptions defaultDescription="STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="STATUS"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="ID"/>
+      </measure>
+      <measure id="REC_CRTD" order="3" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="REC_CRTD"/>
+        <measureMapping columnObjectName="Script_View" columnName="REC_CRTD"/>
+      </measure>
+      <measure id="REC_UPD" order="4" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="REC_UPD"/>
+        <measureMapping columnObjectName="Script_View" columnName="REC_UPD"/>
+      </measure>
+      <measure id="RECORD_CNT" order="5" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="REC_CNT"/>
+        <measureMapping columnObjectName="Script_View" columnName="RECORD_CNT"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

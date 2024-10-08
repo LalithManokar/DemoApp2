@@ -1,0 +1,9 @@
+schema = "SAP_TM_TRP";
+query = "SELECT DISTINCT T1.ROLE_ID,T2.LOCATION_ID,'REGIONAL_PLANNER' AS ROLE_TYPE
+ FROM \"sap.tm.trp.db.systemmanagement.user::t_role_region\" T1 
+ INNER JOIN  \"sap.tm.trp.db.systemmanagement.location::v_region_location_all\" T2 ON (T1.ROOT_ID = T2.ROOT_ID)
+ UNION 
+ SELECT T1.ROLE_ID,T1.LOCATION_ID,'DEPOT_PLANNER' AS ROLE_TYPE
+ FROM \"sap.tm.trp.db.systemmanagement.user::t_role_location\" T1";
+ depends_on_view = ["sap.tm.trp.db.systemmanagement.location::v_region_location_all"];
+ depends_on_table = ["sap.tm.trp.db.systemmanagement.user::t_role_region",  "sap.tm.trp.db.systemmanagement.user::t_role_location"];

@@ -1,0 +1,168 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_resource_balance_man_act_validation" 
+	(
+	IN ID BIGINT,
+	IN IV_ACTIVITY_TYPE INTEGER,
+	IN IV_NETWORK_SETTING_GROUP_ID BIGINT,
+	IN IV_SD_PLAN_ID BIGINT,
+	IN IV_SCENARIO_ID BIGINT,
+	IN IV_RES_CAT NVARCHAR(22),
+	IN IV_QUANTITY DECIMAL(13,3),
+	IN IV_FROM_LOCATION VARCHAR(22),
+    IN IV_TO_LOCATION VARCHAR(22),
+    IN IV_START_TIME DATETIME,
+    IN IV_END_TIME DATETIME,
+    IN IT_LOAD_DISCHARGE_DETAIL "sap.tm.trp.db.planningcockpit::tt_load_discharge_detail",
+	OUT EV_MESSAGE VARCHAR(200)
+	) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+	
+	DECLARE LV_EXECUTION_ID BIGINT;
+    DECLARE LV_NODE_ID BIGINT;
+    DECLARE LV_HANDLING_CAPA INTEGER;
+    DECLARE LV_SRC_REMAINING_CAPACITY BIGINT;
+    DECLARE LV_DEST_REMAINING_CAPACITY BIGINT;
+    DECLARE LV_COUNT INTEGER;
+    DECLARE LV_QUANTITY_IN_SIM DECIMAL(13,3);
+	DECLARE LV_TIME_ZONE_ID VARCHAR(20);
+	DECLARE LV_MIN_INTERVAL_ID INT;
+    
+    CALL "sap.tm.trp.db.planningcockpit::p_get_network_setting_handling_capacity_value"(:IV_NETWORK_SETTING_GROUP_ID, :IV_SD_PLAN_ID, :LV_HANDLING_CAPA);
+  	IF :LV_HANDLING_CAPA = 1 THEN
+  	--GET EXECUTION_ID NODE_ID
+    SELECT MAX(ID)  INTO LV_EXECUTION_ID
+    FROM "sap.tm.trp.db.pipeline::t_plan_execution"
+    WHERE PLAN_MODEL_ID = :IV_SD_PLAN_ID;
+
+    --Get the timezone id of the location filter of SD Plan 
+	SELECT T3.TIMEZONE_ID INTO LV_TIME_ZONE_ID 
+		FROM "sap.tm.trp.db.pipeline::t_plan_model" T1 
+		INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2 ON T2.ID = T1.FILTER_GROUP_ID
+		INNER JOIN "sap.tm.trp.db.filter::t_time_filter" T3 ON T2.TIME_FILTER_ID = T3.ID
+		WHERE T1.ID = :IV_SD_PLAN_ID; 
+
+    CALL "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid"(:LV_EXECUTION_ID, :LV_NODE_ID);
+    
+	--get pure supply and demand result
+	IF (:IV_ACTIVITY_TYPE = 1 OR :IV_ACTIVITY_TYPE = 2 ) THEN	
+		lt_loc = SELECT IV_FROM_LOCATION AS LOC_ID FROM DUMMY
+		         UNION
+		         SELECT IV_TO_LOCATION AS LOC_ID FROM DUMMY;
+		         
+		CALL "sap.tm.trp.db.planningcockpit::p_origin_sd_stock_cutoff_by_location"
+		(
+			:LV_EXECUTION_ID,
+			:IV_SD_PLAN_ID,
+			:LV_NODE_ID,
+			:LT_LOC,
+			LT_PURE_SD,
+			LT_INITIAL_STOCK
+		);
+	ELSE
+		CALL "sap.tm.trp.db.planningcockpit::p_origin_sd_stock_cutoff"
+		(
+			:LV_EXECUTION_ID,
+			:IV_SD_PLAN_ID,
+			:LV_NODE_ID,
+			LT_PURE_SD,
+			LT_INITIAL_STOCK
+		);	
+	END IF ;
+
+	SELECT MIN(TIME_INTERVAL_ID) INTO LV_MIN_INTERVAL_ID FROM :LT_PURE_SD;
+    
+    LT_PURE_SD =  SELECT T0.LOCATION_ID,
+    					 T0.LOCATION_NAME,
+					 	 T0.EQUIP_TYPE_ID,      
+    					 T0.TIME_INTERVAL_ID,
+    					 T0.START_TIME,
+    					 T0.END_TIME,
+    					 IFNULL(T0.SUPPLY-T1.INIT_STOCK,SUPPLY) AS SUPPLY,
+    					 DEMAND
+    				FROM :LT_PURE_SD T0
+    				LEFT JOIN :LT_INITIAL_STOCK T1 
+    				ON T0.LOCATION_ID = T1.LOCATION_ID
+                 	AND T0.EQUIP_TYPE_ID = T1.RESOURCE_TYPE
+                    AND T0.TIME_INTERVAL_ID =:LV_MIN_INTERVAL_ID; 
+	
+	--check whether the overdue, on&off-hire, maintanence and repaire activity should be consider into SD plan.
+	call "sap.tm.trp.db.planningcockpit::p_origin_sd_stock_cutoff_pure_transportation"
+	(
+		:LV_EXECUTION_ID,
+		:IV_NETWORK_SETTING_GROUP_ID,
+		:LT_PURE_SD,
+		LT_PURE_SD
+	);
+	
+	--get the supply and demand with handling capacity for each location
+	CALL "sap.tm.trp.db.planningcockpit::p_get_location_handling_capacity"(:LT_PURE_SD, :LV_TIME_ZONE_ID, :IV_RES_CAT, LT_LOC_SD_W_CAPA);
+	
+  	IF (:IV_ACTIVITY_TYPE = 1 OR :IV_ACTIVITY_TYPE = 2 ) THEN  	
+  		--calculate the source location remaining capacity	
+		LT_SRC_REM_CAPA = SELECT (HANDLING_CAPACITY - (SUPPLY + DEMAND)) AS REM_CAPA,LOCATION_ID,START_TIME,END_TIME FROM :LT_LOC_SD_W_CAPA 
+		WHERE LOCATION_ID = :IV_FROM_LOCATION 
+		AND (START_TIME <= :IV_START_TIME AND END_TIME> :IV_START_TIME);	
+		SELECT COUNT (*) INTO LV_COUNT FROM :LT_SRC_REM_CAPA;
+		IF :LV_COUNT = 1 THEN 	
+			--calculate the used capacity in this scenario.
+			SELECT IFNULL(SUM(QUANTITY),0) INTO LV_QUANTITY_IN_SIM FROM "sap.tm.trp.db.planningcockpit::t_activity" AS A
+			JOIN :LT_SRC_REM_CAPA AS B
+			ON (A.FROM_LOC_ID = B.LOCATION_ID AND A."ID" <> :ID AND (A.START_TIME >= B.START_TIME AND A.START_TIME < B.END_TIME))
+			WHERE A.REL_SCENARIO_ID = :IV_SCENARIO_ID 
+			  AND A.FROM_LOC_ID = :IV_FROM_LOCATION ;
+			  
+			SELECT REM_CAPA INTO LV_SRC_REMAINING_CAPACITY FROM :LT_SRC_REM_CAPA;
+			
+			IF (:LV_SRC_REMAINING_CAPACITY - :LV_QUANTITY_IN_SIM) < :IV_QUANTITY THEN
+				EV_MESSAGE := 'MSG_EXCEED_SRC_HANDING_CAPACITY';
+	        	RETURN;
+			END IF ;
+		END IF ;
+			
+		--calculate the destination location remaining capacity
+		LT_DEST_REM_CAPA = SELECT (HANDLING_CAPACITY - (SUPPLY + DEMAND)) AS REM_CAPA,LOCATION_ID,START_TIME,END_TIME FROM :LT_LOC_SD_W_CAPA
+		WHERE LOCATION_ID = :IV_TO_LOCATION 
+		AND (START_TIME <= :IV_END_TIME AND END_TIME> :IV_END_TIME);
+		SELECT COUNT (*) INTO LV_COUNT FROM :LT_DEST_REM_CAPA;
+		IF :LV_COUNT = 1 THEN 
+			--calculate the used capacity in this scenario.
+			SELECT IFNULL(SUM(QUANTITY),0) INTO LV_QUANTITY_IN_SIM FROM "sap.tm.trp.db.planningcockpit::t_activity" AS A
+			JOIN :LT_DEST_REM_CAPA AS B
+			ON (A.TO_LOC_ID = B.LOCATION_ID AND A."ID" <> :ID AND (A.END_TIME >= B.START_TIME AND A.END_TIME < B.END_TIME))
+			WHERE A.REL_SCENARIO_ID = :IV_SCENARIO_ID 
+			  AND A.TO_LOC_ID = :IV_TO_LOCATION ;
+			
+			SELECT REM_CAPA INTO LV_DEST_REMAINING_CAPACITY FROM :LT_DEST_REM_CAPA;
+			
+			IF (:LV_DEST_REMAINING_CAPACITY - :LV_QUANTITY_IN_SIM) < :IV_QUANTITY THEN
+				EV_MESSAGE := 'MSG_EXCEED_DEST_HANDING_CAPACITY';
+	        	RETURN;
+			END IF ;
+		END IF ;
+	ELSEIF :IV_ACTIVITY_TYPE = 11 THEN		
+		DECLARE LV_LOC_REMAINING_CAPACITY BIGINT;
+		DECLARE CURSOR cur_load_discharge FOR 
+		SELECT STOP_ID,PLAN_ARRIVAL_TIME,PLAN_DEPARTURE_TIME,UPDATED_LOAD_QUANTITY,LOAD_QUANTITY,UPDATED_DISCHARGE_QUANTITY,DISCHARGE_QUANTITY FROM :IT_LOAD_DISCHARGE_DETAIL;
+		
+		FOR lc_activity as cur_load_discharge DO
+			--calculate the location remaining capacity
+			LT_LOC_REM_CAPA = SELECT (HANDLING_CAPACITY - (SUPPLY + DEMAND)) AS REM_CAPA FROM :LT_LOC_SD_W_CAPA
+			WHERE LOCATION_ID = lc_activity.STOP_ID 
+			AND (START_TIME <= lc_activity.PLAN_DEPARTURE_TIME AND END_TIME> lc_activity.PLAN_DEPARTURE_TIME);
+			
+			SELECT COUNT (*) INTO LV_COUNT FROM :LT_LOC_REM_CAPA;
+			IF :LV_COUNT = 1 THEN 
+				SELECT REM_CAPA INTO LV_LOC_REMAINING_CAPACITY FROM :LT_LOC_REM_CAPA;
+				--calculate deltal quantity for location
+				IF ((lc_activity.UPDATED_LOAD_QUANTITY - lc_activity.LOAD_QUANTITY)+(lc_activity.UPDATED_DISCHARGE_QUANTITY - lc_activity.DISCHARGE_QUANTITY)) > LV_LOC_REMAINING_CAPACITY THEN 
+					EV_MESSAGE := 'MSG_EXCEED_DEST_HANDING_CAPACITY';
+	        		RETURN;
+				END IF;
+			END IF ;	
+		END FOR ;
+  	END IF ;  		
+  END IF;
+END;

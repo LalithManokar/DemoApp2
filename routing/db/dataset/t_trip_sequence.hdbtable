@@ -1,0 +1,10 @@
+table.schemaName = "SAP_TM_ROUTING";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "TRIP_ID"; sqlType = BIGINT; },
+    {name = "SEQUENCE"; sqlType = INTEGER; },
+    {name = "LOCATION"; sqlType = NVARCHAR; length = 50; },
+    {name = "DEPARTURE_TIME"; sqlType = TIMESTAMP; },
+    {name = "ARRIVAL_TIME"; sqlType = TIMESTAMP; }
+];
+table.primaryKey.pkcolumns = ["TRIP_ID", "SEQUENCE"];

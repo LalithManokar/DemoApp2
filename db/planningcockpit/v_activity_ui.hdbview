@@ -1,0 +1,99 @@
+schema = "SAP_TM_TRP";
+
+query  = "SELECT T1.ID,
+                 T1.CODE,
+                 T4.DESC AS TYPE,
+                 T1.ACTIVITY_TYPE_ID AS ACTIVITY_TYPE,
+                 T5.DESC AS ACTIVITY_DESC,
+                 T1.EQUIP_TYPE,
+                 T1.QUANTITY,
+                 T1.UOM,
+                 T1.FROM_LOC_ID,
+                 T2.NAME AS FROM_LOC_NAME,
+                 T2.XPOS AS FROM_LOC_XPOS,
+                 T2.YPOS AS FROM_LOC_YPOS,
+                 T1.TO_LOC_ID,
+                 T3.NAME AS TO_LOC_NAME,
+                 T3.XPOS AS TO_LOC_XPOS,
+                 T3.YPOS AS TO_LOC_YPOS,
+                 T1.COST,
+                 T1.CURRENCY AS CURRENCY,
+                 T1.START_TIME AS START_DATE,
+                 T1.END_TIME AS END_DATE,
+                 T1.CONTRACT_NO,
+				 T16.LEASE_CONTRACT_REFERENCE,
+                 T1.REL_SCENARIO_ID,
+                 T1.STATUS AS ACTIVITY_STATUS_CODE,
+                 T15.ACTIVITY_STATUS_NAME,
+                 T15.ACTIVITY_STATUS_DESC,
+                 IFNULL(T1.MODIFIED_ON, T1.CREATED_ON) AS LAST_MODIFIED_TIME,
+                 T1.ROUTE_ID,
+                 T9.BASIC_COST,
+                 T10.TRIP_ID,
+                 T10.VOYAGE,
+                 T10.SCHEDULE,
+                 T10.VEHICLE,
+                 T10.VEHICLE_TYPE,
+                 T1.PORT_LOC_ID,
+                 T6.NAME AS PORT_LOC_NAME                                 
+            FROM (SELECT ID,CODE,ACTIVITY_TYPE_ID,EQUIP_TYPE,QUANTITY,UOM,
+                 CASE WHEN ACTIVITY_TYPE_ID = 11 THEN NULL ELSE FROM_LOC_ID END AS FROM_LOC_ID,
+                 TO_LOC_ID,COST,CURRENCY,START_TIME,END_TIME, CONTRACT_NO,
+                 REL_SCENARIO_ID,ROUTE_ID,STATUS,MODIFIED_ON,CREATED_ON,
+                 CASE WHEN ACTIVITY_TYPE_ID = 11 THEN FROM_LOC_ID ELSE NULL END AS PORT_LOC_ID 
+                 FROM \"sap.tm.trp.db.planningcockpit::t_activity\" ) AS T1
+            LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_all_location\" t2 ON t1.FROM_LOC_ID = t2.ID
+            LEFT OUTER JOIN  \"sap.tm.trp.db.semantic.location::v_all_location\" t3 ON t1.TO_LOC_ID = t3.ID
+            LEFT OUTER JOIN  \"sap.tm.trp.db.semantic.location::v_all_location\" t6 ON t1.PORT_LOC_ID = t6.ID                       
+            LEFT OUTER JOIN
+            ( SELECT ACTIVITY_ID, TRIP_ID,VOYAGE,SCHEDULE, VEHICLE, VEHICLE_TYPE FROM
+              (
+              SELECT ACTIVITY_ID, TRIP_ID,VOYAGE,SCHEDULE, VEHICLE, VEHICLE_TYPE,
+              ROW_NUMBER() over (partition by ACTIVITY_ID order by SEQUENCE) AS SEQ
+              FROM \"sap.tm.trp.db.planningcockpit::t_load_discharge_activity_detail\"
+              )            
+              WHERE SEQ = 1
+            ) t10 ON t1.ID = T10.ACTIVITY_ID
+            LEFT OUTER JOIN
+            (SELECT ID, DESC
+             FROM \"sap.tm.trp.db.planningcockpit::t_activity_type_t\" TA
+             INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" TB ON (TA.SPRAS = TB.SPRAS)
+            ) T4 ON t1.ACTIVITY_TYPE_ID = t4.ID
+            LEFT OUTER JOIN
+            (SELECT TA.ID, TA.DESC
+             FROM \"sap.tm.trp.db.planningcockpit::t_activity_t\" TA
+             INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" TB ON (TA.SPRAS = TB.SPRAS)
+            ) T5 ON t1.ID = t5.ID
+            LEFT OUTER JOIN 
+			(
+			  SELECT T12.STATUS AS ACTIVITY_STATUS,IFNULL(T14.NAME,T12.NAME) AS ACTIVITY_STATUS_NAME,
+			  IFNULL(T14.DESC,T12.DESC) AS ACTIVITY_STATUS_DESC
+			  FROM \"sap.tm.trp.db.planningcockpit::t_status\" T12
+			  LEFT OUTER JOIN
+			  (
+			    SELECT T13.STATUS,T13.CATEGORY,T13.NAME,T13.DESC
+			    FROM  \"sap.tm.trp.db.planningcockpit::t_status_t\" T13
+			    INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" T14 ON (T13.LANG_CODE = T14.SPRAS)
+			  ) T14 ON (T12.STATUS = T14.STATUS AND T12.CATEGORY = T14.CATEGORY)
+			  WHERE T12.CATEGORY = '03'
+            )T15 ON (T1.STATUS = T15.ACTIVITY_STATUS)
+            LEFT OUTER JOIN
+			(  
+			  SELECT T7.ID,SUM(T8.STORAGE_COST+T8.HANDLING_COST+T8.TRANSPORT_COST) AS BASIC_COST
+              FROM \"sap.tm.trp.db.planningcockpit::t_activity\" T7
+              INNER JOIN \"sap.tm.trp.routing.db.path::v_route_sequence\" T8  ON (T7.ROUTE_ID = T8.ROUTE_ID)
+              GROUP BY T7.ID
+            )T9 ON (T1.ID = T9.ID)
+            LEFT OUTER JOIN \"sap.tm.trp.db.leasecontract::t_lease_contract\" T16 ON (T1.CONTRACT_NO = T16.ID)							              " ;
+
+depends_on_view  = ["sap.tm.trp.db.semantic.common::v_lang_code",
+                    "sap.tm.trp.db.semantic.location::v_all_location",
+                    "sap.tm.trp.routing.db.path::v_route_sequence"];
+
+depends_on_table = ["sap.tm.trp.db.planningcockpit::t_status",
+                      "sap.tm.trp.db.planningcockpit::t_status_t",
+                      "sap.tm.trp.db.planningcockpit::t_activity",
+                    "sap.tm.trp.db.planningcockpit::t_activity_t",
+                    "sap.tm.trp.db.planningcockpit::t_activity_type_t",
+                    "sap.tm.trp.db.planningcockpit::t_load_discharge_activity_detail",
+                    "sap.tm.trp.db.leasecontract::t_lease_contract"];

@@ -1,0 +1,20 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_time_filter_in_plan_check" (
+    IN TIME_FILTER_ID BIGINT,
+    OUT PLAN_FLAG VARCHAR(1)
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+ 
+
+
+ SELECT 
+ 	CASE WHEN COUNT(*) > 0 THEN 'Y' ELSE 'N' END INTO PLAN_FLAG
+ FROM "sap.tm.trp.db.filter::t_filter_group"
+ WHERE TIME_FILTER_ID = :TIME_FILTER_ID
+ ;
+ 
+ 
+END;

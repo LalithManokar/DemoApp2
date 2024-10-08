@@ -1,0 +1,138 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_cost_dataset_save"(
+   IN COST_DATASET_ID BIGINT, --IF NEW CREATED, PASS -1 AS COST_DATASET_ID
+    IN NAME NVARCHAR(50),
+    IN DESC VARCHAR(500),
+    IN COST_TYPE_CODE NVARCHAR(20), 
+    IN CURRENCY_CODE NVARCHAR(20),
+    IN CONNECTION_TYPE_CODE NVARCHAR(20),
+    IN DEFAULT_UOM_CODE NVARCHAR(20),
+    IN PURCHASE_ORG_ID NVARCHAR(20),
+    IN AGREEMENT_ID NVARCHAR(20),
+    IN PROFILE_ID NVARCHAR(40),
+    IN EXPIRED_DURATION INTEGER,
+    IN CARRIER_ID_LIST "sap.tm.trp.db.costmodel::tt_carrier_id",
+    IN CONNECTION_ID VARCHAR(100),
+    IN RESOURCE_CATEGORY NVARCHAR(20),
+    OUT OUT_MESSAGE VARCHAR(50),
+    OUT ID BIGINT
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE USER_ID BIGINT;
+    DECLARE VAR_COST_DATASET_ID BIGINT := :COST_DATASET_ID;
+    DECLARE COST_TYPE_CODE_LOCATION_BASED_COST VARCHAR(30) :='LOCATION_BASED_COST';
+    DECLARE COST_TYPE_CODE_DISTANCE_BASED_COST VARCHAR(30) :='DISTANCE_BASED_COST';
+    DECLARE COST_TYPE_CODE_HANDLING_BASED_COST VARCHAR(30) :='HANDLING_COST';
+    DECLARE COST_TYPE_QTY_STORAGE_COST VARCHAR(30) :='QTY_STORAGE_COST';
+    DECLARE COST_TYPE_TIME_STORAGE_COST VARCHAR(30) :='TIME_STORAGE_COST';
+    DECLARE ACTION_CREATE_CODE VARCHAR(20) :='CREATE';
+    DECLARE ACTION_UPDATE_CODE VARCHAR(20) :='UPDATE';
+    DECLARE RETURN_CODE TINYINT;
+    DECLARE I_COUNT INTEGER;
+    OUT_MESSAGE :='MSG_SUCCESS_STATUS';
+    
+    ID := :COST_DATASET_ID;
+    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+     
+     --IF This is the first time to save the dataset (create), then need to get a cost_dataset_id.
+    IF :COST_DATASET_ID = -1 THEN
+        SELECT "sap.tm.trp.db.costmodel::s_cost_dataset".NEXTVAL INTO VAR_COST_DATASET_ID FROM DUMMY;
+        
+        ID := :VAR_COST_DATASET_ID;
+        
+     UPSERT "sap.tm.trp.db.costmodel::t_cost_dataset"
+    (ID, NAME, DESC, COST_TYPE_CODE,CURRENCY_CODE,CONNECTION_TYPE_CODE,DEFAULT_UOM_CODE,
+     PURCHASE_ORG_ID,AGREEMENT_ID,PROFILE_ID,EXPIRED_DURATION,CREATED_BY,CREATED_ON,LAST_MODIFIED_BY,LAST_MODIFIED_ON,RESOURCE_CATEGORY )
+     
+     SELECT :VAR_COST_DATASET_ID,UPPER(:NAME), :DESC, :COST_TYPE_CODE, :CURRENCY_CODE,:CONNECTION_TYPE_CODE,:DEFAULT_UOM_CODE,
+            :PURCHASE_ORG_ID, :AGREEMENT_ID,:PROFILE_ID,:EXPIRED_DURATION,
+            IFNULL(T1.CREATED_BY,:USER_ID) AS CREATED_BY,IFNULL(T1.CREATED_ON,CURRENT_UTCTIMESTAMP) AS CREATED_ON,:USER_ID, CURRENT_UTCTIMESTAMP,:RESOURCE_CATEGORY 
+    --FROM "sap.tm.trp.db.costmodel::t_cost_dataset" T1 WHERE ID = :VAR_COST_DATASET_ID;
+       FROM (  SELECT NULL AS CREATED_BY,NULL AS CREATED_ON  FROM DUMMY )T1;
+     
+            
+    
+   ELSE  
+    --update, check if the input CURRENCY_CODE equals the currency_code in DB, if no, check if it is assigned to a cost model, if yes, return error code:
+    SELECT COUNT(1) INTO I_COUNT
+    FROM "sap.tm.trp.db.costmodel::t_cost_dataset" T1
+    INNER JOIN "sap.tm.trp.db.costmodel::t_cost_model_dataset" T2 ON (T1.ID = T2.COST_DATASET_ID)
+    WHERE T1.ID = :COST_DATASET_ID AND T1.CURRENCY_CODE <> :CURRENCY_CODE;
+    
+    IF I_COUNT >0 THEN
+     	 OUT_MESSAGE := 'MSG_CURRENCY_CHANGE_ERROR_COST_DATASET';
+      	RETURN;
+    END IF;             
+   
+    NETWORK_SETTING_GROUP_ID_LIST =
+    	SELECT T3.USED_OBJECT_ID AS ID
+    	FROM "sap.tm.trp.db.whereusedlist::v_used_cost_dataset" T0
+    	INNER JOIN "sap.tm.trp.db.costmodel::t_cost_dataset" T1 ON T1.NAME = T0.OBJECT_CODE
+    	INNER JOIN "sap.tm.trp.db.costmodel::t_cost_model_new" T2 ON T2.ID = T0.USED_OBJECT_ID
+    	INNER JOIN "sap.tm.trp.db.whereusedlist::v_used_cost_model" T3 ON T3.OBJECT_CODE = T2.NAME
+    	WHERE T0.CATEGORY = 'COSTDATASET' 
+    		AND T3.CATEGORY = 'Network Setting Group' 
+    		AND T1.ID = :COST_DATASET_ID
+    	;
+    CALL "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_invalidate_network_by_setting_group"(:NETWORK_SETTING_GROUP_ID_LIST,'C',RETURN_CODE,MESSAGE,LOG); 
+    
+   
+    
+   
+
+    
+ 
+    UPSERT "sap.tm.trp.db.costmodel::t_cost_dataset"
+    (ID, NAME, DESC, COST_TYPE_CODE,CURRENCY_CODE,CONNECTION_TYPE_CODE,DEFAULT_UOM_CODE,
+    PURCHASE_ORG_ID,AGREEMENT_ID,PROFILE_ID,EXPIRED_DURATION,CREATED_BY,CREATED_ON,LAST_MODIFIED_BY,LAST_MODIFIED_ON,RESOURCE_CATEGORY )
+     SELECT :VAR_COST_DATASET_ID,UPPER(:NAME), :DESC, :COST_TYPE_CODE, :CURRENCY_CODE,:CONNECTION_TYPE_CODE,:DEFAULT_UOM_CODE,
+     :PURCHASE_ORG_ID, :AGREEMENT_ID,:PROFILE_ID,:EXPIRED_DURATION,
+     IFNULL(T1.CREATED_BY,:USER_ID) AS CREATED_BY,IFNULL(T1.CREATED_ON,CURRENT_UTCTIMESTAMP) AS CREATED_ON,:USER_ID, CURRENT_UTCTIMESTAMP,:RESOURCE_CATEGORY 
+    --FROM "sap.tm.trp.db.costmodel::t_cost_dataset" T1 WHERE ID = :VAR_COST_DATASET_ID;
+    FROM (
+	   
+	    SELECT A.CREATED_BY ,A.CREATED_ON
+	    FROM "sap.tm.trp.db.costmodel::t_cost_dataset" A WHERE ID = :VAR_COST_DATASET_ID
+     )T1;
+     
+     
+      END IF;
+     
+  
+    DELETE FROM "sap.tm.trp.db.costmodel::t_cost_dataset_carrier" WHERE COST_DATASET_ID = :VAR_COST_DATASET_ID;
+    
+    INSERT INTO "sap.tm.trp.db.costmodel::t_cost_dataset_carrier"(COST_DATASET_ID,CARRIER_ID)
+    SELECT :VAR_COST_DATASET_ID,ID AS CARRIER_ID FROM :CARRIER_ID_LIST;
+    
+     IF :COST_DATASET_ID = -1 THEN
+	    INSERT INTO "sap.tm.trp.db.costmodel::t_cost_dataset_history"(ID,COST_DATASET_ID,USER_ID,ACTION_CODE,ACTION_TIME)
+		VALUES ("sap.tm.trp.db.costmodel::s_cost_dataset_history".nextVal,:VAR_COST_DATASET_ID,:USER_ID,:ACTION_CREATE_CODE,CURRENT_UTCTIMESTAMP);
+    ELSE
+        INSERT INTO "sap.tm.trp.db.costmodel::t_cost_dataset_history"(ID,COST_DATASET_ID,USER_ID,ACTION_CODE,ACTION_TIME)
+		VALUES ("sap.tm.trp.db.costmodel::s_cost_dataset_history".nextVal,:VAR_COST_DATASET_ID,:USER_ID,:ACTION_UPDATE_CODE,CURRENT_UTCTIMESTAMP);
+    END IF;
+   
+    INSERT INTO "sap.tm.trp.db.costmodel::t_cost_dataset_history" (ID,COST_DATASET_ID,USER_ID,ACTION_CODE,ACTION_TIME)
+    SELECT "sap.tm.trp.db.costmodel::s_cost_dataset_history".nextval,:VAR_COST_DATASET_ID,USER_ID,ACTION_CODE,ACTION_TIME
+    FROM "sap.tm.trp.db.costmodel::t_cost_dataset_history_temporary"
+    WHERE  CONNECTION_ID = :CONNECTION_ID;
+    
+    DELETE FROM  "sap.tm.trp.db.costmodel::t_cost_dataset_history_temporary" WHERE CONNECTION_ID = :CONNECTION_ID;
+
+
+      IF :COST_TYPE_CODE = :COST_TYPE_CODE_HANDLING_BASED_COST THEN
+           CALL "sap.tm.trp.db.costmodel::sp_handling_based_cost_save"(:VAR_COST_DATASET_ID,:CONNECTION_ID);
+      ELSEIF :COST_TYPE_CODE = :COST_TYPE_CODE_LOCATION_BASED_COST THEN
+          CALL "sap.tm.trp.db.costmodel::sp_location_based_cost_save"(:VAR_COST_DATASET_ID,:CONNECTION_ID);
+      ELSEIF :COST_TYPE_CODE = :COST_TYPE_CODE_DISTANCE_BASED_COST THEN
+          CALL "sap.tm.trp.db.costmodel::sp_distance_based_cost_save"(:VAR_COST_DATASET_ID,:CONNECTION_ID);
+      ELSEIF :COST_TYPE_CODE = :COST_TYPE_QTY_STORAGE_COST THEN
+         CALL "sap.tm.trp.db.costmodel::sp_quantity_based_storage_cost_save" (:VAR_COST_DATASET_ID,:CONNECTION_ID);
+      ELSEIF :COST_TYPE_CODE = :COST_TYPE_TIME_STORAGE_COST THEN
+        CALL "sap.tm.trp.db.costmodel::sp_time_based_storage_cost_save" (:VAR_COST_DATASET_ID,:CONNECTION_ID);
+      END IF;
+  	
+END;

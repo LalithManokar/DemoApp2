@@ -1,0 +1,20 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.consistencycheck::p_remove_flag_values_for_all_sd_plans_used_in_vsd" ( ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+/************************************************************************** 
+	Remove flag(ASSIGNED_TO_VIRTUAL) value for all SD plans used in VSD plans
+ ***************************************************************************/
+  UPDATE "sap.tm.trp.db.pipeline::t_plan_model" SET ASSIGNED_TO_VIRTUAL = NULL WHERE ID IN (
+	  SELECT ID
+	  FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+	  INNER JOIN (
+	  	SELECT DISTINCT(PERSISTED_PLAN_MODEL_ID) FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan"
+	  ) T2
+	  ON T1.ID = T2.PERSISTED_PLAN_MODEL_ID
+	  WHERE PLAN_MODEL_TYPE_ID = 1 AND ASSIGNED_TO_VIRTUAL = 'X' 
+  );
+ 
+END;

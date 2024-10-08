@@ -1,0 +1,93 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_lease_contract_hire_condition_validate" (
+	IN HIRE_TERM_INPUT "sap.tm.trp.db.massupload::tt_lease_contract_hire_condition",
+    IN ERROR_LIMIT INTEGER,
+    OUT INVALID_ITEMS "sap.tm.trp.db.massupload::tt_massupload_invalid_item" 
+    ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+
+	--Declarations
+	DECLARE CNT INT;
+	
+	ITEMS = SELECT HTI.LEASE_CONTRACT_REFERENCE, HTI.ROW_INDEX FROM :HIRE_TERM_INPUT HTI WHERE HTI.LEASE_CONTRACT_REFERENCE
+		        NOT IN (SELECT LEASE_CONTRACT_REFERENCE FROM "sap.tm.trp.db.leasecontract::t_lease_contract");
+	
+	
+	--VALIDATE if LEASE_CONTRACT_REFERENCE exists in system 
+	INVALID_ITEMS =  SELECT   A.ROW_INDEX,
+	               		      1 AS COL_INDEX,
+		               		 'LEASE_CONTRACT_REFERENCE_NOT_EXISTS' AS REASON_CODE
+		          			 FROM :ITEMS AS A;
+		          			 
+	ITEMS_1 = SELECT LOCATION_TYPE,LOCATION,ROW_INDEX FROM (
+		            SELECT HTI.LOCATION_TYPE, HTI.LOCATION,HTI.ROW_INDEX,
+		            CASE WHEN HTI.LOCATION_TYPE = '1' AND HTI.LOCATION = A.NAME THEN '1'
+		            	 WHEN HTI.LOCATION_TYPE = '2' AND HTI.LOCATION = B.CODE THEN '1'
+		            	 WHEN HTI.LOCATION_TYPE = '3' AND HTI.LOCATION = A.NAME THEN '1'
+		            	 WHEN HTI.LOCATION_TYPE = '4' AND HTI.LOCATION = D.CODE THEN '1'
+		            	 WHEN HTI.LOCATION_TYPE = '5' AND HTI.LOCATION = C.NAME THEN '1'
+		            	 WHEN HTI.LOCATION_TYPE = '6' AND HTI.LOCATION = E.CODE THEN '1'
+		            	 WHEN HTI.LOCATION_TYPE IS NULL AND HTI.LOCATION = '' THEN '1'
+		            	 WHEN HTI.LOCATION_TYPE IS NOT NULL AND HTI.LOCATION = '' THEN '0'
+		            	 WHEN HTI.LOCATION_TYPE IS NULL AND HTI.LOCATION IS NOT NULL THEN '0'
+		            	 ELSE '2' END AS FLAG
+		            FROM :HIRE_TERM_INPUT HTI
+		            LEFT JOIN "sap.tm.trp.db.semantic.location::v_location" AS A
+		            ON HTI.LOCATION = A.NAME
+		            LEFT JOIN "sap.tm.trp.db.systemmanagement::t_location_group" AS B
+		            ON HTI.LOCATION = B.CODE
+		            LEFT JOIN "sap.tm.trp.db.semantic.location::v_zone" AS C
+		            ON HTI.LOCATION = C.NAME
+		            LEFT JOIN "sap.tm.trp.db.systemmanagement::t_zone_group" AS D
+		            ON HTI.LOCATION = D.CODE
+		            LEFT JOIN "sap.tm.trp.db.systemmanagement::t_region_group" AS E
+		            ON HTI.LOCATION = E.CODE
+		            )
+		            WHERE FLAG IN (0,2);
+		            
+		            
+	--VALIDATE if location type and location id is match 
+	INVALID_ITEMS =  SELECT * FROM :INVALID_ITEMS
+		             UNION ALL
+		             SELECT   X.ROW_INDEX,
+	               		      4 AS COL_INDEX,
+		               		 'EITHER_LOCATION_TYPE_IS_BLANK_OR_LOCATION_ID_MISMATCH' AS REASON_CODE
+		          			 FROM :ITEMS_1 AS X;
+	
+	ITEMS_2 =   SELECT ROW_INDEX FROM (
+			        SELECT HTI.EQUIPMENT,HTI.ROW_INDEX,
+				    CASE WHEN HTI.EQUIPMENT =  EQ1.RESOURCE_TYPE_CODE THEN '1'
+	    	      	     WHEN HTI.EQUIPMENT = EQ2.CODE THEN '1' 
+	    	      	     WHEN HTI.EQUIPMENT = '' THEN '1'
+	    	      	     ELSE '0'
+	    	      	     END AS FLAG1    
+					FROM :HIRE_TERM_INPUT HTI
+			       	INNER JOIN "sap.tm.trp.db.leasecontract::t_lease_contract" AS LC
+			        ON HTI.LEASE_CONTRACT_REFERENCE = LC.LEASE_CONTRACT_REFERENCE
+			        LEFT JOIN "sap.tm.trp.db.semantic.resource::v_resource_type" EQ1
+			        ON HTI.EQUIPMENT = EQ1.RESOURCE_TYPE_CODE
+			        LEFT JOIN "sap.tm.trp.db.systemmanagement::t_equipment_group" EQ2
+			        ON HTI.EQUIPMENT = EQ2.CODE) 
+			        WHERE FLAG1 = '0';
+			
+	--VALIDATE if equipment is match 
+	INVALID_ITEMS =  SELECT * FROM :INVALID_ITEMS
+		             UNION ALL
+		             SELECT   Y.ROW_INDEX,
+	               		      5 AS COL_INDEX,
+		               		 'EQUIPMENT_MISMATCH' AS REASON_CODE
+		          			 FROM :ITEMS_2 AS Y;
+
+
+	
+	--Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;	
+
+END;

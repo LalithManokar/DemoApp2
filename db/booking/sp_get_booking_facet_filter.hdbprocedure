@@ -1,0 +1,280 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.booking::sp_get_booking_facet_filter" (
+    IN EQUIPMENT_FILTER_ID BIGINT,
+    IN LOCATION_FILTER_ID BIGINT, 
+    IN FILTER_ON TINYINT, 
+    IN FROM_DATE TIMESTAMP,
+    IN TO_DATE TIMESTAMP,
+    IN BOOKING_TYPE NVARCHAR(2),
+    IN LOCATION NVARCHAR(20),
+    IN EQUIPMENT_TYPE NVARCHAR(10),
+    IN DATA_PROVIDER_TYPE NVARCHAR(2),
+    IN FUZZYSEARCH_TEXT NVARCHAR(500),
+    IN TU_TYPE_LIST_INPUT "sap.tm.trp.db.booking::tt_str_list",
+    IN RESOURCE_TYPE_LIST_INPUT "sap.tm.trp.db.booking::tt_str_list",
+    IN PLANNING_RELEVANT_LIST_INPUT "sap.tm.trp.db.booking::tt_str_list" ,
+    IN EXECUTION_STATUS_LIST_INPUT "sap.tm.trp.db.booking::tt_str_list",
+    IN LIFECYCLE_STATUS_LIST_INPUT "sap.tm.trp.db.booking::tt_str_list",
+    IN LEASE_CONTRACT_LIST_INPUT "sap.tm.trp.db.booking::tt_str_list",
+    IN LEASE_CONTRACT_TYPE_LIST_INPUT "sap.tm.trp.db.booking::tt_str_list",
+    IN SPECIAL_INSTRUCTION_LIST_INPUT "sap.tm.trp.db.booking::tt_str_list",
+    OUT TU_TYPE_OUTPUT "sap.tm.trp.db.booking::tt_booking_facet_filter_string",
+    OUT RESOURCE_TYPE_OUTPUT "sap.tm.trp.db.booking::tt_booking_facet_filter_string",
+    OUT PLANNING_RELEVANT_OUTPUT "sap.tm.trp.db.booking::tt_booking_facet_filter_string",
+    OUT EXECUTION_STATUS_OUTPUT "sap.tm.trp.db.booking::tt_booking_facet_filter_string",
+    OUT LIFECYCLE_STATUS_OUTPUT "sap.tm.trp.db.booking::tt_booking_facet_filter_string",
+    OUT LEASE_CONTRACT_OUTPUT "sap.tm.trp.db.booking::tt_booking_facet_filter_string",
+    OUT LEASE_CONTRACT_TYPE_OUTPUT "sap.tm.trp.db.booking::tt_booking_facet_filter_string",
+    OUT SPECIAL_INSTRUCTION_OUTPUT "sap.tm.trp.db.booking::tt_booking_facet_filter_string"
+    ) 
+    
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    READS SQL DATA 
+    AS
+    
+    TU_TYPE_LIST_INPUT_CNT INTEGER;
+    RESOURCE_TYPE_LIST_INPUT_CNT INTEGER;
+    PLANNING_RELEVANT_LIST_INPUT_CNT INTEGER;
+    EXECUTION_STATUS_LIST_INPUT_CNT INTEGER;
+    LIFECYCLE_STATUS_LIST_INPUT_CNT INTEGER;
+    LEASE_CONTRACT_LIST_INPUT_CNT INTEGER;
+    LEASE_CONTRACT_TYPE_LIST_INPUT_CNT INTEGER;
+    SPECIAL_INSTRUCTION_LIST_INPUT_CNT INTEGER;
+    FUZZYSEARCH NVARCHAR (500);
+    
+     
+BEGIN 
+    
+        DECLARE UNIT VARCHAR(3);
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        SELECT ::SQL_ERROR_CODE, ::SQL_ERROR_MESSAGE FROM DUMMY;
+        
+        FUZZYSEARCH:=LOWER(FUZZYSEARCH_TEXT);
+        
+        SELECT COUNT(*) INTO TU_TYPE_LIST_INPUT_CNT FROM :TU_TYPE_LIST_INPUT;
+
+        SELECT COUNT(*) INTO RESOURCE_TYPE_LIST_INPUT_CNT FROM :RESOURCE_TYPE_LIST_INPUT;
+
+        SELECT COUNT(*) INTO PLANNING_RELEVANT_LIST_INPUT_CNT FROM :PLANNING_RELEVANT_LIST_INPUT;
+        
+        SELECT COUNT(*) INTO EXECUTION_STATUS_LIST_INPUT_CNT FROM :EXECUTION_STATUS_LIST_INPUT;
+        
+        SELECT COUNT(*) INTO LIFECYCLE_STATUS_LIST_INPUT_CNT FROM :LIFECYCLE_STATUS_LIST_INPUT;
+        
+        SELECT COUNT(*) INTO LEASE_CONTRACT_LIST_INPUT_CNT FROM :LEASE_CONTRACT_LIST_INPUT;
+        
+        SELECT COUNT(*) INTO LEASE_CONTRACT_TYPE_LIST_INPUT_CNT FROM :LEASE_CONTRACT_TYPE_LIST_INPUT;
+        
+        SELECT COUNT(*) INTO SPECIAL_INSTRUCTION_LIST_INPUT_CNT FROM :SPECIAL_INSTRUCTION_LIST_INPUT;
+    
+ 
+    --Check whether any facet filters are present 
+    IF LENGTH(:FUZZYSEARCH)=0
+        AND :TU_TYPE_LIST_INPUT_CNT = 0
+        AND :RESOURCE_TYPE_LIST_INPUT_CNT = 0
+        AND :PLANNING_RELEVANT_LIST_INPUT_CNT = 0
+        AND :EXECUTION_STATUS_LIST_INPUT_CNT = 0
+        AND :LIFECYCLE_STATUS_LIST_INPUT_CNT = 0
+        AND :LEASE_CONTRACT_LIST_INPUT_CNT = 0
+        AND :LEASE_CONTRACT_TYPE_LIST_INPUT_CNT = 0
+        AND :SPECIAL_INSTRUCTION_LIST_INPUT_CNT = 0
+
+    THEN
+
+        --No facet filters present 
+        FILTERED_OUTPUT= SELECT DISTINCT TU_TYPE_CODE,
+                                TU_TYPE,
+                                RESOURCE_TYPE,
+                                HAULAGE_TYPE,
+                                EXECUTION_STATUS_CODE,
+                                EXECUTION_STATUS,
+                                LIFECYCLE_STATUS_CODE,
+                                LIFECYCLE_STATUS,
+                                LEASE_AGREEMENT,
+                                LEASE_TYPE_CODE,
+                                LEASE_TYPE,
+                                SPECIAL_INSTRUCTION_CODE,
+                                SPECIAL_INSTRUCTION_NAME
+                         FROM "sap.tm.trp.db.booking::cv_booking"
+                              (PLACEHOLDER."$$EQUIPMENT_FILTER_ID$$" => :EQUIPMENT_FILTER_ID, 
+                               PLACEHOLDER."$$LOCATION_FILTER_ID$$" => :LOCATION_FILTER_ID,
+                               PLACEHOLDER."$$FILTER_ON$$" => :FILTER_ON,
+                               PLACEHOLDER."$$FROM_DATE$$" => :FROM_DATE,
+                               PLACEHOLDER."$$TO_DATE$$" => :TO_DATE,
+                               PLACEHOLDER."$$BOOKING_TYPE$$" => :BOOKING_TYPE,
+                               PLACEHOLDER."$$LOCATION$$" => :LOCATION,
+                               PLACEHOLDER."$$EQUIPMENT_TYPE$$" => :EQUIPMENT_TYPE,
+                               PLACEHOLDER."$$DATA_PROVIDER_TYPE$$" => :DATA_PROVIDER_TYPE, 
+                               PLACEHOLDER."$$NAV_TYPE$$" => ''
+                               ); 
+    ELSE
+ 
+    --Apply facet filters.  
+      CALC_OUT=SELECT ORDER_ID,
+                      TU_TYPE_CODE,
+                      TU_TYPE, 
+                      CUSTOMER_NAME, 
+                      RESOURCE_TYPE, 
+                      PICKUP_LOCATION_NAME,  
+                      RETURN_LOCATION_NAME, 
+                      PORT_OF_LOADING, 
+                      PORT_OF_DISCHARGE, 
+                      SHIPPER, 
+                      CONSIGNEE,
+                      HAULAGE_TYPE,
+                      EXECUTION_STATUS_CODE,
+                      EXECUTION_STATUS,
+                      LIFECYCLE_STATUS_CODE,
+                      LIFECYCLE_STATUS,
+                      LEASE_AGREEMENT,
+                      LEASE_TYPE_CODE,
+                      LEASE_TYPE,
+                      SPECIAL_INSTRUCTION_CODE,
+                      SPECIAL_INSTRUCTION_NAME
+               FROM "sap.tm.trp.db.booking::cv_booking" 
+                    (PLACEHOLDER."$$EQUIPMENT_FILTER_ID$$" => :EQUIPMENT_FILTER_ID, 
+                     PLACEHOLDER."$$LOCATION_FILTER_ID$$" => :LOCATION_FILTER_ID,
+                     PLACEHOLDER."$$FILTER_ON$$" => :FILTER_ON,
+                     PLACEHOLDER."$$FROM_DATE$$" => :FROM_DATE,
+                     PLACEHOLDER."$$TO_DATE$$" => :TO_DATE,
+                     PLACEHOLDER."$$BOOKING_TYPE$$" => :BOOKING_TYPE,
+                     PLACEHOLDER."$$LOCATION$$" => :LOCATION,
+                     PLACEHOLDER."$$EQUIPMENT_TYPE$$" => :EQUIPMENT_TYPE,
+                     PLACEHOLDER."$$DATA_PROVIDER_TYPE$$" => :DATA_PROVIDER_TYPE,
+                     PLACEHOLDER."$$NAV_TYPE$$" => ''
+                    );
+ 
+    --Apply search keyword Filtering
+    FUZZY_SEARCH_RESULT = SELECT DISTINCT TU_TYPE_CODE,
+                                TU_TYPE,
+                                CUSTOMER_NAME,
+                                RESOURCE_TYPE,
+                                PICKUP_LOCATION_NAME,
+                                RETURN_LOCATION_NAME, 
+                                PORT_OF_LOADING, 
+                                PORT_OF_DISCHARGE, 
+                                SHIPPER,
+                                CONSIGNEE,
+                                HAULAGE_TYPE,
+                                EXECUTION_STATUS_CODE,
+                                EXECUTION_STATUS,
+                                LIFECYCLE_STATUS_CODE,
+                                LIFECYCLE_STATUS,
+                                LEASE_AGREEMENT,
+                                LEASE_TYPE_CODE,
+                                LEASE_TYPE,
+                                SPECIAL_INSTRUCTION_CODE,
+                                SPECIAL_INSTRUCTION_NAME
+                         FROM :CALC_OUT
+                         WHERE LOWER(TU_TYPE) LIKE '%'||:FUZZYSEARCH||'%' OR
+                                LOWER(RESOURCE_TYPE) LIKE '%'||:FUZZYSEARCH||'%' OR
+                                LOWER(EXECUTION_STATUS) LIKE '%'||:FUZZYSEARCH||'%' OR
+                                LOWER(LIFECYCLE_STATUS) LIKE '%'||:FUZZYSEARCH||'%' OR
+                                LOWER(LEASE_AGREEMENT) LIKE '%'||:FUZZYSEARCH||'%' OR
+                                LOWER(LEASE_TYPE) LIKE '%'||:FUZZYSEARCH||'%' OR
+                                LOWER(SPECIAL_INSTRUCTION_NAME) LIKE '%'||:FUZZYSEARCH||'%' OR
+                                LOWER(ORDER_ID) LIKE '%'||:FUZZYSEARCH||'%'
+    ;
+ 
+        --Apply facet Filter conditions 
+
+        IF :TU_TYPE_LIST_INPUT_CNT = 0
+            THEN TU_TYPE_LIST_INPUT = SELECT DISTINCT TU_TYPE_CODE AS STR FROM :FUZZY_SEARCH_RESULT;
+        END IF;
+        
+        IF :RESOURCE_TYPE_LIST_INPUT_CNT = 0
+            THEN RESOURCE_TYPE_LIST_INPUT = SELECT DISTINCT RESOURCE_TYPE AS STR FROM :FUZZY_SEARCH_RESULT;
+        END IF;
+        
+        IF :PLANNING_RELEVANT_LIST_INPUT_CNT = 0
+            THEN PLANNING_RELEVANT_LIST_INPUT = SELECT DISTINCT HAULAGE_TYPE AS STR FROM :FUZZY_SEARCH_RESULT;
+        END IF;
+        
+        IF :EXECUTION_STATUS_LIST_INPUT_CNT = 0
+            THEN EXECUTION_STATUS_LIST_INPUT = SELECT DISTINCT EXECUTION_STATUS_CODE AS STR FROM :FUZZY_SEARCH_RESULT;
+        END IF;
+        
+        IF :LIFECYCLE_STATUS_LIST_INPUT_CNT = 0
+            THEN LIFECYCLE_STATUS_LIST_INPUT = SELECT DISTINCT LIFECYCLE_STATUS_CODE AS STR FROM :FUZZY_SEARCH_RESULT;
+        END IF;
+        
+        IF :LEASE_CONTRACT_LIST_INPUT_CNT = 0
+            THEN LEASE_CONTRACT_LIST_INPUT = SELECT DISTINCT LEASE_AGREEMENT AS STR FROM :FUZZY_SEARCH_RESULT;
+        END IF;
+        
+        IF :LEASE_CONTRACT_TYPE_LIST_INPUT_CNT = 0
+            THEN LEASE_CONTRACT_TYPE_LIST_INPUT = SELECT DISTINCT LEASE_TYPE_CODE AS STR FROM :FUZZY_SEARCH_RESULT;
+        END IF;
+        
+        IF :SPECIAL_INSTRUCTION_LIST_INPUT_CNT = 0
+            THEN SPECIAL_INSTRUCTION_LIST_INPUT = SELECT DISTINCT SPECIAL_INSTRUCTION_CODE AS STR FROM :FUZZY_SEARCH_RESULT;
+        END IF;
+
+     FILTERED_OUTPUT=SELECT DISTINCT MASTER_TBL.TU_TYPE_CODE, 
+                            MASTER_TBL.TU_TYPE,
+                            MASTER_TBL.RESOURCE_TYPE,
+                            MASTER_TBL.HAULAGE_TYPE,
+                            MASTER_TBL.EXECUTION_STATUS_CODE,
+                            MASTER_TBL.EXECUTION_STATUS,
+                            MASTER_TBL.LIFECYCLE_STATUS_CODE,
+                            MASTER_TBL.LIFECYCLE_STATUS,
+                            MASTER_TBL.LEASE_AGREEMENT,
+                            MASTER_TBL.LEASE_TYPE_CODE,
+                            MASTER_TBL.LEASE_TYPE,
+                            MASTER_TBL.SPECIAL_INSTRUCTION_CODE,
+                            MASTER_TBL.SPECIAL_INSTRUCTION_NAME
+                    FROM :FUZZY_SEARCH_RESULT AS MASTER_TBL
+                    INNER JOIN :TU_TYPE_LIST_INPUT AS TU_TYPE_TBL
+                    ON IFNULL(MASTER_TBL.TU_TYPE_CODE,'') = IFNULL(TU_TYPE_TBL.STR,'')                  
+                    INNER JOIN :RESOURCE_TYPE_LIST_INPUT AS RESOURCE_TYPE_TBL
+                    ON IFNULL(MASTER_TBL.RESOURCE_TYPE,'') = IFNULL(RESOURCE_TYPE_TBL.STR,'')
+                    INNER JOIN :PLANNING_RELEVANT_LIST_INPUT AS PLANNING_TBL
+                    ON IFNULL(MASTER_TBL.HAULAGE_TYPE,NULL) = IFNULL(PLANNING_TBL.STR,NULL)
+                    INNER JOIN :EXECUTION_STATUS_LIST_INPUT AS EXE_S_TBL
+                    ON IFNULL(MASTER_TBL.EXECUTION_STATUS_CODE,'') = IFNULL(EXE_S_TBL.STR,'')
+                    INNER JOIN :LIFECYCLE_STATUS_LIST_INPUT AS LIFE_S_TBL
+                    ON IFNULL(MASTER_TBL.LIFECYCLE_STATUS_CODE,'') = IFNULL(LIFE_S_TBL.STR,'')
+                    INNER JOIN :LEASE_CONTRACT_LIST_INPUT AS LEASE_TBL
+                    ON IFNULL(MASTER_TBL.LEASE_AGREEMENT,'') = IFNULL(LEASE_TBL.STR,'')
+                    INNER JOIN :LEASE_CONTRACT_TYPE_LIST_INPUT AS LEASE_TYPE_TBL
+                    ON IFNULL(MASTER_TBL.LEASE_TYPE_CODE,'') = IFNULL(LEASE_TYPE_TBL.STR,'')
+                    INNER JOIN :SPECIAL_INSTRUCTION_LIST_INPUT AS SPECIAL_TBL
+                    ON IFNULL(MASTER_TBL.SPECIAL_INSTRUCTION_CODE,'') = IFNULL(SPECIAL_TBL.STR,'')
+        ;
+    END IF;
+    
+  TU_TYPE_OUTPUT=SELECT DISTINCT IFNULL(TU_TYPE_CODE,'') AS KEY,IFNULL(TU_TYPE,'') AS TEXT 
+                 FROM :FILTERED_OUTPUT
+                 ORDER BY KEY;
+                 
+  RESOURCE_TYPE_OUTPUT=SELECT DISTINCT RESOURCE_TYPE AS KEY,RESOURCE_TYPE AS TEXT 
+                       FROM :FILTERED_OUTPUT 
+                       ORDER BY KEY;
+                       
+  PLANNING_RELEVANT_OUTPUT=SELECT DISTINCT HAULAGE_TYPE AS KEY,HAULAGE_TYPE AS TEXT 
+                           FROM :FILTERED_OUTPUT
+                           ORDER BY KEY;
+                           
+  EXECUTION_STATUS_OUTPUT=SELECT DISTINCT IFNULL(EXECUTION_STATUS_CODE,'') AS KEY,IFNULL(EXECUTION_STATUS,'') AS TEXT
+                          FROM :FILTERED_OUTPUT
+                          ORDER BY KEY;
+                          
+  LIFECYCLE_STATUS_OUTPUT=SELECT DISTINCT IFNULL(LIFECYCLE_STATUS_CODE,'') AS KEY,IFNULL(LIFECYCLE_STATUS,'') AS TEXT
+                          FROM :FILTERED_OUTPUT 
+                          ORDER BY KEY;
+                          
+  LEASE_CONTRACT_OUTPUT=SELECT DISTINCT LEASE_AGREEMENT AS KEY,LEASE_AGREEMENT AS TEXT 
+                        FROM :FILTERED_OUTPUT 
+                        ORDER BY KEY;
+                        
+  LEASE_CONTRACT_TYPE_OUTPUT=SELECT DISTINCT IFNULL(LEASE_TYPE_CODE,'') AS KEY,IFNULL(LEASE_TYPE,'') AS TEXT 
+                             FROM :FILTERED_OUTPUT
+                             ORDER BY KEY;
+                             
+  SPECIAL_INSTRUCTION_OUTPUT=SELECT DISTINCT IFNULL(SPECIAL_INSTRUCTION_CODE,'') AS KEY,IFNULL(SPECIAL_INSTRUCTION_NAME,'') AS TEXT 
+                             FROM :FILTERED_OUTPUT
+                             ORDER BY KEY;
+END;
+ 
+ 

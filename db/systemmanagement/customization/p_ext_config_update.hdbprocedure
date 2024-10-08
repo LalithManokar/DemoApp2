@@ -1,0 +1,55 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.customization::p_ext_config_update"(
+    IN DESC VARCHAR(500),
+    IN CLIENT_CODE VARCHAR(10),
+    IN ZONE_HIERARCHY_ID VARCHAR(32)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE CURRENT_USER_ID BIGINT;
+    DECLARE EXIST_USER_ID BIGINT;
+    DECLARE EXIST_TIME TIMESTAMP;
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE CONFIG_NAME VARCHAR(20);
+    DECLARE EXIST_CONFIG_NAME VARCHAR(20);
+    
+    SELECT IFNULL(MAX(ID),-100) INTO CURRENT_USER_ID FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    SELECT IFNULL(MAX(SPRAS),'E') INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+    
+    SELECT IFNULL (MAX(CODE),'LOGISTIC_SETTING') INTO CONFIG_NAME FROM "sap.tm.trp.db.semantic.common::t_config_pre";
+    
+    SELECT IFNULL (MAX(CODE),'') INTO EXIST_CONFIG_NAME FROM "sap.tm.trp.db.semantic.common::t_config";
+    SELECT IFNULL (MAX(CREATE_AT),NULL) INTO EXIST_TIME FROM "sap.tm.trp.db.semantic.common::t_config";
+    SELECT IFNULL (MAX(CREATE_BY),NULL) INTO EXIST_USER_ID FROM "sap.tm.trp.db.semantic.common::t_config";
+        
+    IF :EXIST_CONFIG_NAME <> :CONFIG_NAME THEN
+      DELETE FROM "sap.tm.trp.db.semantic.common::t_config";
+      INSERT INTO "sap.tm.trp.db.semantic.common::t_config"
+    	VALUES (:CONFIG_NAME,:CONFIG_NAME,:CLIENT_CODE,:ZONE_HIERARCHY_ID,IFNULL (EXIST_USER_ID,:CURRENT_USER_ID),
+    	        IFNULL (:EXIST_TIME,CURRENT_UTCTIMESTAMP),:CURRENT_USER_ID,CURRENT_UTCTIMESTAMP);
+      
+      DELETE FROM "sap.tm.trp.db.systemmanagement.customization::t_config_t";
+      INSERT INTO "sap.tm.trp.db.systemmanagement.customization::t_config_t"
+      VALUES (:CONFIG_NAME,:SPRAS,:DESC);
+    	
+      CALL "sap.tm.trp.db.systemmanagement.location::p_update_root_for_hierarchy"(); 
+    ELSE
+      UPDATE "sap.tm.trp.db.semantic.common::t_config"
+    	SET CODE = :CONFIG_NAME,
+    	    NAME = :CONFIG_NAME,
+    	    CLIENT_CODE = :CLIENT_CODE,
+    	    ZONE_HIERARCHY_ID = :ZONE_HIERARCHY_ID,
+    	    LAST_MODIFIED_BY = :CURRENT_USER_ID,
+    	    LAST_MODIFIED_AT = CURRENT_UTCTIMESTAMP;
+    	    
+      DELETE FROM "sap.tm.trp.db.systemmanagement.customization::t_config_t";
+      INSERT INTO "sap.tm.trp.db.systemmanagement.customization::t_config_t"
+      VALUES (:CONFIG_NAME,:SPRAS,:DESC);
+      
+      CALL "sap.tm.trp.db.systemmanagement.location::p_update_root_for_hierarchy"();
+    END IF ;
+END;

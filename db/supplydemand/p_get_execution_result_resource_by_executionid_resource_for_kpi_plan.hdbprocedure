@@ -1,0 +1,35 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand::p_get_execution_result_resource_by_executionid_resource_for_kpi_plan" (
+  IN EXECUTION_ID BIGINT,
+  IN NODE_ID BIGINT,
+  IN RESOURCE_TYPE_CODE VARCHAR(32),
+  OUT OUT_PUT "sap.tm.trp.db.supplydemand::tt_get_execution_result_resource_by_executionid_resource_output"
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+
+-- GET RESULT
+OUT_PUT =
+	SELECT
+		T1.EQUIP_TYPE_ID AS RESOURCE_TYPE_CODE
+		,T1.EQUIP_TYPE_NAME AS RESOURCE_TYPE_NAME
+		,T1.LOCATION_ID AS GEO_ID
+		,T1.LOCATION_NAME AS GEO_NAME
+		,T1.OUTPUT_KEY
+		,T1.OUTPUT_VALUE
+		,T1.START_TIME
+		,T1.END_TIME
+		,T1.SEQUENCE
+		,T1.ALERT_STATUS
+		,T1.OUT_NODE_ID
+		,T1.HAS_DRILLDOWN_FLAG
+		,T1.TIME_INTERVAL
+		,T1.OUT_NODE_NAME
+		,T1.OUT_NODE_NAV_TYPE
+	FROM "sap.tm.trp.db.supplydemand::cv_get_execution_result_by_executionid_base_new"(placeholder."$$IN_EXECUTION_ID$$"=>:EXECUTION_ID,placeholder."$$IN_NODE_ID$$"=>:NODE_ID) T1
+	WHERE T1.EQUIP_TYPE_ID = :RESOURCE_TYPE_CODE
+	ORDER BY T1.EQUIP_TYPE_ID,T1.OUTPUT_KEY,T1.SEQUENCE;
+
+END;

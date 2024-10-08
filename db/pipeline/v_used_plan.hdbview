@@ -1,0 +1,17 @@
+schema = "SAP_TM_TRP";
+query  ="SELECT 
+               T1.PERSISTED_PLAN_MODEL_ID AS PLAN_ID,
+               T2.ID,
+               T2.NAME,
+               T3.DESC AS TYPE,
+               T4.USERNAME
+               FROM \"sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan\" T1
+               INNER JOIN \"sap.tm.trp.db.pipeline::t_plan_model\" T2 ON T1.VIRTUAL_PLAN_MODEL_ID = T2.ID
+               INNER JOIN \"sap.tm.trp.db.pipeline::t_plan_model_type\" T3 ON T2.PLAN_MODEL_TYPE_ID = T3.ID
+               LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T4 ON T2.CREATE_BY = T4.ID";
+     
+               
+depends_on_table = ["sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan",
+                    "sap.tm.trp.db.pipeline::t_plan_model",
+                    "sap.tm.trp.db.pipeline::t_plan_model_type"];
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];        

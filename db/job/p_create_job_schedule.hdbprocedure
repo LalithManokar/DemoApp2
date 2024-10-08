@@ -1,0 +1,36 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.job::p_create_job_schedule"(
+    IN NEW_SCHEDULE_ID BIGINT,
+    IN MODEL_ID BIGINT,
+    IN SCHEDULE_FLAG BIGINT,
+    IN SCHEDULE_TYPE VARCHAR(500),
+    OUT JOB_SCHEDULE_ID BIGINT
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    
+    SELECT "sap.tm.trp.db.job::s_job_schedule".NEXTVAL INTO JOB_SCHEDULE_ID FROM DUMMY;
+    
+    -- insert a new job schedule               
+    INSERT INTO "sap.tm.trp.db.job::t_job_schedule"
+                (
+                     ID,
+                     SCHEDULE_ID,
+                     MODEL_ID,
+                     CREATE_DATE,
+                     SCHEDULE_FLAG,
+                     SCHEDULE_TYPE                  
+                )
+           values
+                (
+                     :JOB_SCHEDULE_ID,
+                     :NEW_SCHEDULE_ID,
+                     :MODEL_ID,
+                     CURRENT_UTCTIMESTAMP,
+                     :SCHEDULE_FLAG,
+                     :SCHEDULE_TYPE
+                );   
+                
+END;

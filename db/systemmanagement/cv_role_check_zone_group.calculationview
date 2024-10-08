@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_role_check_zone_group" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_role_check_zone_group"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="ID" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="NAME" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="DESC" length="50"/>
+        <viewAttribute datatype="BIGINT" id="USER_ID"/>
+        <viewAttribute datatype="VARCHAR" id="VISIBILITY" length="3"/>
+        <viewAttribute datatype="VARCHAR" id="CREATED_BY" length="60"/>
+        <viewAttribute datatype="TIMESTAMP" id="CREATED_TIME"/>
+        <viewAttribute datatype="VARCHAR" id="MODIFIED_BY" length="60"/>
+        <viewAttribute datatype="TIMESTAMP" id="MODIFIED_TIME"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> 
+  
+ BEGIN 
+ 	 --DECLARE USERID BIGINT;
+     --DECLARE NAME VARCHAR(60);
+     --DECLARE USERTYPE INTEGER;
+     DECLARE LOCATION_TYPE_ZONE_GROUP INTEGER :=6;  
+     
+     --SELECT USERNAME INTO NAME FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+     
+     --SELECT USER_TYPE_ID INTO USERTYPE FROM &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot;
+     --WHERE USERNAME = :NAME;
+     
+     --IF :USERTYPE = 99 THEN
+     DECLARE HAS_AUTHORIZATION_FLAG TINYINT; 
+     call &quot;sap.tm.trp.db.systemmanagement::p_check_location_full_authorization&quot; (
+		 	HAVE_AUTHORIZATION_FLAG => HAS_AUTHORIZATION_FLAG
+		 ); 
+	 IF :HAS_AUTHORIZATION_FLAG = 1 THEN 
+           var_out = SELECT 
+                T1.ID,
+                T1.NAME,
+                T1.DESC AS DESC,
+                T1.USER_ID,
+                T1.VISIBLE_FLAG AS VISIBILITY,
+                T1.CREATE_BY AS CREATED_BY,
+                T1.CREATE_AT AS CREATED_TIME,
+                T1.LAST_MODIFIED_BY AS MODIFIED_BY,
+                T1.LAST_MODIFIED_TIME AS MODIFIED_TIME
+                FROM &quot;sap.tm.trp.db.systemmanagement::v_user_zone_group&quot; T1;                
+     ELSE
+          
+           var_out = SELECT 
+                T1.ID,
+                T1.NAME,
+                T1.DESC AS DESC,
+                T1.USER_ID,
+                T1.VISIBLE_FLAG AS VISIBILITY,
+                T1.CREATE_BY AS CREATED_BY,
+                T1.CREATE_AT AS CREATED_TIME,
+                T1.LAST_MODIFIED_BY AS MODIFIED_BY,
+                T1.LAST_MODIFIED_TIME AS MODIFIED_TIME
+                FROM &quot;sap.tm.trp.db.systemmanagement::v_user_zone_group&quot; T1
+                INNER JOIN &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(PLACEHOLDER.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_ZONE_GROUP) T2
+                ON T1.ID = T2.LOCATION_ID;
+     
+     END IF;
+     
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="NAME" order="2">
+        <descriptions defaultDescription="NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="DESC" order="3">
+        <descriptions defaultDescription="DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+      <attribute id="USER_ID" order="4">
+        <descriptions defaultDescription="USER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="USER_ID"/>
+      </attribute>
+      <attribute id="VISIBILITY" order="5">
+        <descriptions defaultDescription="VISIBILITY"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY"/>
+      </attribute>
+      <attribute id="CREATED_BY" order="6">
+        <descriptions defaultDescription="CREATE_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATED_BY"/>
+      </attribute>
+      <attribute id="MODIFIED_BY" order="8">
+        <descriptions defaultDescription="MODIFIED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="MODIFIED_BY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="CREATED_TIME" order="7" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="CREATE_AT"/>
+        <measureMapping columnObjectName="Script_View" columnName="CREATED_TIME"/>
+      </measure>
+      <measure id="MODIFIED_TIME" order="9" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="LAST_MODIFIED_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="MODIFIED_TIME"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

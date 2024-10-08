@@ -1,0 +1,16 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "used for virtual kpi plan table result by plan";
+table.columns = [
+  {name = "RESOURCE_TYPE_CODE"; sqlType = VARCHAR; length = 32;},
+  {name = "RESOURCE_TYPE_NAME"; sqlType = NVARCHAR; length = 200;},
+  {name = "SEQUENCE"; sqlType = INTEGER;},
+  {name = "START_TIME"; sqlType = TIMESTAMP;},
+  {name = "END_TIME"; sqlType = TIMESTAMP;},
+  {name = "OUTPUT_KEY"; sqlType = VARCHAR; length = 200;},
+  {name = "OUTPUT_VALUE"; sqlType = DECIMAL; length = 20; scale = 4;},
+  {name = "ALERT_STATUS"; sqlType = INTEGER;},
+  {name = "OUT_NODE_NAME"; sqlType = VARCHAR;length = 32;},
+  {name = "HAS_DRILLDOWN_FLAG"; sqlType = INTEGER;},
+  {name = "TIME_INTERVAL"; sqlType = BIGINT;}
+];

@@ -1,0 +1,62 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_network_setting_group_parameter_check" (
+	IN MANDATORY_COST_MODEL_ID BIGINT,
+	IN OPTIONAL_COST_MODEL_ID BIGINT,
+	IN VALUE_LIST "sap.tm.trp.db.planningcockpit::tt_network_setting_group_parameter_value_list",
+	OUT OUTPUT "sap.tm.trp.db.planningcockpit::tt_network_setting_group_parameter_check_output"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	READS SQL DATA AS
+BEGIN SEQUENTIAL EXECUTION
+	-- CHECK COST MODEL CURRENCY
+	T1 =
+		SELECT
+			'CURRENCY' AS PARAMETER_NAME
+			,CASE WHEN COUNT(*) > 0 OR :OPTIONAL_COST_MODEL_ID IS NULL THEN 'Y' ELSE 'N' END AS RTNCD
+		FROM
+			(
+			SELECT
+				T1.CURRENCY_CODE,T2.CURRENCY_CODE
+			FROM
+				(SELECT CURRENCY_CODE FROM "sap.tm.trp.db.costmodel::t_cost_model_new" WHERE ID = :MANDATORY_COST_MODEL_ID) T1
+			JOIN
+				(SELECT CURRENCY_CODE FROM "sap.tm.trp.db.costmodel::t_cost_model_new" WHERE ID = :OPTIONAL_COST_MODEL_ID) T2
+			ON T2.CURRENCY_CODE = T1.CURRENCY_CODE
+		)
+	;
+	
+	-- CHECK COST MODEL DATASET
+	T3 =
+		SELECT
+			'DISTANCE_BASED_COST' AS PARAMETER_NAME
+			,CASE WHEN CNT > 0 THEN 'Y' ELSE 'N' END AS RTNCD
+		FROM (
+			SELECT SUM(CASE WHEN T1.COST_TYPE_CODE = 'DISTANCE_BASED_COST' THEN 1 ELSE 0 END) AS CNT
+			FROM "sap.tm.trp.db.costmodel::t_cost_dataset" T1
+			INNER JOIN  "sap.tm.trp.db.costmodel::t_cost_model_dataset" T2 ON T2.COST_DATASET_ID = T1.ID
+			WHERE T2.COST_MODEL_ID = :MANDATORY_COST_MODEL_ID
+		)
+		;
+		
+	OUTPUT =
+		SELECT 
+			PARAMETER_NAME
+			,RTNCD
+		FROM :T1
+		WHERE RTNCD = 'N'
+		/*
+		UNION
+		SELECT 
+			PARAMETER_NAME
+			,RTNCD
+		FROM :T2
+		WHERE RTNCD = 'N'
+		*/
+		UNION
+		SELECT 
+			PARAMETER_NAME
+			,RTNCD
+		FROM :T3
+		WHERE RTNCD = 'N'
+		;
+END;

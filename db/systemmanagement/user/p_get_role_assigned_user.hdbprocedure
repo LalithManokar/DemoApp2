@@ -1,0 +1,13 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_get_role_assigned_user" (
+  IN ROLE_ID BIGINT,
+  OUT ASSIGNED_USERS "sap.tm.trp.db.systemmanagement.user::tt_user_role")
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA SAP_TM_TRP
+    READS SQL DATA 
+    AS
+BEGIN
+
+    ASSIGNED_USERS = SELECT USER_ID, ROLE_ID FROM "sap.tm.trp.db.systemmanagement.user::t_user_role" WHERE ROLE_ID = :ROLE_ID;
+
+END;

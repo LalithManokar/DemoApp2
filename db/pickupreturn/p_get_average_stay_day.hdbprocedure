@@ -1,0 +1,101 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_get_average_stay_day" (
+    IN IN_LOCATION_RESOURCE "sap.tm.trp.db.pickupreturn::tt_location_resource_info",    
+    IN START_TIME TIMESTAMP,
+    IN END_TIME TIMESTAMP,
+    IN RESOURCE_CATEGORY VARCHAR(20),
+    OUT OUT_AVERAGE_STAY "sap.tm.trp.db.pickupreturn::tt_location_average_stay"
+ ) 
+	LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+    
+BEGIN 
+	DECLARE GATEIN_COUNT INTEGER;
+	
+    tmp_trk = SELECT t1.RESOURCE_TYPE, t1.LOCATION_NAME AS LOCATION, t1.RESOURCE_ID,t1.EVENT_TIME, t1.EVENT_CODE
+              FROM "sap.tm.trp.db.semantic.event::v_gateinout_tracking_history" t1
+              INNER JOIN :IN_LOCATION_RESOURCE t2 ON (t1.LOCATION_NAME = t2.LOCATION_NAME and t1.RESOURCE_TYPE = t2.RESOURCE_TYPE_NAME)
+              INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t6 ON (t1.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :RESOURCE_CATEGORY);
+                   
+     -- get the gate in data from the tracking_history table
+     -- we need to get all the gate in event within the time window
+     -- and the gate in event still not gate out before the time window      
+     gateins = SELECT *, ROW_NUMBER() OVER (PARTITION BY RESOURCE_ID, LOCATION ORDER BY EVENT_TIME ASC) AS EQUIP_SEQ
+               FROM 
+               (
+                (
+                 SELECT RESOURCE_TYPE, LOCATION, RESOURCE_ID, EVENT_TIME,EVENT_CODE
+                 FROM :tmp_trk              
+                 WHERE EVENT_TIME BETWEEN :START_TIME AND :END_TIME
+                 AND EVENT_CODE = 'GTI'
+                )  
+                UNION 
+                (
+                 -- get the gate in before the time window and still has not gate out
+                 SELECT T3.RESOURCE_TYPE, T3.LOCATION, T3.RESOURCE_ID, T3.EVENT_TIME,t3.EVENT_CODE
+                 FROM :tmp_trk T3
+                 INNER JOIN 
+                 (
+                   SELECT T1.RESOURCE_ID, T1.LOCATION, T1.LAST_GTI_TIME FROM
+                   (
+                     SELECT RESOURCE_ID, LOCATION, MAX(EVENT_TIME) AS LAST_GTI_TIME
+                     FROM :tmp_trk          
+                     WHERE EVENT_CODE = 'GTI' AND EVENT_TIME < :START_TIME
+                     GROUP BY RESOURCE_ID, LOCATION
+                   ) T1
+                   LEFT OUTER JOIN 
+                   (
+                     SELECT RESOURCE_ID, LOCATION, MAX(EVENT_TIME) AS LAST_GTO_TIME
+                     FROM :tmp_trk 
+                     WHERE EVENT_CODE = 'GTO'  AND EVENT_TIME < :START_TIME
+                     GROUP BY RESOURCE_ID, LOCATION 
+                   ) T2 ON (T1.RESOURCE_ID = T2.RESOURCE_ID AND T1.LAST_GTI_TIME < T2.LAST_GTO_TIME) 
+                   WHERE T2.RESOURCE_ID IS NULL
+                 ) T4 ON (T3.RESOURCE_ID = T4.RESOURCE_ID AND T3.LOCATION = T4.LOCATION AND T3.EVENT_TIME = T4.LAST_GTI_TIME)
+                )
+               );
+               
+     -- get the gate out data from the tracking_history table      
+     gateouts = SELECT  RESOURCE_TYPE, LOCATION, RESOURCE_ID, EVENT_TIME,
+                ROW_NUMBER() over (PARTITION BY RESOURCE_ID, LOCATION ORDER BY EVENT_TIME ASC) AS EQUIP_SEQ
+                FROM :tmp_trk
+                WHERE EVENT_CODE = 'GTO' AND EVENT_TIME BETWEEN :START_TIME AND :END_TIME;               
+                 
+      -- Get the [gate in time, gate out time] for each equipment id
+      -- The method is to join gate in and gate out data and get gate in time and the min gate out time after it as one pair.               
+      idle_intervals = SELECT T3.*, SECONDS_BETWEEN(IDLE_START,IDLE_END) AS IDLE_SECONDS FROM
+                         ( SELECT T1.LOCATION,
+                                  T1.RESOURCE_ID,
+                                  T1.RESOURCE_TYPE,
+                                  CASE WHEN T1.EVENT_TIME <=:START_TIME THEN :START_TIME
+                                       WHEN T1.EVENT_TIME >:START_TIME THEN TO_TIMESTAMP(T1.EVENT_TIME)
+                                  END AS IDLE_START,
+                                  IFNULL(T2.EVENT_TIME,:END_TIME) AS IDLE_END
+                           FROM :gateins T1
+                           LEFT OUTER JOIN :gateouts T2 ON (T1.RESOURCE_ID = T2.RESOURCE_ID AND T1.LOCATION = T2.LOCATION
+                           AND T1.EQUIP_SEQ = T2.EQUIP_SEQ AND T1.EVENT_TIME < T2.EVENT_TIME)
+                         ) T3 ;
+
+     ------------------------------------------------------------------------------------------------------------------
+     -- compute idle seconds within each interval(as the intervals are stored in seconds in our system, so we also compute in second level)
+     idle_seconds = SELECT LOCATION, RESOURCE_TYPE, SUM(IDLE_SECONDS) AS INTER_IDLE_SECONDS
+                    FROM :idle_intervals
+                    GROUP BY LOCATION, RESOURCE_TYPE;
+
+     gatein_times = SELECT COUNT(*) AS TIMES,LOCATION,RESOURCE_TYPE
+                    FROM :gateins
+                    --WHERE EVENT_TIME BETWEEN :START_TIME AND :END_TIME
+                    --AND VALUE_NEW = 'GTI'
+                    GROUP BY LOCATION, RESOURCE_TYPE;
+
+     OUT_AVERAGE_STAY = SELECT T1.LOCATION,T1.RESOURCE_TYPE,(T2.INTER_IDLE_SECONDS/T1.TIMES)/86400 AS AVERAGE_STAY_DAYS
+                        FROM :gatein_times T1
+                        INNER JOIN :idle_seconds T2
+                        ON (T1.LOCATION = T2.LOCATION) AND (T1.RESOURCE_TYPE = T2.RESOURCE_TYPE) ;
+
+
+	OUT_AVERAGE_STAY = SELECT T1.LOCATION_NAME AS LOCATION,T1.RESOURCE_TYPE,IFNULL(T2.AVERAGE_STAY_DAYS,0) AS AVERAGE_STAY_DAYS FROM :IN_LOCATION_RESOURCE T1
+                        LEFT JOIN :OUT_AVERAGE_STAY T2
+                        ON T1.LOCATION_NAME = T2.LOCATION AND T1.RESOURCE_TYPE = T2.RESOURCE_TYPE;
+END;

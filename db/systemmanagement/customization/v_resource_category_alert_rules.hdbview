@@ -1,0 +1,48 @@
+schema = "SAP_TM_TRP";
+query = "SELECT DISTINCT T3.CODE AS RESOURCE_CATEGORY,
+                T1.OBJECT_ID AS ID,
+                T2.CODE,
+                T2.NAME,
+                T2.DESC,
+                T2.SCHEMA_NAME,
+                T2.STORED_PROCEDURE_NAME,
+                T2.TYPE_ID,
+                T2.TYPE,
+                T2.TYPE_NAME,
+                T2.CATEGORY_ID,
+                T2.CATEGORY,
+                CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                  WHEN (T2.CREATED_BY <> '' AND T2.CREATED_BY IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+			      WHEN T2.CREATED_BY = '' OR T2.CREATED_BY IS NULL THEN ''
+			      ELSE '***' END AS CREATED_BY,
+                T2.CREATED_ON,
+                CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                  WHEN (T2.MODIFIED_BY <> '' AND T2.MODIFIED_BY IS NOT NULL) AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+			      WHEN T2.MODIFIED_BY = '' OR T2.MODIFIED_BY IS NULL THEN ''
+			      ELSE '***' END AS MODIFIED_BY,
+                T2.MODIFIED_ON,
+                T2.MODIFIED_TIME,
+                CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                  WHEN (T2.MODIFIED_BY <> '' AND T2.MODIFIED_BY IS NOT NULL) AND T11.USERNAME IS NOT NULL THEN T11.USERNAME
+			      WHEN T2.MODIFIED_BY = '' OR T2.MODIFIED_BY IS NULL THEN ''
+			      ELSE '***' END AS LAST_MODIFIED_BY,
+                T2.DATA_OBJECT_ID,
+                T2.DATA_OBJECT_FORMAT
+         FROM \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_object_registration\" T1
+         INNER JOIN \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings\" T3
+         ON (T1.RESOURCE_CATEGORY_ID = T3.ID)
+         INNER JOIN \"sap.tm.trp.db.objectregistration::v_alert_rule_ui\" T2
+         ON (T1.OBJECT_ID = T2.ID AND T1.OBJECT_TYPE = T2.TYPE)
+         LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T9  
+         ON T2.CREATED_BY = T9.USERNAME
+         LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T10  
+         ON T2.MODIFIED_BY = T10.USERNAME
+         LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T11 
+         ON T2.LAST_MODIFIED_BY = T11.USERNAME 
+         CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE";
+                
+depends_on_table = ["sap.tm.trp.db.systemmanagement.customization::t_resource_category_object_registration",
+                    "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings"];
+depends_on_view = ["sap.tm.trp.db.objectregistration::v_alert_rule_ui",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_unblock_users",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege"];               

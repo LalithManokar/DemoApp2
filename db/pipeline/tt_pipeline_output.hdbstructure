@@ -1,0 +1,15 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "used for virtual plan model";
+table.columns = [
+  {name = "PLAN_ID"; sqlType = BIGINT;},
+  {name = "EXECUTION_ID"; sqlType = BIGINT;},
+  {name = "GEO_ID"; sqlType = VARCHAR;length = 32;},
+  {name = "RESOURCE_TYPE_ID"; sqlType = VARCHAR;length = 32;},
+  {name = "START_TIME"; sqlType = TIMESTAMP;},
+  {name = "END_TIME"; sqlType = TIMESTAMP;},
+  {name = "SEQUENCE"; sqlType = INTEGER;},
+  {name = "OUTPUT_KEY"; sqlType = VARCHAR;length = 200;},
+  {name = "OUTPUT_VALUE"; sqlType = DECIMAL; length = 20; scale = 4;},
+  {name = "INTERVAL"; sqlType = INTEGER;}
+];

@@ -1,0 +1,86 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_compute_next_departure_time" (
+	IN cur_date DATE, -- last computed date or near computed date
+	IN fix_time TIME,  -- the fix time of day
+	IN cycle_type CHAR,  -- the cycle type, 'D' for daily, 'W' for week, 'M' for month
+	IN is_cycle_wrap CHAR,  -- flag indicates whether the next cycle day is the first entry in the whole cycle, 'X' for true, '' for false
+	IN next_cycle_day TINYINT,  -- the next cycle day, 1 for daily, 0 -- 6 for Mon to Sun, 1 -- 31 for Month Day
+	OUT return_code INTEGER,  -- return code, 0 mean for success, other code for failure
+	OUT next_datetime SECONDDATE  -- the next possible datetime
+) 
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING
+   READS SQL DATA AS
+BEGIN
+	/*********************************************************************
+	This is function is used to compute next possible datetime with the 
+	given previous computed date, the fixed time to the next computed date.
+	For cycle type is WEEK or DAILY, the return_code is always 0.
+	For cycle type is MONTH, there is possibility that the next_datetime could
+	lead to invalid date of some month(because some month has no day for 30th, 31th),
+	in this case next_datetime will the last day of that month and return_code is 1.
+	*********************************************************************/
+	-- decl_list
+	DECLARE DAILY_CYCLE CONSTANT CHAR = 'D';
+	DECLARE WEEK_CYCLE CONSTANT CHAR = 'W';
+	DECLARE MONTH_CYCLE CONSTANT CHAR = 'M';
+
+	DECLARE cur_monthday TINYINT;
+	DECLARE next_monthday TINYINT;
+	DECLARE cur_weekday TINYINT;
+	DECLARE next_weekday TINYINT;
+
+	DECLARE next_date DATE;
+	DECLARE offset_days TINYINT;
+	DECLARE cur_last_day DATE; -- current month last day
+	-- exception_list
+	-- stmt_list
+	return_code = 0;
+	IF :cycle_type = :MONTH_CYCLE THEN
+		IF :is_cycle_wrap = 'X' THEN
+			-- if current month day has already exceed the next cycle day, then advance to next month
+			-- first set the next_date to the last day of current month
+			SELECT LAST_DAY(:cur_date) INTO next_date
+			FROM DUMMY;
+			offset_days = :next_cycle_day;
+		ELSE
+			-- otherwise the next computed day should in current month
+			next_date = :cur_date;
+			SELECT :next_cycle_day - DAYOFMONTH(:cur_date) INTO offset_days
+			FROM DUMMY;
+		END IF;
+
+		SELECT ADD_DAYS(:next_date, :offset_days) INTO next_date
+		FROM DUMMY;
+
+		-- Check whether the day of month in next_date equal to next_cycle_day
+		-- if not, that means such date do not exist, in such case return last day of last month
+		SELECT DAYOFMONTH(:next_date) INTO cur_monthday
+		FROM DUMMY;
+		IF :cur_monthday != :next_cycle_day THEN
+			SELECT LAST_DAY(ADD_MONTHS(:next_date, -1)) INTO next_date
+			FROM DUMMY;
+			return_code = 1;
+		END IF;
+	ELSEIF :cycle_type = :WEEK_CYCLE THEN
+		SELECT WEEKDAY(:cur_date) INTO cur_weekday
+		FROM DUMMY;
+
+		IF :is_cycle_wrap = 'X' THEN
+			offset_days = 7 - :cur_weekday + :next_cycle_day;
+		ELSE
+			offset_days = :next_cycle_day - :cur_weekday;
+		END IF;
+
+		SELECT ADD_DAYS(:cur_date, :offset_days) INTO next_date
+		FROM DUMMY;
+	ELSE
+		-- For daily cycle, always compute the next day
+		SELECT NEXT_DAY(:cur_date) INTO next_date
+		FROM DUMMY;
+	END IF;
+	
+	-- compute next_datetime with the next_date and fix_time
+	SELECT TO_SECONDDATE(TO_VARCHAR(:next_date, 'YYYY-MM-DD') || ' ' || TO_VARCHAR(:fix_time, 'HH24:MI:SS'), 'YYYY-MM-DD HH24:MI:SS') INTO next_datetime
+	FROM DUMMY;
+END

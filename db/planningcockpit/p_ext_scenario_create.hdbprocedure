@@ -1,0 +1,110 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_ext_scenario_create"(
+    IN NAME VARCHAR(22),
+    IN DESC VARCHAR(200),
+    IN REL_SM_PLAN_ID BIGINT,
+    IN FLAG INTEGER,
+    OUT SCENARIO_ID BIGINT,
+    OUT MESSAGE VARCHAR(200),
+    OUT MODIFIED_BY VARCHAR(200)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE USER_ID BIGINT;
+    DECLARE USERNAME VARCHAR(200);
+    DECLARE LOCK_USER VARCHAR(200);
+    DECLARE SPRAS VARCHAR(10);
+    
+    DECLARE V_TIMESTAMP_START DATETIME := CURRENT_UTCTIMESTAMP;
+    DECLARE V_LOCK_SESSION_ID VARCHAR(200);
+    DECLARE V_LOCK_USER_ID BIGINT;
+    DECLARE V_LOCK_LAST_MODIFYED_ON TIMESTAMP;
+    DECLARE V_PLAN_STATUS INTEGER;
+    DECLARE NAME_COUNT INTEGER;
+    DECLARE CURRENCY VARCHAR(30);
+    DECLARE V_EXECUTION_ID BIGINT;
+    DECLARE V_DEFAULT_NODE BIGINT;
+    DECLARE ALERT_NUM INTEGER;
+    
+    CALL "sap.tm.trp.db.planningcockpit::p_ext_lock_simulation_plan_by_id"(:REL_SM_PLAN_ID, V_LOCK_SESSION_ID, V_LOCK_USER_ID, V_LOCK_LAST_MODIFYED_ON);
+      
+    SELECT B.PLAN_STATUS
+      INTO V_PLAN_STATUS 
+      FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" B
+     WHERE B.ID = :REL_SM_PLAN_ID; 
+    
+    SELECT USERNAME INTO USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+    
+    -- for the newly created simulation plan, the user does not get the lock but still need to allow create default scenario
+    IF :V_LOCK_USER_ID = :USER_ID THEN  
+       --:V_LOCK_LAST_MODIFYED_ON IS NOT NULL THEN
+
+        IF V_PLAN_STATUS = 1 THEN
+            MESSAGE := 'MSG_ERROR_FINALIZED';
+            MODIFIED_BY := USERNAME;
+        ELSE
+            SELECT COUNT(1) INTO NAME_COUNT
+            FROM "sap.tm.trp.db.planningcockpit::t_scenario"
+            WHERE REL_SM_PLAN_ID = :REL_SM_PLAN_ID AND NAME = :NAME;
+            
+            IF :NAME_COUNT > 0 THEN
+                MESSAGE := 'MSG_ERROR_SCENARIO_NAME_EXISTED';
+                MODIFIED_BY := USERNAME;
+            ELSE
+                SELECT SPRAS INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+                
+                CALL "sap.tm.trp.db.planningcockpit::p_get_currenty_of_simulation_plan"(
+                       :REL_SM_PLAN_ID,CURRENCY);
+                              
+                SELECT "sap.tm.trp.db.planningcockpit::s_scenario".NEXTVAL INTO SCENARIO_ID FROM DUMMY;
+                
+             
+               
+                --alert calculation:
+                 SELECT IFNULL(MAX(EXCUTE_ID),0) INTO V_EXECUTION_ID 
+				  FROM  "sap.tm.trp.db.planningcockpit::t_simulation_plan"
+				  WHERE ID = :REL_SM_PLAN_ID;
+				  
+                CALL "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid"(:V_EXECUTION_ID,V_DEFAULT_NODE); 
+                
+                SELECT IFNULL(SUM(ALERT_STATUS),0) INTO ALERT_NUM
+				FROM 
+				(
+					SELECT CASE LOWER(T1.MESSAGE) WHEN 'alert' THEN 1 ELSE 0 END AS ALERT_STATUS 
+					FROM  "sap.tm.trp.db.hrf::v_SD_KPI_rules" T1
+					WHERE T1.NODE_ID = :V_DEFAULT_NODE AND T1.PLAN_EXECUTION_ID = :V_EXECUTION_ID 
+				 )T_OLD_ALERT;
+        
+                INSERT INTO "sap.tm.trp.db.planningcockpit::t_scenario"
+                (ID, CODE, NAME, ACTIVITY_STATUS, STATUS, ACTIVITY_COST, BALANCING_COST,REL_SM_PLAN_ID, CREATED_BY, CREATED_ON, CURRENCY,FRESH_FLAG,SYNC_FLAG, ALERT_NUM,MODIFIED_BY, MODIFIED_ON)
+                VALUES(:SCENARIO_ID, UPPER(:NAME), :NAME, 0,0, 0, NULL, :REL_SM_PLAN_ID, :USER_ID, CURRENT_UTCTIMESTAMP, :CURRENCY,0,0, :ALERT_NUM,:USER_ID, CURRENT_UTCTIMESTAMP);
+        
+                INSERT INTO "sap.tm.trp.db.planningcockpit::t_scenario_t"(ID, SPRAS, DESC)
+                VALUES(:SCENARIO_ID, :SPRAS, :DESC);
+            
+                -- we don't need to update this record when create default scenario
+                IF :FLAG = 1 THEN                
+                --update the record in the lock table 
+                UPDATE "sap.tm.trp.db.planningcockpit::t_lock"
+                   SET --SESSION_ID = :SESSION_ID,
+                       USER_ID = :USER_ID,
+                       LAST_MODIFYED_ON = :V_TIMESTAMP_START
+                 WHERE SIMULATION_ID = :REL_SM_PLAN_ID;
+                END IF; 
+
+            
+                MESSAGE := 'MSG_SUCCESS_STATUS';
+                MODIFIED_BY := USERNAME;
+            END IF;
+        END IF;
+        
+    ELSE
+        MESSAGE := 'MSG_ERROR_LOCKED';
+        SELECT USERNAME INTO LOCK_USER
+        FROM "sap.tm.trp.db.systemmanagement.user::t_user" WHERE ID = :V_LOCK_USER_ID;
+        MODIFIED_BY := :LOCK_USER;
+    END IF;
+END;

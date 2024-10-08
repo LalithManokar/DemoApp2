@@ -1,0 +1,12 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::p_basic_node_attribute" ( 
+	IN BASIC_NODES "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::t_basic_node"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	AS
+BEGIN
+	
+	CALL "sap.tm.trp.db.supplydemand.instant::p_sample_fulfill_attribute"(:BASIC_NODES );		
+	
+END;

@@ -1,0 +1,31 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_get_pie_on_map_for_scheduled_plan_for_supply_demand"(
+    IN IN_PLAN_MODEL_ID BIGINT,
+    IN IN_NODE_ID BIGINT,
+    IN SEQUENCE BIGINT,
+    IN IN_POLYGON CLOB,
+    OUT out_pie_on_map "sap.tm.trp.db.pipeline::tt_pie_on_map_for_supply_demand",
+    OUT TOO_MUCH_LOCATION_FLAG SMALLINT,
+    OUT GIS_TYPE VARCHAR(10),
+    OUT OUT_PLAN_STATUS SMALLINT,
+    OUT OUT_LOCATIONS_XPOS_YPOS_INVALID  "sap.tm.trp.db.pipeline::tt_location_info_list" 
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+ 
+
+	    DECLARE  IN_EXECUTION_ID BIGINT;
+	    
+	    SQL_GET_EXECUTION_ID = SELECT * FROM "sap.tm.trp.db.supplydemand::cv_get_executionid_of_the_planmodelid"(placeholder."$$IN_PLAN_MODEL_ID$$"=>:IN_PLAN_MODEL_ID);
+       
+        SELECT EXECUTION_ID INTO IN_EXECUTION_ID
+        FROM :SQL_GET_EXECUTION_ID;   
+        
+         CALL "sap.tm.trp.db.pipeline::p_get_pie_on_map_for_template_plan_for_supply_demand" (null,null,:IN_EXECUTION_ID,:IN_NODE_ID,:SEQUENCE,
+          :IN_POLYGON,out_pie_on_map,TOO_MUCH_LOCATION_FLAG,GIS_TYPE,OUT_PLAN_STATUS,OUT_LOCATIONS_XPOS_YPOS_INVALID);
+        
+       
+   
+END;

@@ -1,0 +1,64 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::p_pr_extr_controller_initial_wrapper" (
+	   in iv_package_size     BIGINT default 50000,                  --> Package size for iterative processing
+	   in iv_delay_buffer     BIGINT default 30,		             --> Seconds delay for the upper cutoff time
+	   in iv_min_start_tmstmp NVARCHAR(15) default '20140101000000', --> Minimum timestamp to start, for the first execution
+	   in iv_stop_job_in_seconds  INT default -1,                    --> Terminate job beyond the assigned seconds
+	   in iv_stop_job_in_exec_cnt INT default -1                     --> Terminate job beyond the execution counter reached
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	--DEFAULT SCHEMA <default_schema_name>
+	--READS SQL DATA 
+	AS
+BEGIN
+
+ 	--Pickup & Return Redesign: Extractor Controller Wrapper
+ 	--Only to be used for the Initial Loads Scenario
+ 	
+ 	declare lv_next_run_flag  NVARCHAR(1) default 'X';
+ 	declare lv_more_data_flag NVARCHAR(1);
+ 	declare lv_stop_job_time  TIMESTAMP default current_utctimestamp;
+ 	declare lv_exec_cnt       INT default 0;
+ 	
+ 	--Find the stop job time
+ 	if iv_stop_job_in_seconds > 0 then
+ 		lv_stop_job_time := add_seconds(lv_stop_job_time, iv_stop_job_in_seconds);
+ 	end if;
+ 	
+ 	
+ 	WHILE lv_next_run_flag = 'X' DO 
+ 		
+ 		--Initial Load procedure
+		CALL "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::p_pr_extr_controller_initial" (
+			iv_package_size => iv_package_size,
+			iv_delay_buffer => iv_delay_buffer,
+			iv_min_start_tmstmp => iv_min_start_tmstmp,
+			ov_more_data_flag => :lv_more_data_flag
+		);
+		
+		COMMIT;
+		
+ 		lv_exec_cnt := lv_exec_cnt + 1;
+ 		
+ 		--Next Execution or Terminate?
+ 		if (iv_stop_job_in_exec_cnt > 0 and lv_exec_cnt >= iv_stop_job_in_exec_cnt) or
+ 		   (iv_stop_job_in_seconds > 0  and current_utctimestamp >= lv_stop_job_time)  or
+ 		   (lv_more_data_flag = '') then
+ 			
+ 			lv_next_run_flag := '';
+ 			
+			/* 			
+ 			select :iv_stop_job_in_exec_cnt as iv_stop_job_in_exec_cnt, 
+ 				   :lv_exec_cnt as lv_exec_cnt, 
+ 				   :iv_stop_job_in_seconds as iv_stop_job_in_seconds, 
+ 				   current_utctimestamp, 
+ 				   :lv_stop_job_time as lv_stop_job_time, 
+ 				   :lv_more_data_flag as lv_more_data_flag
+ 			   from sys.dummy;
+ 			*/
+ 			
+ 		end if; 
+		
+	END WHILE;
+
+END;

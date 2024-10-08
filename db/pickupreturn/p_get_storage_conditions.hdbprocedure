@@ -1,0 +1,143 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_get_storage_conditions" (
+    IN RULE_TYPE INTEGER,
+    IN COST_MODEL_ID BIGINT,
+    IN RESOURCE_CATEGORY VARCHAR(20),
+    IN loc_res "sap.tm.trp.db.pickupreturn::tt_location_resource_info",
+    IN t_impacted_supply_demand "sap.tm.trp.db.pickupreturn::tt_impacted_supply_demand",
+    IN t_average_stay_days "sap.tm.trp.db.pickupreturn::tt_location_average_stay",
+    IN RESOURCE_TYPES_CODE_TEU_COUNT "sap.tm.trp.db.pickupreturn::tt_resource_types_code_teu_count",
+    OUT out_storage_condifion "sap.tm.trp.db.pickupreturn::tt_location_resource_storage_condition"
+ ) 
+	LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+    
+BEGIN 
+   DECLARE CURRENCY VARCHAR(20);
+   DECLARE CUR_TIME TIMESTAMP;
+   DECLARE START_TIME TIMESTAMP;
+   DECLARE RESOURCE_CATEGORY_TYPE VARCHAR(20);
+      
+   SELECT IFNULL(MAX(CURRENCY_CODE),'EUR') INTO CURRENCY 
+	      FROM "sap.tm.trp.db.costmodel::t_cost_model_new"
+	      WHERE ID = :COST_MODEL_ID;
+	   
+   SELECT IFNULL(MAX(RESOURCE_CATEGORY_TYPE),'') INTO RESOURCE_CATEGORY_TYPE
+          FROM "sap.tm.trp.db.costmodel::t_cost_model_new" T1
+          INNER JOIN "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings" T2
+          	ON T1.RESOURCE_CATEGORY = T2.CODE
+            WHERE T1.ID = :COST_MODEL_ID;
+   
+   SELECT ADD_DAYS(CURRENT_UTCTIMESTAMP, IFNULL(MAX(DATE_OFFSET),0)) INTO CUR_TIME
+          FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+          WHERE USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+   
+   SELECT ADD_DAYS(:CUR_TIME, -180) INTO START_TIME FROM DUMMY;  
+        
+   loc_equip = SELECT DISTINCT LOCATION_NAME, RESOURCE_TYPE FROM :loc_res;
+                
+   CALL "sap.tm.trp.db.costmodel::sp_query_storage_cost_config"
+         (:COST_MODEL_ID,:loc_equip,:RESOURCE_TYPES_CODE_TEU_COUNT,timebase_cost_config, quabase_cost_config);
+   
+   time_loc_equip = SELECT DISTINCT LOCATION_NAME, RESOURCE_TYPE FROM :timebase_cost_config;
+   qua_loc_equip = SELECT DISTINCT LOCATION_NAME, RESOURCE_TYPE FROM :quabase_cost_config;
+   
+   t_new_teu = SELECT  T1.LOCATION_NAME, T1.EQUIP_TYPE_NAME AS RESOURCE_TYPE, 
+                       (T1.SUPPLY - T1.DEMAND + T1.IMPACTED_SUPPLY - T1.IMPACTED_DEMAND) AS NEW_TEU 
+                 FROM  :t_impacted_supply_demand T1
+           INNER JOIN :RESOURCE_TYPES_CODE_TEU_COUNT T2 ON (T1.EQUIP_TYPE_NAME = T2.RESOURCE_TYPE_CODE) 
+			;           
+   -- quantity base locations/resourcs, check which threshold the new sd fall in 
+   quabase_storage_condition =   
+        SELECT T3.LOCATION_NAME AS LOCATION, T3.RESOURCE_TYPE, 
+      --  CONCAT(CONCAT(CONCAT(CONCAT(CONCAT(  T4.THRESHOLD_FROM,'~'), T4.THRESHOLD_TO),' TEU/'), T4.PER_DIEM_COST), :CURRENCY) AS STORAGE_CONDITION  
+           CASE WHEN :RESOURCE_CATEGORY_TYPE='CN' THEN TO_INTEGER(T4.THRESHOLD_FROM*T5.TEU_COUNT) ELSE T4.THRESHOLD_FROM END
+        || '~'
+        || CASE WHEN :RESOURCE_CATEGORY_TYPE='CN' THEN  CASE WHEN T4.THRESHOLD_TO =999999999  THEN T4.THRESHOLD_TO ELSE TO_INTEGER(T4.THRESHOLD_TO*T5.TEU_COUNT) END  ELSE T4.THRESHOLD_TO END
+        || ' '
+        || CASE WHEN :RESOURCE_CATEGORY_TYPE='CN' THEN 'TEU' ELSE T4.UOM_CODE END
+        || '/'
+        || CASE WHEN :RESOURCE_CATEGORY_TYPE='CN' THEN TO_DECIMAL(T4.PER_DIEM_COST/T5.TEU_COUNT,18,2) ELSE T4.PER_DIEM_COST END 
+        || :CURRENCY AS STORAGE_CONDITION
+        
+              FROM :t_new_teu T3        
+        INNER JOIN :quabase_cost_config T4
+                ON (    T3.LOCATION_NAME = T4.LOCATION_NAME 
+                    AND T3.RESOURCE_TYPE = T4.RESOURCE_TYPE 
+                    AND T3.NEW_TEU BETWEEN T4.THRESHOLD_FROM AND T4.THRESHOLD_TO
+                    AND T3.NEW_TEU >= 0)
+        INNER JOIN :RESOURCE_TYPES_CODE_TEU_COUNT T5 
+                ON (T3.RESOURCE_TYPE = T5.RESOURCE_TYPE_CODE)                                
+        UNION ALL        
+        (
+        SELECT t5.LOCATION_NAME AS LOCATION, t5.RESOURCE_TYPE, '0' AS STORAGE_CONDITION
+        FROM :t_new_teu T5
+        INNER JOIN :quabase_cost_config T6 ON ( T5.LOCATION_NAME = T6.LOCATION_NAME AND T5.RESOURCE_TYPE = T6.RESOURCE_TYPE ) 
+        WHERE t5.NEW_TEU < 0
+        );        
+      
+   
+   -- Return
+   IF :RULE_TYPE = 2 THEN 
+      timebase_storage_condition = 
+         SELECT T0.LOCATION_NAME AS LOCATION, T0.RESOURCE_TYPE,
+         CONCAT(CONCAT(CONCAT(CONCAT(CONCAT(T2.THRESHOLD_FROM,'~'), T2.THRESHOLD_TO),' Days/'), TO_DECIMAL(T2.PER_DIEM_COST,18,2)), :CURRENCY) AS STORAGE_CONDITION  
+           FROM  
+         ( 
+           SELECT T1.LOCATION_NAME, T1.EQUIP_TYPE_NAME AS RESOURCE_TYPE, IFNULL(T4.AVERAGE_STAY_DAYS,1) AS AVERAGE_STAY_DAYS       
+           FROM :t_impacted_supply_demand T1
+           INNER JOIN :time_loc_equip T3 ON (T1.LOCATION_NAME = T3.LOCATION_NAME AND T1.EQUIP_TYPE_NAME = T3.RESOURCE_TYPE)
+           LEFT OUTER JOIN :t_average_stay_days T4 ON (T1.LOCATION_NAME = T4.LOCATION)
+         ) T0
+         INNER JOIN :timebase_cost_config T2 ON (T0.LOCATION_NAME = T2.LOCATION_NAME AND T0.RESOURCE_TYPE = T2.RESOURCE_TYPE
+               AND (T0.AVERAGE_STAY_DAYS BETWEEN T2.THRESHOLD_FROM AND T2.THRESHOLD_TO));
+   ELSE 
+   -- Pickup  
+   -- Find the longest stay days of the containers in the location, if nothing found use 1 as default
+     tmp_trk = SELECT t4.RESOURCE_TYPE, t4.LOCATION_NAME, t1.RESOURCE_ID AS EQUIP_ID,
+               t1.EVENT_TIME, t1.EVENT_CODE
+               FROM "sap.tm.trp.db.semantic.event::v_gateinout_tracking_history" t1
+               INNER JOIN :loc_res t4 ON (t1.RESOURCE_TYPE = t4.RESOURCE_TYPE AND t1.LOCATION_NAME = t4.LOCATION_NAME)
+               INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t6 ON (t1.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :RESOURCE_CATEGORY)
+               WHERE t1.EVENT_TIME BETWEEN :START_TIME AND :CUR_TIME;       
+       
+     longest_gate_in = 
+              SELECT LOCATION_NAME, RESOURCE_TYPE, DAYS_BETWEEN(MIN(LAST_GTI_TIME),:CUR_TIME) AS LONGEST_GATE_IN FROM 
+              (          
+               SELECT T1.EQUIP_ID, T1.RESOURCE_TYPE, T1.LOCATION_NAME, T1.LAST_GTI_TIME FROM
+               (
+                  SELECT EQUIP_ID, RESOURCE_TYPE, LOCATION_NAME, MAX(EVENT_TIME) AS LAST_GTI_TIME
+                  FROM :tmp_trk          
+                  WHERE EVENT_CODE = 'GTI' 
+                  GROUP BY EQUIP_ID, RESOURCE_TYPE, LOCATION_NAME
+               ) T1
+               LEFT OUTER JOIN 
+               (
+                  SELECT EQUIP_ID, RESOURCE_TYPE,  LOCATION_NAME, MAX(EVENT_TIME) AS LAST_GTO_TIME
+                  FROM :tmp_trk 
+                  WHERE EVENT_CODE = 'GTO'  
+                  GROUP BY EQUIP_ID, RESOURCE_TYPE, LOCATION_NAME 
+               ) T2 ON (T1.EQUIP_ID = T2.EQUIP_ID AND T1.LOCATION_NAME = T2.LOCATION_NAME AND T1.LAST_GTI_TIME < T2.LAST_GTO_TIME) 
+               WHERE T2.EQUIP_ID IS NULL
+              )
+              GROUP BY LOCATION_NAME, RESOURCE_TYPE;  
+      
+      -- Check which interval the longest stay days fall into                 
+      timebase_storage_condition = 
+             SELECT T1.LOCATION_NAME AS LOCATION, T1.EQUIP_TYPE_NAME AS RESOURCE_TYPE,
+             CONCAT(CONCAT(CONCAT(CONCAT(CONCAT(T2.THRESHOLD_FROM,'~'), T2.THRESHOLD_TO),' Days/'), TO_DECIMAL(T2.PER_DIEM_COST,18,2)), :CURRENCY) AS STORAGE_CONDITION
+             FROM
+             (
+              SELECT T1.*, IFNULL(T2.LONGEST_GATE_IN,1 ) AS LONGEST_GATE_IN 
+              FROM :t_impacted_supply_demand T1
+              LEFT OUTER JOIN :longest_gate_in T2 ON (T1.LOCATION_NAME = T2.LOCATION_NAME AND T1.EQUIP_TYPE_NAME = T2.RESOURCE_TYPE) 
+             ) T1
+             INNER JOIN :timebase_cost_config T2 ON (T1.LOCATION_NAME = T2.LOCATION_NAME AND T1.EQUIP_TYPE_NAME = T2.RESOURCE_TYPE 
+             AND (T1.LONGEST_GATE_IN BETWEEN T2.THRESHOLD_FROM AND T2.THRESHOLD_TO )); 
+     END IF;         
+  
+     out_storage_condifion = SELECT * FROM :quabase_storage_condition
+                             UNION ALL
+                             SELECT * FROM :timebase_storage_condition;                          
+END;

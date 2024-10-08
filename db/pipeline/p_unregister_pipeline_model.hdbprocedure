@@ -1,0 +1,56 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_unregister_pipeline_model" (
+IN PIPELINE_MODEL_ID BIGINT,
+OUT MESSAGE VARCHAR(50)) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+DECLARE ENTRY_ID BIGINT;
+DECLARE ENTRY_COUNT INTEGER;
+DECLARE UNREGI_FLAG_ALERT INTEGER;
+DECLARE USED_LIST_COUNT INTEGER;
+DECLARE SQL_STRING NCLOB;
+
+SELECT COUNT(1) INTO ENTRY_COUNT FROM "sap.tm.trp.db.pipeline::t_pipeline_model" WHERE ID = :PIPELINE_MODEL_ID;
+IF(:ENTRY_COUNT > 0 ) THEN
+
+SELECT COUNT(*) INTO USED_LIST_COUNT
+FROM "sap.tm.trp.db.whereusedlist::v_used_registered_object" AS A
+     INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_model" AS B
+     ON A.OBJECT_CODE = B.CODE
+WHERE B.ID = PIPELINE_MODEL_ID;
+
+IF :USED_LIST_COUNT > 0 THEN
+    MESSAGE := 'MSG_ERROR_CALC_MODEL_USED';
+ELSE
+    SELECT ENTRY_POINT_ID INTO ENTRY_ID FROM "sap.tm.trp.db.pipeline::t_pipeline_model" WHERE ID = :PIPELINE_MODEL_ID;
+    DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_entry_point" WHERE ID = :ENTRY_ID;
+    NODE_IDS = SELECT ID FROM "sap.tm.trp.db.pipeline::t_pipeline_node" WHERE PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;
+
+    --UNREGISTER ALERT RULE
+    CALL "sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_unregister_controller_for_pipeline_model"(:PIPELINE_MODEL_ID, UNREGI_FLAG_ALERT);
+
+    DELETE FROM "sap.tm.trp.db.pipeline::t_entry_point_param"
+    WHERE PIPELINE_ENTRY_POINT_ID = :ENTRY_ID;
+    DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_node_connection"  
+    WHERE NODE_ID IN (SELECT * FROM :NODE_IDS);  
+    DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_node_layout"  
+    WHERE NODE_ID IN (SELECT * FROM :NODE_IDS); 
+    DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_node_logical_hierarchy"  
+    WHERE NODE_ID IN (SELECT * FROM :NODE_IDS); 
+    DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_node_misc_info"  
+    WHERE NODE_ID IN (SELECT * FROM :NODE_IDS); 
+    DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_node" WHERE PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;
+    DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_model" WHERE ID = :PIPELINE_MODEL_ID;
+    DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_misc_info" WHERE PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;
+    DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_node_list" WHERE PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;
+    
+    --alter the wrapper procedure once new CM has been deleted
+   	--CALL "sap.tm.trp.db.supplydemand.instant::p_pipeline_procedure_wrapper_generator"(SQL_STRING); 
+    
+    MESSAGE := 'MSG_SUCCESS_STATUS';
+END IF;
+
+END IF;
+END;

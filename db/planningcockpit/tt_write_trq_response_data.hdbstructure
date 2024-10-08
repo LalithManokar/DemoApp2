@@ -1,0 +1,21 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "response message from write TRQ";
+table.columns = [
+  {name = "ACTIVITY_ID"; sqlType = BIGINT;},
+  {name = "STATUS"; sqlType = VARCHAR; length = 10;},
+  {name = "TM_STATUS"; sqlType = VARCHAR; length = 1;},
+  {name = "MESSAGE"; sqlType = NVARCHAR; length = 1000;},
+  {name = "TRQ_ID"; sqlType = NVARCHAR; length = 20;},
+  {name = "TRQ_ITEM_ID"; sqlType = NVARCHAR; length = 20; }, 
+  {name = "SOURCE_LOCATION"; sqlType = VARCHAR; length = 22; },
+  {name = "REQ_DEPARTURE_TIME"; sqlType = DECIMAL; precision = 15; scale = 0;},      
+  {name = "DESTINATION_LOCATION"; sqlType = VARCHAR; length = 22;},
+  {name = "REQ_ARRIVAL_TIME"; sqlType = DECIMAL; precision = 15; scale = 0;},    
+  {name = "RESOURCE_TYPE"; sqlType = VARCHAR; length = 10; }, 
+  {name = "QUANTITY"; sqlType = INTEGER; }, 
+  {name = "TU_GEN_FLAG"; sqlType = VARCHAR; length = 1;},    
+  {name = "TU_ID"; sqlType = NVARCHAR; length = 20;},  
+  {name = "TU_ITEM_ID"; sqlType = NVARCHAR; length = 10; } 
+];
+

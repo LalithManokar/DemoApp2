@@ -1,0 +1,40 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_migrate_timezone" (
+)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+
+    UPDATE
+        "sap.tm.trp.db.filter::t_time_filter" AS TF
+    SET
+        TIMEZONE_ID = TM.NEW_TIMEZONE_ID
+    FROM
+        "sap.tm.trp.db.systemmanagement.user::t_time_zone_migration" AS TM,"sap.tm.trp.db.filter::t_time_filter" AS TF
+    WHERE
+        TF.TIMEZONE_ID = TM.OLD_TIMEZONE_ID
+    ;
+
+    UPDATE
+        "sap.tm.trp.db.job::t_archive_schedule_detail" AS TF
+    SET
+        TIMEZONES = TM.NEW_TIMEZONE_ID
+    FROM
+        "sap.tm.trp.db.systemmanagement.user::t_time_zone_migration" AS TM,"sap.tm.trp.db.job::t_archive_schedule_detail" AS TF
+    WHERE
+        TF.TIMEZONES = TM.OLD_TIMEZONE_ID
+    ;
+
+    UPDATE
+        "sap.tm.trp.routing.db.dataset::t_path_departure_rule" AS TF
+    SET
+        TIMEZONE = TM.NEW_TIMEZONE_ID
+    FROM
+        "sap.tm.trp.db.systemmanagement.user::t_time_zone_migration" AS TM,"sap.tm.trp.routing.db.dataset::t_path_departure_rule" AS TF
+    WHERE
+        TF.TIMEZONE = TM.OLD_TIMEZONE_ID
+    ;
+
+
+END

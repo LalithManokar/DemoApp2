@@ -1,0 +1,177 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_delete_composite_path" (
+	IN network_id BIGINT,
+	IN path_id "sap.tm.trp.routing.db.common::tt_id",
+	OUT return_code INTEGER,
+	OUT id_map "sap.tm.trp.routing.db.dataset::tt_id_map",
+	OUT message "sap.tm.trp.routing.db.common::tt_message",
+	OUT log "sap.tm.trp.routing.db.common::tt_message"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING
+   AS
+BEGIN
+   /*************************************
+       RETURN_CODE:
+       0. Success
+       1. Network ID not exist
+       2. Input Path ids have duplication
+       3. Some input path ids do not exist physically
+       4. Some input path ids do not exist logically
+   *************************************/
+	-- decl_list
+	DECLARE manual_source CONSTANT CHAR = 'M';
+	DECLARE system_source CONSTANT CHAR = 'S';
+	DECLARE action_delete CONSTANT CHAR = 'D';
+	DECLARE action_create CONSTANT CHAR = 'C';
+	DECLARE err_path VARCHAR(50);
+	-- exception_list
+	-- stmt_list
+
+	-- Check whether the network id exist
+	-- check whether the input network id is illegal
+	SELECT CASE COUNT(*) WHEN 0 THEN 1 ELSE 0 END INTO return_code
+	FROM "sap.tm.trp.routing.db.path::t_network_model"
+	WHERE id = :network_id;
+
+	IF :return_code != 0 THEN
+		-- log message
+	    msg_params = SELECT 0 AS PLACEHOLDER, :network_id AS VALUE FROM DUMMY;
+	    CALL "sap.tm.trp.routing.db.common::p_get_text"('MSG_NETWORK_ID_NOT_EXIST', :msg_params, 'E', message);
+	    log = SELECT * FROM :message;
+		RETURN;
+	END IF;
+
+	-- Check whether path id have duplication
+	SELECT CASE COUNT(id) WHEN 0 THEN 0 ELSE 2 END INTO return_code
+	FROM (
+	SELECT id
+	FROM :path_id
+	GROUP BY id
+	HAVING COUNT(id) > 1);
+
+	IF :return_code != 0 THEN
+		-- log message
+	    msg_params = SELECT 0 AS PLACEHOLDER, '' AS VALUE FROM DUMMY WHERE 1 != 1;
+	    CALL "sap.tm.trp.routing.db.common::p_get_text"('MSG_DUPLICATE_INPUT_COMPOSITE_PATH', :msg_params, 'E', message);
+	    log = SELECT * FROM :message;
+		RETURN;
+	END IF;
+
+	-- Get the network id chain
+	CALL "sap.tm.trp.routing.db.path::p_get_network_chain"(:network_id, network_chain);
+
+	-- Lock to-be-deleted records for racing conflict
+	SELECT *
+	FROM "sap.tm.trp.routing.db.path::t_path" AS A
+	WHERE EXISTS (SELECT B.id FROM :path_id AS B WHERE B.id = A.id)
+	FOR UPDATE NOWAIT;
+	
+	-- Check all path id exist in the network chain
+	path_hash = 
+	SELECT A.id, hash
+	FROM :path_id AS A LEFT OUTER JOIN "sap.tm.trp.routing.db.path::t_path" AS B ON A.id = B.id;
+	--FOR UPDATE OF B.id NOWAIT;
+
+	SELECT CASE COUNT(id) WHEN 0 THEN 0 ELSE 3 END INTO return_code
+	FROM :path_hash
+	WHERE hash IS NULL;
+
+	IF :return_code != 0 THEN
+		-- log message
+		SELECT STRING_AGG(id, ',') INTO err_path
+		FROM (
+    		SELECT TOP 5 id
+    		FROM :path_hash
+    		WHERE hash IS NULL
+		);
+
+	    msg_params = SELECT 0 AS PLACEHOLDER, :err_path AS VALUE FROM DUMMY;
+	    CALL "sap.tm.trp.routing.db.common::p_get_text"('MSG_PATH_PHYSIC_NOT_EXIST', :msg_params, 'E', message);
+	    log = SELECT * FROM :message;
+		RETURN;
+	END IF;
+
+	-- Get the latest record by hash
+	path_hash_and_flag = 
+	SELECT A.hash, A.id, FIRST_VALUE(
+		CASE
+		WHEN level = 1 AND source_flag = 0 THEN 'D'  -- exist in the same layer and manual entry, physically delete it(no matter action is C or D, both should be deleted physically)
+		WHEN level IS NOT NULL AND (action IS NULL OR action = :action_create) THEN 'I'  -- exist with lower layer or same layer system entry and action is not delete, logically insert delete record
+		ELSE 'E'  -- The corresponding record not exist logically, in this case, emit error
+		END
+		ORDER BY source_flag, level) AS exist_flag
+	FROM :path_hash AS A LEFT OUTER JOIN (
+		SELECT CASE source 
+			WHEN :manual_source THEN 0 
+			WHEN :system_source THEN 1 
+			ELSE 1 
+			END AS source_flag, level, hash, action
+		FROM :network_chain AS A INNER JOIN "sap.tm.trp.routing.db.path::t_path" AS B
+		ON A.id = B.network_model_id
+	) AS B ON A.hash = B.hash
+	GROUP BY A.hash, A.id;
+
+	-- Check whether there are some records in which correspond to path_id which no longer exist
+	-- That means, delete non exist records, in this case, return error
+	SELECT CASE COUNT(*) WHEN 0 THEN 0 ELSE 4 END INTO return_code
+	FROM :path_hash_and_flag
+	WHERE exist_flag = 'E';
+
+	IF :return_code != 0 THEN
+		-- log message
+		SELECT STRING_AGG(id, ',') INTO err_path
+		FROM (
+    		SELECT TOP 5 id
+    		FROM :path_hash_and_flag
+    		WHERE exist_flag = 'E'
+		);
+
+	    msg_params = SELECT 0 AS PLACEHOLDER, :err_path AS VALUE FROM DUMMY;
+	    CALL "sap.tm.trp.routing.db.common::p_get_text"('MSG_PATH_LOGIC_NOT_EXIST', :msg_params, 'E', message);
+	    log = SELECT * FROM :message;
+		RETURN;
+	END IF;
+	
+	-- Otherwise, for the same layer and manual entry records, physically delete it
+	-- Route will also be deleted if any
+	route_id = SELECT id FROM "sap.tm.trp.routing.db.path::t_route"
+	WHERE composite_path_id IN (SELECT id FROM :path_hash_and_flag WHERE exist_flag = 'D');
+	
+	DELETE FROM "sap.tm.trp.routing.db.path::t_route_sequence_capacity"
+	WHERE route_id in (SELECT id FROM :route_id);
+	
+	DELETE FROM "sap.tm.trp.routing.db.path::t_route_sequence"
+	WHERE route_id in (SELECT id FROM :route_id);
+	
+	DELETE FROM "sap.tm.trp.routing.db.path::t_route"
+	WHERE id in (SELECT id FROM :route_id);
+
+	
+	-- Here no need to delete entries in table "sap.tm.trp.routing.db.path::t_path_target"
+	DELETE FROM "sap.tm.trp.routing.db.path::t_path_sequence"
+	WHERE path_id IN (SELECT id FROM :path_hash_and_flag WHERE exist_flag = 'D');
+
+	DELETE FROM "sap.tm.trp.routing.db.path::t_path"
+	WHERE id IN (SELECT id FROM :path_hash_and_flag WHERE exist_flag = 'D');
+
+	-- For other records, add one logical delete record in current layer with manual operation
+	id_map = 
+	SELECT id AS external_id, "sap.tm.trp.routing.db.path::s_composite_path".NEXTVAL AS id
+	FROM :path_hash_and_flag
+	WHERE exist_flag = 'I';
+
+	INSERT INTO "sap.tm.trp.routing.db.path::t_path" ( id, network_model_id, from_location, to_location, total_distance, loading_cost, unloading_cost, total_cost, loading_duration, unloading_duration, total_duration, cost_currency, action, source, hash, created_by, created_on, changed_by, changed_on)
+	SELECT B.id, :network_id, from_location, to_location, total_distance, loading_cost, unloading_cost, total_cost, loading_duration, unloading_duration, total_duration, cost_currency, :action_delete, :manual_source, hash, SESSION_CONTEXT('APPLICATIONUSER'), CURRENT_UTCTIMESTAMP, SESSION_CONTEXT('APPLICATIONUSER'), CURRENT_UTCTIMESTAMP
+	FROM "sap.tm.trp.routing.db.path::t_path" AS A INNER JOIN :id_map AS B ON A.id = B.external_id;
+
+	INSERT INTO "sap.tm.trp.routing.db.path::t_path_sequence" ( path_id, sequence, basic_path_id, path_type, from_location, to_location, from_bp_sequence, to_bp_sequence, mtr, distance, transport_duration, transship_duration, transport_cost, transship_cost )
+	SELECT B.id, sequence, basic_path_id, path_type, from_location, to_location, from_bp_sequence, to_bp_sequence, mtr, distance, transport_duration, transship_duration, transport_cost, transship_cost
+	FROM "sap.tm.trp.routing.db.path::t_path_sequence" AS A INNER JOIN :id_map AS B ON A.path_id = B.external_id;
+	
+	IF :return_code = 0 THEN
+    	msg_params = SELECT 0 AS PLACEHOLDER, network_id AS VALUE FROM DUMMY;
+        CALL "sap.tm.trp.routing.db.common::p_get_text"('MSG_MANUAL_COMPOSITE_PATH_DELETE_SUCCESS', :msg_params, 'I', message);
+        log = SELECT * FROM :message;
+    END IF;
+END

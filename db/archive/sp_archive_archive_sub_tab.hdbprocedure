@@ -1,0 +1,76 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_archive_archive_sub_tab"(
+		IN RULE_ID BIGINT, 
+		IN EXECUTION_ID BIGINT, 
+		IN ROOT_TEMP_TAB NVARCHAR(500), 
+		IN CHILD_TAB_NAME NVARCHAR(500), 
+		OUT STATUS_CODE INTEGER,
+		OUT RECORD_COUNT BIGINT,
+		OUT MESSAGE NVARCHAR(5000)
+	)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+	
+	DECLARE SCHEMA_NAME NVARCHAR(20) DEFAULT 'SAP_TM_TRP';
+    DECLARE CHILD_WARM_TEM_TAB NVARCHAR(500);
+    DECLARE CHILD_WARM_TAB NVARCHAR(500);
+    DECLARE SQL_STT NVARCHAR(5000);
+    DECLARE COLUMN_STR NVARCHAR(1000);
+    DECLARE PARENT_REF_COL NVARCHAR(500);
+    DECLARE CHILD_REF_COL NVARCHAR(500);
+
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        STATUS_CODE := 2;
+        SELECT ::SQL_ERROR_MESSAGE INTO MESSAGE FROM DUMMY;
+    END; 
+
+    --initialize status code
+    CHILD_WARM_TEM_TAB := '';
+    CHILD_WARM_TAB := '';
+    SQL_STT := '';
+    COLUMN_STR := '';
+    PARENT_REF_COL := '';
+    CHILD_REF_COL := '';
+    STATUS_CODE := 0;
+    MESSAGE := 'Success';
+    RECORD_COUNT := 0;
+
+    
+    --move archived rolws from child table into child temporary table
+    SELECT PARENT_REF_COL, CHILD_REF_COL INTO PARENT_REF_COL, CHILD_REF_COL 
+    FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE TABLE_NAME = :CHILD_TAB_NAME;
+    CHILD_WARM_TAB := :CHILD_TAB_NAME || '_warm'; --child warm table
+    SELECT REPLACE(REPLACE(:CHILD_TAB_NAME,'.','_'),'::','_') || '_warm_temp' INTO CHILD_WARM_TEM_TAB FROM DUMMY; --child warm temporary table
+	SELECT STRING_AGG(COLUMN_NAME,',') INTO COLUMN_STR FROM TABLE_COLUMNS WHERE SCHEMA_NAME = :SCHEMA_NAME AND TABLE_NAME = :CHILD_TAB_NAME;
+	SQL_STT := 
+	'INSERT INTO "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_WARM_TEM_TAB) || '" (' || escape_single_quotes(:COLUMN_STR) || ') SELECT ' || escape_single_quotes(:COLUMN_STR) || ' FROM "'
+	|| :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_TAB_NAME) || '" ' || 'WHERE ' || escape_single_quotes(:CHILD_REF_COL) || ' IN (SELECT DISTINCT ' || escape_single_quotes(:PARENT_REF_COL) || ' FROM "'
+	|| :SCHEMA_NAME || '"."' || escape_double_quotes(:ROOT_TEMP_TAB) || '")';
+	EXECUTE IMMEDIATE :SQL_STT; --insert to temp table
+	SQL_STT := 
+	'DELETE FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_TAB_NAME) || '" ' || 'WHERE ' || escape_single_quotes(:CHILD_REF_COL) || ' IN (SELECT DISTINCT ' || escape_single_quotes(:PARENT_REF_COL) || ' FROM "'
+	|| :SCHEMA_NAME || '"."' || escape_double_quotes(:ROOT_TEMP_TAB) || '")';
+	EXECUTE IMMEDIATE :SQL_STT; --delete corresponding rows in chilad table
+	
+
+	--insert data from teporary table to child warm table
+	SQL_STT := 'UPDATE "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_WARM_TEM_TAB) || '" SET TRP_RULE_ID = ' || :RULE_ID || ', TRP_EXECUTION_ID = ' || :EXECUTION_ID;
+	EXECUTE IMMEDIATE :SQL_STT;
+	COLUMN_STR := :COLUMN_STR || ',TRP_RULE_ID,TRP_EXECUTION_ID';
+	SQL_STT := 'INSERT INTO "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_WARM_TAB) || '" (' || escape_single_quotes(:COLUMN_STR) || ') SELECT '
+	|| escape_single_quotes(:COLUMN_STR) || ' FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_WARM_TEM_TAB) || '"';
+	EXECUTE IMMEDIATE :SQL_STT;
+	
+	--clear child temporary table
+	SQL_STT :=
+	'DELETE FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_WARM_TEM_TAB) || '"';
+	EXECUTE IMMEDIATE :SQL_STT;
+
+	RECORD_COUNT := ::ROWCOUNT;
+
+
+END;

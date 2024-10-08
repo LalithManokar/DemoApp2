@@ -1,0 +1,14 @@
+role sap.tm.trp.config.roles::Support extends role
+    sap.tm.trp.applog.roles::Reader,
+    sap.tm.trp.applog.roles::Writer {
+    package sap.tm: REPO.READ;
+    package sap.ui5: REPO.READ;
+
+    catalog schema "SAP_TM_TRP": SELECT;
+    --catalog schema "SAPTM": SELECT;
+    catalog schema "_SYS_BIC": SELECT;
+    catalog schema "_SYS_XS": SELECT;
+    catalog schema "_SYS_REPO": SELECT;
+
+    catalog analytic privilege: "_SYS_BI_CP_ALL";
+ }

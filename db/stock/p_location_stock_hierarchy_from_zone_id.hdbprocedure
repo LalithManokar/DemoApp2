@@ -1,0 +1,96 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.stock::p_location_stock_hierarchy_from_zone_id" (
+	IN ZONE_ID "sap.tm.trp.db.systemmanagement::tt_zoneid",
+  	OUT RESULT_OUTPUT "sap.tm.trp.db.stock::tt_location_hierarchy",
+  	OUT RESULT_RELATION_OUTPUT "sap.tm.trp.db.stock::tt_location_hierarchy_relation") 
+	--output format
+	--"LEVEL" information is used for stock map view, used seperately
+	-- Other informatin is used for stock table view, hierarchy
+	/*"locations": [
+            {
+                "ID": "123",
+                "NAME": "Depot 1",
+                "TYPE": 1,
+                "HAS_OUTPUT_DATASET_FLAG": 1
+            },
+            {
+                "ID": "456",
+                "NAME": "Zone 1",
+                "TYPE": 3,
+                "HAS_OUTPUT_DATASET_FLAG": 0
+            }
+        ],
+        "locationRelationships": [
+            {
+                "PARENT_ID": "456",
+                "PARENT_TYPE": 3,
+                "CHILD_ID": "123",
+                "CHILD_TYPE": 1
+            }
+	*/
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA 
+	AS
+BEGIN 
+ 
+ DECLARE I_MAX_LEVEL INT;
+	
+	--Get the children for the input zone:(including all the zones in the sub tree of the input zone:)
+
+	 TEMP_ZONE = SELECT DISTINCT T2.ZONE_ID,T2.LEVEL,T3.NAME,T3.DESC
+	            FROM :ZONE_ID T1
+	            INNER JOIN "sap.tm.trp.db.systemmanagement.location::t_region_item" T2 ON (T1.ZONEID = T2.ROOT_ID)
+	            INNER JOIN "sap.tm.trp.db.semantic.location::v_zone" T3 ON (T2.ZONE_ID = T3.ID);
+		
+	--ONLY leaf zone should have locations, if none leaf zone have locations, just ignore it according to the solution's decision:
+	--Get the leaf children of the zone:
+	LEAF_CHILDREN_OF_THE_TEMP_ZONE = 
+	    SELECT A.ZONE_ID,B.LEAF_ZONE_ID,C.LEVEL AS LEAF_ZONE_LEVEL
+	    FROM :TEMP_ZONE A
+	     --leaf zone of each zone:
+	     INNER JOIN
+	     ( 
+	        SELECT T3.ROOT_ID, T3.CHILDREN_ID AS LEAF_ZONE_ID
+			FROM
+			(
+				SELECT T1.ROOT_ID, T1.ZONE_ID AS CHILDREN_ID 
+				FROM  "sap.tm.trp.db.systemmanagement.location::t_region_item" t1
+			)T3
+			LEFT OUTER JOIN(
+			  SELECT * FROM "sap.tm.trp.db.systemmanagement.location::t_region_item" 
+			  WHERE ROOT_ID <> ZONE_ID
+			)T4 ON (T3.CHILDREN_ID = T4.ROOT_ID)
+			WHERE T4.ROOT_ID IS NULL
+		)B ON (A.ZONE_ID = B.ROOT_ID  )
+		INNER JOIN "sap.tm.trp.db.systemmanagement.location::t_region_item" C ON (A.ZONE_ID = C.ZONE_ID);
+		
+		
+	--Get location list for each leaf zone	:	
+		TEMP_LOCATION = 
+		SELECT A.ZONE_ID,  MAX_LEVEL AS LEVEL, --(A.LEAF_ZONE_LEVEL + 100) AS "LEVEL", 
+		C.NAME, B.LOCATION_ID, 1  AS "LOCATION_TYPE", C.XPOS, C.YPOS, 1 AS HAS_OUTPUT_FLAG ,C.DESC
+		FROM :LEAF_CHILDREN_OF_THE_TEMP_ZONE A			
+		--INNER JOIN "sap.tm.trp.db.semantic.location::v_zone_location" B on A.LEAF_ZONE_ID = B.ZONE_ID
+		INNER JOIN "sap.tm.trp.db.systemmanagement.location::v_region_location_all" B ON A.LEAF_ZONE_ID = B.ROOT_ID
+		INNER JOIN "sap.tm.trp.db.semantic.location::v_location" C on B.LOCATION_ID = C.ID
+		INNER JOIN (
+		SELECT MAX(LEAF_ZONE_LEVEL)+ 100 AS MAX_LEVEL FROM :LEAF_CHILDREN_OF_THE_TEMP_ZONE
+		) D ON (1=1);
+		
+	RESULT_OUTPUT = 
+		SELECT LEVEL, NAME, ZONE_ID AS LOCATION_ID, 5 AS LOCATION_TYPE, NULL AS XPOS, NULL AS YPOS, 1 AS HAS_OUTPUT_FLAG,DESC FROM :TEMP_ZONE
+		UNION ALL
+		SELECT DISTINCT LEVEL, NAME, LOCATION_ID, LOCATION_TYPE, XPOS, YPOS, HAS_OUTPUT_FLAG ,DESC FROM :TEMP_LOCATION;
+
+		--Get the relationship of those zones and union the locations of each zone as the zone's children
+		RESULT_RELATION_OUTPUT = SELECT T1.ZONE_ID AS PARENT_ID,5 AS PARENT_TYPE,T2.ZONE_ID AS CHILD_ID,5 AS CHILD_TYPE
+		 FROM :TEMP_ZONE T1
+		 INNER JOIN "sap.tm.trp.db.semantic.location::v_hierarchy_item" T2 ON (T1.ZONE_ID = T2.PARENT_ZONE_ID)
+		 UNION ALL
+		 SELECT T3.ZONE_ID AS PARENT_ID,5 AS PARENT_TYPE,LOCATION_ID AS CHILD_ID,1 AS CHILD_TYPE
+		 FROM :TEMP_LOCATION T3;
+		
+		
+		
+END;

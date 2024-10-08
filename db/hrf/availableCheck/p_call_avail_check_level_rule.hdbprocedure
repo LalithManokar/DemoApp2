@@ -1,0 +1,69 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.availableCheck::p_call_avail_check_level_rule" (
+in IN_TBL "sap.tm.trp.db.hrf.availableCheck::tt_avail_check_level_input",
+out OUT_TBL "sap.tm.trp.db.hrf.availableCheck::tt_avail_check_level_output"
+)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    DECLARE SCRIPT VARCHAR(5000);
+    DECLARE RULE_SP VARCHAR(200);
+    DECLARE TMP_CONNECTION BIGINT;
+    DECLARE NUM_AMOUNT_DECIMAL_POINT INTEGER;
+    DECLARE CURR_USER VARCHAR(32);
+    DECLARE AVAILABLE_CHECK_PLAN INTEGER := 1 ;
+    DECLARE AVAILABLE_CHECK_LEVEL INTEGER := 2 ;
+
+  
+  select T1.SP into RULE_SP
+  from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule" T1
+  inner join "sap.tm.trp.db.hrf.ruleManage::t_availableCheck_assigned_rule" T2
+  on T1.RULE_ID = T2.RULE_ID and 
+     T2.AVAILABLE_STEP_ID = :AVAILABLE_CHECK_LEVEL;
+
+  select CURRENT_CONNECTION into TMP_CONNECTION
+  from dummy;
+
+  SELECT USERNAME INTO CURR_USER FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+
+  TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.hrf.availableCheck::t_hrf_avail_check_level_input_global_temp";
+  TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.hrf.availableCheck::t_hrf_avail_check_level_output_global_temp";
+  insert into "sap.tm.trp.db.hrf.availableCheck::t_hrf_avail_check_level_input_global_temp"
+    (select
+    REQUEST_LOCATION_NAME, REQUEST_LOCATION_XPOS, REQUEST_LOCATION_YPOS, REQUEST_EQUIP_TYPE, 
+    REQUEST_TIME, REQUEST_QUANTITY, REQUEST_CHECK_TYPE,
+    LOCATION_NAME, LOCATION_XPOS, LOCATION_YPOS, EQUIP_TYPE,
+    START_TIME, END_TIME, STOCK, SUPPLY, DEMAND, BALANCE_SUPPLY_DEMAND, BALANCE_STOCK_SUPPLY_DEMAND,
+    MIN_SAFETY_STOCK, MAX_SAFETY_STOCK, MAX_CAPACITY
+    from :IN_TBL);
+
+    SCRIPT := 'call '|| :RULE_SP ||'(
+    "sap.tm.trp.db.hrf.availableCheck::t_hrf_avail_check_level_input_global_temp" ,
+    "sap.tm.trp.db.hrf.availableCheck::t_hrf_avail_check_level_output_global_temp",
+    "sap.tm.trp.db.hrf.ruleManage::t_hrf_actions_results") with overview';
+    execute immediate(:SCRIPT);
+
+    OUT_TBL =
+    select 	distinct
+	 T1.LOCATION_NAME,
+	 T1.EQUIP_TYPE,
+     T1.START_TIME,
+     T1.END_TIME,
+     T1.STOCK,
+     T1.SUPPLY,
+     T1.DEMAND,
+     T1.BALANCE_SUPPLY_DEMAND,
+     T1.BALANCE_STOCK_SUPPLY_DEMAND,
+     T1.MIN_SAFETY_STOCK,
+     T1.MAX_SAFETY_STOCK,
+     T1.MAX_CAPACITY,
+     T2.LEVEL	 	 
+    from "sap.tm.trp.db.hrf.availableCheck::t_hrf_avail_check_level_output_global_temp" T2
+    inner join "sap.tm.trp.db.hrf.availableCheck::t_hrf_avail_check_level_input_global_temp" T1
+    on T1.LOCATION_NAME = T2.LOCATION_NAME and
+       T1.EQUIP_TYPE = T2.EQUIP_TYPE and
+       T1.START_TIME = T2.START_TIME and
+       T1.END_TIME = T2.END_TIME;       
+
+END;

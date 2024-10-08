@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_used_list" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_used_list"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="IN_CODE" parameter="true">
+      <descriptions defaultDescription="IN_CODE"/>
+      <variableProperties datatype="VARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="TYPE" parameter="true">
+      <descriptions defaultDescription="TYPE"/>
+      <variableProperties datatype="VARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="NAME" length="50"/>
+        <viewAttribute datatype="NVARCHAR" id="CODE" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="CATEGORY" length="50"/>
+        <viewAttribute datatype="NVARCHAR" id="DESC" length="500"/>
+        <viewAttribute datatype="VARCHAR" id="VISIBILITY" length="1"/>
+        <viewAttribute datatype="VARCHAR" id="CREATED_BY" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="MODIFIED_BY" length="50"/>
+        <viewAttribute datatype="TIMESTAMP" id="MODIFIED_TIME"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_CATEGORY" length="50"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_CODE</localVariable>
+      <localVariable>#TYPE</localVariable>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+BEGIN 
+-- PLAN CONFIGUTATION
+IF :TYPE = 'PLAN' THEN
+  CALL &quot;sap.tm.trp.db.whereusedlist::p_get_used_plan&quot;(:IN_CODE, VAR_OUT);
+
+-- ATTRIBUTE GROUP
+ELSEIF :TYPE = 'ATTRIBUTE_FILTER' THEN
+  CALL &quot;sap.tm.trp.db.whereusedlist::p_get_used_attribute_group&quot;(:IN_CODE, VAR_OUT);
+
+-- TIME FILTER
+ELSEIF :TYPE = 'TIME_FILTER' THEN
+  CALL &quot;sap.tm.trp.db.whereusedlist::p_get_used_time_filter&quot;(:IN_CODE, VAR_OUT);
+
+-- ALERT RULE GROUP
+ELSEIF :TYPE = 'ALERT_RULE_GROUP' THEN
+  CALL &quot;sap.tm.trp.db.whereusedlist::p_get_used_alert_rule_group&quot;(:IN_CODE, VAR_OUT);
+
+-- OBJECT REGISTRATION
+ELSEIF :TYPE = 'OBJECT_REGISTRATION' THEN
+    CALL &quot;sap.tm.trp.db.whereusedlist::p_get_used_registered_object&quot;(:IN_CODE, VAR_OUT);
+
+-- COST MODEL
+ELSEIF :TYPE = 'COST_MODEL' THEN
+    CALL &quot;sap.tm.trp.db.whereusedlist::p_get_used_cost_model&quot;(:IN_CODE, VAR_OUT);
+
+-- LOCATION FILTER
+ELSEIF :TYPE = 'LOCATION_FILTER' THEN
+    CALL &quot;sap.tm.trp.db.whereusedlist::p_get_used_location_filter&quot;(:IN_CODE, VAR_OUT);
+
+-- RESOURCE FILTER
+ELSEIF :TYPE = 'RESOURCE_FILTER' THEN
+    CALL &quot;sap.tm.trp.db.whereusedlist::p_get_used_resource_filter&quot;(:IN_CODE, VAR_OUT);
+
+-- RESOURCE FILTER
+ELSEIF :TYPE = 'REGION' THEN
+    CALL &quot;sap.tm.trp.db.whereusedlist::p_get_used_region&quot;(:IN_CODE, VAR_OUT);
+
+-- LOCATION GROUP
+ELSEIF :TYPE = 'LOCATION_GROUP' THEN
+    CALL &quot;sap.tm.trp.db.whereusedlist::p_get_used_location_group&quot;(:IN_CODE, VAR_OUT);
+
+-- RESOURCE GROUP
+ELSEIF :TYPE = 'RESOURCE_GROUP' THEN
+    CALL &quot;sap.tm.trp.db.whereusedlist::p_get_used_resource_group&quot;(:IN_CODE, VAR_OUT);
+    
+-- USED ROLE LIST
+ELSEIF :TYPE = 'ROLE' THEN
+    CALL &quot;sap.tm.trp.db.whereusedlist::p_get_used_role&quot;(:IN_CODE, VAR_OUT);
+
+ELSEIF :TYPE = 'COST_DATASET' THEN
+    CALL &quot;sap.tm.trp.db.whereusedlist::p_get_used_cost_dataset&quot;(:IN_CODE, VAR_OUT);
+
+ELSEIF :TYPE = 'NETWORK_SETTING' THEN
+    CALL &quot;sap.tm.trp.db.whereusedlist::p_get_used_network_setting_group&quot;(:IN_CODE, VAR_OUT);
+
+ELSEIF :TYPE = 'EXTENDED_COLUMN' THEN
+    CALL &quot;sap.tm.trp.db.whereusedlist::p_get_used_column_extended&quot;(:IN_CODE, VAR_OUT);
+END IF;
+
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="NAME" order="1">
+        <descriptions defaultDescription="NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="CODE" order="2">
+        <descriptions defaultDescription="CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="CODE"/>
+      </attribute>
+      <attribute id="CATEGORY" order="3">
+        <descriptions defaultDescription="CATEGORY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CATEGORY"/>
+      </attribute>
+      <attribute id="DESC" order="4">
+        <descriptions defaultDescription="DESCRIPTION"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+      <attribute id="VISIBILITY" order="5">
+        <descriptions defaultDescription="VISIBILITY"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY"/>
+      </attribute>
+      <attribute id="CREATED_BY" order="6">
+        <descriptions defaultDescription="CREATED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATED_BY"/>
+      </attribute>
+      <attribute id="MODIFIED_BY" order="7">
+        <descriptions defaultDescription="LAST_MODIFIED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="MODIFIED_BY"/>
+      </attribute>
+      <attribute id="RESOURCE_CATEGORY" order="9">
+        <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_CATEGORY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="MODIFIED_TIME" order="8" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="LAST_MODIFIED_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="MODIFIED_TIME"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

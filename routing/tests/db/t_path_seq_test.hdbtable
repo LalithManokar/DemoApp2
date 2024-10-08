@@ -1,0 +1,11 @@
+table.schemaName = "SAP_TM_ROUTING_TEST";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "BASIC_PATH_ID"; sqlType = BIGINT; },
+    {name = "SEQUENCE"; sqlType = INTEGER; },
+    {name = "LOCATION"; sqlType = VARCHAR; length = 50; nullable = false;},
+    {name = "DISTANCE"; sqlType = DOUBLE; nullable = false;},
+    {name = "ARVTIME"; sqlType = INTEGER; nullable = false;}, 
+    {name = "DPTTIME"; sqlType = INTEGER; nullable = false;}
+];
+table.primaryKey.pkcolumns = ["BASIC_PATH_ID", "SEQUENCE"];

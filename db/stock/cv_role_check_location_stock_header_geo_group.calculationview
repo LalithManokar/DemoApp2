@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_role_check_location_stock_header_geo_group" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_role_check_location_stock_header_geo_group"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="ID" length="32"/>
+        <viewAttribute datatype="INTEGER" id="TYPE"/>
+        <viewAttribute datatype="VARCHAR" id="MIN_SAFETY_STOCK" length="18"/>
+        <viewAttribute datatype="VARCHAR" id="MAX_SAFETY_STOCK" length="18"/>
+        <viewAttribute datatype="VARCHAR" id="MAX_PHYSICAL_STOCK" length="18"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_CATEGORY" length="50"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> 
+
+ BEGIN 
+ 	 --LOCATION TYPE
+	 DECLARE LOCATION_TYPE_LOCATION_GROUP INTEGER :=2;
+	 DECLARE LOCATION_TYPE_REGION_GROUP INTEGER :=6;
+ 	 
+ 	  --ROLE CHECK
+ 	var_out = 
+	 SELECT 
+	 	T0.LOCATION_ID AS ID,
+	 	T0.LOCATION_TYPE AS TYPE,
+	 	T0.MIN_SAFETY AS MIN_SAFETY_STOCK,
+	 	T0.MAX_SAFETY AS MAX_SAFETY_STOCK,
+	 	T0.MAX_CAPACITY AS MAX_PHYSICAL_STOCK,
+	 	T0.RESOURCE_CATEGORY AS RESOURCE_CATEGORY
+	 FROM &quot;sap.tm.trp.db.stock::t_stock_config&quot; T0
+	 INNER JOIN(
+		SELECT LOCATION_ID, :LOCATION_TYPE_LOCATION_GROUP AS LOCATION_TYPE FROM &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(PLACEHOLDER.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_LOCATION_GROUP)
+		UNION
+		SELECT LOCATION_ID, :LOCATION_TYPE_REGION_GROUP AS LOCATION_TYPE FROM &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(PLACEHOLDER.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_REGION_GROUP)
+		) T1 ON T1.LOCATION_ID = T0.LOCATION_ID AND T1.LOCATION_TYPE = T0.LOCATION_TYPE
+	 WHERE LOCATION_HEAD_FLAG = 1 AND T0.LOCATION_TYPE IN (:LOCATION_TYPE_LOCATION_GROUP,:LOCATION_TYPE_REGION_GROUP);
+
+END</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="MIN_SAFETY_STOCK" order="3">
+        <descriptions defaultDescription="MIN_SAFETY_STOCK"/>
+        <keyMapping columnObjectName="Script_View" columnName="MIN_SAFETY_STOCK"/>
+      </attribute>
+      <attribute id="MAX_SAFETY_STOCK" order="4">
+        <descriptions defaultDescription="MAX_SAFETY_STOCK"/>
+        <keyMapping columnObjectName="Script_View" columnName="MAX_SAFETY_STOCK"/>
+      </attribute>
+      <attribute id="MAX_PHYSICAL_STOCK" order="5">
+        <descriptions defaultDescription="MAX_PHYSICAL_STOCK"/>
+        <keyMapping columnObjectName="Script_View" columnName="MAX_PHYSICAL_STOCK"/>
+      </attribute>
+      <attribute id="RESOURCE_CATEGORY" order="6">
+        <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_CATEGORY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="TYPE" order="2" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="TYPE"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

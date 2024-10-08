@@ -1,0 +1,352 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.equipment::p_get_location_resource_group_info" (
+  IN EQUIPMENT_FILTER_ID BIGINT,
+  IN LOCATION_FILTER_ID BIGINT,
+  IN FILTER VARCHAR(2000),
+  IN MOVEMENT_STATUS VARCHAR(3),
+  IN RESOURCE_CATEGORY VARCHAR(20),
+  OUT var_out "sap.tm.trp.db.equipment::tt_resource_master_data"
+)
+  LANGUAGE SQLSCRIPT
+  SQL SECURITY INVOKER
+  DEFAULT SCHEMA "SAP_TM_TRP"
+  READS SQL DATA AS
+/********* Begin Procedure Script ************/
+LANGUAGE_CODE VARCHAR(1);
+BEGIN
+SELECT IFNULL(MAX(SPRAS),'E') INTO LANGUAGE_CODE FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+
+TMP1 =SELECT DISTINCT
+        T0.RESOURCE_ID
+        ,T0.RESOURCE_NAME
+        ,T0.RESOURCE_TYPE_CODE
+        ,T2.RESOURCE_TYPE_DESC
+        ,T0.TARE_WEIGHT
+        ,T0.MAX_GROSS_WEIGHT
+        ,T0.MAX_GROSS_WEIGHT_UOM
+        ,T0.PAYLOAD_WEIGHT AS MAX_CARGO_WEIGHT
+        ,T0.INTERNAL_LENGTH AS INSIDE_LENGTH
+        ,T0.INTERNAL_WIDTH AS INSIDE_WIDTH
+        ,T0.INTERNAL_HEIGHT AS INSIDE_HEIGHT
+        ,T0.DOOR_WIDTH AS DOOR_WIDTH
+        ,T0.DOOR_HEIGHT AS DOOR_HEIGHT
+        ,T0.MAX_LENGTH
+        ,T0.CUBIC_CAPACITY AS VOLUME
+        ,T0.TEU_COUNT
+		,(CASE WHEN T3.BLOCK_STATUS_CODE = '' OR T3.BLOCK_STATUS_CODE IS NULL THEN 'AVAILABLE' ELSE 'UNAVAILABLE' END) AS AVAILABILITY
+        ,T3.BLOCK_STATUS_DESC AS RESOURCE_STATUS
+		,IFNULL(T4.DESC, '') AS OWNERSHIP
+		,T0.PLN_BLOCK AS BLOCK_STATUS
+	    ,T3.MOVEMENT_STATUS_CODE
+		,T3.MOVEMENT_STATUS_CODE AS MOVEMENT_STATUS
+        ,T3.LOADING_STATUS_CODE AS LOADING_STATUS
+		,T0.RESOURCE_CONDITION
+        ,T0.FOOD_GRADE_IND AS FOOD_GRADE
+		--,T12.LAST_CARGO
+        --,T12.CURRENT_RESPONS_TU  AS CURRENT_RESPONSIBLE_TU
+        --,T12.CURRENT_RESPONS_TU_TYPE AS CURRENT_RESPONSIBLE_TU_TYPE
+		--,T12.LAST_ASSIGN_TOR AS LAST_ASSIGNED_TOR
+		,T3.CURRENT_LOCATION_ID
+		,T3.CURRENT_LOCATION
+        ,T3.CURRENT_LOCATION AS LAST_LOCATION
+        --,T12.NEXT_STOP
+        --,T12.FINAL_DESTINATION
+        ,T3.IDLE_DAYS
+        ,T0.LEASE_CONTRACT_REF AS LEASING_ID
+        ,T6.DESC AS VENTILATED
+        ,T7.DESC AS TEMP_CONTROL
+        ,T0.TEMP_CTRL_MIN
+        ,T0.TEMP_CTRL_MAX
+        ,T10.DESC AS SHIPPER_OWNED
+        ,T0.SPECIAL_INSTRUCTION
+        ,T0.EXTNL_CLADDING
+        ,T0.CNTRL_ATM
+        ,T8.DESC AS FLOWER_BULB_AGRMNT
+        ,T0.USDA AS USDA
+        ,T0.COOLING_UNIT_MNFTR
+        ,T0.COOLING_UNIT_MODEL
+        ,T0.DESHUMIDIFY
+        ,T0.DATACORDER
+        ,CASE WHEN T0.OFF_HIRE_DT = 0 THEN NULL ELSE TO_TIMESTAMP(T0.OFF_HIRE_DT) END AS OFF_HIRE_DT
+        ,CASE WHEN T0.ON_HIRE_DT = 0 THEN NULL ELSE TO_TIMESTAMP(T0.ON_HIRE_DT) END AS ON_HIRE_DT
+        --,T12.VESSEL
+		,T1.NAME
+		,TO_DATE(T0.BUILDDATE) AS BUILT_DATE
+		,T0.MAX_WIDTH
+		,T0.MAX_HEIGHT
+    FROM "sap.tm.trp.db.semantic.resource::v_resource_master" T0
+	INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_category" TRC ON TRC.MAPPING_CODE = T0.EQUITYPE
+    INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_head" T1 ON T1.RESOURCE_ID = T0.RESOURCE_ID
+	LEFT JOIN "sap.tm.trp.db.semantic.resource::v_resource_type" T2 
+	ON (T2.RESOURCE_TYPE_CODE = T0.RESOURCE_TYPE_CODE AND T2.EQUI_TYPE = T0.EQUITYPE)
+    LEFT JOIN "sap.tm.trp.db.semantic.resource::v_resource_status" T3 ON T3.RESOURCE_ID = T0.RESOURCE_ID
+    LEFT JOIN "sap.tm.trp.db.semantic.resource::v_ownership_t" T4 ON T4.CODE = T0.OWNERSHIP_CODE
+    LEFT JOIN "sap.tm.trp.db.semantic.resource::v_ventilated_t" T6 ON T6.CODE = T0.VENTILATED
+    LEFT JOIN "sap.tm.trp.db.semantic.resource::v_temp_control_t" T7 ON T7.CODE = T0.TEMP_CONTROL
+    LEFT JOIN "sap.tm.trp.db.semantic.resource::v_flower_bulb_agrmnt_t" T8 ON T8.CODE = T0.FLOWER_BULB_AGRMNT
+    LEFT JOIN "sap.tm.trp.db.semantic.resource::v_shipper_owned_t" T10 ON T10.CODE = T0.SHIPPER_OWNED
+    --LEFT JOIN "sap.tm.trp.db.semantic.resource::v_resource_dynamic_attribute" T12 ON T12.RESOURCE_ID = T0.RESOURCE_ID
+    INNER JOIN (SELECT DISTINCT ITEM.EQUI_CODE AS ID FROM "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" GP
+          INNER JOIN "sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth" ITEM ON GP.EQUIPMENT_GROUP_ID = ITEM.EQUIPMENT_GROUP_ID
+          WHERE GP.EQUIPMENT_FILTER_ID = :EQUIPMENT_FILTER_ID
+          ) EGI ON EGI.ID =  T0.RESOURCE_TYPE_CODE
+    INNER JOIN (SELECT LOCATION_ID AS ID FROM "sap.tm.trp.db.filter::t_location_filter_location" WHERE LOCATION_FILTER_ID = :LOCATION_FILTER_ID) GI ON GI.ID = T3.CURRENT_LOCATION_ID
+    WHERE T3.MOVEMENT_STATUS_CODE LIKE '%'||:MOVEMENT_STATUS||'%' AND TRC.CODE = :RESOURCE_CATEGORY
+    ;
+
+
+tmp2 = SELECT RESOURCE_ID,LAST_ASSIGN_TOR,LAST_CARGO
+	FROM (
+		SELECT
+			T0.RESOURCE_ID
+			--,T1.RESOURCE_NAME
+			,T2.TOR_ID AS LAST_ASSIGN_TOR
+			,CASE WHEN T2.MOVEMENT_CAT = '' THEN T4.CCODE ELSE NULL END AS LAST_CARGO
+			,ROW_NUMBER() OVER (PARTITION BY T1.RESOURCE_name ORDER BY T3.SEL_TIME DESC) AS RANK
+		FROM :tmp1 T0
+		inner join "sap.tm.trp.db.semantic.order::v_transportation_unit_item_resource" T1 on t0.resource_name = t1.resource_name
+		INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_all" T2 ON T2.DB_KEY = T1.TU_KEY
+		INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" T3 ON T3.TU_KEY = T2.DB_KEY
+		LEFT JOIN "sap.tm.trp.db.semantic.order::v_tor_commodity_code" T4 ON T4.ITEM_KEY = T1.DB_KEY
+		--INNER JOIN \"sap.tm.trp.db.semantic.resource::v_resource_master\" T0 ON T0.RESOURCE_NAME = T1.RESOURCE_NAME
+		WHERE --T1.ITEM_CAT = 'TUR' AND 
+		      T2.EXECUTION_STATUS = '04' AND T2.TOR_CAT = 'TU' AND T2.MOVEMENT_CAT NOT IN ('EP','ER')
+	)
+	WHERE RANK = 1 ;
+
+
+tmp3 = SELECT RESOURCE_ID,TOR_ID AS CURRENT_RESPONS_TU,CURRENT_RESPONS_TU_TYPE,FINAL_DESTINATION
+	FROM (
+		SELECT
+			T0.RESOURCE_ID
+			--,T1.RESOURCE_NAME
+			,T2.TOR_ID
+			,T4.DESC AS CURRENT_RESPONS_TU_TYPE
+			,T5.LOCATION_NAME AS FINAL_DESTINATION
+			,ROW_NUMBER() OVER (PARTITION BY T1.RESOURCE_NAME ORDER BY T3.SEL_TIME DESC) AS RANK
+		FROM :tmp1 T0
+		inner join "sap.tm.trp.db.semantic.order::v_transportation_unit_item_resource" T1 on t0.resource_name = t1.resource_name
+		INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit" T2 ON T2.DB_KEY = T1.TU_KEY
+		INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" T3 ON T3.TU_KEY = T2.DB_KEY
+		LEFT JOIN "sap.tm.trp.db.semantic.order::v_tor_movement_category_t" T4 ON T4.CODE = T2.MOVEMENT_CAT
+		LEFT JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" T5 ON T5.TU_KEY = T2.DB_KEY AND T5.STOP_ROLE = 'TL'
+		--INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_master" T0 ON T0.RESOURCE_NAME = T1.RESOURCE_NAME
+		WHERE T1.ITEM_CAT = 'TUR' AND T2.EXECUTION_STATUS = '03' AND T2.TOR_CAT = 'TU'
+	)
+	WHERE RANK = 1;
+	
+tmp4 = SELECT T1.TOR_ID AS CURRENT_RESPONS_TU, T2.LOCATION_NAME AS NEXT_STOP
+	FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" T1
+	INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" T2 ON T2.TU_KEY = T1.DB_KEY
+	INNER JOIN :tmp3 T3 ON T3.CURRENT_RESPONS_TU = T1.TOR_ID
+	WHERE T2.STOP_CURRENT = 'N'
+	UNION ALL
+	SELECT T1.TOR_ID AS CURRENT_RESPONS_TU, T2.LOCATION_NAME AS NEXT_STOP
+	FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" T1
+	INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" T2 ON T2.TU_KEY = T1.DB_KEY
+	WHERE T2.DB_KEY IN (
+		SELECT TO_STOP_KEY
+		FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_stage"
+		WHERE STOP_SUCC_CAT = 'L'
+		AND FROM_STOP_KEY IN (
+			SELECT T2.DB_KEY
+			FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" T1
+			INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" T2 ON T2.TU_KEY = T1.DB_KEY
+			INNER JOIN :tmp3 T3 ON T3.CURRENT_RESPONS_TU = T1.TOR_ID
+			WHERE T2.STOP_CURRENT = 'C'
+			UNION ALL
+			SELECT TO_STOP_KEY
+			FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_stage"
+			WHERE STOP_SUCC_CAT = 'I' AND FROM_STOP_KEY IN (
+				SELECT T2.DB_KEY
+				FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" T1
+				INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" T2 ON T2.TU_KEY = T1.DB_KEY
+				INNER JOIN :tmp3 T3 ON T3.CURRENT_RESPONS_TU = T1.TOR_ID
+				WHERE T2.STOP_CURRENT = 'C'
+			)
+		)
+	);
+
+tmp5 = 	SELECT
+  T0.RESOURCE_ID
+  ,T20.RESOURCE_NAME
+  ,CASE WHEN T20.VESSEL <> '' THEN T20.VESSEL
+        WHEN T1.VESSEL <> '' THEN T1.VESSEL
+        ELSE T2.VESSEL
+  END AS VESSEL
+FROM
+(
+	SELECT
+		T10.RESOURCE_NAME
+		,T4.VESSEL
+		,T5.SCHED_STOP_KEY
+		,T5.SCHED_DEP_KEY 
+		,ROW_NUMBER() OVER (PARTITION BY T10.RESOURCE_NAME ORDER BY T5.SEL_TIME ASC) AS START_SEQ
+	FROM
+	(
+	  SELECT
+		RESOURCE_NAME,
+		TU_KEY,
+		LAST_ASSIGN_TU
+	    FROM
+		( 
+		  SELECT
+			T0.RESOURCE_NAME ,
+			T1.DB_KEY AS TU_KEY,
+			T1.TOR_ID AS LAST_ASSIGN_TU,
+			ROW_NUMBER() OVER (PARTITION BY T0.RESOURCE_NAME ORDER BY T2.SEL_TIME) AS RANK 
+			FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_item_resource" T0 
+			INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit" T1 ON T1.DB_KEY = T0.TU_KEY
+			INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" T2 ON T2.TU_KEY = T1.DB_KEY 
+			WHERE T1.TOR_CAT = 'TU' AND T1.EXECUTION_STATUS = '04' AND T0.ITEM_CAT = 'TUR' 
+		) 
+		WHERE RANK = 1
+	) T10
+	INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item" T1 ON T1.TU_KEY = T10.TU_KEY
+	INNER JOIN "sap.tm.trp.db.semantic.order::v_freight_order_item" T3 ON T3.REF_TU_ITEM_KEY = T1.DB_KEY -- BO item
+	INNER JOIN "sap.tm.trp.db.semantic.order::v_freight_order_stage" T4 ON T4.FREIGHT_ORDER_KEY = T3.FREIGHT_ORDER_KEY AND T4.MOT_CAT = '3' -- BO stages 
+	INNER JOIN "sap.tm.trp.db.semantic.order::v_freight_order_stop" T5 ON T5.DB_KEY = T4.FROM_STOP_KEY -- BO stops
+) T20
+INNER JOIN "sap.tm.trp.db.semantic.schedule::v_departure_location" T1 ON T1.DB_KEY = T20.SCHED_STOP_KEY AND T1.PARENT_KEY = T20.SCHED_DEP_KEY
+INNER JOIN "sap.tm.trp.db.semantic.schedule::v_departure" T2 ON T2.DB_KEY = T1.PARENT_KEY
+INNER JOIN :tmp1 T0 ON T0.RESOURCE_NAME = T20.RESOURCE_NAME
+WHERE T20.START_SEQ = 1;
+
+tmp_final  = select t1.*,
+	 t2.last_assign_tor as LAST_ASSIGNED_TOR, t2.last_cargo,
+		 t3.CURRENT_RESPONS_TU as CURRENT_RESPONSIBLE_TU,
+		t3.FINAL_DESTINATION, t3.CURRENT_RESPONS_TU_TYPE AS CURRENT_RESPONSIBLE_TU_TYPE,
+		t4.next_stop, t5.vessel
+		from :tmp1  as t1
+		left join :tmp2 as t2 on t1.resource_id = t2.resource_id
+		left join :tmp3 t3 on t1.resource_id = t3.resource_id
+	  left join :tmp4 as t4 on T4.CURRENT_RESPONS_TU = T3.CURRENT_RESPONS_TU
+	  left join :tmp5 t5 on t1.resource_id = t5.resource_id
+	  ;
+
+IF :FILTER = '' THEN -- NO NEED TO JOIN MULTIPLE ATTRIBUTE
+var_out =
+	SELECT DISTINCT
+	    RESOURCE_ID
+        ,RESOURCE_NAME
+        ,RESOURCE_TYPE_CODE
+        ,RESOURCE_TYPE_DESC
+        ,TARE_WEIGHT
+        ,MAX_GROSS_WEIGHT
+        ,MAX_GROSS_WEIGHT_UOM
+        ,MAX_CARGO_WEIGHT
+        ,INSIDE_LENGTH
+        ,INSIDE_WIDTH
+        ,INSIDE_HEIGHT
+        ,DOOR_WIDTH
+        ,DOOR_HEIGHT
+        ,MAX_LENGTH
+        ,VOLUME
+        ,TEU_COUNT
+		,AVAILABILITY
+        ,RESOURCE_STATUS
+        ,OWNERSHIP
+        ,BLOCK_STATUS
+	    ,MOVEMENT_STATUS_CODE
+		,MOVEMENT_STATUS
+        ,LOADING_STATUS
+		,RESOURCE_CONDITION
+        ,FOOD_GRADE
+		,LAST_CARGO
+        ,CURRENT_RESPONSIBLE_TU
+        ,CURRENT_RESPONSIBLE_TU_TYPE
+		,LAST_ASSIGNED_TOR
+		,CURRENT_LOCATION_ID
+		,CURRENT_LOCATION
+        ,LAST_LOCATION
+        ,NEXT_STOP
+        ,FINAL_DESTINATION
+        ,IDLE_DAYS
+        ,LEASING_ID
+        ,VENTILATED
+        ,TEMP_CONTROL
+        ,TEMP_CTRL_MIN
+        ,TEMP_CTRL_MAX
+        ,SHIPPER_OWNED
+        ,SPECIAL_INSTRUCTION
+        ,EXTNL_CLADDING
+        ,CNTRL_ATM
+        ,FLOWER_BULB_AGRMNT
+        ,USDA
+        ,COOLING_UNIT_MNFTR
+        ,COOLING_UNIT_MODEL
+        ,DESHUMIDIFY
+        ,DATACORDER
+        ,OFF_HIRE_DT
+        ,ON_HIRE_DT
+		,VESSEL
+		,NAME 
+		,BUILT_DATE
+		,MAX_WIDTH
+		,MAX_HEIGHT
+    FROM :tmp_final;
+ELSE -- NEED MULTIPLE ATTRIBUTES FILTER
+	TMP = APPLY_FILTER(:tmp_final,:FILTER);
+var_out =
+    SELECT DISTINCT
+	    RESOURCE_ID
+        ,RESOURCE_NAME
+        ,RESOURCE_TYPE_CODE
+        ,RESOURCE_TYPE_DESC
+        ,TARE_WEIGHT
+        ,MAX_GROSS_WEIGHT
+        ,MAX_GROSS_WEIGHT_UOM
+        ,MAX_CARGO_WEIGHT
+        ,INSIDE_LENGTH
+        ,INSIDE_WIDTH
+        ,INSIDE_HEIGHT
+        ,DOOR_WIDTH
+        ,DOOR_HEIGHT
+        ,MAX_LENGTH
+        ,VOLUME
+        ,TEU_COUNT
+		,AVAILABILITY
+        ,RESOURCE_STATUS
+        ,OWNERSHIP
+        ,BLOCK_STATUS
+	    ,MOVEMENT_STATUS_CODE
+		,MOVEMENT_STATUS
+        ,LOADING_STATUS
+		,RESOURCE_CONDITION
+        ,FOOD_GRADE
+		,LAST_CARGO
+        ,CURRENT_RESPONSIBLE_TU
+        ,CURRENT_RESPONSIBLE_TU_TYPE
+		,LAST_ASSIGNED_TOR
+		,CURRENT_LOCATION_ID
+		,CURRENT_LOCATION
+        ,LAST_LOCATION
+        ,NEXT_STOP
+        ,FINAL_DESTINATION
+        ,IDLE_DAYS
+        ,LEASING_ID
+        ,VENTILATED
+        ,TEMP_CONTROL
+        ,TEMP_CTRL_MIN
+        ,TEMP_CTRL_MAX
+        ,SHIPPER_OWNED
+        ,SPECIAL_INSTRUCTION
+        ,EXTNL_CLADDING
+        ,CNTRL_ATM
+        ,FLOWER_BULB_AGRMNT
+        ,USDA
+        ,COOLING_UNIT_MNFTR
+        ,COOLING_UNIT_MODEL
+        ,DESHUMIDIFY
+        ,DATACORDER
+        ,OFF_HIRE_DT
+        ,ON_HIRE_DT
+		,VESSEL
+		,NAME 
+		,BUILT_DATE
+		,MAX_WIDTH
+		,MAX_HEIGHT
+    FROM :TMP;
+END IF;
+
+
+END /********* End Procedure Script ************/;

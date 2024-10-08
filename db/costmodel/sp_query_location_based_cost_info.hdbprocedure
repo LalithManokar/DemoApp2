@@ -1,0 +1,87 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_query_location_based_cost_info"(
+   IN COST_MODEL_ID BIGINT,
+   IN LOCATION_BASED_INFO "sap.tm.trp.db.costmodel::tt_query_location_based_cost_info",
+   OUT DATASET_CONNECTION_INFO  "sap.tm.trp.db.costmodel::tt_cost_dataset_connection_info_new",
+   OUT COST_INFO_OUT "sap.tm.trp.db.costmodel::tt_query_location_based_cost_info"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    READS SQL DATA 
+    AS
+BEGIN
+     DECLARE DATASET_LOCATION_BASED_COST VARCHAR(50) = 'LOCATION_BASED_COST';
+
+     LOCATION_BASED_DATASET_INFO_IN_DB = 
+        SELECT T2.COST_DATASET_ID , T2.FROM_LOCATION_NAME, T2.TO_LOCATION_NAME,
+        T2.TRANSPORTATION_MODE_CODE, T2.RESOURCE_TYPE
+        FROM "sap.tm.trp.db.costmodel::t_cost_model_dataset" T1
+        --INNER JOIN "sap.tm.trp.db.costmodel::t_location_based_cost" T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID)
+        INNER JOIN "sap.tm.trp.db.costmodel::cv_location_cost_model_resource_type_explode"(PLACEHOLDER."$$IP_COST_DATASET_ID$$"=>0,PLACEHOLDER."$$IP_COST_MODEL_ID$$"=>:COST_MODEL_ID) T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID)       
+        WHERE T1.COST_MODEL_ID = :COST_MODEL_ID;
+	
+		 /* 
+	    LOCATION_BASED_DATASET_IDS = 
+	    SELECT T1.COST_DATASET_ID AS ID 
+	    FROM :LOCATION_BASED_DATASET_INFO_IN_DB T1;
+	    */
+	    LOCATION_BASED_DATASET_IDS = 
+	    SELECT T1.COST_DATASET_ID AS ID 
+	    FROM "sap.tm.trp.db.costmodel::t_cost_model_dataset" T1
+	     INNER JOIN (
+	        SELECT ID FROM "sap.tm.trp.db.costmodel::t_cost_dataset" WHERE COST_TYPE_CODE = :DATASET_LOCATION_BASED_COST
+	     )T2 ON (T1.COST_DATASET_ID = T2.ID)
+	    WHERE T1.COST_MODEL_ID = :COST_MODEL_ID;
+	    
+	    
+	   CALL "sap.tm.trp.db.costmodel::sp_get_connection_info_of_dataset_new"(:COST_MODEL_ID,:LOCATION_BASED_DATASET_IDS,DATASET_CONNECTION_INFO);
+	   
+	   VALID_CARRIER_LIST_WITH_DATASET_ID = SELECT COST_DATASET_ID,CARRIER_ID
+	   FROM "sap.tm.trp.db.costmodel::cv_costmodel_dataset_supported_carriers"(PLACEHOLDER."$$IN_COST_MODEL_ID$$"=>:COST_MODEL_ID) T1;
+	   
+	   VALID_TRANSPORTATION_MEANS_WITH_DATASET_ID = SELECT COST_DATASET_ID,TRANSPORTATION_MODE_CODE 
+	   FROM "sap.tm.trp.db.costmodel::cv_costmodel_dataset_supported_transportation_means"(PLACEHOLDER."$$IN_COST_MODEL_ID$$"=>:COST_MODEL_ID);
+	   
+	 
+		 --Append a record for the transportation mode code data from dictoionary table for the * value in DB :
+		
+		 --Append the valid carrier_id from valid carrier list:
+		 LOCATION_BASED_DATASET_INFO_IN_DB_2 = 
+		 SELECT T1.COST_DATASET_ID,T1.FROM_LOCATION_NAME,T1.TO_LOCATION_NAME,
+		 T1.TRANSPORTATION_MODE_CODE,T1.RESOURCE_TYPE,T2.CARRIER_ID
+		 FROM :LOCATION_BASED_DATASET_INFO_IN_DB T1
+		 INNER JOIN :VALID_CARRIER_LIST_WITH_DATASET_ID T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID);
+		 
+		 --Using the cost model transportaion filter to do the filter:
+		 LOCATION_BASED_DATASET_INFO_IN_DB_3 = 
+		 SELECT T1.COST_DATASET_ID,T1.FROM_LOCATION_NAME,T1.TO_LOCATION_NAME,
+		 T1.TRANSPORTATION_MODE_CODE,T1.RESOURCE_TYPE,T1.CARRIER_ID
+		 FROM :LOCATION_BASED_DATASET_INFO_IN_DB_2 T1
+		 INNER JOIN :VALID_TRANSPORTATION_MEANS_WITH_DATASET_ID T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID
+		 AND (T1.TRANSPORTATION_MODE_CODE = T2.TRANSPORTATION_MODE_CODE 
+		      OR T2.TRANSPORTATION_MODE_CODE = '*'
+		      OR T1.TRANSPORTATION_MODE_CODE = '*')
+		 );
+	 
+	   --Note: As discussed with Kevin, the input param :LOCATION_BASED_INFO will not contain the * value for any column.
+		 COST_INFO_OUT =
+		 SELECT T1.FROM_LOCATION_NAME,T1.TO_LOCATION_NAME,T1.TRANSPORTATION_MODE_CODE,
+		 T1.RESOURCE_TYPE,T1.CARRIER_ID
+		 FROM :LOCATION_BASED_INFO T1
+		 LEFT OUTER JOIN
+		      (
+		        SELECT DISTINCT FROM_LOCATION_NAME,TO_LOCATION_NAME,
+		        TRANSPORTATION_MODE_CODE,RESOURCE_TYPE,CARRIER_ID
+		        FROM :LOCATION_BASED_DATASET_INFO_IN_DB_3
+		      )T2 ON (
+		      T1.FROM_LOCATION_NAME = T2.FROM_LOCATION_NAME 
+		      AND T1.TO_LOCATION_NAME = T2.TO_LOCATION_NAME
+		      AND (T1.TRANSPORTATION_MODE_CODE = T2.TRANSPORTATION_MODE_CODE OR T2.TRANSPORTATION_MODE_CODE = '*')
+		      AND (T1.RESOURCE_TYPE = T2.RESOURCE_TYPE OR T2.RESOURCE_TYPE = '*')
+		      AND (T1.CARRIER_ID = T2.CARRIER_ID OR T2.CARRIER_ID = '*')
+		      )
+		  WHERE T2.FROM_LOCATION_NAME IS NULL;
+	 
+
+   
+END;

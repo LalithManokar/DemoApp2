@@ -1,0 +1,44 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert.alert_rule_group::p_update_rule" (
+	IN ID BIGINT, 
+	IN ALERT_NAME VARCHAR(50),
+	IN ALERT_DESC VARCHAR(200),
+	IN ALERT_RULE_TYPE_ID INTEGER,
+	IN SP VARCHAR(200)
+ 	) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	AS
+BEGIN
+    DECLARE ALERT_RULE_TYPE_DESC VARCHAR(50);
+    DECLARE USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+    
+    SELECT IFNULL(MAX(SPRAS),'E') INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+ 
+    /**Get alert rule type desc**/
+    select IFNULL(MAX(T1.ALERT_RULE_TYPE_DESC),'') into ALERT_RULE_TYPE_DESC 
+    from "sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_map_node_metaData" T1
+    where T1.ALERT_RULE_TYPE_ID = :ALERT_RULE_TYPE_ID;
+    
+    /**Get user id**/
+    select IFNULL(MAX(T1.ID),0) into USER_ID
+    from "sap.tm.trp.db.systemmanagement.user::t_user" T1
+    where T1.USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username"());
+    
+    /**Update the alert rule**/
+    UPDATE "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule"
+     	SET NAME = :ALERT_NAME, 
+     		DESC = :ALERT_DESC,
+     		ALERT_RULE_TYPE_ID = :ALERT_RULE_TYPE_ID,
+     		ALERT_RULE_TYPE_DESC = :ALERT_RULE_TYPE_DESC,
+     		SP = :SP,
+     		LAST_MODIFIED_BY = :USER_ID,
+     		LAST_MODIFIED_ON = CURRENT_UTCTIMESTAMP
+    WHERE ALERT_RULE_ID = :ID;
+    
+    UPDATE "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_t"
+    SET SPRAS = :SPRAS,
+        DESC = :ALERT_DESC
+    WHERE ID = :ID;
+     
+END;

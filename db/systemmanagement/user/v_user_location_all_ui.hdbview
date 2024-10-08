@@ -1,0 +1,49 @@
+schema="SAP_TM_TRP";
+
+query="SELECT DISTINCT A.ID AS USER_ID,
+              C.LOCATION_ID AS LOCATION_ID,
+              D.NAME AS LOCATION_NAME,
+              D.DESC,
+              D.COUNTRY_CODE,
+              D.COUNTRY_NAME,
+              D.REGION_CODE,
+              D.STATE_NAME,
+              D.CITY_ID,
+              D.CITY_NAME,
+              D.XPOS,
+              D.YPOS,
+              D.POSTAL_CODE
+         FROM \"sap.tm.trp.db.systemmanagement.user::t_user\" AS A
+              INNER JOIN \"sap.tm.trp.db.systemmanagement::v_check_location_full_authorization\" AS E
+              ON A.USERNAME = E.USERNAME
+              INNER JOIN \"sap.tm.trp.db.systemmanagement.user::t_user_role\" AS B
+              ON A.ID = B.USER_ID
+              INNER JOIN \"sap.tm.trp.db.systemmanagement.user::v_role_location_all\" AS C
+              ON B.ROLE_ID = C.ROLE_ID
+              INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_location_ui\" AS D
+              ON C.LOCATION_ID = D.ID
+              WHERE E.HAVE_AUTHORIZATION_FLAG =0
+       UNION ALL
+       SELECT DISTINCT A.ID AS USER_ID,
+              D.ID AS LOCATION_ID,
+              D.NAME AS LOCATION_NAME,
+              D.DESC,
+              D.COUNTRY_CODE,
+              D.COUNTRY_NAME,
+              D.REGION_CODE,
+              D.STATE_NAME,
+              D.CITY_ID,
+              D.CITY_NAME,
+              D.XPOS,
+              D.YPOS,
+              D.POSTAL_CODE
+         FROM \"sap.tm.trp.db.systemmanagement.user::t_user\" AS A
+              INNER JOIN \"sap.tm.trp.db.systemmanagement::v_check_location_full_authorization\" AS E
+              ON A.USERNAME = E.USERNAME,
+              \"sap.tm.trp.db.systemmanagement.location::v_location_ui\" AS D
+        WHERE E.HAVE_AUTHORIZATION_FLAG = 1";
+                       
+depends_on_table = ["sap.tm.trp.db.systemmanagement.user::t_user", "sap.tm.trp.db.systemmanagement.user::t_user_role"];
+depends_on_view  = ["sap.tm.trp.db.systemmanagement.user::v_role_location_all",
+                    "sap.tm.trp.db.systemmanagement::v_check_location_full_authorization",
+                    "sap.tm.trp.db.systemmanagement.location::v_location_ui"];

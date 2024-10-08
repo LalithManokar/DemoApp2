@@ -1,0 +1,16 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_get_user_preference" (
+    IN USERNAME VARCHAR(100),
+    IN FILTER VARCHAR(1000),
+    OUT PREFERENCE_ITEMS "sap.tm.trp.db.systemmanagement.user::t_user_preference"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+READS SQL DATA AS
+BEGIN
+    user_preference = 
+    SELECT * FROM "sap.tm.trp.db.systemmanagement.user::t_user_preference"
+    WHERE USERNAME = :USERNAME;
+
+    PREFERENCE_ITEMS = APPLY_FILTER(:user_preference, :FILTER);
+END;

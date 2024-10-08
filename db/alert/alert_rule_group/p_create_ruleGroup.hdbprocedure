@@ -1,0 +1,69 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert.alert_rule_group::p_create_ruleGroup" (
+    IN ALERT_GROUP_NAME VARCHAR(50),
+    IN ALERT_GROUP_DESC VARCHAR(200),
+    IN ALERT_RULE_GROUP_CATEGORY_ID INTEGER,
+    IN ALLOWED_USAGED_ID VARCHAR(10),
+    IN RESOURCE_CATEGORY VARCHAR(20),
+    OUT OUT_ALERT_RULE_GROUP_ID BIGINT
+)
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+AS
+BEGIN
+    DECLARE ALERT_RULE_GROUP_ID BIGINT;
+    DECLARE USER_ID BIGINT;
+    DECLARE CREAT_TIME TIMESTAMP;
+
+    DECLARE REGISTER_RULE_GROUP INTEGER;
+
+    SELECT "sap.tm.trp.db.alert.alert_rule_group::s_alert_rule_group".NEXTVAL INTO ALERT_RULE_GROUP_ID FROM DUMMY;
+
+    SELECT IFNULL(MAX(T1.ID),0) INTO USER_ID
+    FROM "sap.tm.trp.db.systemmanagement.user::t_user" T1
+    INNER JOIN (SELECT USERNAME AS USER FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username") T2
+    ON T1.USERNAME = T2.USER;
+
+    INSERT INTO "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group"
+    (
+     ALERT_RULE_GROUP_ID,
+     NAME,
+     DESC,
+     ALERT_RULE_GROUP_CATEGORY_ID,
+     ALLOWED_USAGE,
+     CREATE_BY,
+     CREATE_ON,
+     CODE,
+     RESOURCE_CATEGORY,
+     LAST_MODIFIED_BY,
+     LAST_MODIFIED_ON
+    )
+    VALUES(:ALERT_RULE_GROUP_ID,
+           :ALERT_GROUP_NAME,
+           :ALERT_GROUP_DESC,
+           :ALERT_RULE_GROUP_CATEGORY_ID,
+           :ALLOWED_USAGED_ID,
+           :USER_ID,
+           CURRENT_UTCTIMESTAMP,
+           :ALERT_GROUP_NAME,
+           :RESOURCE_CATEGORY,
+           :USER_ID,
+           CURRENT_UTCTIMESTAMP);
+
+    INSERT INTO "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_t" (
+        ID,
+        SPRAS,
+        DESC
+    ) SELECT
+        :ALERT_RULE_GROUP_ID,
+        SPRAS,
+        :ALERT_GROUP_DESC
+    FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+
+    OUT_ALERT_RULE_GROUP_ID := :ALERT_RULE_GROUP_ID;
+
+    PIPELINE_MODEL_IDS = SELECT DISTINCT T1.ID
+                         FROM "sap.tm.trp.db.pipeline::t_pipeline_model" T1
+                         WHERE T1.PIPELINE_MODEL_TYPE_ID = :ALERT_RULE_GROUP_CATEGORY_ID;
+
+    CALL "sap.tm.trp.db.alert.alert_rule_group::p_register_pipeline_model_available_alertRuleGroup"(:ALERT_RULE_GROUP_ID,:PIPELINE_MODEL_IDS,REGISTER_RULE_GROUP);
+END;

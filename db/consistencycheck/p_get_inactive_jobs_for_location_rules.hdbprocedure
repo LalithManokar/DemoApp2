@@ -1,0 +1,25 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.consistencycheck::p_get_inactive_jobs_for_location_rules"(
+		OUT LOCATION_OUTPUT "sap.tm.trp.db.consistencycheck::tt_inactive_location_rules"
+	)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA
+AS
+BEGIN
+	LOCATION_OUTPUT = SELECT T1.ID, 
+				T1.RULE_NAME AS NAME, 
+				T1.RESOURCE_CATEGORY, 
+				T1.SCHEDULE_TIME_TYPE, 
+				T1.RECURRENCE_INTERVAL, 
+				T1.RECURRENCE_TYPE, 
+				T1.RECURRENCE_DAY, 
+				T1.START_DATETIME, 
+				T1.END_DATETIME, 
+				T1.NEXT_EXECUTION_TIME
+			FROM "sap.tm.trp.db.pickupreturn::v_location_rule" AS T1
+				INNER JOIN "sap.tm.trp.db.job::t_job_schedule" AS T3
+				ON T1.id = T3.model_id AND T3.schedule_flag = 1
+			WHERE NEXT_EXECUTION_TIME IS NULL
+				AND T1.END_DATETIME > CURRENT_UTCTIMESTAMP;
+END;

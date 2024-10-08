@@ -1,0 +1,14 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.job::p_cancel_model_schedule_detail"(
+    IN MODEL_ID BIGINT,
+    IN SCHEDULE_TYPE VARCHAR(500)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+        
+        DELETE FROM "sap.tm.trp.db.job::t_model_schedule_detail"
+        WHERE MODEL_ID = :MODEL_ID AND SCHEDULE_TYPE = :SCHEDULE_TYPE;
+        
+END;

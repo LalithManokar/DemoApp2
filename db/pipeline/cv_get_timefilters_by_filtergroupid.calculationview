@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_timefilters_by_filtergroupid" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_timefilters_by_filtergroupid"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="In_Filter_Group_ID" parameter="true">
+      <descriptions defaultDescription="In_Filter_Group_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <viewAttributes>
+        <viewAttribute datatype="TIMESTAMP" id="START_TIMESTAMP"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_TIMESTAMP"/>
+        <viewAttribute datatype="BIGINT" id="TIME_INTERVAL_ID"/>
+        <viewAttribute datatype="INTEGER" id="INTER_SECONDS"/>
+        <viewAttribute datatype="BIGINT" id="SEQUENCE"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#In_Filter_Group_ID</localVariable>
+      <definition> 
+  
+ BEGIN 
+
+     DECLARE EXIT HANDLER FOR SQLEXCEPTION
+     SELECT ::SQL_ERROR_CODE, ::SQL_ERROR_MESSAGE FROM DUMMY;
+     
+        
+     intervals = SELECT TA.TIME_INTERVAL_ID,TA.START_TIME, TA.END_TIME,TA.INTERVAL, TA.SEQUENCE
+                 FROM &quot;sap.tm.trp.db.filter::cv_time_filter_interval&quot; TA
+                 INNER JOIN &quot;sap.tm.trp.db.filter::t_filter_group&quot; TB on (TB.TIME_FILTER_ID = TA.ID)
+                 WHERE TB.ID = :In_Filter_Group_ID;
+                
+
+     var_out = SELECT START_TIME  AS START_TIMESTAMP, END_TIME AS END_TIMESTAMP, TIME_INTERVAL_ID,
+                      INTERVAL AS INTER_SECONDS, SEQUENCE
+               FROM :intervals;
+   
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <attributes>
+      <attribute id="START_TIMESTAMP" order="1">
+        <descriptions defaultDescription="MIN_DATE"/>
+        <keyMapping columnObjectName="Script_View" columnName="START_TIMESTAMP"/>
+      </attribute>
+      <attribute id="END_TIMESTAMP" order="2">
+        <descriptions defaultDescription="END_TIMESTAMP"/>
+        <keyMapping columnObjectName="Script_View" columnName="END_TIMESTAMP"/>
+      </attribute>
+      <attribute id="TIME_INTERVAL_ID" order="3">
+        <descriptions defaultDescription="SEQUENCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_INTERVAL_ID"/>
+      </attribute>
+      <attribute id="INTER_SECONDS" order="4">
+        <descriptions defaultDescription="INTER_SECONDS"/>
+        <keyMapping columnObjectName="Script_View" columnName="INTER_SECONDS"/>
+      </attribute>
+      <attribute id="SEQUENCE" order="5">
+        <descriptions defaultDescription="SEQUENCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SEQUENCE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

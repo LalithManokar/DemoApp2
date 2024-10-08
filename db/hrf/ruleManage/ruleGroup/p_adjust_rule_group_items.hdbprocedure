@@ -1,0 +1,90 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_adjust_rule_group_items" (
+--IN ADD_DELETE_FLAG VARCHAR(1),
+IN ALERT_RULE_GROUP_ID BIGINT,
+IN RULE_ID_LIST "sap.tm.trp.db.hrf.ruleManage.ruleGroup::tt_rule_id_list",
+OUT SUCCESS_FLAG INTEGER
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+
+  DECLARE RULE_ID_NUMBER INTEGER;
+  DECLARE INIT_RULE_ID_NUMBER INTEGER;
+  DECLARE RULE_TYPE_NUMBER INTEGER;
+
+  RULE_TYPE = SELECT DISTINCT RULE_TYPE_ID 
+                    FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule"
+                    WHERE RULE_ID IN (SELECT RULE_ID FROM :RULE_ID_LIST);
+                    
+  RULE_ID_LIST_DISTINCT = SELECT DISTINCT RULE_ID
+                           FROM :RULE_ID_LIST;
+  
+  SELECT COUNT (* ) INTO INIT_RULE_ID_NUMBER
+  FROM :RULE_ID_LIST;
+  
+  SELECT COUNT(*) INTO RULE_ID_NUMBER
+  FROM :RULE_ID_LIST_DISTINCT;
+  
+  IF :INIT_RULE_ID_NUMBER <> :RULE_ID_NUMBER THEN
+    SUCCESS_FLAG := -1;
+  ELSE
+    SELECT COUNT (* ) INTO RULE_TYPE_NUMBER
+    FROM :RULE_TYPE;
+    
+    IF :RULE_TYPE_NUMBER <> :RULE_ID_NUMBER THEN
+      SUCCESS_FLAG := -1;
+    ELSE
+      DELETE FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule_group_items"
+      WHERE ALERT_RULE_GROUP_ID = :ALERT_RULE_GROUP_ID;
+      
+      INSERT INTO "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule_group_items"
+      SELECT :ALERT_RULE_GROUP_ID,RULE_ID FROM :RULE_ID_LIST;
+
+      SUCCESS_FLAG := 0;
+      
+    END IF ;
+  END IF ;
+  
+
+/*
+DECLARE MAPPING_EXISTING INTEGER;
+
+    IF (ADD_DELETE_FLAG = 'A' or ADD_DELETE_FLAG = 'a' )
+    THEN
+        select count(*) into MAPPING_EXISTING 
+        from "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_items" T1
+        where T1.ALERT_RULE_GROUP_ID = :ALERT_RULE_GROUP_ID and 
+              T1.ALERT_RULE_ID = :ALERT_RULE_ID;
+        
+        IF ( :MAPPING_EXISTING > 0 )
+        THEN
+            SUCCESS_FLAG := 1;
+        ELSE
+            insert into "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_items"
+            values (ALERT_RULE_GROUP_ID,ALERT_RULE_ID);
+            SUCCESS_FLAG := 0;
+        END IF;
+    ELSEIF (ADD_DELETE_FLAG = 'D' or ADD_DELETE_FLAG = 'd' )
+    THEN
+        select count(*) into MAPPING_EXISTING 
+        from "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_items" T1
+        where T1.ALERT_RULE_GROUP_ID = :ALERT_RULE_GROUP_ID and 
+              T1.ALERT_RULE_ID = :ALERT_RULE_ID;
+                      SUCCESS_FLAG := -1;
+        IF ( :MAPPING_EXISTING > 0 )
+        THEN
+            delete from "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_items" T1
+            where T1.ALERT_RULE_GROUP_ID = :ALERT_RULE_GROUP_ID and 
+                  T1.ALERT_RULE_ID = :ALERT_RULE_ID;
+            SUCCESS_FLAG := 0;      
+        ELSE
+            SUCCESS_FLAG := 1;
+        END IF;
+    ELSE
+        SUCCESS_FLAG := -1;
+    END IF;
+*/
+
+END;

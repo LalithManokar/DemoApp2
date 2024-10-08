@@ -1,0 +1,35 @@
+schema="SAP_TM_TRP";
+
+query="SELECT DISTINCT A.ID AS ID,
+              A.NAME AS NAME,
+              A.DESC AS DESC,
+              A.ROLE_GROUP_ID AS ROLE_GROUP_ID,
+              B.DESC AS ROLE_GROUP_NAME,
+              CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                   WHEN (A.CREATE_BY <> 0 AND A.CREATE_BY IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+			       WHEN A.CREATE_BY = 0 OR A.CREATE_BY IS NULL THEN ''
+			       ELSE '***' END AS CREATED_BY,
+              A.CREATE_AT AS CREATED_TIME,
+              CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                   WHEN (A.LAST_MODIFIED_BY <> 0 AND A.LAST_MODIFIED_BY IS NOT NULL) AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+			       WHEN A.LAST_MODIFIED_BY = 0 OR A.LAST_MODIFIED_BY IS NULL THEN ''
+			       ELSE '***' END AS MODIFIED_BY,
+              IFNULL(A.LAST_MODIFIED_AT, A.CREATE_AT) AS MODIFIED_TIME,
+              A.CODE AS CODE
+         FROM \"sap.tm.trp.db.systemmanagement.user::t_role\" AS A
+              LEFT JOIN \"sap.tm.trp.db.systemmanagement.user::t_role_group\" AS B
+              ON A.ROLE_GROUP_ID = B.ID
+              LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS C
+              ON A.CREATE_BY = C.ID
+              LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS D
+              ON A.LAST_MODIFIED_BY = D.ID
+              LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T9  ON C.USERNAME = T9.USERNAME
+              LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T10  ON D.USERNAME = T10.USERNAME  
+              CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE
+              ";
+                       
+depends_on_table = ["sap.tm.trp.db.systemmanagement.user::t_role", 
+                    "sap.tm.trp.db.systemmanagement.user::t_role_group"]; 
+depends_on_view=["sap.tm.trp.db.dataprotectionprivacy::v_unblock_users",
+                 "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege",
+                 "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];  

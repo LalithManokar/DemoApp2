@@ -1,0 +1,108 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_location_grp_stock_settings_save"(
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),
+    IN CONNECTION_ID VARCHAR(100),
+    OUT EXECUTION_RESULTS "sap.tm.trp.db.massupload::tt_massupload_execution_result" )
+
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    
+AS
+CURRENT_USER_ID BIGINT;
+BEGIN
+    
+    --Declarations
+      DECLARE LOCATION_TYPE_LOCATION_GROUP INTEGER :=2;
+      DECLARE LOCATION_TYPE_REGION_GROUP INTEGER :=6; 
+      DECLARE MAX_CAPACITY DECIMAL(18);
+      DECLARE USER_ID INTEGER;
+      DECLARE CRTD_REC_CNT integer;
+      DECLARE UPDT_REC_CNT integer;
+      DECLARE TOTAL_REC_CNT integer;
+    
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE CITY_ID VARCHAR(50);
+    DECLARE CITY_NAME VARCHAR(50);
+    DECLARE STATE_CODE VARCHAR(50);
+    DECLARE STATE_NAME VARCHAR(50);
+    DECLARE COUNTRY_CODE VARCHAR(50);
+    DECLARE COUNTRY_NAME VARCHAR(50);    
+    
+    
+    --Select data from temporary table
+    SOURCE = 
+                SELECT 
+                LOCATION_GROUP_ID,
+                LOCATION_GROUP_NAME,
+                IND_UPD,LOCATION_TYPE,
+                RESOURCE_TYPE,RESOURCE_FILTER_TYPE,MIN_SAFETY_STOCK,MAX_SAFETY_STOCK,
+                LOCATION_HEAD_FLAG,RESOURCE_CATEGORY,USER_ID,ACTION_TIME,CONNECTION_ID
+                FROM "sap.tm.trp.db.massupload::t_location_grp_stock_settings_temporary" AS TMP
+                WHERE TMP.CONNECTION_ID = :CONNECTION_ID 
+                AND TMP.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID;    
+
+    -- Get User Id
+              SELECT IFNULL(MAX(ID),0) INTO CURRENT_USER_ID
+              FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+              WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username"); 
+              
+              --Get Language   
+              SELECT IFNULL(MAX(SPRAS),'E') INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+             
+    --Delete all the records in t_stock_config for the location group/region group
+    DELETE FROM "sap.tm.trp.db.stock::t_stock_config" 
+    WHERE LOCATION_ID IN (SELECT LOCATION_GROUP_ID FROM :SOURCE WHERE IND_UPD = 1)
+    AND ( LOCATION_TYPE = :LOCATION_TYPE_LOCATION_GROUP 
+    OR    LOCATION_TYPE = :LOCATION_TYPE_REGION_GROUP )
+    AND RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID;
+
+
+    --Insert Location Stock Settings
+    UPSERT "sap.tm.trp.db.stock::t_stock_config"
+     (   LOCATION_ID,
+         LOCATION_TYPE,
+         EQUIP_CODE,
+         EQUIP_CODE_TYPE,
+         MIN_SAFETY,
+         MAX_SAFETY,
+         MAX_CAPACITY,
+         LOCATION_HEAD_FLAG,
+         RESOURCE_CATEGORY )
+     SELECT
+       LOCATION_GROUP_ID,        
+       LOCATION_TYPE,
+       RESOURCE_TYPE,
+       RESOURCE_FILTER_TYPE,
+       MIN_SAFETY_STOCK,
+       MAX_SAFETY_STOCK,
+       :MAX_CAPACITY,
+       LOCATION_HEAD_FLAG,
+       RESOURCE_CATEGORY
+     FROM :SOURCE;
+
+                      
+    --Get records inserted/updated
+    SELECT 
+    COUNT(LOCATION_GROUP_ID) INTO CRTD_REC_CNT FROM :source
+    WHERE ind_upd = 0;
+    
+    SELECT
+    COUNT(LOCATION_GROUP_ID) INTO UPDT_REC_CNT FROM :source
+    WHERE ind_upd = 1;         
+    
+    --Get total records
+    SELECT COUNT(LOCATION_GROUP_ID) INTO TOTAL_REC_CNT FROM :SOURCE;
+     
+    --Delete the records in temporary table.
+    DELETE FROM "sap.tm.trp.db.massupload::t_location_grp_stock_settings_temporary" 
+    WHERE CONNECTION_ID = :CONNECTION_ID;
+    
+   
+    --Update Mass Upload Execution History table
+    EXECUTION_RESULTS = 
+                            SELECT 
+                                          :CRTD_REC_CNT AS REC_CRTD,
+                                          :UPDT_REC_CNT AS REC_UPD,
+                                          :TOTAL_REC_CNT AS RECORD_CNT from dummy;
+
+END;

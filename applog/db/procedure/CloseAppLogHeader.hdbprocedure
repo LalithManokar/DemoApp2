@@ -1,0 +1,44 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.applog.db.procedure::CloseAppLogHeader" 
+( 
+	IN LogHandleID BIGINT,
+	IN LogHandleCreationDate DATE,
+	IN Timestamp TIMESTAMP,
+	IN User NVARCHAR(256)
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY DEFINER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+	DECLARE invalid_header CONDITION FOR SQL_ERROR_CODE 10004;
+	
+	DECLARE lv_count INTEGER;
+
+	DECLARE EXIT HANDLER FOR invalid_header RESIGNAL;
+	
+	-- Check that header exists and is not closed;
+    SELECT 
+    	COUNT(*) INTO lv_count 
+	FROM 
+		"sap.tm.trp.applog.db::AppLogHeader"
+	WHERE
+       "LogHandle.ID" = :LogHandleID AND 
+	   "LogHandle.CreationDate" = :LogHandleCreationDate AND
+	   "ClosureStatus.Code" = 1; -- ClosureStatusCode 1 means "not closed"
+		
+	IF lv_count = 0 THEN
+		SIGNAL invalid_header SET message_text = 'Closing application log not possible. Application log header does not exist or is already closed.';
+	END IF;
+		
+    -- Set header to closed
+    UPDATE 
+    	"sap.tm.trp.applog.db::AppLogHeader"
+	SET
+		"ClosureStatus.Code" = 2, -- ClosureStatusCode 2 means "closed"
+		"SystemAdministrativeData.LastChangeDateTime" = :Timestamp,
+		"SystemAdministrativeData.LastChangeUserName" = :User
+	WHERE 
+		"LogHandle.ID" = :LogHandleID AND
+		"LogHandle.CreationDate" = :LogHandleCreationDate;	 
+		  
+END;

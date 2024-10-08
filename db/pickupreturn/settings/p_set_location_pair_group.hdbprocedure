@@ -1,0 +1,28 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.settings::p_set_location_pair_group" (
+    IN ACTIVATION_STATUS CHAR(1),
+    IN GROUP_FIELD_NAME1 VARCHAR(200),
+    IN GROUP_FIELD_NAME2 VARCHAR(200),
+    OUT ERROR_CODE VARCHAR(500)
+ ) 
+	LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+    
+BEGIN
+    
+    ERROR_CODE := '';
+    IF :ACTIVATION_STATUS = 'X' AND :GROUP_FIELD_NAME1 = '' THEN
+    	ERROR_CODE := 'MSG_ERROR_PICKUP_RETURN_LOCATION_GROUP_NAME1_MANDATORY';
+    END IF;
+    IF :ERROR_CODE = '' THEN
+		CALL "sap.tm.trp.db.systemmanagement.customization::p_set_general_parameter"('PICKUP_RETURN_LOCATION_PAIR_GROUP_ACTIVATION',:ACTIVATION_STATUS,ERROR_CODE);
+	END IF;
+	IF :ERROR_CODE = '' THEN
+		CALL "sap.tm.trp.db.systemmanagement.customization::p_set_general_parameter"('PICKUP_RETURN_LOCATION_PAIR_GROUP_FIELD_NAME_1',:GROUP_FIELD_NAME1,ERROR_CODE); 
+	END IF;
+	IF :ERROR_CODE = '' THEN
+		CALL "sap.tm.trp.db.systemmanagement.customization::p_set_general_parameter"('PICKUP_RETURN_LOCATION_PAIR_GROUP_FIELD_NAME_2',:GROUP_FIELD_NAME2,ERROR_CODE); 
+	END IF;
+  
+END;

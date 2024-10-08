@@ -1,0 +1,10 @@
+//To define the HDB view file use the following syntax: 
+
+schema="SAP_TM_TRP";
+query="
+	SELECT	GROUP_ID,
+			NODE_ID,
+			VALUE
+	FROM \"sap.tm.trp.db.filter::t_attribute_group_item_node_values\"
+";
+depends_on_table = ["sap.tm.trp.db.filter::t_attribute_group_item_node_values"];

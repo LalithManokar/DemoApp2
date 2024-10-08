@@ -1,0 +1,32 @@
+schema="SAP_TM_TRP";
+query="SELECT DISTINCT A.ID,
+              A.NAME,
+              A.LAYOUT_ID,
+              A.ENTRY_POINT_ID,
+              U1.USERNAME AS CREATE_BY,
+              A.CREATE_ON,
+              U2.USERNAME AS LAST_MODIFIED_BY,
+              A.LAST_MODIFIED_ON,
+              A.PIPELINE_MODEL_TYPE_ID,
+              A.DESC,
+              A.CODE,
+              A.RESOURCE_CATEGORY,
+              B.NODE_ID AS NODE_ID
+       FROM \"sap.tm.trp.db.pipeline::t_pipeline_model\" AS A
+       INNER JOIN (SELECT A.id AS PIPELINE_MODEL_ID, B.id AS node_id 
+                   FROM \"sap.tm.trp.db.pipeline::t_pipeline_model\" AS A
+                   LEFT OUTER JOIN \"sap.tm.trp.db.pipeline::t_pipeline_node\" AS B
+                   ON A.id = B.pipeline_model_id
+                   LEFT OUTER JOIN \"sap.tm.trp.db.pipeline::t_pipeline_node_connection\" AS C
+                   ON B.id = C.node_id
+                   WHERE C.node_id IS NULL) AS B
+       ON A.ID = B.PIPELINE_MODEL_ID
+       INNER JOIN \"sap.tm.trp.db.systemmanagement.user::v_user\" U1
+       ON (U1.ID = A.CREATE_BY)
+       INNER JOIN \"sap.tm.trp.db.systemmanagement.user::v_user\" U2
+       ON (U2.ID = A.LAST_MODIFIED_BY)";
+
+depends_on_table = ["sap.tm.trp.db.pipeline::t_pipeline_model",
+                    "sap.tm.trp.db.pipeline::t_pipeline_node",
+                    "sap.tm.trp.db.pipeline::t_pipeline_node_connection"];
+depends_on_table = ["sap.tm.trp.db.systemmanagement.user::v_user"];

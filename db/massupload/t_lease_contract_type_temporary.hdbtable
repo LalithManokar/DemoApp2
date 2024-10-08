@@ -1,0 +1,14 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+
+	{name = "ROW_NUM"; sqlType = INTEGER;},
+	{name = "TYPE_ID"; sqlType = BIGINT;},
+	{name = "LEASE_CONTRACT_TYPE"; sqlType = NVARCHAR; length = 22; nullable = false;},
+    {name = "DESCRIPTION"; sqlType = NVARCHAR; length = 100; nullable = false;},
+    {name = "ACTION_TIME"; sqlType = TIMESTAMP; nullable = true; },
+    {name = "CONNECTION_ID"; sqlType = VARCHAR; length = 100; nullable = true; },  
+    {name = "IND_UPD"; sqlType = INTEGER; }
+    
+    
+];

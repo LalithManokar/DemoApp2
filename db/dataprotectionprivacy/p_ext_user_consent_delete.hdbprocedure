@@ -1,0 +1,25 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.dataprotectionprivacy::p_ext_user_consent_delete"(
+    IN USER_NAME VARCHAR(60),
+    OUT MESSAGE VARCHAR(100)
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE EXIST_FLAG INTEGER;
+    
+    SELECT COUNT (* ) INTO EXIST_FLAG 
+    FROM "sap.tm.trp.db.dataprotectionprivacy::t_user_consent" 
+    WHERE USERNAME = :USER_NAME;
+    
+    IF	EXIST_FLAG >0 THEN
+      DELETE FROM "sap.tm.trp.db.dataprotectionprivacy::t_user_consent"
+      WHERE USERNAME = :USER_NAME;
+      
+      MESSAGE := 'DELETE_SUCCESS';
+    ELSE
+      MESSAGE := 'USER_NOT_EXIST';
+    END IF;
+   
+END;

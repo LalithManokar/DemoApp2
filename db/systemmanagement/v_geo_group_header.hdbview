@@ -1,0 +1,37 @@
+schema = "SAP_TM_TRP";
+query = "-- List All Geo Groups and Group Items
+	SELECT 
+		T1.ID
+	    ,T1.NAME
+	    ,T1.DESC
+	    ,T1.USER_ID
+	    ,T1.CREATE_BY
+	    ,T1.VISIBLE_FLAG
+	    ,T1.PRIME_LOC_ID
+	    ,T2.NAME AS PRIME_LOC_NAME
+	    ,T1.CREATE_AT
+	    ,T1.LAST_MODIFIED_BY
+	    ,T1.LAST_MODIFIED_TIME
+	    ,1 AS TYPE  --location group type
+	    ,T1.RESOURCE_CATEGORY
+	   FROM \"sap.tm.trp.db.systemmanagement::v_user_location_group\" T1
+	   LEFT JOIN \"sap.tm.trp.db.semantic.location::v_location\" T2 ON T2.ID = T1.PRIME_LOC_ID
+	 UNION ALL 
+	 SELECT
+		T1.ID
+	    ,T1.NAME
+	    ,T1.DESC
+	    ,T1.USER_ID
+	    ,T1.CREATE_BY
+	    ,T1.VISIBLE_FLAG
+	    ,T1.PRIME_LOC_ID
+	    ,T2.NAME AS PRIME_LOC_NAME
+	    ,T1.CREATE_AT
+	    ,T1.LAST_MODIFIED_BY
+	    ,T1.LAST_MODIFIED_TIME
+	    ,3 AS TYPE   --region group type
+	    ,T1.RESOURCE_CATEGORY
+	   FROM \"sap.tm.trp.db.systemmanagement::v_user_region_group\" T1
+	   LEFT JOIN \"sap.tm.trp.db.semantic.location::v_location\" T2 ON T2.ID = T1.PRIME_LOC_ID";
+                
+depends_on_view = ["sap.tm.trp.db.systemmanagement::v_user_region_group", "sap.tm.trp.db.systemmanagement::v_user_location_group", "sap.tm.trp.db.semantic.location::v_location"];

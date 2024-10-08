@@ -1,0 +1,34 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "a list of facet filter results, key is ID";
+table.columns = [
+    {name = "TU_ID"; sqlType = NVARCHAR; length = 32;},
+    {name = "TU_TYPE"; sqlType = NVARCHAR; length = 60;},
+    {name = "RESOURCE_TYPE";sqlType = VARCHAR; length = 10;},
+    {name = "QUANTITY";sqlType = INTEGER;},
+    {name = "ITE_KEY";sqlType = VARCHAR; length = 50;},
+    {name = "SHIPPER_ID";sqlType = VARCHAR; length = 10;},
+    {name = "SHIPPER";sqlType = VARCHAR; length = 40;},       
+    {name = "CONSIGNEE_ID";sqlType = VARCHAR; length = 10;},
+    {name = "CONSIGNEE";sqlType = VARCHAR; length = 40;},           
+    {name = "CUR_LOCATION_ID"; sqlType = VARCHAR; length = 22;},
+    {name = "CUR_DATE";sqlType= TIMESTAMP;},    
+    {name = "PRE_LOCATION_ID"; sqlType = VARCHAR; length = 22;},
+    {name = "PRE_DATE";sqlType= TIMESTAMP;},     
+    {name = "SHIPPER_LOCATION_ID"; sqlType = VARCHAR; length = 22;},
+    {name = "SHIPPER_LOCATION"; sqlType = VARCHAR; length = 50;},
+    {name = "CONSIGNEE_LOCATION_ID"; sqlType = VARCHAR; length = 22;},
+    {name = "CONSIGNEE_LOCATION"; sqlType = VARCHAR; length = 50;},    
+    {name = "CUSTOMER_NAME";sqlType = VARCHAR; length = 40;},
+    {name = "RELEVANT_PLANNING"; sqlType =INTEGER;},    
+    {name = "POL";sqlType = VARCHAR; length = 22;},    
+    {name = "POL_NAME";sqlType = VARCHAR; length = 50;},
+    {name = "POD";sqlType = VARCHAR; length = 22;},
+    {name = "POD_NAME";sqlType = VARCHAR; length = 50;},    
+    {name = "BOOKING_DATE";sqlType = DATE;},
+    {name = "STATUS";sqlType = VARCHAR; length = 60;},    
+    {name = "LIFECYCLE_STATUS";sqlType = VARCHAR; length = 35;},
+    {name = "FLAG"; sqlType = INTEGER; comment="Assign type 1:system 2:manual"; },        
+    {name = "CUR_LOCATION_NAME"; sqlType = VARCHAR; length = 50;}
+    ];    
+      

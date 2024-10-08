@@ -1,0 +1,16 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "ALERT_RULE_GROUP_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "NAME"; sqlType = VARCHAR; length = 50;},
+    {name = "DESC"; sqlType = VARCHAR; length = 200;},
+    {name = "ALERT_RULE_GROUP_CATEGORY_ID"; sqlType = INTEGER; comment="1:Planning Alerts, 2:KPI";},
+    {name = "ALLOWED_USAGE";sqlType= VARCHAR; length = 10; comment="1:global,2:personal";},
+    {name = "CREATE_BY"; sqlType = BIGINT;},
+    {name = "CREATE_ON"; sqlType = TIMESTAMP;},
+    {name = "LAST_MODIFIED_BY"; sqlType = BIGINT;},
+    {name = "LAST_MODIFIED_ON"; sqlType = TIMESTAMP;},
+    {name = "CODE";sqlType = NVARCHAR; length = 20; nullable = true;unique = true;},
+    {name = "RESOURCE_CATEGORY";sqlType = NVARCHAR; length = 20;}
+    ];
+table.primaryKey.pkcolumns = ["ALERT_RULE_GROUP_ID"];

@@ -1,0 +1,45 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.job::p_create_archive_schedule_detail"(
+    IN RULE_ID BIGINT,
+    IN START_TIME TIMESTAMP,
+    IN EXPIRY_TIME TIMESTAMP,
+    IN RECURRENCE_TYPE VARCHAR(50),
+    IN RECURRENCE_INTERVAL INTEGER,
+    IN RECURRENCE_DAY INTEGER,
+    IN SCHEDULE_TYPE VARCHAR(500),
+    IN TIMEZONES VARCHAR(50),
+    OUT ARCHIVE_SCHEDULE_DETAIL_ID BIGINT
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+   SELECT "sap.tm.trp.db.job::s_archive_schedule_detail".NEXTVAL INTO ARCHIVE_SCHEDULE_DETAIL_ID FROM dummy;
+
+        INSERT INTO "sap.tm.trp.db.job::t_archive_schedule_detail"
+                (
+                     ID,
+                     RULE_ID,
+                     START_TIME,
+                     EXPIRY_TIME,
+                     RECURRENCE_TYPE,
+                     RECURRENCE_INTERVAL,
+                     RECURRENCE_DAY,
+                     SCHEDULE_TYPE,
+                     TIMEZONES
+                )
+           values
+                (
+                     :ARCHIVE_SCHEDULE_DETAIL_ID,
+                     :RULE_ID,
+                     :START_TIME,
+                     :EXPIRY_TIME,
+                     :RECURRENCE_TYPE,
+                     :RECURRENCE_INTERVAL,
+                     :RECURRENCE_DAY,
+                     :SCHEDULE_TYPE,
+                     :TIMEZONES
+                );
+
+END;

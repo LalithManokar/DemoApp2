@@ -1,0 +1,109 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_get_basic_conn_merged_view" (
+	IN dataset_id BIGINT,
+	IN from_location NVARCHAR(50),
+	IN to_location NVARCHAR(50),
+	IN mtr NVARCHAR(10),
+	--OUT return_code TINYINT,
+	OUT accumulate_conn_id TABLE(id BIGINT),
+	OUT accumulate_conflict_delta_id TABLE(id BIGINT)
+	--OUT connection "sap.tm.trp.routing.db.dataset::tt_connection_out", 
+	--OUT connection_carrier "sap.tm.trp.routing.db.dataset::tt_connection_carrier", 
+	--OUT message "sap.tm.trp.routing.db.common::tt_message",
+	--OUT log "sap.tm.trp.routing.db.common::tt_message"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING
+   READS SQL DATA AS
+BEGIN 
+	-- decl_list
+	DECLARE dataset_chain TABLE(id BIGINT, level INTEGER);
+	DECLARE chainid_arr BIGINT ARRAY;
+	DECLARE chain_iter INTEGER;
+	--DECLARE global_dataset_id CONSTANT BIGINT = 0;
+	DECLARE manual_source CONSTANT CHAR = 'M';
+	DECLARE system_source CONSTANT CHAR = 'S';
+	DECLARE accumulate_conn TABLE(id BIGINT, dataset_id BIGINT, hash VARBINARY(32));
+	-- exception_list
+	-- stmt_list
+
+	-- Get a list of dataset chain id consisting the inheritance relation
+	dataset_chain = 
+	SELECT 0 AS id, 0 AS level
+	FROM DUMMY
+	WHERE 1 != 1;
+	
+	accumulate_conn =
+	SELECT 0 AS id, 0 AS dataset_id, TO_VARBINARY('') AS hash
+	FROM DUMMY
+	WHERE 1 != 1;
+	
+	accumulate_conflict_delta = 
+	SELECT 0 AS id, 0 AS dataset_id
+	FROM DUMMY
+	WHERE 1 != 1;
+	
+	CALL "sap.tm.trp.routing.db.dataset::p_get_dataset_chain"(:dataset_id, dataset_chain);
+
+	conn_data_all = 
+	SELECT id, dataset_id, from_location, to_location, mtr, action, source, hash
+	FROM "sap.tm.trp.routing.db.dataset::t_connection"
+	WHERE dataset_id IN (SELECT id FROM :dataset_chain);
+	
+    CALL "sap.tm.trp.routing.db.dataset::p_filter_conn_by_from_to_loc_mtr"(:conn_data_all, :from_location, :to_location, :mtr, conn_data);
+    
+	chainid_arr = ARRAY_AGG(:dataset_chain.id);
+	FOR chain_iter IN REVERSE 1..CARDINALITY(:chainid_arr) DO 
+		DECLARE cur_dataset_id BIGINT = :chainid_arr[:chain_iter];
+		DECLARE delta_cnt BIGINT;
+		/*
+		IF :cur_dataset_id = :global_dataset_id THEN 
+			accumulate_conn = 
+			SELECT id, dataset_id, hash
+			FROM "sap.tm.trp.routing.db.dataset::t_connection"
+			WHERE dataset_id = :global_dataset_id AND source = :system_source;
+
+			CONTINUE;
+		END IF;
+		*/
+		
+		-- Always add system connection
+        accumulate_conn_tmp =
+		SELECT id, dataset_id, hash
+		FROM :conn_data
+		WHERE dataset_id = :cur_dataset_id AND source = :system_source;
+
+        -- Always add system connection
+        accumulate_conn = 
+		SELECT * FROM :accumulate_conn
+		WHERE hash NOT IN (SELECT DISTINCT hash FROM :accumulate_conn_tmp)
+		UNION ALL
+		SELECT * FROM :accumulate_conn_tmp;
+        
+		-- Fetch the delta data in current data set
+		delta_conn = 
+		SELECT id, dataset_id, action, hash
+		FROM :conn_data
+		WHERE dataset_id = :cur_dataset_id AND source = :manual_source;
+        
+		-- check whether delta exist, otherwise continue
+		SELECT COUNT(*) INTO delta_cnt FROM :delta_conn;
+		IF :delta_cnt = 0 THEN
+			CONTINUE;
+		END IF;
+
+		-- Apply the delta
+		CALL "sap.tm.trp.routing.db.dataset::p_apply_delta" (:accumulate_conn, :delta_conn, accumulate_conn, conflict_delta);
+		-- Merge conflict delta
+		accumulate_conflict_delta = 
+		SELECT * FROM :accumulate_conflict_delta
+		UNION ALL 
+		SELECT * FROM :conflict_delta;
+	END FOR;
+
+	accumulate_conn_id = 
+	SELECT id FROM :accumulate_conn;
+
+	accumulate_conflict_delta_id = 
+	SELECT id FROM :accumulate_conflict_delta;
+END

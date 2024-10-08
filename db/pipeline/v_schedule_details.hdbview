@@ -1,0 +1,30 @@
+schema = "SAP_TM_TRP";
+query  ="SELECT
+                T1.MODEL_ID AS ID,
+                T1.ID AS PLAN_SCHEDULE_ID,
+                T1.RECURRENCE_TYPE,
+                T1.RECURRENCE_INTERVAL,
+                T1.RECURRENCE_DAY,
+                --REPLACE(TO_VARCHAR(UTCTOLOCAL(START_TIME, IFNULL(TIMEZONES,'UTC'), 'platform'),'YYYY-MM-DD HH24:MI:SS'),' ','T')||'.000Z' AS START_TIME,
+                --REPLACE(TO_VARCHAR(UTCTOLOCAL(EXPIRY_TIME, IFNULL(TIMEZONES,'UTC'), 'platform'),'YYYY-MM-DD HH24:MI:SS'),' ','T')||'.000Z' AS EXPIRY_TIME,
+                TO_VARCHAR(UTCTOLOCAL(T1.START_TIME, IFNULL(T1.TIMEZONES,'UTC'), 'platform'),'YYYY-MM-DD HH24:MI:SS') AS START_TIME,
+                TO_VARCHAR(UTCTOLOCAL(T1.EXPIRY_TIME, IFNULL(T1.TIMEZONES,'UTC'), 'platform'),'YYYY-MM-DD HH24:MI:SS') AS EXPIRY_TIME,
+                T1.EXECUTE_WORKING_HOUR,
+                --REPLACE(TO_VARCHAR(UTCTOLOCAL(START_WORKING_HOUR_TIME, IFNULL(TIMEZONES,'UTC'), 'platform'),'YYYY-MM-DD HH24:MI:SS'),' ','T')||'.000Z' AS START_WORKING_HOUR_TIME,
+                --REPLACE(TO_VARCHAR(UTCTOLOCAL(END_WORKING_HOUR_TIME, IFNULL(TIMEZONES,'UTC'), 'platform'),'YYYY-MM-DD HH24:MI:SS'),' ','T')||'.000Z' AS END_WORKING_HOUR_TIME,
+                TO_VARCHAR(UTCTOLOCAL(T1.START_WORKING_HOUR_TIME, IFNULL(T1.TIMEZONES,'UTC'), 'platform'),'YYYY-MM-DD HH24:MI:SS') AS START_WORKING_HOUR_TIME,
+                TO_VARCHAR(UTCTOLOCAL(T1.END_WORKING_HOUR_TIME, IFNULL(T1.TIMEZONES,'UTC'), 'platform'),'YYYY-MM-DD HH24:MI:SS') AS END_WORKING_HOUR_TIME,
+                T1.TIMEZONES,
+                T2.DESC AS TIMEZONES_DESC
+         from \"sap.tm.trp.db.job::t_model_schedule_detail\" T1
+         LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::v_time_zone\" T2 ON T2.CODE = T1.TIMEZONES
+         WHERE SCHEDULE_TYPE = 'PLAN'
+         ";
+
+depends_on_table = [
+"sap.tm.trp.db.job::t_model_schedule_detail"
+];
+
+depends_on_view=[
+"sap.tm.trp.db.systemmanagement.user::v_time_zone"
+];

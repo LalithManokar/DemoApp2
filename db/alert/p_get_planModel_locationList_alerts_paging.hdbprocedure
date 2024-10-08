@@ -1,0 +1,264 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert::p_get_planModel_locationList_alerts_paging" ( 
+IN PLAN_MODEL_ID BIGINT,
+IN PLAN_EXECUTION_ID BIGINT,
+IN NODE_ID BIGINT,
+IN LOCATION_ID_LIST "sap.tm.trp.db.alert::tt_locationList_UI",
+IN SORT_BY_ID INTEGER,
+IN ORDER_ID INTEGER,
+IN SKIP_AMOUNT INTEGER,
+IN TOP_AMOUNT INTEGER,
+OUT OUTPUT "sap.tm.trp.db.alert::tt_planModel_location_alert_UI_timeInterval_withoutGis"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+
+    DECLARE MAX_EXECUTION_ID BIGINT;
+    
+    DECLARE PLAN_EXECUTION_ID_EXIST INTEGER;
+    DECLARE MESSAGE_ALERT VARCHAR(10) := 'Alert';
+    
+    DECLARE SORT_BY_PRIORITY INTEGER;
+    DECLARE SORT_BY_LOCATION INTEGER;
+    DECLARE SORT_BY_TIME INTEGER;
+    DECLARE SORT_BY_OWNER INTEGER;
+    DECLARE ORDER_ASC INTEGER;
+    DECLARE ORDER_DESC INTEGER;
+    SORT_BY_PRIORITY := 1;
+    SORT_BY_LOCATION := 2;
+    SORT_BY_TIME := 3;
+    SORT_BY_OWNER := 4;
+    ORDER_ASC := 1;
+    ORDER_DESC := 2;
+
+	select count(T1.EXECUTION_ID) into PLAN_EXECUTION_ID_EXIST
+	from 
+	(
+		SELECT B.ID AS PLAN_MODEL_ID, 
+		       A.EXECUTION_ID, 
+		       B.PIPELINE_MODEL_ID, 
+		       C.NODE_ID 
+		FROM "sap.tm.trp.db.pipeline::t_plan_model" AS B        
+		LEFT JOIN 
+		(SELECT DISTINCT 
+		        PLAN_MODEL_ID,
+		        FIRST_VALUE(ID) over (PARTITION BY PLAN_MODEL_ID ORDER BY EXECUTE_ON DESC) AS EXECUTION_ID 
+		 FROM "sap.tm.trp.db.pipeline::t_plan_execution" )AS A
+		ON ( A.PLAN_MODEL_ID = B.ID)
+		LEFT JOIN "sap.tm.trp.db.pipeline::v_pipeline_model" AS C
+		ON ( B.PIPELINE_MODEL_ID = C.ID )
+	) T1
+	WHERE T1.PLAN_MODEL_ID = :PLAN_MODEL_ID;
+	
+	IF ( (PLAN_EXECUTION_ID_EXIST > 0  or :PLAN_EXECUTION_ID != -1) and SKIP_AMOUNT >= 0 and TOP_AMOUNT >= 0 )
+	THEN
+	    IF ( PLAN_EXECUTION_ID_EXIST > 0 )
+	    THEN
+		    SELECT IFNULL(MAX(T1.EXECUTION_ID),0) into MAX_EXECUTION_ID
+	        FROM "sap.tm.trp.db.pipeline::v_plan_default_node_latest_execution" T1
+	        WHERE T1.PLAN_MODEL_ID = :PLAN_MODEL_ID;
+        END IF;
+     
+	    IF (:PLAN_EXECUTION_ID = -1 and :NODE_ID = -1)
+	    THEN
+	      TEMP_TBL = SELECT distinct
+	               ALERT_REASON,
+	               T1.ALERT_SCORE,
+	               T1.PLAN_EXECUTION_ID,
+	               FILTER_TYPE,
+	               PLAN_MODEL_ID,
+	               PIPELINE_MODEL_ID,
+	               NODE_ID,
+	               NODE_NAME as NAME,
+	               T1.LOCATION_ID,
+	               LOCATION_NAME,
+	               EQUIP_TYPE_ID,
+	               START_TIME as TIME,
+	               STOCK,
+	               SUPPLY,
+	               DEMAND,
+	               MIN_SAFETY_STOCK,
+	               MAX_SAFETY_STOCK,
+	               MESSAGE,
+	               OWNER ,
+	               T2.ALERT_NUM,
+	               LOCATION_FILTER_TYPE 
+	               FROM "sap.tm.trp.db.alert::t_planModel_alert_forUI_timeInterval_withoutGis" T1
+	               INNER JOIN :LOCATION_ID_LIST T11
+	               ON (T1.MESSAGE = 'Alert' and 
+	                   T1.LOCATION_ID = T11.LOCATION_ID and 
+	                   T1.PLAN_MODEL_ID = :PLAN_MODEL_ID and 
+	                   T1.PLAN_EXECUTION_ID = :MAX_EXECUTION_ID )  
+	               INNER JOIN "sap.tm.trp.db.alert::v_alert_normal_quantity_location" T2
+	               ON  ( T1.PLAN_EXECUTION_ID = T2.PLAN_EXECUTION_ID and 
+	                     T1.LOCATION_ID = T2.LOC_ZONE_REGION_ID )
+	               ORDER BY T1.LOCATION_ID,T1.ALERT_SCORE desc;
+	    ELSEIF (:PLAN_EXECUTION_ID != -1 and :NODE_ID != -1)
+	    THEN
+	      TEMP_TBL = SELECT distinct
+	               ALERT_REASON,
+	               T1.ALERT_SCORE,
+	               T1.PLAN_EXECUTION_ID,
+	               FILTER_TYPE,
+	               PLAN_MODEL_ID,
+	               PIPELINE_MODEL_ID,
+	               NODE_ID,
+	               NODE_NAME as NAME,
+	               T1.LOCATION_ID,
+	               LOCATION_NAME,
+	               EQUIP_TYPE_ID,
+	               START_TIME as TIME,
+	               STOCK,
+	               SUPPLY,
+	               DEMAND,
+	               MIN_SAFETY_STOCK,
+	               MAX_SAFETY_STOCK,
+	               MESSAGE,
+	               OWNER ,
+	               T2.ALERT_NUM,
+	               LOCATION_FILTER_TYPE 
+	               FROM "sap.tm.trp.db.alert::t_planModel_alert_forUI_timeInterval_withoutGis" T1
+	               INNER JOIN :LOCATION_ID_LIST T11
+	               ON (T1.MESSAGE = 'Alert' and 
+	                   T1.LOCATION_ID = T11.LOCATION_ID and 
+	                   T1.PLAN_MODEL_ID = :PLAN_MODEL_ID and 
+	                   T1.PLAN_EXECUTION_ID = :PLAN_EXECUTION_ID and 
+	                   T1.NODE_ID = :NODE_ID) 
+	               --INNER JOIN "sap.tm.trp.db.alert::v_alert_normal_quantity_location" T2
+	               INNER JOIN "sap.tm.trp.db.alert::v_alert_normal_quantity" T2
+	               ON  ( T1.PLAN_EXECUTION_ID = T2.PLAN_EXECUTION_ID and 
+	                     T1.LOCATION_ID = T2.LOC_ZONE_REGION_ID and 
+	                     T1.NODE_ID = T2.PIPELINE_NODE_ID)
+	               ORDER BY T1.LOCATION_ID,T1.ALERT_SCORE desc;
+	    ELSEIF (:PLAN_EXECUTION_ID != -1 and :NODE_ID = -1)
+	    THEN    
+	      TEMP_TBL = SELECT distinct
+	               ALERT_REASON,
+	               T1.ALERT_SCORE,
+	               T1.PLAN_EXECUTION_ID,
+	               FILTER_TYPE,
+	               PLAN_MODEL_ID,
+	               PIPELINE_MODEL_ID,
+	               NODE_ID,
+	               NODE_NAME as NAME,
+	               T1.LOCATION_ID,
+	               LOCATION_NAME,
+	               EQUIP_TYPE_ID,
+	               START_TIME as TIME,
+	               STOCK,
+	               SUPPLY,
+	               DEMAND,
+	               MIN_SAFETY_STOCK,
+	               MAX_SAFETY_STOCK,
+	               MESSAGE,
+	               OWNER ,
+	               T2.ALERT_NUM,
+	               LOCATION_FILTER_TYPE 
+	               FROM "sap.tm.trp.db.alert::t_planModel_alert_forUI_timeInterval_withoutGis" T1
+	               INNER JOIN :LOCATION_ID_LIST T11
+	               ON (T1.MESSAGE = 'Alert' and 
+	                   T1.LOCATION_ID = T11.LOCATION_ID and 
+	                   T1.PLAN_MODEL_ID = :PLAN_MODEL_ID and 
+	                   T1.PLAN_EXECUTION_ID = :PLAN_EXECUTION_ID)   
+	               INNER JOIN "sap.tm.trp.db.alert::v_alert_normal_quantity_location" T2
+	               ON  ( T1.PLAN_EXECUTION_ID = T2.PLAN_EXECUTION_ID and 
+	                     T1.LOCATION_ID = T2.LOC_ZONE_REGION_ID )
+	               ORDER BY T1.LOCATION_ID,T1.ALERT_SCORE desc;
+	    ELSEIF (:PLAN_EXECUTION_ID = -1 and :NODE_ID != -1)
+	    THEN 
+	      TEMP_TBL = SELECT distinct
+	               ALERT_REASON,
+	               T1.ALERT_SCORE,
+	               T1.PLAN_EXECUTION_ID,
+	               FILTER_TYPE,
+	               PLAN_MODEL_ID,
+	               PIPELINE_MODEL_ID,
+	               NODE_ID,
+	               NODE_NAME as NAME,
+	               T1.LOCATION_ID,
+	               LOCATION_NAME,
+	               EQUIP_TYPE_ID,
+	               START_TIME as TIME,
+	               STOCK,
+	               SUPPLY,
+	               DEMAND,
+	               MIN_SAFETY_STOCK,
+	               MAX_SAFETY_STOCK,
+	               MESSAGE,
+	               OWNER ,
+	               T2.ALERT_NUM,
+	               LOCATION_FILTER_TYPE 
+	               FROM "sap.tm.trp.db.alert::t_planModel_alert_forUI_timeInterval_withoutGis" T1
+	               INNER JOIN :LOCATION_ID_LIST T11
+	               ON (T1.MESSAGE = 'Alert' and 
+	                   T1.LOCATION_ID = T11.LOCATION_ID and 
+	                   T1.PLAN_MODEL_ID = :PLAN_MODEL_ID and 
+	                   T1.PLAN_EXECUTION_ID = :MAX_EXECUTION_ID and 
+	                   T1.NODE_ID = :NODE_ID) 
+	               INNER JOIN "sap.tm.trp.db.alert::v_alert_normal_quantity" T2
+	               ON  ( T1.PLAN_EXECUTION_ID = T2.PLAN_EXECUTION_ID and 
+	                     T1.LOCATION_ID = T2.LOC_ZONE_REGION_ID and
+	                     T1.NODE_ID = T2.PIPELINE_NODE_ID)
+	              ORDER BY T1.LOCATION_ID,T1.ALERT_SCORE desc;
+	    END IF; 
+	    
+       
+      -- Optional -- SORT_BY:   1: Priority, 2: Location, 3: Time, 4: Owner. (default: 1: Priority)
+      -- Optional -- ORDER:   1: asc, 2: desc ((default :   1: Priority desc, 2: Location asc, 3: Time asc, 4: Owner asc.)
+       
+	    IF ( (:SORT_BY_ID = :SORT_BY_PRIORITY or :SORT_BY_ID = -1) and (:ORDER_ID = :ORDER_DESC or :ORDER_ID = -1) )
+	    THEN
+	      OUTPUT = select * from :TEMP_TBL t
+	         where t.MESSAGE = :MESSAGE_ALERT
+	         order by t.ALERT_SCORE desc,t.NODE_ID, t.LOCATION_NAME,t.EQUIP_TYPE_ID,t.TIME
+	         LIMIT :TOP_AMOUNT OFFSET :SKIP_AMOUNT;
+	    ELSEIF ( (:SORT_BY_ID = :SORT_BY_PRIORITY or :SORT_BY_ID = -1) and (:ORDER_ID = :ORDER_ASC) )
+	    THEN
+	      OUTPUT = select * from :TEMP_TBL t
+	         where t.MESSAGE = :MESSAGE_ALERT
+	         order by t.ALERT_SCORE asc,t.NODE_ID, t.LOCATION_NAME,t.EQUIP_TYPE_ID,t.TIME
+	         LIMIT :TOP_AMOUNT OFFSET :SKIP_AMOUNT;
+	    ELSEIF (:SORT_BY_ID = :SORT_BY_LOCATION and (:ORDER_ID = :ORDER_ASC or :ORDER_ID = -1))
+	    THEN
+	      OUTPUT = select * from :TEMP_TBL t
+	         where t.MESSAGE = :MESSAGE_ALERT
+	         order by t.LOCATION_NAME asc,t.ALERT_SCORE desc,t.NODE_ID,t.EQUIP_TYPE_ID,t.TIME
+             LIMIT :TOP_AMOUNT OFFSET :SKIP_AMOUNT;
+ 	    ELSEIF (:SORT_BY_ID = :SORT_BY_LOCATION and (:ORDER_ID = :ORDER_DESC ))
+	    THEN
+	      OUTPUT = select * from :TEMP_TBL t
+	         where t.MESSAGE = :MESSAGE_ALERT
+	         order by t.LOCATION_NAME desc,t.ALERT_SCORE desc,t.NODE_ID,t.EQUIP_TYPE_ID,t.TIME
+             LIMIT :TOP_AMOUNT OFFSET :SKIP_AMOUNT;       
+	    ELSEIF (:SORT_BY_ID = :SORT_BY_TIME and (:ORDER_ID = :ORDER_ASC or :ORDER_ID = -1))
+	    THEN    
+	      OUTPUT = select * from :TEMP_TBL t
+	         where t.MESSAGE = :MESSAGE_ALERT
+	         order by t.TIME asc,t.ALERT_SCORE desc,t.NODE_ID, t.LOCATION_NAME,t.EQUIP_TYPE_ID
+             LIMIT :TOP_AMOUNT OFFSET :SKIP_AMOUNT;  
+	    ELSEIF (:SORT_BY_ID = :SORT_BY_TIME and (:ORDER_ID = :ORDER_DESC))
+	    THEN    
+	      OUTPUT = select * from :TEMP_TBL t
+	         where t.MESSAGE = :MESSAGE_ALERT
+	         order by t.TIME desc,t.ALERT_SCORE desc,t.NODE_ID, t.LOCATION_NAME,t.EQUIP_TYPE_ID
+             LIMIT :TOP_AMOUNT OFFSET :SKIP_AMOUNT;   
+	    ELSEIF (:SORT_BY_ID = :SORT_BY_OWNER and (:ORDER_ID = :ORDER_ASC or :ORDER_ID = -1))
+	    THEN 
+	      OUTPUT = select * from :TEMP_TBL t
+	         where t.MESSAGE = :MESSAGE_ALERT
+	         order by t.OWNER asc,t.ALERT_SCORE desc,t.NODE_ID, t.LOCATION_NAME,t.EQUIP_TYPE_ID,t.TIME
+             LIMIT :TOP_AMOUNT OFFSET :SKIP_AMOUNT; 
+	    ELSEIF (:SORT_BY_ID = :SORT_BY_OWNER and (:ORDER_ID = :ORDER_DESC))
+	    THEN 
+	      OUTPUT = select * from :TEMP_TBL t
+	         where t.MESSAGE = :MESSAGE_ALERT
+	         order by t.OWNER desc,t.ALERT_SCORE desc,t.NODE_ID, t.LOCATION_NAME,t.EQUIP_TYPE_ID,t.TIME
+             LIMIT :TOP_AMOUNT OFFSET :SKIP_AMOUNT;         
+	    END IF;        
+   
+   /*ELSE
+	    */
+     END IF;
+END;

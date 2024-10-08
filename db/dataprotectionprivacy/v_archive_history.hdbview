@@ -1,0 +1,17 @@
+schema="SAP_TM_TRP";
+
+query="SELECT DISTINCT T1.ID,
+			  T1.RULE_NAME,
+			  T1.DESCRIPTION AS DESC,
+			  T3.USERNAME AS EXECUTED_BY_NAME
+       FROM \"sap.tm.trp.db.archive::t_archive_rule\" T1
+       INNER JOIN (SELECT MIN(ID) AS ID,RULE_ID, EXECUTED_BY 
+                   FROM \"sap.tm.trp.db.archive::t_archive_execution_detail\"
+		           GROUP BY RULE_ID,EXECUTED_BY) T2
+	   ON T1.ID=T2.RULE_ID
+       LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T3
+       ON T2.EXECUTED_BY=T3.ID";
+                       
+depends_on_table = ["sap.tm.trp.db.archive::t_archive_execution_detail",
+                    "sap.tm.trp.db.archive::t_archive_rule"];
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

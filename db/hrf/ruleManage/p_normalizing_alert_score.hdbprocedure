@@ -1,0 +1,387 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage::p_normalizing_alert_score" (
+IN  IN_EXECUTION_ID BIGINT,
+IN IN_PLAN_MODEL_TYPE_ID INTEGER,
+OUT OUTPUT_RECORDS INTEGER 
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN       
+     --persistent/temporary plan
+    IF (:IN_PLAN_MODEL_TYPE_ID = 1 or :IN_PLAN_MODEL_TYPE_ID = 2 or IN_PLAN_MODEL_TYPE_ID = 99)
+        THEN          
+          DELETE FROM "sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_normalizedAlertScore"  
+          WHERE PLAN_EXECUTION_ID = :IN_EXECUTION_ID;
+           
+          SQL1 = SELECT  
+               T0.PLAN_EXECUTION_ID,
+               T0.PLAN_MODEL_ID,    
+               T0.PLAN_MODEL_TYPE_ID,                   
+               T0.PLAN_MODEL_CATEGORY_ID,                 
+               T0.FILTER_TYPE,
+               T0.FILTER_GROUP_ID,
+               T0.PIPELINE_MODEL_ID,
+               T0.NODE_ID,
+               T0.NODE_NAME,
+               T0.NODE_VISIBLE,
+               T0.NODE_OUTPUT_KEYS,
+               T0.METADATA_NODE_ID,
+               T0.DATA_OBJECT_FORMAT,
+               T0.LOCATION_TYPE,
+               T0.LOCATION_ID,
+               T0.LOCATION_NAME,
+               T0.EQUIP_TYPE_TYPE,
+               T0.EQUIP_TYPE_ID,
+               T0.EQUIP_TYPE_NAME,
+               T0.TIME_FILTER_DESC,
+               T0.TIME_INTERVAL_ID,
+               T0.SEQUENCE,
+               T0.START_TIME,
+               T0.TIME_STEP,
+               T0.STOCK,
+               T0.SUPPLY,
+               T0.DEMAND,
+               T0.BALANCE_SUPPLY_DEMAND,
+               T0.BALANCE_STOCK_SUPPLY_DEMAND,
+               T0.MIN_SAFETY_STOCK,
+               T0.MAX_SAFETY_STOCK,
+               T0.MAX_CAPACITY,
+               T0.UNIT,
+               T0.ROW_ID,
+               T0.MESSAGE,
+               T0.ALERT_REASON,
+               T0.ALERT_SCORE_IMP,
+               T0.ALERT_SCORE_EMER,
+               T6.ALERT_SCORE_IMP_EMER,
+               CASE WHEN T6.ALERT_SCORE_IMP_EMER_RANGE >0.0001 
+               THEN T6.ALERT_SCORE_NORMALIZING 
+               ELSE 50 
+               END AS ALERT_SCORE_NORMALIZING  
+          FROM "sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_DeltaFlag"  T0
+          INNER JOIN
+          (
+             SELECT T5.NODE_ID,
+                    T5.LOCATION_ID,
+                    T5.EQUIP_TYPE_ID,
+                    T5.SEQUENCE,
+                    T5.ALERT_SCORE_IMP_EMER,
+                    T5.ALERT_SCORE_IMP_EMER_RANGE, 
+                    T5.ALERT_SCORE_NORMALIZING         
+             FROM
+             (     
+                    SELECT T41.NODE_ID,
+                           T41.LOCATION_ID,
+                           T41.EQUIP_TYPE_ID,
+                           T41.SEQUENCE,
+                           T41.ALERT_SCORE_IMP_EMER,
+                           T42.ALERT_SCORE_IMP_EMER_RANGE,
+                           CEIL((T41.ALERT_SCORE_IMP_EMER - T42.ALERT_SCORE_IMP_EMER_MIN)/T42.ALERT_SCORE_IMP_EMER_RANGE*(100-1))+1 AS ALERT_SCORE_NORMALIZING
+                    FROM
+                    (
+                         SELECT T1.FILTER_TYPE, 
+                                T1.NODE_ID,
+                                T1.LOCATION_ID,
+                                T1.EQUIP_TYPE_ID,
+                                T1.SEQUENCE,
+                                (T1.ALERT_SCORE_EMER  + T1.ALERT_SCORE_IMP) AS ALERT_SCORE_IMP_EMER
+                         FROM "sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_DeltaFlag" T1
+                         WHERE PLAN_EXECUTION_ID = :IN_EXECUTION_ID
+                    )T41,
+                    (     
+                         SELECT  T4_1.ALERT_SCORE_IMP_EMER_RANGE AS ALERT_SCORE_IMP_EMER_RANGE,
+                                 T4_1.ALERT_SCORE_IMP_EMER_MIN
+                         FROM
+                         (
+                             SELECT (MAX(T4.ALERT_SCORE_IMP_EMER) - MIN(T4.ALERT_SCORE_IMP_EMER)) AS ALERT_SCORE_IMP_EMER_RANGE,
+                                    MIN(T4.ALERT_SCORE_IMP_EMER) AS ALERT_SCORE_IMP_EMER_MIN
+                             FROM
+                             (
+                                 SELECT T1.FILTER_TYPE, 
+                                        (T1.ALERT_SCORE_EMER   + T1.ALERT_SCORE_IMP ) AS ALERT_SCORE_IMP_EMER
+                                 FROM "sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_DeltaFlag"  T1
+                                 WHERE PLAN_EXECUTION_ID = :IN_EXECUTION_ID
+                             )T4
+                          )T4_1
+                   )T42
+               )T5
+          )T6 ON (T0.NODE_ID       = T6.NODE_ID 
+              AND T0.LOCATION_ID   = T6.LOCATION_ID 
+              AND T0.EQUIP_TYPE_ID = T6.EQUIP_TYPE_ID
+              AND T0.SEQUENCE      = T6.SEQUENCE )
+           WHERE T0.PLAN_EXECUTION_ID = :IN_EXECUTION_ID;
+        
+          INSERT INTO "sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_normalizedAlertScore"  
+          (
+	           PLAN_EXECUTION_ID,
+	           PLAN_MODEL_ID,    
+	           PLAN_MODEL_TYPE_ID,                   
+	           PLAN_MODEL_CATEGORY_ID,                 
+	           FILTER_TYPE,
+	           FILTER_GROUP_ID,
+	           PIPELINE_MODEL_ID,
+	           NODE_ID,
+	           NODE_NAME,
+	           NODE_VISIBLE,
+	           NODE_OUTPUT_KEYS,
+               METADATA_NODE_ID,
+	           DATA_OBJECT_FORMAT,
+	           LOCATION_TYPE,
+	           LOCATION_ID,
+	           LOCATION_NAME,
+	           EQUIP_TYPE_TYPE,
+	           EQUIP_TYPE_ID,
+	           EQUIP_TYPE_NAME,
+	           TIME_FILTER_DESC,
+	           TIME_INTERVAL_ID,
+	           SEQUENCE,
+	           START_TIME,
+	           TIME_STEP,
+	           STOCK,
+	           SUPPLY,
+	           DEMAND,
+	           BALANCE_SUPPLY_DEMAND,
+	           BALANCE_STOCK_SUPPLY_DEMAND,
+	           MIN_SAFETY_STOCK,
+	           MAX_SAFETY_STOCK,
+	           MAX_CAPACITY,
+               UNIT,
+               ROW_ID,
+               MESSAGE,
+               ALERT_REASON,
+               ALERT_SCORE_IMP,
+               ALERT_SCORE_EMER,
+	           ALERT_SCORE_IMP_EMER,
+	           ALERT_SCORE_NORMALIZING
+            )
+		    SELECT
+		           T1.PLAN_EXECUTION_ID,
+		           T1.PLAN_MODEL_ID,    
+		           T1.PLAN_MODEL_TYPE_ID,                   
+		           T1.PLAN_MODEL_CATEGORY_ID,                 
+		           T1.FILTER_TYPE,
+		           T1.FILTER_GROUP_ID,
+		           T1.PIPELINE_MODEL_ID,
+		           T1.NODE_ID,
+		           T1.NODE_NAME,
+		           T1.NODE_VISIBLE,
+		           T1.NODE_OUTPUT_KEYS,
+                   T1.METADATA_NODE_ID,
+		           T1.DATA_OBJECT_FORMAT,
+		           T1.LOCATION_TYPE,
+		           T1.LOCATION_ID,
+		           T1.LOCATION_NAME,
+		           T1.EQUIP_TYPE_TYPE,
+		           T1.EQUIP_TYPE_ID,
+		           T1.EQUIP_TYPE_NAME,
+		           T1.TIME_FILTER_DESC,
+		           T1.TIME_INTERVAL_ID,
+		           T1.SEQUENCE,
+		           T1.START_TIME,
+		           T1.TIME_STEP,
+		           T1.STOCK,
+		           T1.SUPPLY,
+		           T1.DEMAND,
+		           T1.BALANCE_SUPPLY_DEMAND,
+		           T1.BALANCE_STOCK_SUPPLY_DEMAND,
+		           T1.MIN_SAFETY_STOCK,
+		           T1.MAX_SAFETY_STOCK,
+		           T1.MAX_CAPACITY,
+                   T1.UNIT,
+                   T1.ROW_ID,
+                   T1.MESSAGE,
+                   T1.ALERT_REASON,
+                   T1.ALERT_SCORE_IMP,
+                   T1.ALERT_SCORE_EMER,
+		           T1.ALERT_SCORE_IMP_EMER,
+		           T1.ALERT_SCORE_NORMALIZING
+		       FROM :SQL1 T1;
+		       
+		   select count(*) into OUTPUT_RECORDS
+		   from "sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_normalizedAlertScore"  T1
+		   where T1.PLAN_EXECUTION_ID  = :IN_EXECUTION_ID;
+    ELSEIF(:IN_PLAN_MODEL_TYPE_ID = 4) --persistent KPI plan
+         THEN
+        
+          DELETE FROM "sap.tm.trp.db.hrf.kpi::t_trp_hrf_KPI_cus_output_normalizedAlertScore"  
+          WHERE PLAN_EXECUTION_ID = :IN_EXECUTION_ID;
+           
+          SQL1_KPI = SELECT  
+               T0.PLAN_EXECUTION_ID,
+               T0.PLAN_MODEL_ID,    
+               T0.PLAN_MODEL_TYPE_ID,                   
+               T0.PLAN_MODEL_CATEGORY_ID,                 
+               T0.FILTER_TYPE,
+               T0.FILTER_GROUP_ID,
+               T0.PIPELINE_MODEL_ID,
+               T0.NODE_ID,
+               T0.NODE_NAME,
+               T0.NODE_VISIBLE,
+               T0.NODE_OUTPUT_KEYS,
+               T0.METADATA_NODE_ID,
+               T0.DATA_OBJECT_FORMAT,
+               T0.LOCATION_TYPE,
+               T0.LOCATION_ID,
+               T0.LOCATION_NAME,
+               T0.EQUIP_TYPE_TYPE,
+               T0.EQUIP_TYPE_ID,
+               T0.EQUIP_TYPE_NAME,
+               T0.TIME_INTERVAL_ID,              
+               T0.TIME_FILTER_DESC,
+               T0.SEQUENCE,
+               T0.START_TIME,
+               T0.TIME_STEP,
+               T0.RATE,
+               T0.QUANTITY,
+               T0.RESERV1,
+               T0.RESERV2,
+               T0.UNIT,
+               T0.ROW_ID,
+               T0.MESSAGE,
+               T0.ALERT_REASON,
+               T0.ALERT_SCORE_IMP,
+               T0.ALERT_SCORE_EMER,
+               T6.ALERT_SCORE_IMP_EMER,
+               CASE WHEN T6.ALERT_SCORE_IMP_EMER_RANGE >0.0001 
+               THEN T6.ALERT_SCORE_NORMALIZING 
+               ELSE 50 
+               END AS ALERT_SCORE_NORMALIZING  
+          FROM "sap.tm.trp.db.hrf.kpi::t_trp_hrf_KPI_cus_output_withoutDelta" T0
+          INNER JOIN
+          (
+             SELECT T5.NODE_ID,
+                    T5.LOCATION_ID,
+                    T5.EQUIP_TYPE_ID,
+                    T5.SEQUENCE,
+                    T5.ALERT_SCORE_IMP_EMER,
+                    T5.ALERT_SCORE_IMP_EMER_RANGE, 
+                    T5.ALERT_SCORE_NORMALIZING         
+             FROM
+             (     
+                    SELECT T41.NODE_ID,
+                           T41.LOCATION_ID,
+                           T41.EQUIP_TYPE_ID,
+                           T41.SEQUENCE,
+                           T41.ALERT_SCORE_IMP_EMER,
+                           T42.ALERT_SCORE_IMP_EMER_RANGE,
+                           CEIL((T41.ALERT_SCORE_IMP_EMER - T42.ALERT_SCORE_IMP_EMER_MIN)/T42.ALERT_SCORE_IMP_EMER_RANGE*(100-1))+1 AS ALERT_SCORE_NORMALIZING
+                    FROM
+                    (
+                         SELECT T1.FILTER_TYPE, 
+                                T1.NODE_ID,
+                                T1.LOCATION_ID,
+                                T1.EQUIP_TYPE_ID,
+                                T1.SEQUENCE,
+                                (T1.ALERT_SCORE_EMER  + T1.ALERT_SCORE_IMP) AS ALERT_SCORE_IMP_EMER
+                         FROM "sap.tm.trp.db.hrf.kpi::t_trp_hrf_KPI_cus_output_withoutDelta" T1
+                         WHERE PLAN_EXECUTION_ID = :IN_EXECUTION_ID
+                    )T41,
+                    (     
+                         SELECT  T4_1.ALERT_SCORE_IMP_EMER_RANGE AS ALERT_SCORE_IMP_EMER_RANGE,
+                                 T4_1.ALERT_SCORE_IMP_EMER_MIN
+                         FROM
+                         (
+                             SELECT (MAX(T4.ALERT_SCORE_IMP_EMER) - MIN(T4.ALERT_SCORE_IMP_EMER)) AS ALERT_SCORE_IMP_EMER_RANGE,
+                                    MIN(T4.ALERT_SCORE_IMP_EMER) AS ALERT_SCORE_IMP_EMER_MIN
+                             FROM
+                             (
+                                 SELECT T1.FILTER_TYPE, 
+                                        (T1.ALERT_SCORE_EMER   + T1.ALERT_SCORE_IMP ) AS ALERT_SCORE_IMP_EMER
+                                 FROM "sap.tm.trp.db.hrf.kpi::t_trp_hrf_KPI_cus_output_withoutDelta" T1
+                                 WHERE PLAN_EXECUTION_ID = :IN_EXECUTION_ID
+                             )T4
+                          )T4_1
+                   )T42
+               )T5
+          )T6 ON (T0.NODE_ID       = T6.NODE_ID 
+              AND T0.LOCATION_ID   = T6.LOCATION_ID 
+              AND T0.EQUIP_TYPE_ID = T6.EQUIP_TYPE_ID
+              AND T0.SEQUENCE      = T6.SEQUENCE )
+           WHERE T0.PLAN_EXECUTION_ID = :IN_EXECUTION_ID;
+        
+          INSERT INTO "sap.tm.trp.db.hrf.kpi::t_trp_hrf_KPI_cus_output_normalizedAlertScore"  
+          (
+	           PLAN_EXECUTION_ID,
+	           PLAN_MODEL_ID,    
+	           PLAN_MODEL_TYPE_ID,                   
+	           PLAN_MODEL_CATEGORY_ID,                 
+	           FILTER_TYPE,
+	           FILTER_GROUP_ID,
+	           PIPELINE_MODEL_ID,
+	           NODE_ID,
+	           NODE_NAME,
+	           NODE_VISIBLE,
+	           NODE_OUTPUT_KEYS,
+               METADATA_NODE_ID,
+	           DATA_OBJECT_FORMAT,
+	           LOCATION_TYPE,
+	           LOCATION_ID,
+	           LOCATION_NAME,
+	           EQUIP_TYPE_TYPE,
+	           EQUIP_TYPE_ID,
+	           EQUIP_TYPE_NAME,
+	           TIME_INTERVAL_ID,
+	           TIME_FILTER_DESC,
+	           SEQUENCE,
+	           START_TIME,
+	           TIME_STEP,
+               RATE,
+               QUANTITY,
+               RESERV1,
+               RESERV2,
+               UNIT,
+               ROW_ID,
+               MESSAGE,
+               ALERT_REASON,
+               ALERT_SCORE_IMP,
+               ALERT_SCORE_EMER,
+	           ALERT_SCORE_IMP_EMER,
+	           ALERT_SCORE_NORMALIZING
+            )
+		    SELECT
+		           T1.PLAN_EXECUTION_ID,
+		           T1.PLAN_MODEL_ID,    
+		           T1.PLAN_MODEL_TYPE_ID,                   
+		           T1.PLAN_MODEL_CATEGORY_ID,                 
+		           T1.FILTER_TYPE,
+		           T1.FILTER_GROUP_ID,
+		           T1.PIPELINE_MODEL_ID,
+		           T1.NODE_ID,
+		           T1.NODE_NAME,
+		           T1.NODE_VISIBLE,
+		           T1.NODE_OUTPUT_KEYS,
+                   T1.METADATA_NODE_ID,
+		           T1.DATA_OBJECT_FORMAT,
+		           T1.LOCATION_TYPE,
+		           T1.LOCATION_ID,
+		           T1.LOCATION_NAME,
+		           T1.EQUIP_TYPE_TYPE,
+		           T1.EQUIP_TYPE_ID,
+		           T1.EQUIP_TYPE_NAME,
+		           T1.TIME_INTERVAL_ID,
+                   T1.TIME_FILTER_DESC,
+		           T1.SEQUENCE,
+		           T1.START_TIME,
+		           T1.TIME_STEP,
+                   T1.RATE,
+                   T1.QUANTITY,
+                   T1.RESERV1,
+                   T1.RESERV2,
+                   T1.UNIT,
+                   T1.ROW_ID,
+                   T1.MESSAGE,
+                   T1.ALERT_REASON,
+                   T1.ALERT_SCORE_IMP,
+                   T1.ALERT_SCORE_EMER,
+		           T1.ALERT_SCORE_IMP_EMER,
+		           T1.ALERT_SCORE_NORMALIZING
+		       FROM :SQL1_KPI T1;
+		               
+           select count(*) into OUTPUT_RECORDS
+		   from "sap.tm.trp.db.hrf.kpi::t_trp_hrf_KPI_cus_output_normalizedAlertScore" T1
+		   where T1.PLAN_EXECUTION_ID  = :IN_EXECUTION_ID;
+    ELSE
+           select -1 into OUTPUT_RECORDS
+		   from dummy;
+    END IF;
+END;

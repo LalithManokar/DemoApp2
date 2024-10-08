@@ -1,0 +1,58 @@
+service{
+   "sap.tm.trp.applog.db.view::AppLogHeader" as "AppLogHeader"
+   	 	key ("LogHandle.ID", "LogHandle.CreationDate")
+   		navigates ("Items" as "Items", "AllParameters" as "AllParameters")
+		create forbidden
+		update forbidden
+		delete forbidden;
+		
+  "sap.tm.trp.applog.db.view::AppLogItem" as "AppLogItem" 
+  		key ("_ID", "_Header.ID", "_Header.CreationDate")
+  		navigates ( "Parameters" as "Parameters") 
+		create forbidden
+		update forbidden
+		delete forbidden;
+		
+  "sap.tm.trp.applog.db.view::AppLogItemMsgParam" as "AppLogItemMsgParam" 
+  		key ("_Item", "_Header.ID", "_Header.CreationDate", "OrdinalNumberValue")
+  		create forbidden
+  		update forbidden
+  		delete forbidden;
+  		
+  "sap.tm.trp.applog.db.view::AppLogHeaderAlternative" as "AppLogHeaderAlternative"
+        key ("LogHandle.ID", "LogHandle.CreationDate")
+        navigates ("ItemsAlternative" as "Items", "AllParametersAlternative" as "AllParameters")
+        parameters via key and entity "SearchParams" results property "AppLogHeader"
+        create forbidden
+        update forbidden
+        delete forbidden;		
+
+  "sap.tm.trp.applog.db.view::AppLogHeaderAlternative_PR" as "AppLogHeaderAlternative_PR"
+        key ("LogHandle.ID", "LogHandle.CreationDate")
+        navigates ("ItemsAlternative_PR" as "Items", "AllParametersAlternative_PR" as "AllParameters")
+        parameters via key and entity "SearchParams1" results property "AppLogHeader"
+        create forbidden
+        update forbidden
+        delete forbidden;
+        
+  association "Items" principal "AppLogHeader"("LogHandle.ID", "LogHandle.CreationDate")
+  		multiplicity "1" dependent "AppLogItem"("_Header.ID", "_Header.CreationDate") multiplicity "*";
+  		
+  association "ItemsAlternative" principal "AppLogHeaderAlternative"("LogHandle.ID", "LogHandle.CreationDate")
+        multiplicity "1" dependent "AppLogItem"("_Header.ID", "_Header.CreationDate") multiplicity "*";
+          
+  association "Parameters" principal "AppLogItem"("_ID", "_Header.ID", "_Header.CreationDate")
+  		multiplicity "1" dependent "AppLogItemMsgParam"("_Item", "_Header.ID", "_Header.CreationDate") multiplicity "*";
+  
+  association "AllParameters" principal "AppLogHeader"("LogHandle.ID", "LogHandle.CreationDate")
+  		multiplicity "1" dependent "AppLogItemMsgParam"("_Header.ID", "_Header.CreationDate") multiplicity "*";
+  		
+  association "AllParametersAlternative" principal "AppLogHeaderAlternative"("LogHandle.ID", "LogHandle.CreationDate")
+        multiplicity "1" dependent "AppLogItemMsgParam"("_Header.ID", "_Header.CreationDate") multiplicity "*";
+
+  association "ItemsAlternative_PR" principal "AppLogHeaderAlternative_PR"("LogHandle.ID", "LogHandle.CreationDate")
+        multiplicity "1" dependent "AppLogItem"("_Header.ID", "_Header.CreationDate") multiplicity "*";  
+        
+  association "AllParametersAlternative_PR" principal "AppLogHeaderAlternative_PR"("LogHandle.ID", "LogHandle.CreationDate")
+        multiplicity "1" dependent "AppLogItemMsgParam"("_Header.ID", "_Header.CreationDate") multiplicity "*";
+}

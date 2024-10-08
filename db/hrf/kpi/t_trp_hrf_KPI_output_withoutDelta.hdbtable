@@ -1,0 +1,45 @@
+table.schemaName = "SAP_TM_TRP";
+table.temporary = false;
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "PLAN_EXECUTION_ID"; sqlType = BIGINT;},
+    {name = "PLAN_MODEL_ID"; sqlType = BIGINT;},
+    {name = "PLAN_MODEL_TYPE_ID"; sqlType = INTEGER;},
+    {name = "PLAN_MODEL_CATEGORY_ID"; sqlType = INTEGER;},
+    {name = "FILTER_TYPE"; sqlType = INTEGER;},    
+    {name = "FILTER_GROUP_ID"; sqlType = BIGINT;},
+    {name = "PIPELINE_MODEL_ID"; sqlType = BIGINT;},
+    {name = "NODE_ID"; sqlType = BIGINT;},
+    {name = "NODE_NAME"; sqlType = VARCHAR; length = 255;},
+    {name = "NODE_VISIBLE"; sqlType = SMALLINT;},
+    {name = "NODE_OUTPUT_KEYS"; sqlType = VARCHAR; length = 200;},
+    {name = "METADATA_NODE_ID"; sqlType = VARCHAR; length = 500;},
+    {name = "DATA_OBJECT_FORMAT"; sqlType = VARCHAR; length = 200;},
+    
+    {name = "LOCATION_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "LOCATION_NAME"; sqlType = VARCHAR; length = 50;},
+    {name = "LOCATION_TYPE"; sqlType = INTEGER;},
+    
+    {name = "EQUIP_TYPE_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "EQUIP_TYPE_NAME"; sqlType = VARCHAR; length = 50;},
+    {name = "EQUIP_TYPE_TYPE"; sqlType = INTEGER;  },
+    
+    {name = "TIME_INTERVAL_ID"; sqlType = BIGINT;},
+    {name = "TIME_FILTER_DESC"; sqlType = VARCHAR; length = 50;},
+    {name = "SEQUENCE"; sqlType = INTEGER;},
+    
+    {name = "START_TIME"; sqlType = TIMESTAMP;},
+    {name = "TIME_STEP"; sqlType = DECIMAL; },
+     
+    {name = "IDLE_RATE"; sqlType = DOUBLE; },
+    {name = "STORAGE_COST"; sqlType = DOUBLE; },
+    {name = "DWELL_TIME"; sqlType = DOUBLE; },
+    {name = "IMPORT_EXPORT"; sqlType = DOUBLE; },
+    {name = "UNIT"; sqlType = VARCHAR; length = 32;},
+    {name = "ROW_ID"; sqlType = CHAR; length = 32;}, 
+    {name = "MESSAGE"; sqlType = VARCHAR; length = 8; }, 
+    {name = "ALERT_REASON"; sqlType = VARCHAR; length = 500; }, 
+    {name = "ALERT_SCORE_IMP"; sqlType = DOUBLE;}, 
+    {name = "ALERT_SCORE_EMER"; sqlType = DOUBLE; }
+    ];
+ table.primaryKey.pkcolumns = ["PLAN_EXECUTION_ID","NODE_ID","LOCATION_TYPE","LOCATION_ID","EQUIP_TYPE_TYPE","EQUIP_TYPE_ID","START_TIME"];

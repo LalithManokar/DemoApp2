@@ -1,0 +1,38 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::p_pr_extr_get_dep_leading_tu" ( 
+	IN  iv_from_tmstmp decimal(15, 0),
+	IN  iv_to_tmstmp   decimal(15, 0),
+	OUT OUTPUT "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization::tt_pr_extr_dependent_out_str"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	--DEFAULT SCHEMA <default_schema_name>
+	READS SQL DATA AS
+BEGIN
+
+--Step 1: Get the the TU changes for all the Movement Categories
+	lt_tu_item_leading = select tu_item.db_key as "TU_ITEM_KEY",
+								tu_header.changed_on as "CHANGED_ON_LEADING_TU"
+							from       "sap.tm.trp.db.semantic.order::v_transportation_unit"      tu_header  --header
+							inner join "sap.tm.trp.db.semantic.order::v_transportation_unit_item" tu_item    --item
+							        on tu_item.tu_key = tu_header.DB_KEY
+							where (tu_header.changed_on > iv_from_tmstmp AND tu_header.changed_on <= iv_to_tmstmp);			  
+								  
+--Step 2: Get the Parent TU based on Leading Item Key
+	lt_affected_tu = select :lt_tu_item_leading.changed_on_leading_tu,
+							tu_header.db_key,
+							tu_header.movement_cat
+						from 	   :lt_tu_item_leading     	   			--leading tu
+						inner join "sap.tm.trp.db.semantic.order::v_transportation_unit_item" tu_item --item
+						   on tu_item.leading_item_key = :lt_tu_item_leading.tu_item_key 
+						inner join "sap.tm.trp.db.semantic.order::v_transportation_unit" tu_header    --header
+						   on tu_header.db_key = tu_item.tu_key
+						where tu_header.movement_cat in ('EP','ER');						
+--Output	
+	OUTPUT = select distinct
+	                db_key as "TU_KEY",
+					movement_cat,
+					TO_TIMESTAMP(changed_on_leading_tu) as "CHANGED_ON",
+					'LEADING_TU' as "NODE"
+				from :lt_affected_tu;
+			
+END;

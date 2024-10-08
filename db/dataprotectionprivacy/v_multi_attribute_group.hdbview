@@ -1,0 +1,14 @@
+schema="SAP_TM_TRP";
+query="
+	SELECT 	T1.ID,
+			T1.NAME,
+			T1.DESC,
+			T2.USERNAME AS CREATED_BY,
+			T3.USERNAME AS MODIFIED_BY,
+			T1.RESOURCE_CATEGORY
+	FROM \"sap.tm.trp.db.filter::t_attribute_group\" T1
+	LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T2 ON T2.ID = T1.CREATED_BY
+	LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T3 ON T3.ID = T1.MODIFIED_BY ";
+	
+depends_on_table = ["sap.tm.trp.db.filter::t_attribute_group"];
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

@@ -1,0 +1,23 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::p_sample_fulfill_attribute" ( 
+	IN BASIC_NODES "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::t_basic_node"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	AS
+BEGIN
+
+	LT_BASIC_NODE_W_RANK = SELECT *, ROW_NUMBER ( ) OVER (  ) AS RANK FROM :BASIC_NODES WHERE DELETE_FLAG = '';
+	
+	LT_BASIC_NODE_ATT = SELECT CLIENT,COMPANY_CODE,SOURCE_KEY,SOURCE_TYPE,
+						CASE 
+							WHEN MOD(RANK,4) = 0 THEN 'A'
+							WHEN MOD(RANK,4) = 1 THEN 'B'
+							WHEN MOD(RANK,4) = 2 THEN 'C'
+							WHEN MOD(RANK,4) = 3 THEN 'D' 
+							ELSE 'E'
+						END AS FOOD_GRADE
+						FROM :LT_BASIC_NODE_W_RANK;
+	--UPSERT "sap.tm.trp.db.supplydemand.instant::t_basic_node_attribute" (CLIENT,COMPANY_CODE,SOURCE_KEY,SOURCE_TYPE,FOOD_GRADE) 
+	SELECT * FROM :LT_BASIC_NODE_ATT;
+END;

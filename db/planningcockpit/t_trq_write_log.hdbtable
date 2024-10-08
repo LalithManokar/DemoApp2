@@ -1,0 +1,26 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "SCENARIO_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "ACTIVITY_ID"; sqlType = BIGINT; nullable = true;},
+    {name = "STATUS"; sqlType = VARCHAR; length = 10; nullable = true;},
+    {name = "TM_STATUS"; sqlType = VARCHAR; length = 1;},
+    {name = "MESSAGE"; sqlType = NVARCHAR; length = 1000; nullable = true;},
+    {name = "TRQ_ID"; sqlType = NVARCHAR; length = 20; nullable = true;},
+    {name = "TRQ_ITEM_ID"; sqlType = NVARCHAR; length = 10; nullable = true;}, 
+    {name = "SOURCE_LOCATION"; sqlType = VARCHAR; length = 22; nullable = true;},
+    {name = "REQ_DEPARTURE_TIME"; sqlType = DECIMAL; precision = 15; scale = 0;  nullable = true;},      
+    {name = "DESTINATION_LOCATION"; sqlType = VARCHAR; length = 22; nullable = true;},
+    {name = "REQ_ARRIVAL_TIME"; sqlType = DECIMAL; precision = 15; scale = 0;  nullable = true;},    
+    {name = "RESOURCE_TYPE"; sqlType = VARCHAR; length = 10; nullable = true;}, 
+    {name = "QUANTITY"; sqlType = INTEGER; nullable = true;}, 
+    {name = "TU_GEN_FLAG"; sqlType = VARCHAR; length = 1; nullable = true;comment= " 'X' for Yes and '' for No";},    
+    {name = "TU_ID"; sqlType = NVARCHAR; length = 20; nullable = true;},  
+    {name = "TU_ITEM_ID"; sqlType = NVARCHAR; length = 10; nullable = true;}, 
+    {name = "CREATED_BY"; sqlType = BIGINT; nullable = true;},
+    {name = "MODIFIED_BY"; sqlType = BIGINT; nullable = true;},
+    {name = "CREATED_ON"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "MODIFIED_ON"; sqlType = TIMESTAMP; nullable = true;} 
+];
+table.primaryKey.pkcolumns = ["ID"];

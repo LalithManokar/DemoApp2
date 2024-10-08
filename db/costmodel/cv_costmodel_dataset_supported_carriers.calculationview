@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_costmodel_dataset_supported_carriers" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_anna_privilege_check"/>
+  <localVariables>
+    <variable id="IN_COST_MODEL_ID" parameter="true">
+      <descriptions/>
+      <variableProperties datatype="BIGINT" defaultValue="" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="COST_DATASET_ID"/>
+        <viewAttribute datatype="VARCHAR" id="CARRIER_ID" length="50"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_COST_MODEL_ID</localVariable>
+      <definition> 
+  
+ BEGIN
+
+        --The cost model supported carrier id should be the intersection of the definition in cost model dataset carrier and the cost dataset carrier
+        VAR_OUT =  SELECT T1.COST_DATASET_ID, CARRIER_ID 
+	    FROM (
+	             SELECT T1.COST_DATASET_ID,'*' AS CARRIER_ID
+			     FROM &quot;sap.tm.trp.db.costmodel::t_cost_model_dataset&quot;  T1
+			     LEFT OUTER JOIN &quot;sap.tm.trp.db.costmodel::t_cost_model_carrier&quot;  T2 ON (T1.COST_MODEL_ID = T2.COST_MODEL_ID 
+			     AND T1.COST_DATASET_ID = T2.COST_DATASET_ID)
+			     WHERE T1.COST_MODEL_ID = :IN_COST_MODEL_ID 
+			     AND T2.COST_MODEL_ID IS NULL 
+	    )T1
+	    UNION ALL SELECT T2.COST_DATASET_ID,T2.CARRIER_ID
+	    FROM &quot;sap.tm.trp.db.costmodel::t_cost_model_carrier&quot; T2
+	    WHERE T2.COST_MODEL_ID = :IN_COST_MODEL_ID;
+	    
+END 
+</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="CARRIER_ID" order="2">
+        <descriptions defaultDescription="TO_LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="CARRIER_ID"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="COST_DATASET_ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="FROM_LOCATION_NAME"/>
+        <measureMapping columnObjectName="Script_View" columnName="COST_DATASET_ID"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

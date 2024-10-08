@@ -1,0 +1,10 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "PIPELINE_ENTRY_POINT_ID"; sqlType = BIGINT;},
+    {name = "PARAM_NAME"; sqlType = VARCHAR; length = 200; },
+    {name = "NODE_ID"; sqlType = BIGINT; },
+    {name = "NODE_PARAM_INDEX"; sqlType = INTEGER; } 
+    ];
+table.primaryKey.pkcolumns = ["ID"];

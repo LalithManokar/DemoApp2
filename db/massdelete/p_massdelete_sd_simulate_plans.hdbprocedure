@@ -1,0 +1,128 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massdelete::p_massdelete_sd_simulate_plans" (
+	IN PLAN_LIST TABLE(NAME VARCHAR(200), ID BIGINT, FILTER_GROUP_ID BIGINT),
+    OUT COUNT_OF_RECORDS_DELETED_OUT "sap.tm.trp.db.massdelete::tt_massdelete_sd_plans_output_temp" 
+   ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	--DEFAULT SCHEMA <default_schema_name> 
+	READS SQL DATA AS
+BEGIN
+
+
+    --GET THE COUNT OF RECORDS DELETED FROM VARIOUS TABLES 
+    COUNT_OF_RECORDS_DELETED_TBL1 = SELECT NAME, count(*) as t_plan_model from "sap.tm.trp.db.pipeline::t_plan_model" B
+                                        WHERE ID IN (SELECT ID FROM :PLAN_LIST) GROUP BY NAME;
+                                
+    COUNT_OF_RECORDS_DELETED_TBL2 = SELECT A.NAME, count(*) as t_filter_location_filter from "sap.tm.trp.db.filter::t_filter_location_filter" B
+                                        INNER JOIN :PLAN_LIST A ON A.FILTER_GROUP_ID = B.FILTER_GROUP_ID GROUP BY A.NAME;
+    
+    COUNT_OF_RECORDS_DELETED_TBL3 = SELECT A.NAME, count(*) as t_filter_equipment_filter from "sap.tm.trp.db.filter::t_filter_equipment_filter" B
+                                        INNER JOIN :PLAN_LIST A ON A.FILTER_GROUP_ID = B.FILTER_GROUP_ID GROUP BY A.NAME;
+   
+    COUNT_OF_RECORDS_DELETED_TBL4 = SELECT A.NAME, count(*) as t_filter_group from "sap.tm.trp.db.filter::t_filter_group" B
+                                        INNER JOIN :PLAN_LIST A ON A.FILTER_GROUP_ID = B.ID GROUP BY A.NAME;
+    
+    COUNT_OF_RECORDS_DELETED_TBL5 = select A.NAME, count(*) as t_virtual_plan_persisted_plan FROM :PLAN_LIST A 
+                                        INNER JOIN "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" B ON A.ID = B.VIRTUAL_PLAN_MODEL_ID GROUP BY A.NAME;
+    
+    COUNT_OF_RECORDS_DELETED_TBL6 = select A.NAME, count(*) as t_virtual_tree_location_info FROM :PLAN_LIST A 
+                                        INNER JOIN "sap.tm.trp.db.pipeline::t_virtual_tree_location_info" B ON A.ID = B.VIRTUAL_PLAN_MODEL_ID GROUP BY A.NAME;
+                                
+    COUNT_OF_RECORDS_DELETED_TBL7 = select A.NAME, count(*) as t_virtual_tree_hierarchy FROM :PLAN_LIST A 
+                                        INNER JOIN "sap.tm.trp.db.pipeline::t_virtual_tree_hierarchy" B ON A.ID = B.VIRTUAL_PLAN_MODEL_ID GROUP BY A.NAME;
+                               
+    COUNT_OF_RECORDS_DELETED_TBL8 = select A.NAME, count(*) as t_virtual_tree_node_name FROM :PLAN_LIST A 
+                                        INNER JOIN "sap.tm.trp.db.pipeline::t_virtual_tree_node_name" B ON A.ID = B.VIRTUAL_PLAN_MODEL_ID GROUP BY A.NAME;
+    
+    -- GET EXECUTION ID LIST
+    EXECUTION_IDS = SELECT A.ID AS EXECUTION_ID, B.NAME FROM "sap.tm.trp.db.pipeline::t_plan_execution" A
+                    INNER JOIN :PLAN_LIST B ON A.PLAN_MODEL_ID = B.ID;
+    
+    --Get number of records in t_pipeline_output_dataset
+    COUNT_OF_RECORDS_DELETED_TBL9 = SELECT A.NAME, count(*) as t_pipeline_output_dataset FROM :EXECUTION_IDS A  
+                                    INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" B ON A.EXECUTION_ID = B.PLAN_EXECUTION_ID GROUP BY A.NAME;
+    
+    --Get number of records deleted from t_plan_execution                           
+    COUNT_OF_RECORDS_DELETED_TBL10 = SELECT A.NAME, count(*) as t_plan_execution FROM :EXECUTION_IDS A 
+                                    INNER JOIN  "sap.tm.trp.db.pipeline::t_plan_execution" B ON A.EXECUTION_ID = B.ID GROUP BY A.NAME;
+    
+    COUNT_OF_RECORDS_DELETED_TBL11 = SELECT A.NAME, count(*) as t_alert_rule_group_assign_plan_model FROM :PLAN_LIST A 
+                                    INNER JOIN "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_assign_plan_model" B ON A.ID = B.PLAN_MODEL_ID GROUP BY A.NAME;                            
+    
+    COUNT_OF_RECORDS_DELETED_TBL12 = SELECT A.NAME, count(*) as t_alert_DT_output_timeInterval FROM :EXECUTION_IDS A 
+                                    INNER JOIN  "sap.tm.trp.db.alert::t_alert_DT_output_timeInterval" B ON A.EXECUTION_ID = B.PLAN_EXECUTION_ID GROUP BY A.NAME;
+                                  
+    COUNT_OF_RECORDS_DELETED_TBL13 = SELECT A.NAME, count(*) as t_alert_DT_output_alertScore_timeInterval FROM :EXECUTION_IDS A 
+                                    INNER JOIN  "sap.tm.trp.db.alert::t_alert_DT_output_alertScore_timeInterval" B ON A.EXECUTION_ID = B.PLAN_EXECUTION_ID GROUP BY A.NAME;
+                                 
+    COUNT_OF_RECORDS_DELETED_TBL14 = SELECT A.NAME, count(*) as t_planModel_alert_forUI_timeInterval FROM :EXECUTION_IDS A 
+                                INNER JOIN  "sap.tm.trp.db.alert::t_planModel_alert_forUI_timeInterval" B ON A.EXECUTION_ID = B.PLAN_EXECUTION_ID GROUP BY A.NAME;
+                                
+    --Get number of records in t_execution_context
+    COUNT_OF_RECORDS_DELETED_TBL15 = SELECT A.NAME, count(*) as t_execution_context FROM :EXECUTION_IDS A  
+                                    INNER JOIN "sap.tm.trp.db.pipeline::t_execution_context" B ON A.EXECUTION_ID = B.EXECUTION_ID GROUP BY A.NAME;
+ 
+    --Get number of records in t_rule_dispatch_node_to_sp
+    COUNT_OF_RECORDS_DELETED_TBL16 = SELECT A.NAME, count(*) as t_rule_dispatch_node_to_sp FROM :EXECUTION_IDS A  
+                                    INNER JOIN "sap.tm.trp.db.hrf.ruleManage::t_rule_dispatch_node_to_sp" B ON A.EXECUTION_ID = B.PLAN_EXECUTION_ID GROUP BY A.NAME;
+                                    
+                                    
+    --Get number of records in t_trp_hrf_SD_output_DeltaFlag
+    COUNT_OF_RECORDS_DELETED_TBL17 = SELECT A.NAME, count(*) as t_trp_hrf_SD_output_DeltaFlag FROM :EXECUTION_IDS A  
+                                    INNER JOIN "sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_DeltaFlag" B ON A.EXECUTION_ID = B.PLAN_EXECUTION_ID GROUP BY A.NAME;
+                                    
+    --Get number of records in t_SD_KPI_cus_BubbleRule_output
+    COUNT_OF_RECORDS_DELETED_TBL18 = SELECT A.NAME, count(*) as t_SD_KPI_cus_BubbleRule_output FROM :EXECUTION_IDS A  
+                                    INNER JOIN "sap.tm.trp.db.hrf.planBubble::t_SD_KPI_cus_BubbleRule_output" B ON A.EXECUTION_ID = B.PLAN_EXECUTION_ID GROUP BY A.NAME;
+                                    
+    --Get number of records in t_trp_hrf_SD_output_normalizedAlertScore
+    COUNT_OF_RECORDS_DELETED_TBL19 = SELECT A.NAME, count(*) as t_trp_hrf_SD_output_normalizedAlertScore FROM :EXECUTION_IDS A  
+                                    INNER JOIN "sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_normalizedAlertScore" B ON A.EXECUTION_ID = B.PLAN_EXECUTION_ID GROUP BY A.NAME;
+                                    
+--Get number of records in t_trp_hrf_SD_output_forUI
+    COUNT_OF_RECORDS_DELETED_TBL20 = SELECT A.NAME, count(*) as t_trp_hrf_SD_output_forUI FROM :EXECUTION_IDS A  
+                                    INNER JOIN "sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_forUI" B ON A.EXECUTION_ID = B.PLAN_EXECUTION_ID GROUP BY A.NAME;
+  
+
+    COUNT_OF_RECORDS_DELETED_OUT = SELECT A.NAME,
+                                    A.t_plan_model,
+                                    B.t_filter_location_filter,
+                                    C.t_filter_equipment_filter,
+                                    D.t_filter_group,
+                                    E.t_virtual_plan_persisted_plan,
+                                    F.t_virtual_tree_location_info,
+                                    G.t_virtual_tree_hierarchy,
+                                    H.t_virtual_tree_node_name ,
+                                    I.t_pipeline_output_dataset,
+                                    J.t_plan_execution,
+                                    K.t_alert_rule_group_assign_plan_model,
+                                    L.t_alert_DT_output_timeInterval,
+                                    M.t_alert_DT_output_alertScore_timeInterval,
+                                    N.t_planModel_alert_forUI_timeInterval,
+                                    O.t_execution_context,
+                                    P.t_rule_dispatch_node_to_sp ,
+                                    Q.t_trp_hrf_SD_output_DeltaFlag,
+                                    R.t_SD_KPI_cus_BubbleRule_output,
+                                    S.t_trp_hrf_SD_output_normalizedAlertScore,
+                                    T.t_trp_hrf_SD_output_forUI FROM :COUNT_OF_RECORDS_DELETED_TBL1 A
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL2 B ON A.NAME = B.NAME
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL3 C ON A.NAME = C.NAME 
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL4 D ON A.NAME = D.NAME
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL5 E ON A.NAME = E.NAME
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL6 F ON A.NAME = F.NAME
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL7 G ON A.NAME = G.NAME 
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL8 H ON A.NAME = H.NAME
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL9 I ON A.NAME = I.NAME
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL10 J ON A.NAME = J.NAME
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL11 K ON A.NAME = K.NAME 
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL12 L ON A.NAME = L.NAME
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL13 M ON A.NAME = M.NAME
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL14 N ON A.NAME = N.NAME
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL15 O ON A.NAME = O.NAME
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL16 P ON A.NAME = P.NAME
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL17 Q ON A.NAME = Q.NAME
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL18 R ON A.NAME = R.NAME
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL19 S ON A.NAME = S.NAME
+                                    LEFT JOIN :COUNT_OF_RECORDS_DELETED_TBL20 T ON A.NAME = T.NAME;
+       
+END;

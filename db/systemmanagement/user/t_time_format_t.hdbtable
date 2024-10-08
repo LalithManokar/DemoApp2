@@ -1,0 +1,8 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "TIME_FORMAT_ID"; sqlType = INTEGER; nullable = false;},
+    {name = "LANG_CODE"; sqlType = VARCHAR; length = 50; nullable = true; },
+    {name = "DESC"; sqlType = VARCHAR; length = 50; nullable = true; }
+];
+table.primaryKey.pkcolumns = ["TIME_FORMAT_ID","LANG_CODE"];

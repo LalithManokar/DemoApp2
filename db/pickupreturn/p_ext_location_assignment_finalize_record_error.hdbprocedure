@@ -1,0 +1,154 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_location_assignment_finalize_record_error" ( 
+    IN RULE_ID BIGINT,
+    IN LOC_ASSIGNMENT_TMP_ID CLOB,
+    IN RUN_ID VARCHAR(200)
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+    
+  DECLARE USER_ID INTEGER; 
+  DECLARE USER_NAME VARCHAR(60); 
+  DECLARE V_SCHEDULE_TIME_TYPE INTEGER; 
+  
+  CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:LOC_ASSIGNMENT_TMP_ID,'~',errorInputString);
+   
+     LOC_ASSIGNMENT_TMP_ID_P = select CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 1) as VARCHAR(20)) as TU_ID,
+                                      CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 2) as VARCHAR(2000)) as MSG
+                      from :errorInputString;
+                       
+  SELECT T1.ID INTO USER_ID 
+  FROM "sap.tm.trp.db.systemmanagement.user::t_user" T1
+  INNER JOIN "sap.tm.trp.db.systemmanagement.user::cv_get_username" T2
+  ON (T1.USERNAME = T2.USERNAME);
+  
+  SELECT IFNULL(MAX(USERNAME),'') INTO USER_NAME
+  FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+  
+  SELECT IFNULL (MAX (SCHEDULE_TIME_TYPE),0) INTO V_SCHEDULE_TIME_TYPE
+  FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+  WHERE ID = :RULE_ID;
+  
+  IF :V_SCHEDULE_TIME_TYPE = 1 THEN
+  
+  SELECT :RUN_ID,
+        AFFECTED_TBL.RULE_ID,
+        AFFECTED_TBL.TU_ID,
+        :USER_NAME,
+        AFFECTED_TBL.EXECUTION_STATUS_CODE,
+        AFFECTED_TBL.SHIPPER_ID,
+        AFFECTED_TBL.CONSIGNEE_ID,
+        AFFECTED_TBL.RESOURCE_TYPE,
+        AFFECTED_TBL.QUANTITY,
+        AFFECTED_TBL.SOURCE_LOCATION_ID,
+        AFFECTED_TBL.DESTINATION_LOCATION_ID,
+        AFFECTED_TBL.POL,
+        AFFECTED_TBL.POD,
+        CASE AFFECTED_TBL.TU_TYPE_CODE WHEN 'EP' THEN AFFECTED_TBL.VESSEL_CUTOFF_TIME 
+          WHEN 'ER' THEN AFFECTED_TBL.VESSEL_ARRIVAL_DATE END AS DATE,
+        AFFECTED_TBL.PRE_LOCATION_ID,
+        AFFECTED_TBL.CUR_LOCATION_ID,
+        AFFECTED_TBL.PRE_DATE,
+        AFFECTED_TBL.CUR_DATE,
+        AFFECTED_TBL.STREETTURN_TU_ID,
+        AFFECTED_TBL.FLAG,
+        AFFECTED_TBL.OP_SETTING_TYPE,
+        AFFECTED_TBL.SAVE_TIME,
+        AFFECTED_TBL.SCHEDULE_TIME_TYPE,
+        :USER_ID,
+        B.MSG
+    FROM "sap.tm.trp.db.pickupreturn::t_pickupreturn_global_draft" AS AFFECTED_TBL
+    INNER JOIN :LOC_ASSIGNMENT_TMP_ID_P AS B ON (AFFECTED_TBL.TU_ID = B.TU_ID)
+    WHERE AFFECTED_TBL.RULE_ID = :RULE_ID
+    AND AFFECTED_TBL.USER = :USER_NAME
+    INTO "sap.tm.trp.db.pickupreturn::t_location_rule_assign_error"(
+        RUN_ID,
+        RULE_ID,
+        TU_ID,
+        USER,
+        EXECUTION_STATUS_CODE,
+        SHIPPER_ID,
+        CONSIGNEE_ID,
+        RESOURCE_TYPE,
+        QUANTITY,
+        SOURCE_LOCATION_ID,
+        DESTINATION_LOCATION_ID,
+        POL,
+        POD,
+        DATE,
+        PRE_LOCATION_ID,
+        CUR_LOCATION_ID,
+        PRE_DATE,
+        CUR_DATE,
+        STREETTURN_TU_ID,
+        FLAG,
+        OP_SETTING_TYPE,
+        EXECUTION_TIME,
+        SCHEDULE_TIME_TYPE,
+        EXECUTION_BY, 
+        ERROR_MMESSAGE
+    );
+  
+  ELSE
+  
+  SELECT :RUN_ID,
+        AFFECTED_TBL.RULE_ID,
+        AFFECTED_TBL.TU_ID,
+        :USER_NAME,
+        AFFECTED_TBL.EXECUTION_STATUS_CODE,
+        AFFECTED_TBL.SHIPPER_ID,
+        AFFECTED_TBL.CONSIGNEE_ID,
+        AFFECTED_TBL.RESOURCE_TYPE,
+        AFFECTED_TBL.QUANTITY,
+        AFFECTED_TBL.SOURCE_LOCATION_ID,
+        AFFECTED_TBL.DESTINATION_LOCATION_ID,
+        AFFECTED_TBL.POL,
+        AFFECTED_TBL.POD,
+        CASE AFFECTED_TBL.TU_TYPE_CODE WHEN 'EP' THEN AFFECTED_TBL.VESSEL_CUTOFF_TIME 
+          WHEN 'ER' THEN AFFECTED_TBL.VESSEL_ARRIVAL_DATE END AS DATE,
+        AFFECTED_TBL.PRE_LOCATION_ID,
+        AFFECTED_TBL.CUR_LOCATION_ID,
+        AFFECTED_TBL.PRE_DATE,
+        AFFECTED_TBL.CUR_DATE,
+        AFFECTED_TBL.STREETTURN_TU_ID,
+        AFFECTED_TBL.FLAG,
+        AFFECTED_TBL.OP_SETTING_TYPE,
+        AFFECTED_TBL.SAVE_TIME,
+        AFFECTED_TBL.SCHEDULE_TIME_TYPE,
+        :USER_ID,
+        B.MSG
+    FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft" AS AFFECTED_TBL
+    INNER JOIN :LOC_ASSIGNMENT_TMP_ID_P AS B ON (AFFECTED_TBL.TU_ID = B.TU_ID)
+    WHERE AFFECTED_TBL.RULE_ID = :RULE_ID
+    AND AFFECTED_TBL.USER = :USER_NAME
+    INTO "sap.tm.trp.db.pickupreturn::t_location_rule_assign_error"(
+        RUN_ID,
+        RULE_ID,
+        TU_ID,
+        USER,
+        EXECUTION_STATUS_CODE,
+        SHIPPER_ID,
+        CONSIGNEE_ID,
+        RESOURCE_TYPE,
+        QUANTITY,
+        SOURCE_LOCATION_ID,
+        DESTINATION_LOCATION_ID,
+        POL,
+        POD,
+        DATE,
+        PRE_LOCATION_ID,
+        CUR_LOCATION_ID,
+        PRE_DATE,
+        CUR_DATE,
+        STREETTURN_TU_ID,
+        FLAG,
+        OP_SETTING_TYPE,
+        EXECUTION_TIME,
+        SCHEDULE_TIME_TYPE,
+        EXECUTION_BY, 
+        ERROR_MMESSAGE
+    );
+    END IF;
+END;

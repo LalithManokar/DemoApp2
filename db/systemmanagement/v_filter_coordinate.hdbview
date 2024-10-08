@@ -1,0 +1,13 @@
+schema = "SAP_TM_TRP";
+query = "SELECT FILTER_GROUP_ID,
+                XPOS,
+                YPOS
+           FROM (
+         SELECT DISTINCT DENSE_RANK() OVER (PARTITION BY FILTER_GROUP_ID ORDER BY ABS(XPOS) DESC, ABS(YPOS) DESC) AS RANK,
+                T1.FILTER_GROUP_ID,
+                T1.XPOS AS XPOS,
+                T1.YPOS AS YPOS
+           FROM \"sap.tm.trp.db.systemmanagement::v_filter_geo_all\" AS T1)
+          WHERE RANK = 1";
+          
+depends_on_view = ["sap.tm.trp.db.systemmanagement::v_filter_geo_all"];

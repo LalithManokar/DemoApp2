@@ -1,0 +1,79 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_batch_check_supply_demand_flag" ( 
+  IN SD_PLAN_LIST "sap.tm.trp.db.massupload::tt_plan_name_list",
+  OUT INVALID_PLAN_LIST "sap.tm.trp.db.massupload::tt_invalid_plan_list"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	 DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+/***************************** 
+ This procedure is used to get the list of virtual/scheduled SD plans
+ that don't have supply&demand node
+ *****************************/
+  DECLARE PLAN_SD SMALLINT := 1; --plan type: scheduled SD plan
+  DECLARE PLAN_VSD SMALLINT := 3; -- plan type: vritual SD plan
+  
+ --get calcuaton model id and plan type id 
+ SD_PLAN_DETAILS = SELECT A.ID, A.NAME, PIPELINE_MODEL_ID , --Calcuation Model ID
+                    PLAN_MODEL_TYPE_ID --Plan type id
+                   FROM "sap.tm.trp.db.pipeline::t_plan_model" AS A
+                   INNER JOIN :SD_PLAN_LIST AS B
+                   ON A.NAME = B.NAME;
+  
+ --for scheduled SD plan
+  INVALID_PSD_LIST = 
+    SELECT A.ID, A.NAME, 'MSG_ERROR_MUST_HAVE_BOTH_SD_DATA' AS MESSAGE 
+	  FROM :SD_PLAN_DETAILS AS A
+	  INNER JOIN "sap.tm.trp.db.pipeline::v_pipeline_has_supply_demand" AS B
+	  ON A.PIPELINE_MODEL_ID = B.PIPELINE_MODEL_ID 
+	    AND B.HAS_SUPPLY_DEMAND <= 0 AND A.PLAN_MODEL_TYPE_ID = :PLAN_SD;
+    
+ --for virtual SD plan
+ ---1)get scheduled Plan list and their node value from virtual SD plan
+ NODE_VALUE_LIST = 
+    SELECT T0.ID, T0.VIRTUAL_PLAN_MODEL_ID, T0.VSD_NAME,T1.DEFAULT_NODE_ID, T2.VALUE   
+    FROM (
+    	SELECT ID, PIPELINE_MODEL_ID , T2.VIRTUAL_PLAN_MODEL_ID, T2.NAME AS VSD_NAME
+    	FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+	    INNER JOIN ( SELECT VIRTUAL_PLAN_MODEL_ID, PERSISTED_PLAN_MODEL_ID, B.NAME
+	    FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" AS A
+	    INNER JOIN :SD_PLAN_DETAILS AS B
+	    ON B.PLAN_MODEL_TYPE_ID = :PLAN_VSD AND A.VIRTUAL_PLAN_MODEL_ID = B.ID
+	    ) AS T2
+	    ON T1.ID = T2.PERSISTED_PLAN_MODEL_ID
+    ) AS T0
+    LEFT OUTER JOIN "sap.tm.trp.db.pipeline::v_pipeline_default_node" T1
+    ON T0.PIPELINE_MODEL_ID = T1.PIPELINE_MODEL_ID
+    LEFT OUTER JOIN 
+    (
+	 SELECT NODE_ID, VALUE FROM "sap.tm.trp.db.pipeline::t_pipeline_node_layout"
+	 WHERE KEY = 'outputKey'
+	 AND VALUE LIKE '%SUPPLY%' OR VALUE LIKE '%DEMAND%'
+   ) T2
+   ON T1.DEFAULT_NODE_ID = T2.NODE_ID;
+ 
+  NO_SUPPLY_OR_DEMAND = 
+      SELECT DISTINCT VIRTUAL_PLAN_MODEL_ID, VSD_NAME
+        FROM  :NODE_VALUE_LIST WHERE VALUE IS NOT NULL
+      MINUS
+        (
+          SELECT DISTINCT VIRTUAL_PLAN_MODEL_ID, VSD_NAME FROM (
+	         SELECT T1.VIRTUAL_PLAN_MODEL_ID, T1.VSD_NAME
+	        FROM (SELECT  VIRTUAL_PLAN_MODEL_ID, VSD_NAME FROM  :NODE_VALUE_LIST WHERE VALUE LIKE '%SUPPLY%') AS T1
+	        INNER JOIN (SELECT VIRTUAL_PLAN_MODEL_ID, VSD_NAME FROM  :NODE_VALUE_LIST WHERE VALUE LIKE '%DEMAND%') AS T2
+	        ON T1.VIRTUAL_PLAN_MODEL_ID = T2.VIRTUAL_PLAN_MODEL_ID 
+	       )
+        );            
+   ---2) get invlaid virtual SD plan list
+   INVALID_VSD_LIST = 
+            SELECT A.VIRTUAL_PLAN_MODEL_ID AS ID, A.VSD_NAME AS NAME, 'MSG_ERROR_WITH_NONE_SD_PLAN' AS MESSAGE
+            FROM :NODE_VALUE_LIST AS A WHERE A.VALUE IS NULL
+            UNION
+            SELECT B.VIRTUAL_PLAN_MODEL_ID AS ID, B.VSD_NAME AS NAME, 'MSG_ERROR_VSD_NO_SD_DATA' AS MESSAGE 
+            FROM :NO_SUPPLY_OR_DEMAND AS B;
+   
+   INVALID_PLAN_LIST = SELECT * FROM :INVALID_PSD_LIST
+                       UNION
+                       SELECT * FROM :INVALID_VSD_LIST;
+END;

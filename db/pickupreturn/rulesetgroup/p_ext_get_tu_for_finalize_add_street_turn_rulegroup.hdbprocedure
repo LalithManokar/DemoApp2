@@ -1,0 +1,514 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_ext_get_tu_for_finalize_add_street_turn_rulegroup" (
+    IN RULE_GROUP_ID BIGINT,
+    IN EXECUTION_ID VARCHAR(200),
+    IN START_TIME TIMESTAMP,
+    OUT COUNT_AFFECTED_DATA INT,
+    OUT COUNT_CONTAINER_SPECIAL_INSTRUCTION INT
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+ 
+  DECLARE USER_NAME VARCHAR(60);
+  DECLARE USER_ID INTEGER;
+  DECLARE V_RULE_TYPE INTEGER;
+  DECLARE V_SCHEDULE_TIME_TYPE INTEGER;
+  DECLARE SCRIPT VARCHAR(5000);
+  DECLARE PROC VARCHAR(200);
+  DECLARE OBJECT_NAME VARCHAR(200);
+  DECLARE IN_FILTER_EXECUTION BIGINT;
+  DECLARE ACTIVE_COUNT BIGINT;
+  
+  SELECT IFNULL (MAX (USERNAME),'') INTO USER_NAME
+  FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+  
+  SELECT T1.ID INTO USER_ID 
+  FROM "sap.tm.trp.db.systemmanagement.user::t_user" T1
+  INNER JOIN "sap.tm.trp.db.systemmanagement.user::cv_get_username" T2
+  ON (T1.USERNAME = T2.USERNAME);
+
+  SELECT RULESET_TYPE INTO V_RULE_TYPE FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group"
+  WHERE ID = :RULE_GROUP_ID;
+
+  /*SELECT IFNULL (MAX (SCHEDULE_TIME_TYPE),0) INTO V_SCHEDULE_TIME_TYPE
+  FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+  WHERE ID = :RULE_ID;*/
+  
+
+  --TU info
+  --CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_ext_get_staging_tu"(:RULE_GROUP_ID,:V_RULE_TYPE, TU_INFO);
+  --IF :V_RULE_TYPE=1 THEN
+  TU_INFO1 = select t2.* from "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result" t2  
+  	 	 	where t2.status = 'O' and t2.rule_id in (select rule_id from "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" where rule_group_id = :rule_group_id);
+ 
+  TU_INFO = select a.*,b.rule_name from :TU_INFO1 a inner join "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" b on b.id = a.rule_id;
+  
+  TU_IDS = SELECT TU_ID FROM :TU_INFO;
+  
+  
+   /*INVALID_STREET_TURN_TUs  =
+        SELECT TU_ID as TRANSPORTATION_ID
+          FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft"  
+         WHERE rule_id in (select rule_id from "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" where rule_group_id = :rule_group_id) and INVALID = 1; */
+    
+  SELECT FILTER_EXECUTION INTO IN_FILTER_EXECUTION  
+  FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+  WHERE ID IN (SELECT TOP 1 RULE_ID FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" WHERE RULE_GROUP_ID = :RULE_GROUP_ID);
+  
+  IF :IN_FILTER_EXECUTION = 1 THEN
+        
+  SELECT count(*) into ACTIVE_COUNT FROM  "sap.tm.trp.db.pickupreturn::t_register_exclude_processed_tu" T1
+  where T1.ACTIVATION_STATUS = 1;
+  
+  IF (:ACTIVE_COUNT > 0) THEN
+		SELECT T1.NAME into OBJECT_NAME  FROM  "sap.tm.trp.db.pickupreturn::t_register_exclude_processed_tu" T1 
+		where T1.ACTIVATION_STATUS = 1;
+   
+		SELECT T1.procedure_name into PROC
+		FROM "sap.tm.trp.db.pickupreturn::t_register_exclude_processed_tu" T1
+		WHERE T1.NAME = :OBJECT_NAME;
+		
+		TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_assign_result_temp";
+		INSERT INTO "sap.tm.trp.db.pickupreturn::t_assign_result_temp"
+		(TOR_ID)
+		SELECT DISTINCT TU_ID FROM "sap.tm.trp.db.pickupreturn::v_location_rule_assign_result";
+		
+		TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_original_tu_temp";
+		INSERT INTO "sap.tm.trp.db.pickupreturn::t_original_tu_temp" 
+		(TOR_ID)
+		SELECT DISTINCT TU_ID FROM :TU_IDS;
+	
+		SCRIPT := 'call "'|| :PROC || '"(' 
+			|| '''' || :RULE_GROUP_ID  || '''' ||    
+			 ')';  
+		
+		execute immediate(:SCRIPT); 
+  
+  -- TUs to be processed further 
+  		TUS_VALID = SELECT * FROM "sap.tm.trp.db.pickupreturn::t_original_tu_temp";
+  
+         
+  	 	INVALID_SUGGEST_LOCATION_TUs =
+        SELECT A.TU_ID as TRANSPORTATION_ID,
+        'This TU is invalid.Becasue suggestion location assginment is in other rule set.' as ERR_MSG
+          FROM :TU_INFO A
+    	  INNER JOIN "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" B
+          ON A.RULE_ID=B.ID
+    	  INNER JOIN "sap.tm.trp.db.pickupreturn::v_location_rule_assign_result" C
+          ON A.TU_ID=C.TU_ID
+          WHERE A.TU_ID not in (select TOR_ID from :TUS_VALID)
+          AND C.PRE_LOCATION_ID <>'' 
+          AND C.PRE_LOCATION_ID is not null;  
+          
+        END IF;
+        
+    ELSE
+  
+  	 	INVALID_SUGGEST_LOCATION_TUs =
+        SELECT A.TU_ID as TRANSPORTATION_ID,
+        'This TU is invalid.Becasue suggestion location assginment is in other rule set.' as ERR_MSG
+          FROM :TU_INFO A
+    	  INNER JOIN "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" B
+          ON A.RULE_ID=B.ID
+    	  INNER JOIN "sap.tm.trp.db.pickupreturn::v_location_rule_assign_result" C
+          ON A.TU_ID=C.TU_ID
+          WHERE B.FILTER_EXECUTION=1
+          AND C.PRE_LOCATION_ID <>'' 
+          AND C.PRE_LOCATION_ID is not null;     
+  END IF;
+  
+  INVALID_OPTIMIZED_TUs = SELECT A.TU_ID as TRANSPORTATION_ID,
+          'No optimal location found during optimization' as ERR_MSG
+          FROM :TU_INFO A WHERE (A.PRE_LOCATION_ID = '' OR A.PRE_LOCATION_ID IS NULL) 
+          AND A.TU_ID NOT IN (SELECT TRANSPORTATION_ID from :INVALID_SUGGEST_LOCATION_TUs);
+  
+  INVALID_SUGGEST_LOCATION_TUs_FINAL = SELECT * from :INVALID_SUGGEST_LOCATION_TUs UNION ALL SELECT * from :INVALID_OPTIMIZED_TUs;     
+
+      INSERT INTO  "sap.tm.trp.db.pickupreturn::t_location_rule_assign_error"	
+  	             (
+  	               RULE_GROUP_ID,  
+  	               RUN_ID,	
+			       RULE_ID,	
+			       TU_ID,	
+			       USER,	
+			       EXECUTION_STATUS_CODE,	
+			       SHIPPER_ID,	
+			       CONSIGNEE_ID,	
+			       RESOURCE_TYPE,	
+			       QUANTITY,	
+			       SOURCE_LOCATION_ID,	
+			       DESTINATION_LOCATION_ID,	
+			       POL,	
+			       POD,	
+			       DATE,	
+			       PRE_LOCATION_ID,	
+			       CUR_LOCATION_ID,	
+			       PRE_DATE,	
+			       CUR_DATE,	
+			       STREETTURN_TU_ID,	
+			       FLAG,	
+			       OP_SETTING_TYPE,	
+			       EXECUTION_TIME,	
+			       SCHEDULE_TIME_TYPE,	
+			       EXECUTION_BY, 	
+			       ERROR_MMESSAGE	
+                 )	
+		   SELECT   
+		            :RULE_GROUP_ID,
+		            B.RUN_ID,	
+			        B.RULE_ID,	
+			        B.TU_ID,	 
+			        :USER_NAME,	
+			        B.EXECUTION_STATUS_CODE,	
+			        B.SHIPPER_ID,	
+			        B.CONSIGNEE_ID,	
+			        B.RESOURCE_TYPE,	
+			        B.QUANTITY,	
+			        B.SOURCE_LOCATION_ID,	
+			        B.DESTINATION_LOCATION_ID,	
+			        B.POL,	
+			        B.POD,	
+			        B.DATE,	
+			        B.PRE_LOCATION_ID,	
+			        B.CUR_LOCATION_ID,	
+			        B.PRE_DATE,	
+			        B.CUR_DATE,	
+			        B.STREETTURN_TU_ID,	
+			        B.FLAG,	
+			        B.OP_SETTING_TYPE,	
+			        :START_TIME,	
+			        B.SCHEDULE_TIME_TYPE,	
+			        :USER_ID,	
+			        A.ERR_MSG	
+		    FROM   :INVALID_SUGGEST_LOCATION_TUs_FINAL A	
+      --INNER JOIN   "sap.tm.trp.db.pickupreturn.rulesetgroup::t_pickupreturn_global_draft_rulegroup" B	
+      --        ON   A.TRANSPORTATION_ID =B.TU_ID
+      INNER JOIN   :TU_INFO B	
+              ON   A.TRANSPORTATION_ID =B.TU_ID ;	
+      --INNER JOIN   :TU_IDS C	
+       --       ON   C.TU_ID = A.TRANSPORTATION_ID;                	
+           --WHERE   B.RULE_ID in (select rule_id from "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" where rule_group_id = :rule_group_id);  	
+ 
+       update "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result"  A 
+       set A.RULE_GROUP_ID3 = :RULE_GROUP_ID,A.PROCESS_3_EXECUTION_ID = :EXECUTION_ID,A.STATUS = 'U',
+       PROCESS_3_EXECUTION_START_TIME = :START_TIME, PROCESS_3_EXECUTION_END_TIME = CURRENT_UTCTIMESTAMP,
+       A.AYSNC_TM_UPD = 2
+       where A.RULE_ID in (select rule_id from "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" where rule_group_id = :rule_group_id)
+       and A.TU_ID in (SELECT TRANSPORTATION_ID  from :INVALID_SUGGEST_LOCATION_TUs_FINAL)
+       and A.STATUS = 'O';
+       
+  IF :V_RULE_TYPE = 1 THEN
+    ASSIGNED_DATA = SELECT  T1.RULE_ID,
+    	 	 	 	 	 	T1.RULE_NAME,
+							:V_RULE_TYPE  as RULE_TYPE,
+							T1.TU_ID as TRANSPORTATION_ID,
+							T1.cur_date as ORIGINAL_PICKUP_DATE,
+							T1.cur_location_id as ORIGINAL_PICKUP_LOCATION_ID,
+							T1.cur_location as ORIGINAL_PICKUP_LOCATION,
+							T1.pre_date as PICKUP_DATE,
+							T1.pre_location_id as  PICKUP_LOCATION_ID,
+							T1.pre_location as PICKUP_LOCATION,
+							'' as ORIGINAL_RETURN_DATE,
+							'' as ORIGINAL_RETURN_LOCATION_ID,
+							'' as ORIGINAL_RETURN_LOCATION,
+							'' as RETURN_DATE,
+							'' as RETURN_LOCATION_ID,
+							'' as RETURN_LOCATION,
+                           :USER_NAME AS USER,
+                           T1.TU_UUID,
+						   NULL as TR_TU_UUID,
+						   T1.RUN_ID
+                    FROM :TU_INFO T1
+                    WHERE --T1.RULE_ID = :RULE_ID
+                     T1.ASSIGN_STATUS > 0 
+                        --  AND (T1.cur_location_id <> T1.pre_location_id OR (T1.pre_location_id = '' OR T1.pre_location_id IS NULL)) 
+                       --   AND (T1.cur_location_id IS NOT NULL AND T1.cur_location_id <>'')) 
+                         --OR (T1.STREETTURN_TU_ID IS NOT NULL AND T1.STREETTURN_TU_ID <> '')
+                         --if only update date it will also be update in TM
+                       --  OR ((T1.CUR_DATE <> T1.PRE_DATE AND T1.CUR_DATE <> '' AND T1.CUR_DATE IS NOT NULL) ))
+                              --OR (T1.RETURN_DATE <> T1.ORIGINAL_RETURN_DATE AND T1.RETURN_DATE <> '' AND T1.RETURN_DATE IS NOT NULL)))
+                     AND T1.TU_ID NOT IN  (SELECT TRANSPORTATION_ID FROM :INVALID_SUGGEST_LOCATION_TUs_FINAL) ; 
+
+        SPECIAL_INS_DATA = SELECT T1.RULE_ID,
+        	 	 	 	 	T1.RULE_NAME,
+						    :V_RULE_TYPE  as RULE_TYPE,
+							T1.TU_ID as TRANSPORTATION_ID,
+							T1.cur_date as ORIGINAL_PICKUP_DATE,
+							T1.cur_location_id as ORIGINAL_PICKUP_LOCATION_ID,
+							T1.cur_location as ORIGINAL_PICKUP_LOCATION,
+							T1.pre_date as PICKUP_DATE,
+							T1.pre_location_id as  PICKUP_LOCATION_ID,
+							T1.pre_location as PICKUP_LOCATION,
+							'' as ORIGINAL_RETURN_DATE,
+							'' as ORIGINAL_RETURN_LOCATION_ID,
+							'' as ORIGINAL_RETURN_LOCATION,
+							'' as RETURN_DATE,
+							'' as RETURN_LOCATION_ID,
+							'' as RETURN_LOCATION,
+	                           :USER_NAME AS USER,
+	                           T1.TU_UUID,
+							   NULL as TR_TU_UUID,
+							   T1.RUN_ID
+	                    FROM :TU_INFO T1 
+	                    INNER JOIN (SELECT DISTINCT RULE_ID,USER,TU_ID 
+                                    FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction") T3
+	                    ON (T1.RULE_ID = T3.RULE_ID AND T1.TU_ID = T3.TU_ID AND T3.USER = :USER_NAME)
+	                    WHERE T1.TU_ID NOT IN  (SELECT TRANSPORTATION_ID FROM :INVALID_SUGGEST_LOCATION_TUs_FINAL) ; 
+  ELSE
+    ASSIGNED_DATA1 = SELECT T1.RULE_ID,
+    	 	 	 	 	    T1.RULE_NAME,
+							:V_RULE_TYPE  as RULE_TYPE,
+							T1.TU_ID as TRANSPORTATION_ID,
+							'' as ORIGINAL_PICKUP_DATE,
+							'' as ORIGINAL_PICKUP_LOCATION_ID,
+							'' as ORIGINAL_PICKUP_LOCATION,
+							'' as PICKUP_DATE,
+							'' as PICKUP_LOCATION_ID,
+							'' as PICKUP_LOCATION,
+							T1.cur_date as ORIGINAL_RETURN_DATE,
+							T1.cur_location_id as ORIGINAL_RETURN_LOCATION_ID,
+							T1.cur_location as ORIGINAL_RETURN_LOCATION,
+							T1.pre_date as RETURN_DATE,
+							T1.pre_location_id as RETURN_LOCATION_ID,
+							T1.pre_location as RETURN_LOCATION,
+                           :USER_NAME AS USER,
+                           T1.TU_UUID,
+							NULL as  TR_TU_UUID,
+							T1.RUN_ID
+                    FROM :TU_INFO T1 
+                    WHERE --T1.RULE_ID = :RULE_ID
+                     T1.ASSIGN_STATUS > 0 
+                      --    AND (T1.cur_location_id <> T1.pre_location_id OR (T1.pre_location_id = '' OR T1.pre_location_id IS NULL))
+                       --   AND (T1.cur_location_id IS NOT NULL AND T1.cur_location_id <> ''))
+                        --OR (T1.STREETTURN_TU_ID IS NOT NULL AND T1.STREETTURN_TU_ID <> '') 
+                        --OR ((T1.PICKUP_DATE <> T1.ORIGINAL_PICKUP_DATE AND T1.PICKUP_DATE <> '' AND T1.PICKUP_DATE IS NOT NULL) 
+                             -- OR (T1.cur_DATE <> T1.pre_DATE AND T1.cur_DATE <> '' AND T1.cur_DATE IS NOT NULL))
+                     AND T1.TU_ID NOT IN  (SELECT TRANSPORTATION_ID FROM :INVALID_SUGGEST_LOCATION_TUs_FINAL) ; 
+                    -- no matter the assign status is success or warning, both can be finalized to TM
+                    --((T1.RETURN_LOCATION_ID IS NOT NULL AND T1.RETURN_LOCATION_ID <> ''
+                    --      AND T1.RETURN_LOCATION_ID <> T1.ORIGINAL_RETURN_LOCATION_ID)
+                    --      OR (T1.RETURN_DATE <> T1.ORIGINAL_RETURN_DATE AND T1.RETURN_DATE <> '' AND T1.RETURN_DATE IS NOT NULL));
+
+    SPECIAL_INS_DATA1 = SELECT T1.RULE_ID,
+    	 	 	 	 	 	T1.RULE_NAME,
+							:V_RULE_TYPE as RULE_TYPE,
+							T1.TU_ID as TRANSPORTATION_ID,
+							'' as ORIGINAL_PICKUP_DATE,
+							'' as ORIGINAL_PICKUP_LOCATION_ID,
+							'' as ORIGINAL_PICKUP_LOCATION,
+							'' as PICKUP_DATE,
+							'' as PICKUP_LOCATION_ID,
+							'' as PICKUP_LOCATION,
+							T1.cur_date as ORIGINAL_RETURN_DATE,
+							T1.cur_location_id as ORIGINAL_RETURN_LOCATION_ID,
+							T1.cur_location as ORIGINAL_RETURN_LOCATION,
+							T1.pre_date as RETURN_DATE,
+							T1.pre_location_id as RETURN_LOCATION_ID,
+							T1.pre_location as RETURN_LOCATION,
+                           :USER_NAME AS USER,
+                           T1.TU_UUID,
+						   NULL as TR_TU_UUID,
+						   T1.RUN_ID
+                    FROM :TU_INFO T1
+                    INNER JOIN (SELECT DISTINCT RULE_ID,USER,TU_ID 
+                                FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction") T3
+	                ON (T1.RULE_ID = T3.RULE_ID AND T1.TU_ID = T3.TU_ID AND T3.USER = :USER_NAME)
+	                WHERE T1.TU_ID NOT IN  (SELECT TRANSPORTATION_ID FROM :INVALID_SUGGEST_LOCATION_TUs_FINAL) ; 
+  END IF ;
+
+  IF :V_RULE_TYPE = 1 THEN
+  	INSERT INTO "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::t_finalize_affected_tu_temp_rulegroup"
+  	SELECT DISTINCT * FROM (
+                     SELECT RULE_ID,
+							RULE_TYPE,
+							TRANSPORTATION_ID,
+							ORIGINAL_PICKUP_DATE,
+							ORIGINAL_PICKUP_LOCATION_ID,
+							ORIGINAL_PICKUP_LOCATION,
+							IFNULL (PICKUP_DATE,ORIGINAL_PICKUP_DATE) AS PICKUP_DATE,
+							CASE PICKUP_LOCATION_ID
+							WHEN NULL THEN ORIGINAL_PICKUP_LOCATION_ID
+							WHEN '' THEN ORIGINAL_PICKUP_LOCATION_ID
+							ELSE PICKUP_LOCATION_ID
+							END AS PICKUP_LOCATION_ID,
+							CASE PICKUP_LOCATION
+							WHEN NULL THEN ORIGINAL_PICKUP_LOCATION
+							WHEN '' THEN ORIGINAL_PICKUP_LOCATION
+							ELSE PICKUP_LOCATION
+							END AS PICKUP_LOCATION,
+							--IFNULL (PICKUP_LOCATION_ID,ORIGINAL_PICKUP_LOCATION_ID) AS PICKUP_LOCATION_ID,
+							--IFNULL (PICKUP_LOCATION,ORIGINAL_PICKUP_LOCATION) AS PICKUP_LOCATION,
+							ORIGINAL_RETURN_DATE,
+							ORIGINAL_RETURN_LOCATION_ID,
+							ORIGINAL_RETURN_LOCATION,
+							IFNULL (RETURN_DATE,ORIGINAL_RETURN_DATE) AS RETURN_DATE,
+							CASE RETURN_LOCATION_ID
+							WHEN NULL THEN ORIGINAL_RETURN_LOCATION_ID
+							WHEN '' THEN ORIGINAL_RETURN_LOCATION_ID
+							ELSE RETURN_LOCATION_ID
+							END AS RETURN_LOCATION_ID,
+							CASE RETURN_LOCATION
+							WHEN NULL THEN ORIGINAL_RETURN_LOCATION
+							WHEN '' THEN ORIGINAL_RETURN_LOCATION
+							ELSE RETURN_LOCATION
+							END AS RETURN_LOCATION,
+							--IFNULL (RETURN_LOCATION_ID,ORIGINAL_RETURN_LOCATION_ID) AS RETURN_LOCATION_ID,
+							--IFNULL (RETURN_LOCATION,ORIGINAL_RETURN_LOCATION) AS RETURN_LOCATION,
+							USER,
+                            TU_UUID,
+							TR_TU_UUID,
+							RUN_ID,
+							RULE_NAME
+	                 FROM :ASSIGNED_DATA
+	                 UNION
+	                 SELECT RULE_ID,
+							RULE_TYPE,
+							TRANSPORTATION_ID,
+							ORIGINAL_PICKUP_DATE,
+							ORIGINAL_PICKUP_LOCATION_ID,
+							ORIGINAL_PICKUP_LOCATION,
+							IFNULL (PICKUP_DATE,ORIGINAL_PICKUP_DATE) AS PICKUP_DATE,
+							CASE PICKUP_LOCATION_ID
+							WHEN NULL THEN ORIGINAL_PICKUP_LOCATION_ID
+							WHEN '' THEN ORIGINAL_PICKUP_LOCATION_ID
+							ELSE PICKUP_LOCATION_ID
+							END AS PICKUP_LOCATION_ID,
+							CASE PICKUP_LOCATION
+							WHEN NULL THEN ORIGINAL_PICKUP_LOCATION
+							WHEN '' THEN ORIGINAL_PICKUP_LOCATION
+							ELSE PICKUP_LOCATION
+							END AS PICKUP_LOCATION,
+							--IFNULL (PICKUP_LOCATION_ID,ORIGINAL_PICKUP_LOCATION_ID) AS PICKUP_LOCATION_ID,
+							--IFNULL (PICKUP_LOCATION,ORIGINAL_PICKUP_LOCATION) AS PICKUP_LOCATION,
+							ORIGINAL_RETURN_DATE,
+							ORIGINAL_RETURN_LOCATION_ID,
+							ORIGINAL_RETURN_LOCATION,
+							IFNULL (RETURN_DATE,ORIGINAL_RETURN_DATE) AS RETURN_DATE,
+							CASE RETURN_LOCATION_ID
+							WHEN NULL THEN ORIGINAL_RETURN_LOCATION_ID
+							WHEN '' THEN ORIGINAL_RETURN_LOCATION_ID
+							ELSE RETURN_LOCATION_ID
+							END AS RETURN_LOCATION_ID,
+							CASE RETURN_LOCATION
+							WHEN NULL THEN ORIGINAL_RETURN_LOCATION
+							WHEN '' THEN ORIGINAL_RETURN_LOCATION 
+							ELSE RETURN_LOCATION
+							END AS RETURN_LOCATION,
+							--IFNULL (RETURN_LOCATION_ID,ORIGINAL_RETURN_LOCATION_ID) AS RETURN_LOCATION_ID,
+							--IFNULL (RETURN_LOCATION,ORIGINAL_RETURN_LOCATION) AS RETURN_LOCATION,
+							USER,
+                            TU_UUID,
+                            TR_TU_UUID,
+                            RUN_ID,
+                            RULE_NAME
+	                 FROM :SPECIAL_INS_DATA
+	                 WHERE TRANSPORTATION_ID NOT IN (SELECT TRANSPORTATION_ID FROM :ASSIGNED_DATA)
+	               );
+  ELSE
+  	INSERT INTO "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::t_finalize_affected_tu_temp_rulegroup"
+  	SELECT DISTINCT * FROM (
+                     SELECT RULE_ID,
+							RULE_TYPE,
+							TRANSPORTATION_ID,
+							ORIGINAL_PICKUP_DATE,
+							ORIGINAL_PICKUP_LOCATION_ID,
+							ORIGINAL_PICKUP_LOCATION,
+							IFNULL (PICKUP_DATE,ORIGINAL_PICKUP_DATE) AS PICKUP_DATE,
+							CASE PICKUP_LOCATION_ID
+							WHEN NULL THEN ORIGINAL_PICKUP_LOCATION_ID
+							WHEN '' THEN ORIGINAL_PICKUP_LOCATION_ID
+							ELSE PICKUP_LOCATION_ID
+							END AS PICKUP_LOCATION_ID,
+							CASE PICKUP_LOCATION
+							WHEN NULL THEN ORIGINAL_PICKUP_LOCATION
+							WHEN '' THEN ORIGINAL_PICKUP_LOCATION
+							ELSE PICKUP_LOCATION
+							END AS PICKUP_LOCATION,
+							--IFNULL (PICKUP_LOCATION_ID,ORIGINAL_PICKUP_LOCATION_ID) AS PICKUP_LOCATION_ID,
+							--IFNULL (PICKUP_LOCATION,ORIGINAL_PICKUP_LOCATION) AS PICKUP_LOCATION,
+							ORIGINAL_RETURN_DATE,
+							ORIGINAL_RETURN_LOCATION_ID,
+							ORIGINAL_RETURN_LOCATION,
+							IFNULL (RETURN_DATE,ORIGINAL_RETURN_DATE) AS RETURN_DATE,
+							CASE RETURN_LOCATION_ID
+							WHEN NULL THEN ORIGINAL_RETURN_LOCATION_ID
+							WHEN '' THEN ORIGINAL_RETURN_LOCATION_ID
+							ELSE RETURN_LOCATION_ID
+							END AS RETURN_LOCATION_ID,
+							CASE RETURN_LOCATION
+							WHEN NULL THEN ORIGINAL_RETURN_LOCATION
+							WHEN '' THEN ORIGINAL_RETURN_LOCATION
+							ELSE RETURN_LOCATION
+							END AS RETURN_LOCATION,
+							--IFNULL (RETURN_LOCATION_ID,ORIGINAL_RETURN_LOCATION_ID) AS RETURN_LOCATION_ID,
+							--IFNULL (RETURN_LOCATION,ORIGINAL_RETURN_LOCATION) AS RETURN_LOCATION,
+							USER,
+                            TU_UUID,
+							TR_TU_UUID,
+							RUN_ID,
+							RULE_NAME
+	                 FROM :ASSIGNED_DATA1
+	                 UNION
+	                 SELECT RULE_ID,
+							RULE_TYPE,
+							TRANSPORTATION_ID,
+							ORIGINAL_PICKUP_DATE,
+							ORIGINAL_PICKUP_LOCATION_ID,
+							ORIGINAL_PICKUP_LOCATION,
+							IFNULL (PICKUP_DATE,ORIGINAL_PICKUP_DATE) AS PICKUP_DATE,
+							CASE PICKUP_LOCATION_ID
+							WHEN NULL THEN ORIGINAL_PICKUP_LOCATION_ID
+							WHEN '' THEN ORIGINAL_PICKUP_LOCATION_ID
+							ELSE PICKUP_LOCATION_ID
+							END AS PICKUP_LOCATION_ID,
+							CASE PICKUP_LOCATION
+							WHEN NULL THEN ORIGINAL_PICKUP_LOCATION
+							WHEN '' THEN ORIGINAL_PICKUP_LOCATION
+							ELSE PICKUP_LOCATION
+							END AS PICKUP_LOCATION,
+							--IFNULL (PICKUP_LOCATION_ID,ORIGINAL_PICKUP_LOCATION_ID) AS PICKUP_LOCATION_ID,
+							--IFNULL (PICKUP_LOCATION,ORIGINAL_PICKUP_LOCATION) AS PICKUP_LOCATION,
+							ORIGINAL_RETURN_DATE,
+							ORIGINAL_RETURN_LOCATION_ID,
+							ORIGINAL_RETURN_LOCATION,
+							IFNULL (RETURN_DATE,ORIGINAL_RETURN_DATE) AS RETURN_DATE,
+							CASE RETURN_LOCATION_ID
+							WHEN NULL THEN ORIGINAL_RETURN_LOCATION_ID
+							WHEN '' THEN ORIGINAL_RETURN_LOCATION_ID
+							ELSE RETURN_LOCATION_ID
+							END AS RETURN_LOCATION_ID,
+							CASE RETURN_LOCATION
+							WHEN NULL THEN ORIGINAL_RETURN_LOCATION
+							WHEN '' THEN ORIGINAL_RETURN_LOCATION 
+							ELSE RETURN_LOCATION
+							END AS RETURN_LOCATION,
+							--IFNULL (RETURN_LOCATION_ID,ORIGINAL_RETURN_LOCATION_ID) AS RETURN_LOCATION_ID,
+							--IFNULL (RETURN_LOCATION,ORIGINAL_RETURN_LOCATION) AS RETURN_LOCATION,
+							USER,
+                            TU_UUID,
+                            TR_TU_UUID,
+                            RUN_ID,
+                            RULE_NAME
+	                 FROM :SPECIAL_INS_DATA1
+	                 WHERE TRANSPORTATION_ID NOT IN (SELECT TRANSPORTATION_ID FROM :ASSIGNED_DATA)
+	               );
+  END IF;	
+  	               
+  select count(*) into COUNT_AFFECTED_DATA from "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::t_finalize_affected_tu_temp_rulegroup";
+ 
+  INSERT INTO "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::t_finalize_resource_special_instruction_temp_rulegroup"
+  SELECT DISTINCT T1.RESOURCE_ID,
+                                  T1.SPECIAL_INSTRUCTION_CODE,T2.RUN_ID,T2.RULE_ID,T2.TRANSPORTATION_ID
+                                  FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction" T1
+                                  INNER JOIN "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::t_finalize_affected_tu_temp_rulegroup" T2 ON (T1.TU_ID = T2.TRANSPORTATION_ID)
+                                  AND T1.RULE_ID = T2.RULE_ID
+                                  WHERE T1.USER = :USER_NAME;
+                                  
+   select count(*) into COUNT_CONTAINER_SPECIAL_INSTRUCTION from 
+   "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::t_finalize_resource_special_instruction_temp_rulegroup";
+
+
+ 
+END;

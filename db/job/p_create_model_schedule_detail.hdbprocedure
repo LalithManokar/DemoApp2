@@ -1,0 +1,55 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.job::p_create_model_schedule_detail"(
+    IN MODEL_ID BIGINT,
+    IN START_TIME TIMESTAMP,
+    IN EXPIRY_TIME TIMESTAMP,
+    IN RECURRENCE_TYPE VARCHAR(50),
+    IN RECURRENCE_INTERVAL INTEGER,
+    IN RECURRENCE_DAY INTEGER,
+    IN SCHEDULE_TYPE VARCHAR(500),
+    IN EXECUTE_WORKING_HOUR VARCHAR(1),
+    IN START_WORKING_HOUR_TIME TIMESTAMP,
+    IN END_WORKING_HOUR_TIME TIMESTAMP,
+    IN TIMEZONE VARCHAR(50),
+    OUT MODEL_SCHEDULE_DETAIL_ID BIGINT
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+
+   SELECT "sap.tm.trp.db.job::s_model_schedule_detail".NEXTVAL INTO MODEL_SCHEDULE_DETAIL_ID FROM dummy;
+
+        INSERT INTO "sap.tm.trp.db.job::t_model_schedule_detail"
+                (
+                     ID,
+                     MODEL_ID,
+                     START_TIME,
+                     EXPIRY_TIME,
+                     RECURRENCE_TYPE,
+                     RECURRENCE_INTERVAL,
+                     RECURRENCE_DAY,
+                     SCHEDULE_TYPE,
+                     EXECUTE_WORKING_HOUR,
+                     START_WORKING_HOUR_TIME,
+                     END_WORKING_HOUR_TIME,
+                     TIMEZONES
+                )
+           values
+                (
+                     :MODEL_SCHEDULE_DETAIL_ID,
+                     :MODEL_ID,
+                     :START_TIME,
+                     :EXPIRY_TIME,
+                     :RECURRENCE_TYPE,
+                     :RECURRENCE_INTERVAL,
+                     :RECURRENCE_DAY,
+                     :SCHEDULE_TYPE,
+                     :EXECUTE_WORKING_HOUR,
+                     :START_WORKING_HOUR_TIME,
+                     :END_WORKING_HOUR_TIME,
+                     :TIMEZONE
+                );
+
+END;

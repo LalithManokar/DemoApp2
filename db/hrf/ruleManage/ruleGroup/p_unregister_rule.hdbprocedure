@@ -1,0 +1,35 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_unregister_rule" (
+	IN ID BIGINT,
+	OUT MESSAGE VARCHAR(200)) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+	DECLARE NUM INTEGER;
+	DECLARE ITEM_NUM INTEGER;
+	
+	/** check whether the alert rule exist */
+	SELECT COUNT(*) INTO NUM from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule" 
+	WHERE RULE_ID = :ID;
+	IF( :NUM > 0) THEN
+		/** check whether can be unregistered via where-used list*/
+		SELECT COUNT(*) INTO ITEM_NUM 
+        FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule_group_items" 
+		WHERE RULE_ID = :ID;
+			
+		IF ( :ITEM_NUM = 0) THEN
+				
+		  DELETE FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule"
+		  WHERE RULE_ID = :ID;
+		  
+		  DELETE FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule_t"
+	      WHERE ID = :ID;
+		  MESSAGE := 'MSG_SUCCESS_STATUS';
+		ELSE
+		  MESSAGE := 'MSG_ERROR_STATUS';
+		END IF;
+	ELSE
+		MESSAGE := 'MSG_ERROR_RULE_NOT_EXIST';
+	END IF;
+END;

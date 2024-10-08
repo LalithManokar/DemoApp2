@@ -1,0 +1,37 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_schedule_archive_rulegroup" (
+	 IN RULE_ID BIGINT,
+	 IN EXECUTION_ID BIGINT,
+	 OUT STATUS_CODE INTEGER,
+ 	 OUT RECORD_COUNT BIGINT,
+	 OUT MESSAGE NVARCHAR(5000)
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP" 
+AS
+BEGIN 
+
+	DECLARE STATUS_SUCCESS INTEGER DEFAULT 1;
+	DECLARE STATUS_ERROR INTEGER DEFAULT 2;
+	
+	--initialize status code
+    STATUS_CODE := 0;
+    MESSAGE := 'Success';
+    RECORD_COUNT := 0;
+	
+	--call archiving procedure
+	CALL "sap.tm.trp.db.archive::sp_archive_schoption_archivedata_rulegroup"(:RULE_ID, :EXECUTION_ID, :STATUS_CODE, :RECORD_COUNT, :MESSAGE );
+	
+	IF :STATUS_CODE = 0 THEN
+	
+		--update execution details with SUCCESS
+	    CALL "sap.tm.trp.db.archive::p_archive_update_execution_detail"(:EXECUTION_ID, :STATUS_SUCCESS, :RECORD_COUNT, :MESSAGE);
+    
+    ELSE 
+    
+    	--update execution details with ERROR
+	    CALL "sap.tm.trp.db.archive::p_archive_update_execution_detail"(:EXECUTION_ID, :STATUS_ERROR, 0, :MESSAGE);
+       
+    END IF;
+END;
+

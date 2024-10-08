@@ -1,0 +1,25 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::p_sd_parameter_attribute_filter" (
+	IN ATTRIBUTE_FILTER_ID BIGINT,
+	OUT EV_ATT_FILTER NVARCHAR(500)
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+
+	IF ATTRIBUTE_FILTER_ID > 0 THEN
+		ATTR_NODE_ID_LIST =
+			SELECT NODE_ID FROM "sap.tm.trp.db.filter::t_attribute_group_item"
+            WHERE GROUP_ID = :ATTRIBUTE_FILTER_ID AND LOGIC_OPERATOR IS NULL ORDER BY SEQUENCE;
+            
+		CALL "sap.tm.trp.db.filter::p_attribute_group_filter_generate_dynamic"(
+			:ATTRIBUTE_FILTER_ID, 
+			:ATTR_NODE_ID_LIST, 
+			EV_ATT_FILTER
+		);
+	ELSE
+		SELECT '' INTO EV_ATT_FILTER FROM DUMMY;
+	END IF;
+		
+END;

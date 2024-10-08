@@ -1,0 +1,160 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_virtual_supply_demand_plan_upload" ( 
+    IN VIRTUAL_SUPPLY_DEMAND_PLAN "sap.tm.trp.db.massupload::tt_virtual_supply_demand_plan_upload",
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),  
+    IN CONNECTION_ID VARCHAR(100)
+) 
+
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    
+AS
+BEGIN
+
+    --Declarations
+    DECLARE USER_ID BIGINT;    
+    DECLARE VAR_CURRENT_UTCTIMESTAMP TIMESTAMP := CURRENT_UTCTIMESTAMP;
+    
+    --Get ID for Location Filter, Resource Filter and Supply&Demand Plan
+    /*LOCATION_FILTERS =
+    
+    SELECT ID, CODE, VISIBLE_FLAG, LOCATION_TYPE, RESOURCE_CATEGORY, CREATE_BY
+    FROM "sap.tm.trp.db.filter::t_location_filter" AS L
+    INNER JOIN :VIRTUAL_SUPPLY_DEMAND_PLAN AS V
+    ON L.CODE = UPPER(V.LOCATION_FILTER_NAME)
+    AND L.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID;*/
+    
+    /*RESOURCE_FILTERS =
+    
+    SELECT ID, CODE, VISIBLE_FLAG, FILTER_TYPE, RESOURCE_CATEGORY, CREATE_BY
+    FROM "sap.tm.trp.db.filter::t_equipment_filter" AS E
+    INNER JOIN :VIRTUAL_SUPPLY_DEMAND_PLAN AS V
+    ON E.CODE = UPPER(V.RESOURCE_FILTER_NAME)
+    AND E.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID;*/
+ 
+    /*SUPPLY_DEMAND_PLANS =
+    
+    SELECT T1.ID, T1.CODE, T1.VISIBILITY_FLAG, T1.CREATE_BY, T2.TIME_FILTER_ID 
+    FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+    INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2
+    ON T1.FILTER_GROUP_ID = T2.ID AND T1.PLAN_MODEL_TYPE_ID = 1 
+    AND T2.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID
+    INNER JOIN :VIRTUAL_SUPPLY_DEMAND_PLAN AS V
+    ON T1.CODE = UPPER(V.SDP_NAME); */
+    
+    
+    /*VIRTUAL_SUPPLY_DEMAND_PLANS =
+    
+    SELECT DISTINCT(T1.CODE) AS CODE,T1.ID,T1.VISIBILITY_FLAG,T1.FILTER_GROUP_ID,T1.STATUS,T1.CREATE_BY
+    FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+    INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2
+    ON T1.FILTER_GROUP_ID = T2.ID AND T1.PLAN_MODEL_TYPE_ID = 3 
+    AND T2.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID
+    INNER JOIN :VIRTUAL_SUPPLY_DEMAND_PLAN AS V
+    ON UPPER(V.VSDP_NAME) = T1.CODE;*/ 
+    
+    --Get Source data
+    SOURCE = 
+    
+        SELECT 
+              DISTINCT SDP_NAME, V.ID AS VP_ID,V.FILTER_GROUP_ID,V.STATUS,VSDP_NAME,TYPE_NAME,DESCRIPTION,VISIBILITY,LOCATION_FILTER_NAME,
+               RESOURCE_FILTER_NAME,L.ID AS LF_ID,L.LOCATION_TYPE AS LOCATION_TYPE, R.ID AS RF_ID, S.ID AS SDP_ID,
+               S.TIME_FILTER_ID AS TIME_FILTER_ID, S.USAGE, S.USAGE_CODE, V.CREATE_BY, V.CREATE_ON,
+               --ROW_NUMBER () OVER () AS ROW_INDEX
+               ROW_INDEX
+        FROM :VIRTUAL_SUPPLY_DEMAND_PLAN AS A
+        LEFT OUTER JOIN 
+        (SELECT  T1.CODE,T1.ID,T1.VISIBILITY_FLAG,T1.FILTER_GROUP_ID,T1.STATUS,T1.CREATE_BY, T1.CREATE_ON
+        FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+        INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2
+        ON T1.FILTER_GROUP_ID = T2.ID AND T1.PLAN_MODEL_TYPE_ID = 3 
+        AND T2.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID) AS V
+        ON V.CODE = UPPER(A.VSDP_NAME)
+        INNER JOIN (
+                SELECT T1.ID, T1.CODE, T1.VISIBILITY_FLAG, T1.CREATE_BY, T1.USAGE, T1.USAGE_CODE, T2.TIME_FILTER_ID 
+                FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+                INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2
+                ON T1.FILTER_GROUP_ID = T2.ID AND T1.PLAN_MODEL_TYPE_ID = 1 
+                AND T2.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID
+              ) AS S
+        ON UPPER(A.SDP_NAME)= S.CODE
+        LEFT OUTER JOIN "sap.tm.trp.db.filter::t_location_filter" AS L
+        ON UPPER(A.LOCATION_FILTER_NAME)= L.CODE
+        LEFT OUTER JOIN "sap.tm.trp.db.filter::t_equipment_filter" AS R
+        ON UPPER(A.RESOURCE_FILTER_NAME) = R.CODE;
+
+    --Get User
+    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(:USER_ID);
+    
+    --Delete the records in temporary table in case there're already some uploaded data with same db connection
+    DELETE FROM "sap.tm.trp.db.massupload::t_virtual_supply_demand_plan_temporary" 
+    WHERE CONNECTION_ID = :CONNECTION_ID;
+    
+    --Add records to temporary table
+    INSERT INTO "sap.tm.trp.db.massupload::t_virtual_supply_demand_plan_temporary"
+    (ROW_NUM,VSDP_ID,VSDP_NAME,DESCRIPTION,IND_UPD,STATUS,TYPE_NAME,FILTER_GROUP_ID,VISIBILITY_FLAG,LOC_ID,LOCATION_FILTER_NAME,LOCATION_TYPE,RES_ID,RESOURCE_FILTER_NAME,
+    TIME_FILTER_ID,SDP_ID,SDP_NAME,USER_ID,CREATE_BY,CREATE_ON,ACTION_TIME,CONNECTION_ID,RESOURCE_CATEGORY,USAGE,USAGE_CODE)
+    SELECT 
+      
+       --ROW_NUMBER () OVER () AS ROW_INDEX,
+       ROW_INDEX,
+       VP_ID,
+       UPPER(VSDP_NAME), 
+       DESCRIPTION,
+       
+       (CASE
+       WHEN VP_ID IS NULL
+       THEN '0'
+       ELSE '1'
+       END) AS IND_UPD,
+       
+       STATUS,
+       TYPE_NAME,
+       FILTER_GROUP_ID,
+       
+       (CASE 
+       WHEN UPPER(VISIBILITY) = 'GLOBAL'
+       THEN '1'
+       WHEN UPPER(VISIBILITY) = 'PERSONAL'
+       THEN '0' 
+       END) AS VISIBILITY_FLAG,
+       
+       LF_ID,    
+       UPPER(LOCATION_FILTER_NAME),
+       LOCATION_TYPE,
+       
+       RF_ID,
+       UPPER(RESOURCE_FILTER_NAME),
+       
+       TIME_FILTER_ID,              
+       SDP_ID,
+       UPPER(SDP_NAME),
+       
+       :USER_ID,
+       
+       (CASE
+       WHEN CREATE_BY IS NULL
+       THEN :USER_ID
+       ELSE CREATE_BY
+       END) AS CREATE_BY,
+       
+       (CASE
+       WHEN CREATE_ON IS NULL
+       THEN :VAR_CURRENT_UTCTIMESTAMP
+       ELSE CREATE_ON
+       END) AS CREATE_ON,
+       
+       :VAR_CURRENT_UTCTIMESTAMP,
+       :CONNECTION_ID,
+       :RESOURCE_CATEGORY_ID,
+       USAGE,
+       USAGE_CODE
+      FROM :SOURCE;
+      /*INNER JOIN :SUPPLY_DEMAND_PLANS AS S
+       ON UPPER(V.SDP_NAME)= S.CODE
+      LEFT OUTER JOIN :LOCATION_FILTERS AS L
+      ON UPPER(V.LOCATION_FILTER_NAME)= L.CODE
+      LEFT OUTER JOIN :RESOURCE_FILTERS AS R
+      ON UPPER(V.RESOURCE_FILTER_NAME) = R.CODE;*/
+
+END;

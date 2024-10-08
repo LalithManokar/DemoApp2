@@ -1,0 +1,146 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_register_return_extended_col_update" (
+    IN ENTRY_ID BIGINT,
+    IN DESC VARCHAR(500),
+    IN ACTIVATION_STATUS TINYINT
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+
+    DECLARE USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE OLD_ACTIVATION_STATUS TINYINT;
+    DECLARE CREATE_TIME TIMESTAMP;
+    DECLARE SCHEMA_NAME VARCHAR(256);
+    DECLARE STRUCTURE_NAME VARCHAR(256);
+    DECLARE PAGE_ID INTEGER := 104;
+    DECLARE TU_ID_FIELD VARCHAR(8) := 'TU_ID';
+    
+    SELECT IFNULL(MAX(ID),-1) INTO USER_ID
+    FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    SELECT IFNULL(MAX(SPRAS),'') INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+       
+    ---update description in text table 
+    UPDATE "sap.tm.trp.db.pickupreturn::t_extended_fields_for_return_config_t"
+		SET DESC  = :DESC
+		WHERE ID  = :ENTRY_ID
+		AND SPRAS = :SPRAS;	
+    	   
+    --update activation status
+    	--if the entry is being activated, deactivate all other entries and update extended columns
+    	--if the entry is being deactivated, delete extended columns
+    	
+    SELECT SCHEMA_NAME, STRUCTURE_NAME, ACTIVATION_STATUS INTO SCHEMA_NAME, STRUCTURE_NAME, OLD_ACTIVATION_STATUS 
+    	FROM "sap.tm.trp.db.pickupreturn::t_extended_fields_for_return_config" WHERE ID = :entry_id ;
+    	
+    IF :OLD_ACTIVATION_STATUS = 0 AND :ACTIVATION_STATUS = 1 THEN -- entry is being activated
+    	
+    	--deactivate all other entries
+        UPDATE "sap.tm.trp.db.pickupreturn::t_extended_fields_for_return_config" 
+            SET ACTIVATION_STATUS = 0 
+            WHERE ID <> :ENTRY_ID;
+            
+        --activate the current entry
+        UPDATE "sap.tm.trp.db.pickupreturn::t_extended_fields_for_return_config" 
+            SET ACTIVATION_STATUS = 1 
+            WHERE ID = :ENTRY_ID;
+            
+        --Delete from extended column text table
+    	DELETE FROM "sap.tm.trp.db.common::t_extended_fields_t" WHERE ID IN 
+    		(SELECT ID FROM "sap.tm.trp.db.common::t_extended_fields" WHERE PAGE_ID = :PAGE_ID);
+            
+        --Update extended columns table - first delete existing entries and enter new ones based on structure in the input
+        DELETE FROM "sap.tm.trp.db.common::t_extended_fields" WHERE PAGE_ID = :PAGE_ID;
+        
+        SELECT CURRENT_UTCTIMESTAMP INTO CREATE_TIME FROM DUMMY;
+        
+        LT_EXTENDED_COLUMNS = SELECT 
+	                 "sap.tm.trp.db.common::s_extended_fields".NEXTVAL AS ID,
+	                 :PAGE_ID AS PAGE_ID,
+	                 A.COLUMN_NAME AS NAME,
+	                 A.COLUMN_NAME AS MAPPED_NAME,
+	                 A.COLUMN_NAME AS DISPLAY_NAME,
+	                 IFNULL(A.COMMENTS,A.COLUMN_NAME) AS DESCRIPTION,
+	                 A.DATA_TYPE_NAME AS DATA_TYPE,
+	                 A.LENGTH AS LENGTH,
+	                 A.SCALE AS SCALE,
+	                 NULL AS SEARCHABLE,
+	                 NULL AS FILTERABLE,
+	                 :USER_ID AS ADDED_BY,
+	                 :CREATE_TIME AS ADDED_ON,
+	                 :USER_ID AS EDITED_BY,
+	                 :CREATE_TIME AS EDITED_ON
+                 FROM TABLE_COLUMNS AS A
+                 WHERE SCHEMA_NAME = :SCHEMA_NAME
+                 AND TABLE_NAME = :STRUCTURE_NAME ;
+         
+           INSERT INTO "sap.tm.trp.db.common::t_extended_fields" (
+           		ID,
+           		PAGE_ID,
+           		NAME,
+           		MAPPED_NAME,
+           		DISPLAY_NAME,
+           		DESCRIPTION,
+           		DATA_TYPE,
+           		LENGTH,
+           		SCALE,
+           		SEARCHABLE,
+           		FILTERABLE,
+           		ADDED_BY,
+           		ADDED_ON,
+           		EDITED_BY,
+           		EDITED_ON
+           )    
+           SELECT 
+           		ID,
+           		PAGE_ID,
+           		NAME,
+           		MAPPED_NAME,
+           		DISPLAY_NAME,
+           		DESCRIPTION,
+           		DATA_TYPE,
+           		LENGTH,
+           		SCALE,
+           		SEARCHABLE,
+           		FILTERABLE,
+           		ADDED_BY,
+           		ADDED_ON,
+           		EDITED_BY,
+           		EDITED_ON
+           	FROM :LT_EXTENDED_COLUMNS WHERE NAME <> TU_ID_FIELD;
+           	
+           	--Update description table
+           INSERT INTO "sap.tm.trp.db.common::t_extended_fields_t"
+			(ID, SPRAS, DESC) 
+		   SELECT ID, :SPRAS, NAME FROM :LT_EXTENDED_COLUMNS WHERE NAME <> TU_ID_FIELD;
+    	
+    END IF;
+    
+    IF :OLD_ACTIVATION_STATUS = 1 AND :ACTIVATION_STATUS = 0 THEN -- entry is being deactivated
+    	
+    	--deactivate the entry
+    	UPDATE "sap.tm.trp.db.pickupreturn::t_extended_fields_for_return_config" 
+            SET ACTIVATION_STATUS = 0 
+            WHERE ID = :ENTRY_ID;
+            
+        --Delete from extended column text table
+    	DELETE FROM "sap.tm.trp.db.common::t_extended_fields_t" WHERE ID IN 
+    		(SELECT ID FROM "sap.tm.trp.db.common::t_extended_fields" WHERE PAGE_ID = :PAGE_ID);
+            
+            
+         --delete extended columns
+         DELETE FROM "sap.tm.trp.db.common::t_extended_fields" WHERE PAGE_ID = :PAGE_ID;
+      
+    END IF;
+    
+    --update last modified in main table
+	UPDATE "sap.tm.trp.db.pickupreturn::t_extended_fields_for_return_config" 
+    	SET LAST_MODIFIED_BY =  :USER_ID,
+    		LAST_MODIFIED_ON = CURRENT_UTCTIMESTAMP
+    	WHERE ID = :ENTRY_ID;        
+    
+END;

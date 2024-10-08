@@ -1,0 +1,36 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_prepare_filterinfo_for_pipeline" 
+( IN In_Filter_Group_ID INTEGER)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+AS BEGIN
+ 
+
+
+     -- Flags to indicate the status of the filter information calculation 
+     DECLARE Date_offset INTEGER;
+     DECLARE EXIT HANDLER FOR SQLEXCEPTION
+     SELECT ::SQL_ERROR_CODE, ::SQL_ERROR_MESSAGE FROM DUMMY;
+
+     -- Get date shift offset from config table
+     SELECT IFNULL(MAX(DATE_OFFSET),0) INTO Date_offset
+     FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+     WHERE USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+     
+     IF :In_Filter_Group_ID > 0 THEN 
+        
+       -- Get selected locations/equip types/time interval using the filter group id                
+       INSERT INTO "sap.tm.trp.db.pipeline::t_timefilterinfo_for_pipeline_GlobalTemp"  
+       SELECT TIME_INTERVAL_ID, SEQUENCE, ADD_DAYS(START_TIMESTAMP,:date_offset), ADD_DAYS(END_TIMESTAMP,:date_offset), INTER_SECONDS FROM
+       "_SYS_BIC"."sap.tm.trp.db.pipeline/cv_get_timefilters_by_filtergroupid"(placeholder."$$In_Filter_Group_ID$$"=>:In_Filter_Group_ID);
+     
+       INSERT INTO "sap.tm.trp.db.pipeline::t_locationinfo_for_pipeline_GlobalTemp" SELECT * FROM 
+       "_SYS_BIC"."sap.tm.trp.db.pipeline/cv_get_locationinfo_by_filtergroupid"(placeholder."$$Filter_Group_ID$$"=>:In_Filter_Group_ID);
+     
+       INSERT INTO  "sap.tm.trp.db.pipeline::t_equipinfo_for_pipeline_GlobalTemp"  SELECT * FROM        
+       "_SYS_BIC"."sap.tm.trp.db.pipeline/cv_get_equiptypes_by_filtergroupid"(placeholder."$$Filter_Group_ID$$"=>:In_Filter_Group_ID);
+
+     
+     END IF;  
+     
+END;

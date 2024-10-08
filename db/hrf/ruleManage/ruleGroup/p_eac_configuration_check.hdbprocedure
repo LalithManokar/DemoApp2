@@ -1,0 +1,56 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_eac_configuration_check" (
+    IN ID BIGINT,
+    IN NAME VARCHAR(200), --should be mapped to code field in the tables
+    IN DESCRIPTION VARCHAR(500),
+    -- IN SCHEMA_NAME VARCHAR(20),
+    IN SP VARCHAR(200),
+    IN LOCATIONS_LIST TABLE (ID BIGINT),
+      
+    OUT STATUS INTEGER,  --0 error  1 success
+    OUT MESSAGE VARCHAR(200)
+   )
+	 LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+   
+    DECLARE EXISTING_COUNT INTEGER;
+    DECLARE DIFFERENT_COUNT INTEGER;
+    
+	STATUS := 1;
+	MESSAGE :='MSG_SUCCESS_STATUS';
+	
+	
+	-- Check existing or not existing
+	IF ID IS NULL THEN
+	    -- for create, check if the name already exists... id is null implies it is create and not edit
+	    SELECT COUNT(*) INTO EXISTING_COUNT
+	    FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group"
+	    WHERE DESC = :NAME;
+	    IF :EXISTING_COUNT > 0 THEN
+	        STATUS := 0;
+	        MESSAGE := 'MSG_EAC_RULE_GROUP_NAME_EXISTS';
+        END IF;
+	ELSE
+	    -- for edit, check if the id exists or not. if not, there is an error
+	    SELECT COUNT(*) INTO EXISTING_COUNT
+	    FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group"
+	    WHERE ID = :ID;
+	    IF :EXISTING_COUNT = 0 THEN
+	      STATUS := 0;
+	  	  MESSAGE := 'MSG_ERROR_NO_RULESET_GROUP';
+        END IF;
+	END IF; 
+	
+	-- check if empty locations  list
+	IF STATUS = 1 THEN
+		SELECT COUNT(*) INTO DIFFERENT_COUNT FROM :LOCATIONS_LIST;
+		IF DIFFERENT_COUNT = 0 THEN
+	      STATUS := 0;
+	  	  MESSAGE := 'MSG_ERROR_RULESET_GROUP_EMPTY_LOCATIONS_LIST';
+		END IF;
+	END IF;
+	
+	
+END;

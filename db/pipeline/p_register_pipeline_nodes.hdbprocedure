@@ -1,0 +1,159 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_register_pipeline_nodes" ( 
+    IN PIPELINE_MODEL_ID BIGINT,
+    IN METADATA_TBL "sap.tm.trp.db.pipeline::tt_node_metadata"
+)
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+	DECLARE INSTANT_BASIC_NODE_LISTS CLOB;
+    DECLARE INSTANT_SOURCE_NODE_LISTS CLOB;
+    DECLARE INSTANT_SOURCE_NODE_LISTS_STOCK CLOB;
+    DECLARE V_CNT INTEGER:= 0;
+    DECLARE V_CNT_OVERDUE INTEGER := 0;
+    --Select all the nodes except the container node
+    
+    
+    NODE_NAME_LIST = SELECT METADATA_TBL.NODE_NAME, MAX(METADATA_TBL.ID) AS ID
+        FROM :METADATA_TBL AS METADATA_TBL 
+        LEFT JOIN (SELECT DISTINCT NODE_NAME 
+                   FROM :METADATA_TBL 
+                   WHERE KEY = 'sap.afm.nodeType' AND TO_VARCHAR(VALUE) = 'ContainerNode') AS CONTAINER_NODE_NAME 
+            ON METADATA_TBL.NODE_NAME = CONTAINER_NODE_NAME.NODE_NAME 
+        WHERE CONTAINER_NODE_NAME.NODE_NAME IS NULL
+        GROUP BY METADATA_TBL.NODE_NAME
+        ORDER BY MAX(METADATA_TBL.ID) ASC; -- to keep the original node order in metdata table
+
+    --Insert Node List
+    SELECT 
+        "sap.tm.trp.db.pipeline::s_pipeline_node".NEXTVAL AS ID, 
+        0 AS RESULT_VISIBLE, 
+        :PIPELINE_MODEL_ID AS PIPELINE_MODEL_ID, 
+        -- RANK() OVER( ORDER BY NODE_LIST_TBL.NODE_NAME) AS NODE_INDEX,
+        RANK() OVER( ORDER BY NODE_LIST_TBL.ID) AS NODE_INDEX,
+        NODE_LIST_TBL.NODE_NAME AS NAME,
+        METADATA_NODEID_TBL.VALUE AS METADATA_NODE_ID
+    FROM :NODE_NAME_LIST AS NODE_LIST_TBL
+    LEFT OUTER JOIN (SELECT DISTINCT NODE_NAME, TO_VARCHAR(VALUE) AS VALUE 
+                     FROM :METADATA_TBL 
+                     WHERE KEY = 'nodeID') AS METADATA_NODEID_TBL
+        ON NODE_LIST_TBL.NODE_NAME = METADATA_NODEID_TBL.NODE_NAME
+    INTO "sap.tm.trp.db.pipeline::t_pipeline_node" (ID, RESULT_VISIBLE, PIPELINE_MODEL_ID, NODE_INDEX, NAME, METADATA_NODE_ID);
+    
+    --Insert Node layout
+    SELECT 
+        C.ID, 
+        B.KEY, 
+        TO_VARCHAR(B.VALUE) AS VALUE 
+    FROM :METADATA_TBL AS A 
+    INNER JOIN :METADATA_TBL AS B 
+        ON A.KEY = 'sap.afm.layout' AND B.PARENT_ID = A.ID
+    INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" AS C 
+        ON A.NODE_NAME = C.NAME
+    WHERE C.PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID
+    INTO "sap.tm.trp.db.pipeline::t_pipeline_node_layout";
+    
+    SELECT 
+        C.ID, 
+        A.KEY, 
+        TO_VARCHAR(A.VALUE) AS VALUE 
+    FROM :METADATA_TBL AS A
+    INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" AS C 
+        ON A.NODE_NAME = C.NAME AND  (A.KEY = 'displayName' OR A.KEY = 'outputKey')
+    WHERE C.PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID
+    INTO "sap.tm.trp.db.pipeline::t_pipeline_node_layout";
+     
+  
+/***************************************************************
+  get node list(basic node ID, ovedue node ID) from META table for redesign
+ *************************************************************/
+	
+	INSTANT_BASIC_NODE = SELECT DISTINCT NODE_NAME
+			FROM :METADATA_TBL
+			WHERE KEY = 'isBasicNode' AND TO_VARCHAR(VALUE) = 'true';
+			
+	INSTANT_BASIC_NODE_ID = SELECT TO_VARCHAR(VALUE) AS BASIC_NODE_ID
+		FROM :METADATA_TBL T1
+		INNER JOIN :INSTANT_BASIC_NODE T2 ON T1.NODE_NAME = T2.NODE_NAME
+		WHERE KEY = 'nodeID';
+	
+ 	--lean model :start -> FETCH BSIC_NODE_LIST of lean model and add them
+	SELECT COUNT(1) INTO V_CNT FROM :METADATA_TBL WHERE KEY = 'basicNodeLists';
+	
+	IF(:V_CNT>0) THEN
+	    SELECT STRING_AGG(TO_VARCHAR(VALUE),',') INTO INSTANT_BASIC_NODE_LISTS FROM :METADATA_TBL WHERE KEY = 'basicNodeLists';
+	    CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:INSTANT_BASIC_NODE_LISTS,',',lt_basic_node_list);
+	
+	    INSTANT_BASIC_NODE_ID= SELECT DISTINCT BASIC_NODE_ID FROM 
+	                                (
+	                                    SELECT BASIC_NODE_ID FROM :INSTANT_BASIC_NODE_ID
+	                                    UNION ALL 
+	                                    SELECT STRING AS BASIC_NODE_ID FROM :lt_basic_node_list
+	                                );
+	 END IF;
+	--lean model : end
+
+	OVERDUE_DETAILS = SELECT T2.BASIC_NODE_ID, T1.OVEDUE_NODE_ID 
+		FROM (
+			SELECT NODE_NAME, TO_VARCHAR(VALUE) AS OVEDUE_NODE_ID
+			FROM :METADATA_TBL
+			WHERE KEY = 'nodeID' AND NODE_NAME IN (
+				SELECT DISTINCT TO_VARCHAR(NODE_NAME) AS NODE_NAME
+				FROM :METADATA_TBL
+				WHERE KEY = 'sourceNode' AND VALUE IS NOT NULL
+			)
+	    )  AS T1
+	   INNER JOIN (
+		 SELECT DISTINCT TO_VARCHAR(NODE_NAME) AS NODE_NAME, TO_VARCHAR(VALUE) AS BASIC_NODE_ID
+		  FROM :METADATA_TBL
+		  WHERE KEY = 'sourceNode' AND VALUE IS NOT NULL 
+		) AS T2 ON T1.NODE_NAME = T2.NODE_NAME
+		
+			
+		UNION
+		    SELECT TO_VARCHAR(VALUE) AS BASIC_NODE_ID, TO_VARCHAR(VALUE) AS OVEDUE_NODE_ID
+		    FROM :METADATA_TBL
+		    WHERE KEY = 'nodeID' AND NODE_NAME IN (
+				SELECT DISTINCT TO_VARCHAR(NODE_NAME) AS NODE_NAME
+				FROM  :METADATA_TBL
+				WHERE KEY = 'outputKey' AND TO_VARCHAR(VALUE) = 'STOCK') ;
+	
+	--lean model :start -> FETCH OVERDUE_LIST of lean model and add them	
+	SELECT COUNT(1) INTO V_CNT_OVERDUE FROM :METADATA_TBL WHERE KEY = 'sourceNodeLists';
+	
+	IF(:V_CNT_OVERDUE>0) THEN
+	    SELECT STRING_AGG(TO_VARCHAR(VALUE),',') INTO INSTANT_SOURCE_NODE_LISTS FROM :METADATA_TBL 
+		WHERE KEY = 'sourceNodeLists' AND VALUE IS NOT NULL;
+		CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:INSTANT_SOURCE_NODE_LISTS,',',lt_source_node_list);
+
+
+		SELECT STRING_AGG(TO_VARCHAR(VALUE),',') INTO INSTANT_SOURCE_NODE_LISTS_STOCK FROM :METADATA_TBL WHERE KEY = 'basicNodeLists' 
+		AND NODE_NAME IN ( 
+		SELECT DISTINCT TO_VARCHAR(NODE_NAME) AS NODE_NAME
+						FROM  :METADATA_TBL
+						WHERE KEY = 'outputKey' AND TO_VARCHAR(VALUE) = 'STOCK');
+		CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:INSTANT_SOURCE_NODE_LISTS_STOCK,',',lt_source_node_list_stock);
+
+		OVERDUE_DETAILS_LEAN=SELECT T1.BASIC_NODE_ID,T2.STRING AS OVEDUE_NODE_ID FROM :INSTANT_BASIC_NODE_ID T1 
+		INNER JOIN :lt_source_node_list T2 
+		ON T2.STRING LIKE '%'||T1.BASIC_NODE_ID
+		WHERE STRING<>'' 
+		UNION
+		SELECT STRING AS BASIC_NODE_ID, STRING AS OVEDUE_NODE_ID FROM :lt_source_node_list_stock;
+		
+		OVERDUE_DETAILS=SELECT * FROM :OVERDUE_DETAILS_LEAN
+		UNION ALL
+		SELECT * FROM :OVERDUE_DETAILS;
+
+	 END IF;
+	--lean model : end
+	
+ 	INSTANT_NODE_LIST = SELECT :PIPELINE_MODEL_ID AS PIPELINE_MODEL_ID,
+ 	        A.BASIC_NODE_ID AS NODE, IFNULL(B.OVEDUE_NODE_ID,'') AS OVERDUE_NAME 
+	FROM :INSTANT_BASIC_NODE_ID A
+	LEFT OUTER JOIN :OVERDUE_DETAILS B ON A.BASIC_NODE_ID = B.BASIC_NODE_ID;
+ 
+ 	SELECT * FROM :INSTANT_NODE_LIST INTO "sap.tm.trp.db.pipeline::t_pipeline_node_list";
+  
+END;

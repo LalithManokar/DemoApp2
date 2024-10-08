@@ -1,0 +1,62 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_generate_trip_by_departure_time" (
+	IN path_id BIGINT,
+	IN departure_time SECONDDATE,
+	OUT trip TABLE(from_location NVARCHAR(50), to_location NVARCHAR(50), departure_time TIMESTAMP, arrival_time TIMESTAMP),
+	OUT trip_sequence TABLE(sequence INTEGER, location NVARCHAR(50), departure_time TIMESTAMP, arrival_time TIMESTAMP)
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING
+   READS SQL DATA AS
+BEGIN
+	-- decl_list
+	DECLARE from_location, to_location VARCHAR(50);
+	DECLARE max_path_seq INTEGER;
+	DECLARE cur_time SECONDDATE = :departure_time;
+	DECLARE cur_trip_seq INTEGER = 0;
+	DECLARE arrival_time SECONDDATE;
+	DECLARE CURSOR path_conn_csr FOR 
+	SELECT sequence, from_location, to_location, duration, stay_time
+	FROM "sap.tm.trp.routing.db.dataset::t_path_connection"
+	WHERE path_id = :path_id ORDER BY sequence;
+	-- exception_list
+	-- stmt_list
+	SELECT from_location, to_location INTO from_location, to_location
+	FROM "sap.tm.trp.routing.db.dataset::t_path"
+	WHERE id = :path_id;
+
+	SELECT MAX(sequence) INTO max_path_seq
+	FROM "sap.tm.trp.routing.db.dataset::t_path_connection"
+	WHERE path_id = :path_id;
+
+	-- Init trip_sequence
+	trip_sequence = 
+	SELECT :cur_trip_seq AS sequence, :from_location AS location, :cur_time AS departure_time, NULL AS arrival_time
+	FROM DUMMY;
+	cur_trip_seq = :cur_trip_seq + 1;
+
+	FOR path_conn_row AS path_conn_csr DO
+		SELECT ADD_SECONDS(:cur_time, path_conn_row.duration + path_conn_row.stay_time) INTO cur_time
+		FROM DUMMY;
+
+		trip_sequence = 
+		SELECT * FROM :trip_sequence
+		UNION ALL
+		SELECT :cur_trip_seq AS sequence, path_conn_row.to_location AS location, 
+		CASE path_conn_row.sequence 
+		WHEN :max_path_seq THEN NULL 
+		ELSE :cur_time 
+		END AS departure_time, 
+		ADD_SECONDS(:cur_time, -path_conn_row.stay_time) AS arrival_time
+		FROM DUMMY;
+		
+		cur_trip_seq = :cur_trip_seq + 1;
+	END FOR;
+
+	SELECT MAX(arrival_time) INTO arrival_time
+	FROM :trip_sequence;
+
+	trip = 
+	SELECT :from_location AS from_location, :to_location AS to_location, :departure_time AS departure_time, :arrival_time AS arrival_time
+	FROM DUMMY;
+END

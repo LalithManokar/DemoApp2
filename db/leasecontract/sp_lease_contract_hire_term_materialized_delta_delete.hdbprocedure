@@ -1,0 +1,85 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.leasecontract::sp_lease_contract_hire_term_materialized_delta_delete" 
+( IN ACTION_TYPE INTEGER,
+  OUT VAR_OUT "sap.tm.trp.db.leasecontract::tt_lease_contract_change_track") 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+
+	--Locations
+	CHANGE_TRACK = SELECT 
+						"ID",
+						"OBJECT_ID",
+						"OBJECT_SOURCE",
+						"OBJECT_TYPE",
+						"ACTION_TYPE",
+						"STATUS",
+						"START_TIME",
+						"END_TIME"
+					FROM "sap.tm.trp.db.leasecontract::t_lease_object_change_track" 
+				   WHERE OBJECT_SOURCE=2 AND STATUS=3 AND ACTION_TYPE=:ACTION_TYPE;
+	
+	LOCATION_GROUPS =  
+					SELECT T.*,LG.CODE 
+					FROM :CHANGE_TRACK T 
+					INNER JOIN "sap.tm.trp.db.systemmanagement::t_location_group" LG
+					ON T.OBJECT_ID = LG.ID 
+					WHERE T.OBJECT_TYPE=2;
+	
+	DELETE FROM "sap.tm.trp.db.leasecontract::t_lease_contract_hire_term_materialized" 
+	WHERE LOCATION_TYPE=2 
+	AND LOC_GROUP_ID IN (SELECT OBJECT_ID FROM :CHANGE_TRACK);
+	
+	ZONES = 
+			SELECT T.*,Z.NAME AS CODE
+			FROM :CHANGE_TRACK T 
+			INNER JOIN "sap.tm.trp.db.semantic.location::v_zone" Z
+			ON T.OBJECT_ID = Z.ID
+			WHERE T.OBJECT_TYPE=5;
+			
+	DELETE FROM "sap.tm.trp.db.leasecontract::t_lease_contract_hire_term_materialized" 
+	WHERE LOCATION_TYPE=5  
+	AND LOC_GROUP_ID IN (SELECT OBJECT_ID FROM :CHANGE_TRACK);
+	
+	REGION_GROUPS = 
+				SELECT T.*,RG.CODE 
+				FROM :CHANGE_TRACK T 
+				INNER JOIN "sap.tm.trp.db.systemmanagement::t_region_group" RG 
+				ON T.OBJECT_ID = RG.ID 
+				WHERE T.OBJECT_TYPE=6;
+	
+	DELETE FROM "sap.tm.trp.db.leasecontract::t_lease_contract_hire_term_materialized" 
+	WHERE LOCATION_TYPE=5  
+	AND LOC_GROUP_ID IN (SELECT OBJECT_ID FROM :CHANGE_TRACK);
+	
+	--Resources
+	CHANGE_TRACK = SELECT 
+						"ID",
+						"OBJECT_ID",
+						"OBJECT_SOURCE",
+						"OBJECT_TYPE",
+						"ACTION_TYPE",
+						"STATUS",
+						"START_TIME",
+						"END_TIME" 
+					FROM "sap.tm.trp.db.leasecontract::t_lease_object_change_track" 
+				   WHERE OBJECT_SOURCE=1 AND STATUS=3 AND ACTION_TYPE=:ACTION_TYPE; 
+	
+	EQUIPMENT_GROUPS =  
+				SELECT T.*,EG.CODE 
+				FROM :CHANGE_TRACK T 
+				INNER JOIN "sap.tm.trp.db.systemmanagement::t_equipment_group" EG ON T.OBJECT_ID = EG.ID
+				WHERE T.OBJECT_TYPE=2;
+	
+	DELETE FROM "sap.tm.trp.db.leasecontract::t_lease_contract_hire_term_materialized" 
+	WHERE EQUIPMENT_CODE_TYPE=2  
+	AND EQUIP_GROUP_ID IN (SELECT OBJECT_ID FROM :CHANGE_TRACK);
+	
+	--Final Output
+	VAR_OUT =  SELECT * FROM :LOCATION_GROUPS UNION 
+			   SELECT * FROM :ZONES UNION 
+			   SELECT * FROM :REGION_GROUPS UNION 
+			   SELECT * FROM :EQUIPMENT_GROUPS;
+
+END; 

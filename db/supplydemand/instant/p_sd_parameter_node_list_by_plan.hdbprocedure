@@ -1,0 +1,15 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::p_sd_parameter_node_list_by_plan" (
+	IN PIPELINE_MODEL_ID BIGINT,
+	OUT NODE_LIST "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_node"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+ 
+	NODE_LIST = 
+	  SELECT NODE, OVERDUE_NAME 
+		FROM "sap.tm.trp.db.pipeline::t_pipeline_node_list" WHERE PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;	
+		
+END;

@@ -1,0 +1,45 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_update_rule" (
+	IN ID BIGINT, 
+	IN NAME VARCHAR(50),
+	IN DESC VARCHAR(200),
+	IN RULE_TYPE_ID INTEGER,
+	IN SP VARCHAR(200)
+ 	) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    DECLARE RULE_TYPE_DESC VARCHAR(50);
+    DECLARE USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+    
+    SELECT SPRAS INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+ 
+    
+    select T1.RULE_TYPE_DESC into RULE_TYPE_DESC 
+    from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData" T1
+    where T1.RULE_TYPE_ID = :RULE_TYPE_ID;
+    
+    
+    select T1.ID into USER_ID
+    from "sap.tm.trp.db.systemmanagement.user::t_user" T1
+    where T1.USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    
+    UPDATE "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule"
+     	SET NAME = :NAME, 
+     		DESC = :DESC,
+     		RULE_TYPE_ID = :RULE_TYPE_ID,
+     		RULE_TYPE_DESC = :RULE_TYPE_DESC,
+     		SP = :SP,
+     		LAST_MODIFIED_BY = :USER_ID,
+     		LAST_MODIFIED_ON = CURRENT_UTCTIMESTAMP
+    WHERE RULE_ID = :ID;
+    
+    UPDATE "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule_t"
+    SET SPRAS = :SPRAS,
+        DESC = :DESC
+    WHERE ID = :ID;
+     
+END;

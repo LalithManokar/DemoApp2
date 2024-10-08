@@ -1,0 +1,68 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_special_instruction_save"(
+    IN LOCATION_RULE_ID BIGINT,
+    IN TU_ID VARCHAR(20),
+    IN SPECIAL_INSTRUCTION "sap.tm.trp.db.pickupreturn::tt_resource_special_instruction",
+    OUT RESOURCE_INFO "sap.tm.trp.db.pickupreturn::tt_resource_special_instruction"
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+   DECLARE USER_NAME VARCHAR(60);
+   DECLARE TABLE_AMOUNT INTEGER;
+   DECLARE COUNT_SPECIAL_INSTRUCTION INTEGER;
+   DECLARE COUNT_CHANGED_SI INTEGER;
+   
+   SELECT COUNT(*) INTO COUNT_SPECIAL_INSTRUCTION
+   FROM :SPECIAL_INSTRUCTION;
+   
+   IF :COUNT_SPECIAL_INSTRUCTION >0 THEN
+	 --Check wheter the special constructions have been changed
+	 CALL "sap.tm.trp.db.pickupreturn::p_get_assigned_containers" (
+	  :LOCATION_RULE_ID,
+	  :TU_ID,
+	  ASSIGNED_RESOURCE_INFO
+	 );
+	   
+	 UPDATE_RESOURCE = SELECT DISTINCT T1.RESOURCE_ID,
+	                          IFNULL (T2.SPECIAL_INSTRUCTION_CODE,T1.SPECIAL_INSTRUCTION_CODE) AS SPECIAL_INSTRUCTION_CODE
+	                   FROM :ASSIGNED_RESOURCE_INFO T1
+	                   LEFT JOIN :SPECIAL_INSTRUCTION T2
+	                   ON (T1.RESOURCE_ID = T2.RESOURCE_ID);
+	                       
+	 SELECT COUNT(*) INTO COUNT_CHANGED_SI
+	 FROM :UPDATE_RESOURCE;
+	   
+	 IF :COUNT_CHANGED_SI >0 THEN
+	   SELECT IFNULL (MAX (USERNAME),'') INTO USER_NAME 
+	   FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+	   
+	   DELETE FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction"
+	   WHERE RULE_ID = :LOCATION_RULE_ID
+	   AND TU_ID = :TU_ID
+	   AND USER = :USER_NAME;
+	   
+	   INSERT INTO "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction" (
+	       RULE_ID,
+	       USER,
+	       TU_ID,
+	       RESOURCE_ID,
+	       SPECIAL_INSTRUCTION_CODE
+	     )
+	     SELECT :LOCATION_RULE_ID,
+	            :USER_NAME,
+	            :TU_ID,
+	            RESOURCE_ID,
+	            SPECIAL_INSTRUCTION_CODE
+	     FROM :UPDATE_RESOURCE;
+	 END IF ;              
+   END IF ;
+	 
+   RESOURCE_INFO = SELECT RESOURCE_ID,
+	                      SPECIAL_INSTRUCTION_CODE
+	               FROM "sap.tm.trp.db.pickupreturn::t_assigned_container_special_instruction"
+	               WHERE RULE_ID = :LOCATION_RULE_ID
+	               AND TU_ID = :TU_ID
+	               AND USER = :USER_NAME;
+END;

@@ -1,0 +1,23 @@
+schema="SAP_TM_TRP";
+
+query = "SELECT distinct ID, CODE, NAME, CATEGORY_ID FROM
+ (
+	SELECT A.ID, A.CODE, A.NAME, C.ID AS CATEGORY_ID FROM \"sap.tm.trp.db.objectregistration::t_schema_name_list\" A
+		INNER JOIN \"sap.tm.trp.db.objectregistration::t_object_type_schema\" B
+		ON A.ID = B.SCHEMA_ID
+		INNER JOIN \"sap.tm.trp.db.objectregistration::v_object_category_ui\" C
+		ON B.OBJECT_TYPE_ID = C.TYPE_ID
+	UNION
+	SELECT distinct C.SCHEMA_ID AS ID, C.SCHEMA_ID AS CODE, A.SCHEMA_NAME, B.ID AS CATEGORY_ID FROM PROCEDURES A
+	 	INNER JOIN (
+	 		SELECT A.PROCEDURE_CONSTRAINT, A.ID, A.TYPE_ID FROM \"sap.tm.trp.db.objectregistration::v_object_category_ui\" A
+	 		INNER JOIN \"sap.tm.trp.db.objectregistration::t_object_type\" B
+	 		on A.TYPE_ID = B.ID and B.TYPE = 3 --filter caculation model from the list, B.TYPE = 3 means Caculation model
+	 	) B
+	 	ON A.PROCEDURE_NAME like '%' || B.PROCEDURE_CONSTRAINT || '%'
+	 	INNER JOIN \"sap.tm.trp.db.objectregistration::t_object_type_schema\" C
+	 	ON B.TYPE_ID = C.OBJECT_TYPE_ID
+)";
+
+depends_on_table=["sap.tm.trp.db.objectregistration::t_schema_name_list" , "sap.tm.trp.db.objectregistration::t_object_type_schema", "sap.tm.trp.db.objectregistration::t_object_type" ];
+depends_on_view=["sap.tm.trp.db.objectregistration::v_object_category_ui"];

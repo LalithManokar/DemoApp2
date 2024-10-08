@@ -1,0 +1,25 @@
+schema = "SAP_TM_TRP";
+query = "-- List Filters For UI Display, Including Filter Selected Type
+         SELECT DISTINCT T1.ID,
+         		T1.RESOURCE_CATEGORY,
+                T2.ID AS TIME_FILTER_ID,
+                T2.DESC AS TIME_FILTER_NAME,
+                T1.USER_ID AS USER_ID,
+                T1.FILTER_TYPE AS FILTER_TYPE,
+                T4.FILTER_TYPE AS EQUI_TYPE,
+                T6.LOCATION_TYPE AS LOCATION_TYPE
+           FROM \"sap.tm.trp.db.filter::t_filter_group\" AS T1
+                LEFT OUTER JOIN \"sap.tm.trp.db.filter::t_time_filter\" AS T2 ON T1.TIME_FILTER_ID = T2.ID
+                LEFT OUTER JOIN \"sap.tm.trp.db.filter::t_filter_equipment_filter\" AS T3 ON T3.FILTER_GROUP_ID = T1.ID
+                LEFT OUTER JOIN \"sap.tm.trp.db.filter::t_equipment_filter\" AS T4 ON T3.EQUIPMENT_FILTER_ID = T4.ID AND T4.RESOURCE_CATEGORY = T3.RESOURCE_CATEGORY
+                LEFT OUTER JOIN \"sap.tm.trp.db.filter::t_filter_location_filter\" AS T5 ON T5.FILTER_GROUP_ID = T1.ID
+                LEFT OUTER JOIN \"sap.tm.trp.db.filter::t_location_filter\" AS T6 ON T5.LOCATION_FILTER_ID = T6.ID
+                ";
+                
+depends_on_table = ["sap.tm.trp.db.filter::t_location_filter"
+					,"sap.tm.trp.db.filter::t_filter_location_filter"
+					,"sap.tm.trp.db.filter::t_equipment_filter"
+					,"sap.tm.trp.db.filter::t_filter_group"
+					,"sap.tm.trp.db.filter::t_time_filter"
+					,"sap.tm.trp.db.filter::t_filter_equipment_filter"
+					];

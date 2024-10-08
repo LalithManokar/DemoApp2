@@ -1,0 +1,40 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_get_tu_for_return_opt_vad" (
+    IN VAL_MOT_CAT VARCHAR(200),
+    IN START_T NVARCHAR(200),
+    IN END_T NVARCHAR(200) ) 
+
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+    BEGIN
+
+    tu_detail_info = select t1.tor_id, 
+                        t3.SCHED_STOP_KEY AS POD_SCHED_STOP_KEY,
+                        t3.SCHED_DEP_KEY AS POD_SCHED_DEP_KEY
+                     from "sap.tm.trp.db.pickupreturn::t_ord_fil_by_loc_return_temp" t1
+                     inner join  "sap.tm.trp.db.pickupreturn.harmonization::t_pr_harmonized_tu_list" t2
+                     on t1.tor_id = t2.tu_id
+                     left join "sap.tm.trp.db.semantic.order::v_freight_order_stop" t3
+                     on t2.POD_FREIGHT_ORDER_STOP_KEY = t3.db_key;
+
+    tu_list = select t1.tor_id, t3.arrival_utc as vad
+            from :tu_detail_info t1
+            inner join "sap.tm.trp.db.semantic.schedule::v_departure_schdpl" t3
+            on (t3.DB_KEY = t1.POD_SCHED_STOP_KEY AND t3.PARENT_KEY = t1.POD_SCHED_DEP_KEY) 
+            where CAST(t3.arrival_utc as VARCHAR) between :START_T AND :END_T;
+
+    tu = select * from  "sap.tm.trp.db.pickupreturn::t_ord_fil_by_loc_return_temp";
+
+    TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_ord_fil_by_loc_return_temp";
+        INSERT INTO "sap.tm.trp.db.pickupreturn::t_ord_fil_by_loc_return_temp"(
+                    
+                    TOR_ID,
+                    
+                    PLANNED_DEPARTURE_TIME,
+                   
+                    PLANNED_ARRIVAL_TIME)
+                    select t21.TOR_ID,t22.PLANNED_DEPARTURE_TIME,
+    t22.PLANNED_ARRIVAL_TIME from :tu_list t21 inner join :tu t22 on (t21.TOR_ID = t22.TOR_ID); 
+
+END;

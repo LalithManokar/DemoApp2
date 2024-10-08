@@ -1,0 +1,36 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.streetturn::p_streetturn_get_locations" (
+IN  IV_RULE_ID BIGINT,     
+OUT FROM_LOCATION_LIST "sap.tm.trp.db.pickupreturn::tt_location_list",
+OUT TO_LOCATION_LIST "sap.tm.trp.db.pickupreturn::tt_location_list"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	READS SQL DATA 
+	AS
+BEGIN
+	
+	DECLARE lv_LOCATION_FILTER_ID BIGINT;
+	
+	--get location filter and equipment filter
+	 SELECT IFNULL (MAX (LOCATION_FILTER_ID),0)
+			INTO 
+			lv_LOCATION_FILTER_ID
+	  FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+	  WHERE ID = :iv_rule_id;
+
+	   CALL "sap.tm.trp.db.filter::p_get_locations_by_locfilterid"(:lv_LOCATION_FILTER_ID, lt_filtered_locs);
+                                   
+      from_location_list = SELECT DISTINCT B."NAME" as "LOCATION" 
+      					    FROM :lt_filtered_locs A
+      					    join "sap.tm.trp.db.semantic.location::v_all_location" B
+      					    on A.LOCATION_ID = b.ID;
+--{ Update      					    
+     /* to_location_list = SELECT DISTINCT B."NAME" as "LOCATION" 
+      					    FROM :lt_filtered_locs A
+      					    join "sap.tm.trp.db.semantic.location::v_all_location" B
+      					    on A.LOCATION_ID = b.ID; */
+	to_location_list = SELECT * FROM :from_location_list;      					    
+      					    
+--} Update      					    
+      
+END;

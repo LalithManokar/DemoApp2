@@ -1,0 +1,10 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.consistencycheck::p_migration_inactive" ()
+ LANGUAGE SQLSCRIPT
+ SQL SECURITY INVOKER
+ DEFAULT SCHEMA SAP_TM_TRP
+ AS
+BEGIN
+
+    CALL "sap.tm.trp.db.systemmanagement.customization::p_reset_general_parameter"('MIGRATION');
+
+END;

@@ -1,0 +1,12 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "LOCATION_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "LOCATION_TYPE"; sqlType = INTEGER; },
+    {name = "EQUIP_CODE"; sqlType = VARCHAR; length = 10; },
+    {name = "EQUIP_CODE_TYPE"; sqlType = INTEGER;  },
+    {name = "MIN_SAFETY"; sqlType = INTEGER;  },
+    {name = "MAX_SAFETY"; sqlType = INTEGER;  },
+    {name = "MAX_CAPACITY"; sqlType = INTEGER; }
+];
+table.primaryKey.pkcolumns = ["LOCATION_ID", "LOCATION_TYPE", "EQUIP_CODE", "EQUIP_CODE_TYPE"];

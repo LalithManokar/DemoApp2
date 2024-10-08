@@ -1,0 +1,13 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup.massupload::p_pickup_return_ruleset_group_temporary_data_clean" (
+	IN CONNECTION_ID VARCHAR(100)
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+
+ DELETE FROM "sap.tm.trp.db.pickupreturn.rulesetgroup.massupload::t_pickup_return_ruleset_group_temporary"
+ 	WHERE CONNECTION_ID = :CONNECTION_ID;
+ 	
+END;

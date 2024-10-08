@@ -1,0 +1,25 @@
+schema = "SAP_TM_TRP";
+query = "SELECT DISTINCT T1.RESOURCE_CATEGORY_ID,
+                T2.ID AS REGISTERED_OBJECT_ID,
+                T2.CODE AS REGISTERED_OBJECT_CODE,
+                T2.NAME AS REGISTERED_OBJECT_NAME,
+                T2.DESC AS REGISTERED_OBJECT_DESC,
+                T2.STORED_PROCEDURE_NAME,
+                T2.META_DATA_TABLE_NAME,
+                T2.SCHEMA_NAME,
+                T2.TYPE_ID,
+                T2.TYPE,
+                T2.TYPE_NAME,
+                T2.CATEGORY_ID,
+                T2.CATEGORY,
+                T2.CREATED_BY,
+                T2.CREATED_ON,
+                T2.MODIFIED_BY,
+                T2.MODIFIED_ON,
+                T2.MODIFIED_TIME
+         FROM \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_object_registration\" T1 
+         INNER JOIN \"sap.tm.trp.db.objectregistration::v_registered_object_ui\" T2
+         ON (T1.OBJECT_ID = T2.ID AND T1.OBJECT_TYPE = T2.TYPE)";
+                
+depends_on_table = ["sap.tm.trp.db.systemmanagement.customization::t_resource_category_object_registration"];
+depends_on_view = ["sap.tm.trp.db.objectregistration::v_registered_object_ui"];               

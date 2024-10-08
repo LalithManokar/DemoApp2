@@ -1,0 +1,13 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_role_resource_create" (
+  IN ROLE_ID BIGINT,
+  IN RESOURCE_ATT "sap.tm.trp.db.systemmanagement.user::tt_role_resource") 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+  
+    INSERT INTO "sap.tm.trp.db.systemmanagement.user::t_role_resource" (ROLE_ID, RES_CATEGORY, RES_TYPE) 
+    SELECT :ROLE_ID, RES_CATEGORY, RES_TYPE FROM :RESOURCE_ATT;
+    
+END;

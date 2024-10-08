@@ -1,0 +1,18 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_check_plan_assignment_status" (
+    IN PLAN_MODEL_ID BIGINT,
+    OUT ASSGINED_FLAG NVARCHAR(1)
+) 
+	LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+ 
+
+--Get the plan data to check if the plan has been assigned to virtual plan or not
+	SELECT ASSIGNED_TO_VIRTUAL 
+	INTO ASSGINED_FLAG 
+	FROM "sap.tm.trp.db.pipeline::t_plan_model" 
+	WHERE ID = :PLAN_MODEL_ID;
+
+END;

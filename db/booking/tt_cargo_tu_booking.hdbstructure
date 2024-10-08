@@ -1,0 +1,31 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE; 
+table.description = "a table of cargo tu with its booking information";
+table.columns = [
+    {name = "ID"; sqlType = VARBINARY; length=16;},
+    {name = "TOR_ID"; sqlType = NVARCHAR; length=20;},
+    {name = "MOVEMENT_CAT"; sqlType = NVARCHAR; length=2;},
+    {name = "EXECUTION_STATUS"; sqlType = NVARCHAR; length=2;},
+    {name = "EXECUTION_STATUS_TEXT"; sqlType = NVARCHAR; length=60;},
+    {name = "LIFECYCLE"; sqlType = NVARCHAR; length=2;},
+    {name = "LIFECYCLE_TEXT"; sqlType = NVARCHAR; length=60;},
+    {name = "SOURCE_LOCATION_ID"; sqlType = NVARCHAR; length=22;},
+    {name = "SOURCE_LOCATION_NAME"; sqlType = NVARCHAR; length=20;},
+    {name = "PLANNED_DEPARTURE_TIME"; sqlType = TIMESTAMP;},
+    {name = "DESTINATION_LOCATION_ID"; sqlType = NVARCHAR; length=22;},
+    {name = "DESTINATION_LOCATION_NAME"; sqlType = NVARCHAR; length=20;},
+    {name = "PLANNED_ARRIVAL_TIME"; sqlType = TIMESTAMP;},
+    {name = "DEPARTURED"; sqlType = SMALLINT; },
+    {name = "UNLOADED"; sqlType = SMALLINT; },
+    {name = "PICKUP_LOCATION_ID"; sqlType = NVARCHAR; length=22;},
+    {name = "PICKUP_LOCATION_NAME"; sqlType = NVARCHAR; length=20;},
+    {name = "PICKUP_DATE"; sqlType = DATE;},
+    {name = "RETURN_LOCATION_ID"; sqlType = NVARCHAR; length=22;},
+    {name = "RETURN_LOCATION_NAME"; sqlType = NVARCHAR; length=20;},
+    {name = "RETURN_DATE"; sqlType = DATE;},
+    {name = "SHIPPER"; sqlType = NVARCHAR; length=40;},
+    {name = "CONSIGNEE"; sqlType = NVARCHAR; length=40;},
+    {name = "CUSTOMER_NAME"; sqlType = NVARCHAR; length=40;},
+    {name = "BOOKING_DATE"; sqlType = DATE;},
+    {name = "TRQ_ID"; sqlType = NVARCHAR; length=35;}
+];     

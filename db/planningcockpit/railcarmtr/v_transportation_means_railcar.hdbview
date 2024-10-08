@@ -1,0 +1,10 @@
+schema = "SAP_TM_TRP";
+
+query  = "SELECT T1.CODE,T1.DESC,T1.COLOR_VALUE, T3.NAME AS RESOURCE_CATEGORY
+FROM  \"sap.tm.trp.db.semantic.common::v_transportation_means\" T1 
+INNER JOIN \"sap.tm.trp.db.planningcockpit.railcarmtr::t_transportation_means_railcar\" T2 on (T1.CODE = T2.CODE)
+INNER JOIN \"sap.tm.trp.db.systemmanagement.customization::v_resource_category\" T3 ON T2.RESOURCE_CATEGORY = T3.RESOURCE_CATEGORY_TYPE
+        ";
+                 
+depends_on_table = ["sap.tm.trp.db.planningcockpit.railcarmtr::t_transportation_means_railcar"];
+depends_on_view = ["sap.tm.trp.db.semantic.common::v_transportation_means", "sap.tm.trp.db.systemmanagement.customization::v_resource_category"]; 

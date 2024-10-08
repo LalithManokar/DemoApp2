@@ -1,0 +1,51 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_get_users_resource_category" (
+    OUT USERS_RESOURCE_CATEGORY "sap.tm.trp.db.systemmanagement.user::tt_users_resource_category"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_TRP
+   READS SQL DATA AS
+BEGIN
+
+	DECLARE USERNAME STRING;
+	DECLARE USERID STRING;
+	DECLARE USERTYPEID STRING;
+	
+	SELECT IFNULL (MAX (USERNAME),'') INTO USERNAME 
+	FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+	CALL "sap.tm.trp.db.systemmanagement.user::p_get_user_id_by_username"(:USERNAME, USERID);
+	SELECT IFNULL (MAX (USER_TYPE_ID),0) INTO USERTYPEID
+	FROM "sap.tm.trp.db.systemmanagement.user::v_user"
+	WHERE ID = :USERID;
+
+	--admin user returns all resource categories
+	IF :USERTYPEID = 99 THEN
+		USERS_RESOURCE_CATEGORY =
+				    SELECT DISTINCT
+						   A.RESOURCE_CATEGORY_NAME AS CODE,
+						   A.RESOURCE_CATEGORY_TYPE AS TYPE,
+						   A.RESOURCE_CATEGORY_TYPE_DESC AS DESC,
+						   B.LEASE_CONTRACT_FLAG AS CONTRACT
+					FROM "sap.tm.trp.db.systemmanagement.user::cv_resource_type_category" A
+					INNER JOIN "sap.tm.trp.db.systemmanagement.customization::v_resource_category" B
+                 	ON A.RESOURCE_CATEGORY_NAME = B.NAME
+                 	ORDER BY CODE ASC;
+	ELSE
+		USERS_RESOURCE_CATEGORY =
+					SELECT * FROM :USERS_RESOURCE_CATEGORY
+					UNION
+					SELECT DISTINCT
+						   CAT.RESOURCE_CATEGORY_NAME AS CODE,
+						   CAT.RESOURCE_CATEGORY_TYPE AS TYPE,
+						   CAT.RESOURCE_CATEGORY_TYPE_DESC AS DESC,
+						   RES_CAT.LEASE_CONTRACT_FLAG AS CONTRACT
+					FROM "sap.tm.trp.db.systemmanagement.user::cv_resource_type_category" CAT
+					INNER JOIN "sap.tm.trp.db.systemmanagement.user::t_role_resource" ROLE_RES
+					ON( CAT.RES_CATEGORY = ROLE_RES.RES_CATEGORY )
+					INNER JOIN "sap.tm.trp.db.systemmanagement.user::v_user_role" USER_ROLE
+					ON( ROLE_RES.ROLE_ID = USER_ROLE.id AND USER_ROLE.USER_ID = :USERID)
+					INNER JOIN "sap.tm.trp.db.systemmanagement.customization::v_resource_category" RES_CAT
+                 	ON CAT.RESOURCE_CATEGORY_NAME = RES_CAT.NAME
+                 	ORDER BY CODE ASC;
+	END IF;
+END

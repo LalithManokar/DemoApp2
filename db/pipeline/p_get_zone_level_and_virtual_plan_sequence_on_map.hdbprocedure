@@ -1,0 +1,39 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_get_zone_level_and_virtual_plan_sequence_on_map"(
+    IN IN_PLAN_MODEL_ID BIGINT,
+    OUT OUT_ZONE_LEVEL "sap.tm.trp.db.pipeline::tt_virtual_tree_zone_level_on_map",
+    OUT OUT_VIRTUAL_PLAN_SEQUENCE "sap.tm.trp.db.pipeline::tt_id_list",
+    OUT_NAME_INTERSECTION "sap.tm.trp.db.pipeline::tt_virtual_plan_node_name"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+OUT_ZONE_LEVEL = SELECT DISTINCT LEVEL
+ FROM "sap.tm.trp.db.pipeline::t_virtual_tree_location_info"
+ WHERE VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_MODEL_ID
+ ORDER BY LEVEL;
+ 
+ OUT_VIRTUAL_PLAN_SEQUENCE = 
+SELECT T3.SEQUENCE AS ID
+FROM 
+(
+	SELECT TOP 1 B.ID,B.FILTER_GROUP_ID
+	FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" A
+	INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" B ON (A.PERSISTED_PLAN_MODEL_ID = B.ID  )
+	WHERE A.VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_MODEL_ID
+) T1 
+INNER JOIN  "sap.tm.trp.db.filter::t_filter_group" T2 ON (T1.FILTER_GROUP_ID = T2.ID)
+INNER JOIN "sap.tm.trp.db.filter::t_time_filter_interval" T3 ON (T2.TIME_FILTER_ID = T3.TIME_FILTER_ID);
+
+SQL_PP_LIST = 
+SELECT PERSISTED_PLAN_MODEL_ID AS ID FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan"
+              WHERE VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_MODEL_ID;
+
+CALL "sap.tm.trp.db.pipeline::p_get_intersection_name_of_nodes_for_plan_model" (:SQL_PP_LIST,SQL_INTERSECTION_NAME);
+
+OUT_NAME_INTERSECTION = SELECT * FROM :SQL_INTERSECTION_NAME;
+
+  
+END;

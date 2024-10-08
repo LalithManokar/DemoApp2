@@ -1,0 +1,41 @@
+schema = "SAP_TM_TRP";
+query = "SELECT DISTINCT T2.LOCATION_FILTER_ID,
+                T2.LOCATION_ID AS LOCATION_ID,
+                1 AS LOCATION_FILTER_TYPE
+           FROM \"sap.tm.trp.db.filter::t_location_filter_location\" AS T2
+          WHERE T2.LOCATION_ID IS NOT NULL
+          UNION
+         SELECT DISTINCT T3.LOCATION_FILTER_ID,
+                T2.LOCATION_ID AS LOCATION_ID,
+                2 AS LOCATION_FILTER_TYPE
+           FROM \"sap.tm.trp.db.filter::t_location_filter_location\" AS T3
+                INNER JOIN \"sap.tm.trp.db.systemmanagement::t_location_group_item\" AS T2
+                ON T3.LOCATION_GROUP_ID = T2.LOCATION_GROUP_ID
+          WHERE T2.LOCATION_ID IS NOT NULL
+         
+          UNION ALL
+         SELECT DISTINCT T3.LOCATION_FILTER_ID,
+                REG_LOC.LOCATION_ID AS LOCATION_ID,
+                5 AS LOCATION_FILTER_TYPE
+           FROM \"sap.tm.trp.db.filter::t_location_filter_region\" AS T3
+                INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_region_location_all\" AS REG_LOC
+                ON REG_LOC.ROOT_ID = T3.ZONE_ID
+          WHERE REG_LOC.LOCATION_ID IS NOT NULL
+          UNION ALL
+         SELECT DISTINCT T3.LOCATION_FILTER_ID,
+                REG_LOC.LOCATION_ID AS LOCATION_ID,
+                6 AS LOCATION_FILTER_TYPE
+           FROM \"sap.tm.trp.db.filter::t_location_filter_region\" AS T3
+                INNER JOIN \"sap.tm.trp.db.systemmanagement::t_region_group_item\" AS T2
+                ON T3.REGION_GROUP_ID = T2.REGION_GROUP_ID
+                INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_region_location_all\" AS REG_LOC
+                ON REG_LOC.ROOT_ID = T2.ZONE_ID
+          WHERE REG_LOC.LOCATION_ID IS NOT NULL";
+       
+ depends_on_view  = [
+                     "sap.tm.trp.db.systemmanagement.location::v_region_location_all"];
+ depends_on_table = ["sap.tm.trp.db.filter::t_location_filter_location",
+                     "sap.tm.trp.db.filter::t_location_filter_region",
+                     "sap.tm.trp.db.systemmanagement::t_location_group_item",
+                     "sap.tm.trp.db.systemmanagement::t_region_group_item"];
+       

@@ -1,0 +1,123 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel.storagecost::p_get_dataset" (
+	IN COST_MODEL_ID INTEGER,
+	IN LOCATION_RESOURCE_TYPE_LIST "sap.tm.trp.db.costmodel.storagecost::tt_location_resource_type",
+	OUT RESULT "sap.tm.trp.db.costmodel.storagecost::tt_matched_cost_dataset"
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"   
+	 AS
+BEGIN
+	/*
+	This procedure will return location and resource type matched cost dataset, only use first one cost dataset
+	*/
+      
+      t_dataset_priority = SELECT * FROM (
+                         	SELECT  T1.COST_DATASET_ID,
+                         	        T1.PRIORITY,
+                         		    T2.LOCATION_NAME AS LOCATION,
+                         		    CASE WHEN T2.RESOURCE_TYPE = '*' THEN '*' ELSE REPLACE(T2.RESOURCE_TYPE, '*', '%') END AS RESOURCE_TYPE,
+                         		    'TIME' AS TYPE,
+                                    NULL AS FREE_POOL_TYPE,
+                                    NULL AS START_AT,
+                                    NULL AS START_TIME,
+                                    THRESHOLD_FROM,
+                                    THRESHOLD_TO,
+                                    UOM_CODE,
+                                    PER_DIEM_COST,
+                                    WILD_STAR_COUNT
+                         			FROM "sap.tm.trp.db.costmodel::t_cost_model_dataset" T1
+                         			INNER JOIN "sap.tm.trp.db.costmodel::t_time_based_storage_cost" T2 ON T1.COST_DATASET_ID = T2.COST_DATASET_ID
+                         			WHERE T1.COST_MODEL_ID = :COST_MODEL_ID
+                         			UNION ALL
+                         	SELECT  T1.COST_DATASET_ID,
+                                  T1.PRIORITY,
+                         		    T2.LOCATION_NAME AS LOCATION,
+                         		    CASE WHEN T2.RESOURCE_TYPE = '*' THEN '*' ELSE REPLACE(T2.RESOURCE_TYPE, '*', '%') END AS RESOURCE_TYPE,
+                                    'QUANTITY' AS TYPE,
+                                    FREE_POOL_TYPE,
+                                    START_AT,
+                                    START_TIME,
+                                    THRESHOLD_FROM,
+                                    THRESHOLD_TO,
+                                    UOM_CODE,
+                                    PER_DIEM_COST,
+                                    WILD_STAR_COUNT
+                         			FROM "sap.tm.trp.db.costmodel::t_cost_model_dataset" AS T1
+                         			INNER JOIN "sap.tm.trp.db.costmodel::t_quantity_based_storage_cost" AS T2 ON T1.COST_DATASET_ID = T2.COST_DATASET_ID
+                         			WHERE T1.COST_MODEL_ID = :COST_MODEL_ID
+                         ) ORDER BY PRIORITY ASC,WILD_STAR_COUNT ASC,THRESHOLD_FROM ASC,THRESHOLD_TO ASC;
+                         
+      t_matched_dataset_id = SELECT DISTINCT T10.LOCATION,T10.RESOURCE_TYPE,T20.COST_DATASET_ID FROM (
+                                  SELECT T1.LOCATION,T1.RESOURCE_TYPE,MIN(PRIORITY) AS PRIORITY FROM :LOCATION_RESOURCE_TYPE_LIST T1
+                                  INNER JOIN :t_dataset_priority T2
+                                  ON T1.LOCATION = T2.LOCATION
+                                  WHERE (T1.RESOURCE_TYPE = T2.RESOURCE_TYPE OR T1.RESOURCE_TYPE LIKE T2.RESOURCE_TYPE OR T2.RESOURCE_TYPE = '*')
+                                  GROUP BY T1.LOCATION,T1.RESOURCE_TYPE
+                              ) T10 INNER JOIN :t_dataset_priority T20 ON T10.PRIORITY = T20.PRIORITY
+                              UNION                                
+                              SELECT DISTINCT T10.LOCATION,T10.RESOURCE_TYPE,T20.COST_DATASET_ID FROM (
+                                  SELECT T1.LOCATION,T1.RESOURCE_TYPE,MIN(PRIORITY) AS PRIORITY FROM :LOCATION_RESOURCE_TYPE_LIST T1
+                                  INNER JOIN :t_dataset_priority T2
+                                  ON T2.LOCATION = '*'
+                                  WHERE (T1.RESOURCE_TYPE = T2.RESOURCE_TYPE OR T1.RESOURCE_TYPE LIKE T2.RESOURCE_TYPE OR T2.RESOURCE_TYPE = '*')
+                                  GROUP BY T1.LOCATION,T1.RESOURCE_TYPE
+                              ) T10 INNER JOIN :t_dataset_priority T20 ON T10.PRIORITY = T20.PRIORITY;
+
+      t_dataset_seq = SELECT
+                        ROW_NUMBER() OVER(PARTITION BY T2.LOCATION, T2.RESOURCE_TYPE) AS SEQ,
+                        T2.LOCATION,
+                        T2.RESOURCE_TYPE,
+                        TYPE,
+                        FREE_POOL_TYPE,
+                        START_AT,
+                        START_TIME,
+                        THRESHOLD_FROM,
+                        IFNULL(THRESHOLD_TO,99999999) AS THRESHOLD_TO,
+                        UOM_CODE,
+                        PER_DIEM_COST
+                        FROM :t_dataset_priority T1
+                        INNER JOIN :t_matched_dataset_id T2 ON T1.LOCATION = T2.LOCATION
+                        AND T1.COST_DATASET_ID = T2.COST_DATASET_ID
+                        WHERE (T1.RESOURCE_TYPE = T2.RESOURCE_TYPE OR T2.RESOURCE_TYPE LIKE T1.RESOURCE_TYPE OR T1.RESOURCE_TYPE = '*')
+                      UNION
+                      SELECT
+                        ROW_NUMBER() OVER(PARTITION BY T2.LOCATION, T2.RESOURCE_TYPE) AS SEQ,
+                        T2.LOCATION,
+                        T2.RESOURCE_TYPE,
+                        TYPE,
+                        FREE_POOL_TYPE,
+                        START_AT,
+                        START_TIME,
+                        THRESHOLD_FROM,
+                        IFNULL(THRESHOLD_TO,99999999) AS THRESHOLD_TO,
+                        UOM_CODE,
+                        PER_DIEM_COST
+                        FROM :t_dataset_priority T1
+                        INNER JOIN :t_matched_dataset_id T2 ON T1.LOCATION = '*'
+                        AND T1.COST_DATASET_ID = T2.COST_DATASET_ID
+                        WHERE (T1.RESOURCE_TYPE = T2.RESOURCE_TYPE OR T2.RESOURCE_TYPE LIKE T1.RESOURCE_TYPE OR T1.RESOURCE_TYPE = '*');
+                  
+	RESULT = SELECT
+                    T10.LOCATION,
+                    T10.RESOURCE_TYPE,
+                    T10.TYPE,
+                    T10.FREE_POOL_TYPE,
+                    T10.START_AT,
+                    T10.START_TIME,
+                    CASE T10.TYPE WHEN 'TIME' 
+                    THEN GREATEST(IFNULL(T20.PREVIOUS_MAX_THRESHOLD_TO,0)+1,THRESHOLD_FROM)
+                    ELSE GREATEST(IFNULL(T20.PREVIOUS_MAX_THRESHOLD_TO,0),THRESHOLD_FROM) 
+                    END AS THRESHOLD_FROM,
+                    T10.THRESHOLD_TO,
+                    T10.UOM_CODE,
+                    T10.PER_DIEM_COST
+                  FROM :t_dataset_seq T10
+                  LEFT JOIN (
+                  	SELECT T1.LOCATION,T1.RESOURCE_TYPE,T1.SEQ,MAX(T2.THRESHOLD_TO) AS PREVIOUS_MAX_THRESHOLD_TO 
+                  	FROM :t_dataset_seq T1
+                  	INNER JOIN :t_dataset_seq T2 ON T1.LOCATION = T2.LOCATION AND T1.RESOURCE_TYPE = T2.RESOURCE_TYPE AND T1.SEQ > T2.SEQ
+                  	GROUP BY T1.LOCATION,T1.RESOURCE_TYPE,T1.SEQ
+                  ) T20 ON T10.LOCATION = T20.LOCATION AND T10.RESOURCE_TYPE = T20.RESOURCE_TYPE AND T10.SEQ = T20.SEQ
+                  WHERE T10.THRESHOLD_TO > T20.PREVIOUS_MAX_THRESHOLD_TO OR T20.PREVIOUS_MAX_THRESHOLD_TO IS NULL;
+END;

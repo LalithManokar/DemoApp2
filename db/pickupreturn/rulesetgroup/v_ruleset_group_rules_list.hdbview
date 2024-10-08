@@ -1,0 +1,19 @@
+schema="SAP_TM_TRP";
+query = "SELECT T1.RULE_ID AS ID,
+				T1.RULE_GROUP_ID AS GROUP_ID,
+                T2.RULE_NAME,
+                T2.DESCRIPTION AS RULE_DESCRIPTION,
+                T2.FILTER_EXECUTION,
+                T2.FILTER_EXECUTION_DESC,
+                T2.SELECTION_DATE,
+                T2.NETWORK_SETTING_GROUP_ID,
+                T2.NETWORK_SETTING_GROUP,
+                T2.OP_SETTING_TYPE,
+                T2.OPTIMIZATION,
+                T2.OPTIMIZATION_DESC
+                FROM \"sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item\" AS T1
+                INNER JOIN \"sap.tm.trp.db.pickupreturn::v_role_check_location_rule\" AS T2 
+                ON T1.RULE_ID = T2.ID";
+
+depends_on_table = ["sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item"]; 
+depends_on_view = ["sap.tm.trp.db.pickupreturn::v_role_check_location_rule"];

@@ -1,0 +1,24 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_ext_location_filter_delete"(
+    IN FILTER_ID BIGINT
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    
+    AS
+BEGIN
+    DELETE FROM "sap.tm.trp.db.filter::t_location_filter_location"
+    WHERE LOCATION_FILTER_ID = :FILTER_ID;
+    DELETE FROM "sap.tm.trp.db.filter::t_location_filter_zone"
+    WHERE LOCATION_FILTER_ID = :FILTER_ID;
+    DELETE FROM "sap.tm.trp.db.filter::t_location_filter_region"
+    WHERE LOCATION_FILTER_ID = :FILTER_ID;
+    
+    DELETE FROM "sap.tm.trp.db.filter::t_location_filter"
+    WHERE ID = :FILTER_ID;
+    
+    -- DELETE LAST USED PARAMETERS
+    DELETE FROM "sap.tm.trp.db.systemmanagement.user::t_last_used_parameters"
+    WHERE PARAMETER_KEY = 'LAST_USED_LOCATOIN_FILTER_ID'
+          AND PARAMETER_VALUE = :FILTER_ID;
+END;

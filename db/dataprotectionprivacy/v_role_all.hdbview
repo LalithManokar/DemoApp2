@@ -1,0 +1,19 @@
+schema="SAP_TM_TRP";
+
+query="SELECT DISTINCT A.ID AS ID,
+              A.NAME AS NAME,
+              A.DESC AS DESC,
+              C.USERNAME AS CREATED_BY,
+              D.USERNAME AS MODIFIED_BY,
+              A.CODE AS CODE
+         FROM \"sap.tm.trp.db.systemmanagement.user::t_role\" AS A
+              LEFT JOIN \"sap.tm.trp.db.systemmanagement.user::t_role_group\" AS B
+              ON A.ROLE_GROUP_ID = B.ID
+              LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS C
+              ON A.CREATE_BY = C.ID
+              LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS D
+              ON A.LAST_MODIFIED_BY = D.ID";
+                       
+depends_on_table = ["sap.tm.trp.db.systemmanagement.user::t_role",
+                    "sap.tm.trp.db.systemmanagement.user::t_role_group"];
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

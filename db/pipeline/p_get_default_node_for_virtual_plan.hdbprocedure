@@ -1,0 +1,81 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_get_default_node_for_virtual_plan" (
+IN IN_VIRTUAL_PLAN_ID BIGINT,
+OUT DEFAULT_NODE_NAME VARCHAR(200)
+)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+ 
+
+
+ DECLARE METADATA_NODE_ID_NUM INTEGER;
+ DECLARE DEFAULT_METADATA_NODE_NUM INTEGER;
+ DECLARE PP_ID INTEGER;
+ 
+ -- get the intersection nodes of the virtual plan
+ METADATA_NODE_ID_INTERSECTION = 
+	 SELECT NAME 
+	 FROM "sap.tm.trp.db.pipeline::t_virtual_tree_node_name" 
+	 WHERE VIRTUAL_PLAN_MODEL_ID = :IN_VIRTUAL_PLAN_ID;
+ 
+ SELECT COUNT(NAME) INTO METADATA_NODE_ID_NUM FROM :METADATA_NODE_ID_INTERSECTION;
+ 
+ IF (:METADATA_NODE_ID_NUM = 0) THEN -- intersection is empty
+ 	SELECT '' INTO DEFAULT_NODE_NAME FROM DUMMY;
+ ELSE
+	  -- get the sub persisted plans for this virual plan
+	 PP_ID_LIST =
+	 	SELECT PERSISTED_PLAN_MODEL_ID AS ID
+	 	FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" 
+	    WHERE VIRTUAL_PLAN_MODEL_ID = :IN_VIRTUAL_PLAN_ID;
+	 
+	 -- get calculation model and default node for each persisted plan
+	 PP_ID_LIST_METADATA_NODE_ID = 
+		 SELECT T1.ID AS PLAN_MODEL_ID,T3.DEFAULT_NODE_ID, T4.METADATA_NODE_ID
+		 FROM :PP_ID_LIST T1
+		 INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T2 ON (T1.ID = T2.ID) -- get the calculation model id
+		 INNER JOIN "sap.tm.trp.db.pipeline::v_pipeline_default_node" T3 ON (T2.PIPELINE_MODEL_ID = T3.PIPELINE_MODEL_ID) -- get the default node;
+		 INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T4 ON (T3.DEFAULT_NODE_ID = T4.ID); -- get the default metadata node id
+	
+	 -- get the intersection of the default nodes
+	 DEFAULT_NODE_LIST = 
+		 SELECT T1.PLAN_MODEL_ID, T1.DEFAULT_NODE_ID, T1.METADATA_NODE_ID
+		 FROM :PP_ID_LIST_METADATA_NODE_ID T1
+		 INNER JOIN :METADATA_NODE_ID_INTERSECTION T2 ON T1.METADATA_NODE_ID = T2.NAME;
+	 
+	 -- get the number of different metadata node id
+	 SELECT COUNT(DISTINCT METADATA_NODE_ID) INTO DEFAULT_METADATA_NODE_NUM FROM :DEFAULT_NODE_LIST;
+	 
+	 -- then apply the following rules
+		-- 1. If there are only one metadata node id for the default nodes, then return this metadata node id
+		-- 2. If there is no default node in the intersection, then just return the metadata node id with maximial node id in the intersection
+		-- 3. If there are multiple metadata node ids for the default nodes, then return the metadata node id with maximal node id in the default node set
+	 IF( :DEFAULT_METADATA_NODE_NUM = 1) THEN
+	 	SELECT TOP 1 METADATA_NODE_ID INTO DEFAULT_NODE_NAME FROM :DEFAULT_NODE_LIST;
+	 ELSE
+	 	-- the node id in the same model can be used to determine the default node in some casess 
+	 	-- get the plan id which will be used to get the node id for each metadata node id
+	 	SELECT TOP 1 ID INTO PP_ID FROM :PP_ID_LIST;
+	 	NODE_ID_LIST = 
+		 	SELECT T3.ID AS NODE_ID, T4.NAME AS METADATA_NODE_ID
+		 	FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+		 	INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_model" T2 ON (T1.PIPELINE_MODEL_ID = T2.ID) -- get the calculation model id
+		 	INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T3 ON (T2.ID = T3.PIPELINE_MODEL_ID) -- get the node id
+		 	INNER JOIN :METADATA_NODE_ID_INTERSECTION T4 ON (T3.METADATA_NODE_ID = T4.NAME)
+		 	WHERE T1.ID = :PP_ID -- garantee they are in the same persisted plan i.e. Calculation Model
+		 	ORDER BY T3.ID DESC;
+	 	
+	 	IF (:DEFAULT_METADATA_NODE_NUM = 0) THEN
+		 	SELECT TOP 1 METADATA_NODE_ID INTO DEFAULT_NODE_NAME FROM :NODE_ID_LIST
+		 	ORDER BY NODE_ID DESC; -- from the intesection, get the metadata node id which has the max node id
+	 	ELSE
+		 	SELECT TOP 1 T1.METADATA_NODE_ID FROM :DEFAULT_NODE_LIST T1
+		 	INNER JOIN :NODE_ID_LIST T2 -- get the node id
+		 	ON T1.METADATA_NODE_ID = T2.METADATA_NODE_ID
+		 	ORDER BY DEFAULT_NODE_ID DESC;
+   	    END IF;
+	END IF;   
+ END IF;
+END;

@@ -1,0 +1,259 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_build_route_v2" ( 
+    IN network_id BIGINT,
+    IN cost_model_id BIGINT,
+    IN resource_type NVARCHAR(20),
+	IN loc_pair "sap.tm.trp.routing.db.path::tt_location_pair",
+	IN composite_path_id "sap.tm.trp.routing.db.common::tt_id",
+	IN options "sap.tm.trp.routing.db.common::tt_option",
+	OUT route_path "sap.tm.trp.routing.db.path::tt_route_path",
+	OUT route_sequence "sap.tm.trp.routing.db.path::tt_route_sequence",
+	OUT message "sap.tm.trp.routing.db.common::tt_message",
+	OUT log_message "sap.tm.trp.routing.db.common::tt_message", 
+	OUT return_code INTEGER
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING"
+   AS
+BEGIN 
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+   DECLARE global_dataset_id CONSTANT BIGINT = 0;
+   DECLARE local_dataset_id BIGINT;
+   DECLARE from_time, to_time TIMESTAMP;
+   DECLARE edge_cost_null_cnt INTEGER;
+   DECLARE err_path VARCHAR(50);
+   DECLARE start_seq_no CONSTANT INTEGER = 0;
+   DECLARE count INTEGER;
+   
+   DECLARE network_exist INTEGER;
+   
+   DECLARE total_missed_location INTEGER;
+   DECLARE missed_location_arr NVARCHAR(50) ARRAY;
+   DECLARE loc_iter INTEGER;
+   
+   DECLARE storage_cost_cnt INTEGER;
+   
+   DECLARE origin_time TIMESTAMP; -- Use as origin time, all timestamp should occur after 2000-01-01!!!
+   
+   SELECT TO_TIMESTAMP('2000-01-01 00:00:00', 'YYYY-MM-DD HH24:MI:SS') INTO origin_time
+   FROM DUMMY;
+   
+	SELECT COUNT(*) INTO network_exist FROM "sap.tm.trp.routing.db.path::t_network_model" WHERE id = :network_id;
+	IF :network_exist = 0 THEN
+	    msg_params = SELECT 0 AS PLACEHOLDER, TO_NVARCHAR(:network_id) AS VALUE FROM DUMMY;
+	    CALL "sap.tm.trp.routing.db.common::p_get_text"('MSG_NETWORK_ID_NOT_EXIST', :msg_params, 'E', message);
+	    log_message = SELECT * FROM :message;
+	    return_code = 1;
+	    RETURN;
+	END IF;
+
+-- Check is disabled at the moment since the method will just be called internally.
+-- Enable it when necessary. But locations are saved in base dataset.
+
+   SELECT MIN(DPT_TIME), MAX(ARV_TIME) INTO from_time, to_time FROM :loc_pair;
+
+   location_pair_set = 
+   SELECT from_location AS st_location, SECONDS_BETWEEN(:origin_time, dpt_time) AS dpt_time, to_location AS ed_location, SECONDS_BETWEEN(:origin_time, arv_time) AS arv_time
+   FROM :loc_pair;
+   
+   -- Retrieve Composite Path(from "sap.tm.trp.routing.db.path::t_path" and "sap.tm.trp.routing.db.path::t_path_sequence") with the given location pair and network id
+   path_list = SELECT A.id AS path_id, A.from_location, FIRST_VALUE(from_bp_sequence - 1 ORDER BY B.sequence) AS next_bp_sequence
+   FROM :composite_path_id AS M
+   INNER JOIN "sap.tm.trp.routing.db.path::t_path" AS A
+   ON M.id = A.id
+   INNER JOIN "sap.tm.trp.routing.db.path::t_path_sequence" AS B ON A.id = B.path_id
+   GROUP BY A.id, A.from_location;
+   
+   path_conn_list_tmp = SELECT TO_VARCHAR(A.path_id) AS name, path_type, A.from_location, A.to_location AS location, sequence, mtr, TO_VARCHAR(basic_path_id) AS basic_path_name, 
+   A.to_bp_sequence AS pre_bp_sequence, LEAD(A.from_bp_sequence - 1, 1, 0) OVER (PARTITION BY A.path_id ORDER BY A.sequence ASC) AS next_bp_sequence 
+   FROM "sap.tm.trp.routing.db.path::t_path_sequence" AS A INNER JOIN :composite_path_id AS B ON A.path_id = B.id;
+   
+   -- path_conn_list represent the basic path section in composite path; basic_conn_list represent the basic connection section in 
+   --basic_path_conn_list = SELECT name, location, sequence, mtr, basic_path_name FROM :path_conn_list_tmp WHERE path_type = 'P';
+   -- Get All (Unique) Basic Path from Composite Path
+   path_conn_list = 
+   SELECT name, location, sequence, mtr, path_type AS category, basic_path_name, pre_bp_sequence, next_bp_sequence FROM :path_conn_list_tmp
+   UNION ALL
+   SELECT TO_VARCHAR(path_id), from_location AS location, 0, '', '', 0, 0, next_bp_sequence
+   FROM :path_list;
+   
+   location_mtr_pair = SELECT DISTINCT from_location, location AS to_location, mtr
+   FROM :path_conn_list_tmp
+   WHERE path_type = 'P';
+   
+   CALL "sap.tm.trp.routing.db.dataset::p_list_trip_by_location_mtr" (:from_time, :to_time, :location_mtr_pair, trip, trip_location);
+   -- TimeStamp Convert to Integer; Retrieve transport cost from "sap.tm.trp.routing.db.cost::t_transport_cost"
+
+   -- retrieve transport cost info
+   CALL "sap.tm.trp.db.costmodel::sp_get_transportation_based_cost_info"(:cost_model_id, transport_cost_info);
+   
+   -- Calculate transport cost   
+   trip_sequence_for_cost = 
+   SELECT t.id AS id, l.sequence, LAG(location, 1, NULL) OVER (PARTITION BY trip_id ORDER BY sequence ASC) AS from_location, location AS to_location, t.mtr, t.carrier, 
+   :resource_type AS resource_type, l.distance, l.duration
+   FROM :trip AS t
+   INNER JOIN :trip_location AS l
+   ON t.id = l.trip_id
+   WHERE l.sequence > 0;
+   
+   CALL "SAP_TM_ROUTING"."sap.tm.trp.routing.db.cost::p_calculate_transport_cost"(:transport_cost_info, :trip_sequence_for_cost, trip_sequence_transport_cost);
+   
+	-- Verify whether there are edge_cost is null, if there is, it means it fails to look up the unit transport cost in table "sap.tm.trp.routing.db.cost::t_transport_cost"
+	null_edge_cost_path_conn = 
+	SELECT A.id, A.sequence, B.from_location, B.to_location, B.mtr, 'P' AS category 
+	FROM :trip_sequence_transport_cost AS A INNER JOIN :trip_sequence_for_cost AS B ON A.id = B.id AND A.sequence = B.sequence
+	WHERE cost IS NULL;
+	
+	SELECT COUNT(*) INTO edge_cost_null_cnt
+	FROM :null_edge_cost_path_conn;
+	
+	IF :edge_cost_null_cnt > 0 THEN
+	    CALL "sap.tm.trp.routing.db.util::p_convert_transport_cost_missing_message"(:null_edge_cost_path_conn, message);
+	    log_message = SELECT * FROM :message;
+	    return_code = 1;
+	    RETURN;
+	END IF;
+	
+   -- Here assume the trip returned from "sap.tm.trp.routing.db.connector::p_list_trip" have the same encoding for the sequence as in basic path!!!
+   -- The trip sequence should be started from 0!!!
+   trip_seq_info = 
+   SELECT A.id, A.basic_path_id, B.vehicle_id, B.location, B.sequence, B.distance, A.mtr,
+   SECONDS_BETWEEN(:origin_time, B.arrival_time) AS arrival_time, SECONDS_BETWEEN(:origin_time, IFNULL(B.depart_time, B.arrival_time)) AS depart_time,
+   B.availability_offset, B.cutoff_offset, NULL AS capacity -- NULL capacity means maximum value that can be represented
+   FROM :trip AS A INNER JOIN :trip_location AS B ON A.id = B.trip_id;
+   
+   basic_path_trip = 
+   SELECT A.id AS name, A.basic_path_id AS basic_path_name, A.vehicle_id AS vehicle_name, A.mtr, 'P' AS category, A.location, A.sequence, B.cost, A.distance, arrival_time AS arv_time, depart_time AS dpt_time,
+   A.availability_offset, A.cutoff_offset, A.capacity
+   FROM :trip_seq_info AS A INNER JOIN :trip_sequence_transport_cost AS B ON A.id = B.id AND A.sequence = B.sequence
+   UNION ALL
+   SELECT id AS name, basic_path_id AS basic_path_name, vehicle_id AS vehicle_name, mtr, 'P' AS category, location, sequence, 0 AS cost, 0 AS distance, depart_time AS arv_time, depart_time AS dpt_time,
+   availability_offset, cutoff_offset, 0 AS capacity
+   FROM :trip_seq_info
+   WHERE sequence = :start_seq_no;
+   
+   -- Compute basic connection related cost
+   --basic_conn_list = SELECT name, location, sequence, mtr, basic_path_name FROM :path_conn_list_tmp WHERE path_type = 'C';
+   basic_conn_list = SELECT DISTINCT from_location, location AS to_location, mtr FROM :path_conn_list_tmp WHERE path_type = 'C';
+
+   basic_conn_into_account = 
+   SELECT TO_NVARCHAR(B.id) AS basic_path_name, 1 AS sequence, B.from_location, B.to_location, B.mtr, :resource_type AS resource_type, B.distance, B.duration
+   FROM :basic_conn_list AS A INNER JOIN "sap.tm.trp.routing.db.dataset::t_connection" AS B 
+   ON A.from_location = B.from_location
+   AND A.to_location = B.to_location
+   AND A.mtr = B.mtr;
+
+   basic_conn_info = 
+   SELECT A.basic_path_name AS id, sequence, from_location, to_location, mtr, IFNULL(C.carrier, '') AS carrier, resource_type, distance, duration
+   FROM :basic_conn_into_account AS A LEFT OUTER JOIN "sap.tm.trp.routing.db.dataset::t_connection_carrier" AS C
+   ON A.basic_path_name = C.connection_id;
+   
+   CALL "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_calculate_basic_conn_transport_cost"(:transport_cost_info, :basic_conn_info, basic_conn_transport_cost);
+   
+	-- Verify whether there are edge_cost is null, if there is, it means it fails to look up the unit transport cost in table "sap.tm.trp.routing.db.cost::t_transport_cost"
+	null_edge_cost_path_conn = 
+	SELECT A.id, sequence, from_location, to_location, mtr, 'C' AS category 
+	FROM :basic_conn_transport_cost AS A INNER JOIN :basic_conn_info AS B ON A.id = B.id
+	WHERE cost IS NULL;
+	
+	SELECT COUNT(*) INTO edge_cost_null_cnt
+	FROM :null_edge_cost_path_conn;
+	
+	IF :edge_cost_null_cnt > 0 THEN
+	    CALL "sap.tm.trp.routing.db.util::p_convert_transport_cost_missing_message"(:null_edge_cost_path_conn, message);
+	    log_message = SELECT * FROM :message;
+	    return_code = 1;
+	    RETURN;
+	END IF;
+
+   -- For basic connection, use the basic path name as the trip name!!!
+   basic_conn_trip = 
+   SELECT A.basic_path_name AS name, A.basic_path_name, '' AS vehicle_name, mtr, 'C' AS category, to_location AS location, 1 AS sequence, B.cost, 
+   distance, duration AS arv_time, duration AS dpt_time, 0 AS availability_offset, 0 AS cutoff_offset, NULL AS capacity -- here dpt_time has no meaning, simply make sure larger or equal to arv_time and not null
+   FROM :basic_conn_into_account AS A INNER JOIN :basic_conn_transport_cost AS B ON A.basic_path_name = B.id
+   UNION ALL
+   SELECT basic_path_name AS name, basic_path_name, '' AS vehicle_name, mtr, 'C' AS category, from_location AS location, 0 AS sequence, 0 AS cost, 0 AS distance, 
+   0 AS arv_time, 0 AS dpt_time, 0 AS availability_offset, 0 AS cutoff_offset, 0 AS capacity  -- here arv_time has no meaning, simply make sure smaller or equal than dpt_time and not null
+   FROM :basic_conn_into_account;
+   
+   trip_tab = 
+   SELECT * FROM :basic_path_trip
+   UNION ALL
+   SELECT * FROM :basic_conn_trip;
+
+	CALL "sap.tm.trp.db.costmodel::sp_get_handling_based_cost_info"(:cost_model_id, handling_cost_set_tmp);
+	
+	handling_cost_set = 
+	SELECT location_name AS location, from_mot AS from_mtr, to_mot AS to_mtr, priority, wild_star_count AS star_count, cost
+	FROM :handling_cost_set_tmp
+	WHERE resource_type = :resource_type OR resource_type = '*';
+	/*
+   	handling_cost_set = 
+	SELECT location, from_mtr, to_mtr, handling_type AS act_type, cost FROM "sap.tm.trp.routing.db.cost::t_handling_cost" WHERE cost_model_id = :cost_model_id;
+    */
+	-- Decision from PO, for version 1.1 there is no requirements to do handling duration, so here just retrieve no data!!!
+	handling_duration_set = 
+	SELECT '' AS location, '' AS from_mtr, '' AS to_mtr, 0 AS priority, 0 AS star_count, 0.0 AS duration
+	FROM DUMMY
+	WHERE 1 != 1;
+    
+    -- To-do: get storage cost from configuration
+    CALL "sap.tm.trp.routing.db.cost::p_get_storage_based_cost_info"(:cost_model_id, storage_cost_info);
+
+    storage_cost_set = 
+    SELECT location_name AS location, priority, wild_star_count AS star_count, unit_cost
+    FROM :storage_cost_info;
+    
+    
+	--network_conf = SELECT name AS parameter_name, value AS str_value FROM "sap.tm.trp.routing.db.path::t_network_model_conf" WHERE network_model_id = :network_id;
+	control_parameters = select name as parameter_name, value as str_value from :options;
+
+	
+   -- Call Routing Algorithm to retrieve routing info with location pair, composite path, related trip, return results with route_path, route_sequence
+    CALL "_SYS_AFL"."TRP_AREA_ROUTE_GENERATE_PROC" (:location_pair_set, :path_conn_list, :trip_tab, :handling_cost_set, :handling_duration_set, :storage_cost_set, :control_parameters, route_seq_tmp, internal_message, ret_code);
+
+    CALL "sap.tm.trp.routing.db.common::p_convert_texts_util"(internal_message => :internal_message, message => message, log_message => log_message);
+    SELECT TOP 1 return_code INTO return_code FROM :ret_code;
+    IF return_code != 0 THEN
+        return_code = 1;
+        RETURN;
+    END IF;
+    
+  route_sequence = 
+    SELECT route_id, sequence -1 AS sequence, location, pre_trip_sequence, next_trip_sequence, 
+    CASE WHEN basic_path_name = '' THEN NULL 
+    ELSE TO_BIGINT(basic_path_name) END AS basic_path_id, 
+    CASE WHEN trip_name = '' THEN NULL ELSE trip_name END AS trip_name,
+    mtr, category, ADD_SECONDS(:origin_time, dpt_time) AS dpt_time, ADD_SECONDS(:origin_time, arv_time) AS arv_time, 
+    distance, storage_cost, handling_cost, transport_cost, act_type
+    FROM :route_seq_tmp;
+    
+    route_path = 
+    SELECT route_id, :network_id AS network_model_id, FIRST_VALUE(composite_name ORDER BY sequence) AS composite_path_id, 
+    FIRST_VALUE(location ORDER BY sequence) AS st_location, FIRST_VALUE(ADD_SECONDS(:origin_time, dpt_time) ORDER BY sequence) AS dpt_time,
+    LAST_VALUE(location ORDER BY sequence) AS ed_location, LAST_VALUE(ADD_SECONDS(:origin_time, arv_time) ORDER BY sequence) AS arv_time
+    FROM :route_seq_tmp
+    GROUP BY route_id;
+    
+ /* 
+ 	delete from "sap.tm.trp.routing.db.path::t_temp_trip_seq";
+	INSERT INTO "sap.tm.trp.routing.db.path::t_temp_trip_seq" select * from :trip_tab;
+	
+    return_code = 0;
+    route_sequence = 
+    SELECT 0 as route_id, 0 AS sequence, '' as location, 0 as pre_trip_sequence, 0 as next_trip_sequence, 
+    0 AS basic_path_id, '' AS trip_name,
+    '' as mtr, '' as category, null AS dpt_time, null AS arv_time, 
+    0 as distance, 0 as storage_cost, 0 as handling_cost, 0 as transport_cost, '' as act_type
+    FROM dummy;
+    
+    route_path = 
+    SELECT 0 as route_id, 0 AS network_model_id, 0 AS composite_path_id, 
+    '' AS st_location, null AS dpt_time,
+    '' AS ed_location, null AS arv_time
+    FROM dummy;
+    */
+    
+END

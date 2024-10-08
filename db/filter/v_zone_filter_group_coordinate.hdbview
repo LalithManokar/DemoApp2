@@ -1,0 +1,16 @@
+schema = "SAP_TM_TRP";
+query = "SELECT ID,ITEM_ID,XPOS,YPOS FROM (
+         SELECT DENSE_RANK() OVER (PARTITION BY ID ORDER BY T3.XPOS DESC, T3.YPOS DESC) AS RANK,
+                T1.ID,
+                T2.ZONE_GROUP_ID AS ITEM_ID,
+                T3.XPOS,
+                T3.YPOS
+           FROM \"sap.tm.trp.db.filter::t_location_filter\" AS T1
+                INNER JOIN \"sap.tm.trp.db.filter::t_location_filter_zone\" AS T2
+                ON T1.ID = T2.LOCATION_FILTER_ID
+                INNER JOIN \"sap.tm.trp.db.systemmanagement::v_geo_group_coordinate\" AS T3
+                ON T2.ZONE_GROUP_ID = T3.GROUP_ID AND T3.FILTER_TYPE = 5)
+          WHERE RANK = 1";
+       
+depends_on_view = ["sap.tm.trp.db.systemmanagement::v_geo_group_coordinate"];
+depends_on_table = ["sap.tm.trp.db.filter::t_location_filter_zone", "sap.tm.trp.db.filter::t_location_filter"];

@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_costmodel_dataset_supported_transportation_means" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_anna_privilege_check"/>
+  <localVariables>
+    <variable id="IN_COST_MODEL_ID" parameter="true">
+      <descriptions/>
+      <variableProperties datatype="BIGINT" defaultValue="" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="COST_DATASET_ID"/>
+        <viewAttribute datatype="NVARCHAR" id="TRANSPORTATION_MODE_CODE" length="20"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_COST_MODEL_ID</localVariable>
+      <definition> 
+  
+ BEGIN
+
+	   --Find the cost model dataset that do not define the carrier, for those dataset, all carriers should be support, so
+	   -- Need to do the cross join for the carrier dictionary table
+	   COST_MODEL_DATASET_WITHOUT_TRANSPORTATION_MEANS_FILTER = 
+	   SELECT T1.COST_DATASET_ID
+	   FROM &quot;sap.tm.trp.db.costmodel::t_cost_model_dataset&quot;  T1
+	   LEFT OUTER JOIN &quot;sap.tm.trp.db.costmodel::t_cost_model_transportation_means&quot; T2 ON (T1.COST_MODEL_ID = T2.COST_MODEL_ID 
+	   AND T1.COST_DATASET_ID = T2.COST_DATASET_ID)
+	   WHERE T1.COST_MODEL_ID = :IN_COST_MODEL_ID AND T2.COST_MODEL_ID IS NULL;
+	   
+	  COST_MODEL_DATASET_WITHOUT_TRANSPORTATION_MEANS_FILTER_CROSS_JOIN = 
+	  --SELECT T1.COST_DATASET_ID,T2.CODE AS TRANSPORTATION_MODE_CODE
+      SELECT T1.COST_DATASET_ID,'*' AS TRANSPORTATION_MODE_CODE
+	  FROM :COST_MODEL_DATASET_WITHOUT_TRANSPORTATION_MEANS_FILTER T1;
+	    
+	    --The cost model dataset without defining the carrier filter union the cost model dataset that defined the carrier filter
+	    COST_MODEL_DATASET_TRANSPORTATION_MEANS = SELECT T1.COST_DATASET_ID, TRANSPORTATION_MODE_CODE 
+	    FROM :COST_MODEL_DATASET_WITHOUT_TRANSPORTATION_MEANS_FILTER_CROSS_JOIN T1
+	    UNION ALL SELECT T2.COST_DATASET_ID,T2.TRANSPORTATION_MODE_CODE
+	    FROM &quot;sap.tm.trp.db.costmodel::t_cost_model_transportation_means&quot; T2
+	    WHERE T2.COST_MODEL_ID = :IN_COST_MODEL_ID;
+	  
+        --The cost model supported carrier id should be the intersection of the definition in cost model dataset carrier and the cost dataset carrier
+        VAR_OUT =  SELECT T1.COST_DATASET_ID,T1.TRANSPORTATION_MODE_CODE
+	    FROM :COST_MODEL_DATASET_TRANSPORTATION_MEANS T1;
+	                                           
+  
+END 
+</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="COST_DATASET_ID" order="1">
+        <descriptions defaultDescription="FROM_LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="COST_DATASET_ID"/>
+      </attribute>
+      <attribute id="TRANSPORTATION_MODE_CODE" order="2">
+        <descriptions defaultDescription="TO_LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="TRANSPORTATION_MODE_CODE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

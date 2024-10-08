@@ -1,0 +1,25 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.dashboard::p_ext_tile_update" (
+    IN TILE_ID BIGINT,
+    IN TYPE VARCHAR(500),
+    IN ITEM_LIST "sap.tm.trp.db.dashboard::tt_tile_item"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+USER_ID BIGINT;
+BEGIN
+    SELECT ID INTO USER_ID
+    FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    UPDATE "sap.tm.trp.db.dashboard::t_tile"
+    SET TYPE = :TYPE,
+        MODIFIED_TIME = CURRENT_UTCTIMESTAMP,
+        MODIFIED_BY = :USER_ID
+    WHERE ID = :TILE_ID;
+    
+    CALL "sap.tm.trp.db.dashboard::p_tile_item_delete"(:TILE_ID);
+    CALL "sap.tm.trp.db.dashboard::p_tile_item_create"(:TILE_ID, :ITEM_LIST);
+
+END

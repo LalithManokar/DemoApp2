@@ -1,0 +1,30 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_cost_model_temporary_data_clean"(
+   IN CONNECTION_ID VARCHAR(100)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+
+DELETE FROM "sap.tm.trp.db.costmodel::t_cost_dataset_history_temporary"
+WHERE CONNECTION_ID = :CONNECTION_ID;
+
+DELETE FROM "sap.tm.trp.db.costmodel::t_distance_based_cost_temporary"
+WHERE CONNECTION_ID = :CONNECTION_ID;
+
+DELETE FROM "sap.tm.trp.db.costmodel::t_location_based_cost_temporary"
+WHERE CONNECTION_ID = :CONNECTION_ID;
+
+DELETE FROM "sap.tm.trp.db.costmodel::t_handling_based_cost_temporary"
+WHERE CONNECTION_ID = :CONNECTION_ID;
+
+DELETE FROM "sap.tm.trp.db.costmodel::t_quantity_based_storage_cost_temporary"
+WHERE CONNECTION_ID = :CONNECTION_ID;
+
+DELETE FROM "sap.tm.trp.db.costmodel::t_time_based_storage_cost_temporary"
+WHERE CONNECTION_ID = :CONNECTION_ID;
+
+
+END;

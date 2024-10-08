@@ -1,0 +1,175 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_time_filter_interval_4_timezone" ( 
+	IN TIME_FILTER_ID BIGINT,
+	IN TIMEZONE NVARCHAR(50),
+	OUT TIME_INTERVAL "sap.tm.trp.db.filter::tt_time_filter_interval_value"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+	DECLARE HOUR_START INTEGER;
+    DECLARE MINUTE_START INTEGER;
+    DECLARE WEEK_START INTEGER;
+    DECLARE MONTH_START INTEGER;
+    DECLARE TIME_ZONE VARCHAR(50);
+    DECLARE FLAG INTEGER;
+    DECLARE OFFSET INTEGER;
+    DECLARE ITEM_ID BIGINT; 
+    DECLARE UNIT_ID BIGINT;-- 0:hour 1:day 2:week 3:month 4:year
+    DECLARE UTC_START_FROM TIMESTAMP;
+    DECLARE REPEAT INTEGER;  
+    
+    CALL "sap.tm.trp.db.filter::p_get_utc_start_time_4_timezone"(:TIME_FILTER_ID,:TIMEZONE,T_START_TIME);
+    
+    sql0 = SELECT
+                 B.ID AS TIME_FILTER_ID,
+                 A.SEQUENCE,
+                 A.ID AS TIME_INTERVAL_ID,
+                 A.START_OFFSET,
+                 A.END_OFFSET,               
+                 B.UNIT_ID,
+                 B.TIMEZONE_ID,
+                 B.DIRECTION_FLAG,
+                 B.OFFSET_FLAG,
+                 B.UTC_START_TIMESTAMP
+                 FROM :T_START_TIME B
+                 INNER JOIN "sap.tm.trp.db.filter::t_time_filter_interval" A
+                 ON A.TIME_FILTER_ID = B.ID 
+                 ORDER BY A.SEQUENCE;
+                               
+     -- no offset,history or unit type is hour
+     TIME_INTERVAL_LIST1 = 
+                 SELECT 
+                       A.TIME_FILTER_ID AS ID,
+                       (ROW_NUMBER() OVER (PARTITION BY A.TIME_FILTER_ID ORDER BY A.SEQUENCE DESC)) AS SEQUENCE,
+                       A.TIME_INTERVAL_ID,                     
+                       ADD_SECONDS(CURRENT_UTCTIMESTAMP,A.START_OFFSET) AS START_TIME,
+                       ADD_SECONDS(CURRENT_UTCTIMESTAMP,A.END_OFFSET) AS END_TIME,
+                       A.END_OFFSET - A.START_OFFSET AS INTERVAL
+                       FROM :sql0 A 
+                       WHERE (A.OFFSET_FLAG = 0 AND A.DIRECTION_FLAG = 1) -- offset = 0,history 
+                 UNION
+                SELECT 
+                       A.TIME_FILTER_ID AS ID,
+                       (ROW_NUMBER() OVER (PARTITION BY A.TIME_FILTER_ID ORDER BY A.SEQUENCE DESC)) AS SEQUENCE,   
+                       A.TIME_INTERVAL_ID,          
+                       ADD_SECONDS(CURRENT_UTCTIMESTAMP,A.START_OFFSET) AS START_TIME,
+                       ADD_SECONDS(CURRENT_UTCTIMESTAMP,A.END_OFFSET) AS END_TIME,
+                       A.END_OFFSET - A.START_OFFSET AS INTERVAL
+                       FROM :sql0 A 
+                       WHERE (A.OFFSET_FLAG = 1 AND  A.DIRECTION_FLAG = 1 AND A.UNIT_ID = 1);-- offset = 1,but unit type is hour,so ignore the offset,history
+        
+     -- no offset,future or unit type is hour
+     TIME_INTERVAL_LIST2 = 
+                 SELECT 
+                       A.TIME_FILTER_ID AS ID,
+                       A.SEQUENCE,
+                       A.TIME_INTERVAL_ID,
+                       ADD_SECONDS(CURRENT_UTCTIMESTAMP,A.START_OFFSET) AS START_TIME,
+                       ADD_SECONDS(CURRENT_UTCTIMESTAMP,A.END_OFFSET) AS END_TIME,
+                       A.END_OFFSET - A.START_OFFSET AS INTERVAL
+                       FROM :sql0 A
+                       WHERE (A.OFFSET_FLAG = 0 AND A.DIRECTION_FLAG = 2) -- offset = 0, future
+                 UNION
+                SELECT 
+                       A.TIME_FILTER_ID AS ID,
+                       A.SEQUENCE,
+                       A.TIME_INTERVAL_ID,
+                       ADD_SECONDS(CURRENT_UTCTIMESTAMP,A.START_OFFSET) AS START_TIME,
+                       ADD_SECONDS(CURRENT_UTCTIMESTAMP,A.END_OFFSET) AS END_TIME,
+                       A.END_OFFSET - A.START_OFFSET AS INTERVAL
+                       FROM :sql0 A
+                       WHERE (A.OFFSET_FLAG = 1 AND A.DIRECTION_FLAG = 2 AND A.UNIT_ID = 1); -- offset = 1,but unit type is hour,so ignore the offset,history
+       
+     --unit type is not hour, offset is active, history      
+
+         sqlA1 = SELECT   
+                       A.TIME_FILTER_ID,
+                       A.SEQUENCE,
+                       A.TIME_INTERVAL_ID,
+                       A.UTC_START_TIMESTAMP AS START_TIME,
+                       CURRENT_UTCTIMESTAMP AS END_TIME
+                       FROM :sql0 A
+                       WHERE A.OFFSET_FLAG = 1 AND A.DIRECTION_FLAG = 1 AND A.UNIT_ID != 1 AND A.SEQUENCE = 1;
+                                                                                                                                 
+         sqlA2 = SELECT 
+                       A.TIME_FILTER_ID ,
+                       A.SEQUENCE,     
+                       A.TIME_INTERVAL_ID,             
+                       ADD_SECONDS(A.UTC_START_TIMESTAMP,A.START_OFFSET - B.START_OFFSET) AS START_TIME,
+                       ADD_SECONDS(A.UTC_START_TIMESTAMP,A.END_OFFSET - B.START_OFFSET) AS END_TIME
+                       FROM :sql0 A 
+                       INNER JOIN :sql0 B 
+                       ON A.TIME_FILTER_ID = B.TIME_FILTER_ID 
+                       AND B.SEQUENCE = 1
+                       WHERE A.OFFSET_FLAG = 1 AND A.DIRECTION_FLAG = 1 AND A.UNIT_ID != 1 AND A.SEQUENCE != 1;
+                       
+         sqlA = SELECT * FROM
+                       (
+                         SELECT * FROM :sqlA1
+                         UNION
+                         SELECT * FROM :sqlA2
+                       );
+                                                                                      
+         TIME_INTERVAL_LIST3 = SELECT 
+                       A.TIME_FILTER_ID AS ID,
+                       (ROW_NUMBER() OVER (PARTITION BY A.TIME_FILTER_ID ORDER BY A.START_TIME)) AS SEQUENCE,-- recount sequence
+                       A.TIME_INTERVAL_ID,
+                       A.START_TIME,
+                       A.END_TIME,
+                       SECONDS_BETWEEN(A.START_TIME,A.END_TIME) AS INTERVAL
+                       FROM :sqlA A
+                       ORDER BY A.START_TIME DESC;
+                                                                                                                                          
+    -- unit type is not hour, offset is active, future    
+         sqlB1 = SELECT   
+                       A.TIME_FILTER_ID,
+                       A.SEQUENCE,
+                       A.TIME_INTERVAL_ID,
+                       CURRENT_UTCTIMESTAMP AS START_TIME,
+                       A.UTC_START_TIMESTAMP AS END_TIME
+                       FROM :sql0 A
+                       WHERE A.OFFSET_FLAG = 1 AND A.DIRECTION_FLAG = 2 AND A.UNIT_ID != 1 AND A.SEQUENCE = 1;
+                                                                                                                                 
+         sqlB2 = SELECT 
+                       A.TIME_FILTER_ID ,
+                       A.SEQUENCE,     
+                       A.TIME_INTERVAL_ID,             
+                       ADD_SECONDS(A.UTC_START_TIMESTAMP,A.START_OFFSET - B.END_OFFSET) AS START_TIME,
+                       ADD_SECONDS(A.UTC_START_TIMESTAMP,A.END_OFFSET - B.END_OFFSET) AS END_TIME
+                       FROM :sql0 A 
+                       INNER JOIN :sql0 B 
+                       ON A.TIME_FILTER_ID = B.TIME_FILTER_ID 
+                       AND B.SEQUENCE = 1
+                       WHERE A.OFFSET_FLAG = 1 AND A.DIRECTION_FLAG = 2 AND A.UNIT_ID != 1 AND A.SEQUENCE != 1;
+                       
+         sqlB = SELECT * FROM
+                       (
+                         SELECT * FROM :sqlB1
+                         UNION
+                         SELECT * FROM :sqlB2
+                       );
+                                                                                           
+         TIME_INTERVAL_LIST4 = SELECT 
+                       A.TIME_FILTER_ID AS ID,
+                       (ROW_NUMBER() OVER (PARTITION BY A.TIME_FILTER_ID ORDER BY A.START_TIME)) AS SEQUENCE,-- recount sequence
+                       A.TIME_INTERVAL_ID,
+                       A.START_TIME,
+                       A.END_TIME,
+                       SECONDS_BETWEEN(A.START_TIME, A.END_TIME) AS INTERVAL
+                       FROM :sqlB A
+                       ORDER BY A.START_TIME; 
+                               
+         TIME_INTERVAL = SELECT * FROM 
+                   (
+                   SELECT * FROM :TIME_INTERVAL_LIST1 -- offset = 0, history or unit type is hour
+                   UNION
+                   SELECT * FROM :TIME_INTERVAL_LIST2 -- offset = 0, future or unit type is hour
+                   UNION
+                   SELECT * FROM :TIME_INTERVAL_LIST3 -- offset = 1 , history , unit type is not hour  
+                   UNION
+                   SELECT * FROM :TIME_INTERVAL_LIST4 -- offset = 1 , future , unit type is not hour
+                   ) A
+                   ORDER BY A.ID, A.SEQUENCE;
+END;

@@ -1,0 +1,47 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_ext_scenario_get"(
+    IN SCENARIO_ID BIGINT,
+    OUT SCENARIO "sap.tm.trp.db.planningcockpit::t_scenario",
+    OUT PLAN_MODEL "sap.tm.trp.db.pipeline::t_plan_model",
+    OUT SIMULATION_PLAN "sap.tm.trp.db.planningcockpit::t_simulation_plan",
+    OUT TIME_RANGE "sap.tm.trp.db.planningcockpit::tt_time_range_for_plan"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE FILTER_GROUP_ID BIGINT;
+    DECLARE EXECUTION_ID BIGINT;
+    DECLARE NODE_ID BIGINT;
+        
+    SCENARIO = 
+        SELECT * 
+        FROM "sap.tm.trp.db.planningcockpit::t_scenario" 
+        WHERE ID = :SCENARIO_ID;
+      
+    PLAN_MODEL = 
+        SELECT a.* 
+        FROM "sap.tm.trp.db.pipeline::t_plan_model" AS a
+        INNER JOIN "sap.tm.trp.db.planningcockpit::t_simulation_plan" AS b
+        ON a.ID = b.SD_PLAN_ID
+        INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" AS c
+        ON c.REL_SM_PLAN_ID = b.ID
+        AND c.ID = :SCENARIO_ID;
+        
+    SIMULATION_PLAN = SELECT p.*
+        FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" AS p
+        INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" AS s
+        ON p.ID = s.REL_SM_PLAN_ID
+        WHERE s.ID = :SCENARIO_ID;
+
+    SELECT IFNULL(MAX(EXCUTE_ID),0) INTO EXECUTION_ID 
+    FROM :SIMULATION_PLAN;
+    
+    CALL "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid" (:EXECUTION_ID, NODE_ID);
+
+    TIME_RANGE = SELECT DISTINCT START_TIME, END_TIME 
+         FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"
+         WHERE PLAN_EXECUTION_ID = :EXECUTION_ID AND NODE_ID = :NODE_ID
+         ORDER BY START_TIME ASC;    
+                      
+END;

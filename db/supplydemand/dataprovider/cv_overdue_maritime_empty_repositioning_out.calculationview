@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_overdue_maritime_empty_repositioning_out" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_order_supply_with_filters"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="NODE_ID" length="32"/>
+        <viewAttribute datatype="NVARCHAR" id="GEO_ID" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="GEO_NAME" length="100"/>
+        <viewAttribute datatype="INTEGER" id="GEO_FILTER_TYPE"/>
+        <viewAttribute datatype="NVARCHAR" id="EQUIP_TYPE" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="EQUIP_NAME" length="100"/>
+        <viewAttribute datatype="INTEGER" id="EQUIP_FILTER_TYPE"/>
+        <viewAttribute datatype="BIGINT" id="TIME_INTERVAL_ID"/>
+        <viewAttribute datatype="BIGINT" id="SEQUENCE"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_TIME"/>
+        <viewAttribute datatype="BIGINT" id="INTER_SECONDS"/>
+        <viewAttribute datatype="NVARCHAR" id="OUTPUT_KEY" length="20"/>
+        <viewAttribute datatype="INTEGER" id="OUTPUT_VALUE"/>
+        <viewAttribute datatype="NVARCHAR" id="UNIT" length="10"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> 
+  
+ BEGIN 
+     DECLARE Filter_Calflag BIGINT;   
+     DECLARE Unit VARCHAR(3); 
+     DECLARE FirstStartTime TIMESTAMP;
+     DECLARE FirstEndTime TIMESTAMP;
+     DECLARE FirstTimeIntervalID INTEGER;
+     DECLARE FirstSequene INTEGER;
+     DECLARE FirstInterSeconds INTEGER;
+     DECLARE ExtQueryAttrGrpId BIGINT;
+     DECLARE ext_query_str VARCHAR(2000);
+     DECLARE FILTER_CALCULATED_OK INTEGER := 1;
+     DECLARE RESOURCE_CATEGORY VARCHAR(20);
+     DECLARE VAL_ITEM_CAT VARCHAR(20);
+     
+     -- Get all the needed information:filter info, date offset, unit 
+     CALL &quot;sap.tm.trp.db.pipeline::p_prepare_info_for_providers_generic&quot;(shift_filtered_dates,filtered_locations,
+          filtered_equiptypes, Filter_Calflag, Unit, ExtQueryAttrGrpId,RESOURCE_CATEGORY);
+     
+     -- If the filered information are not calculated correctly, then return 
+     IF :Filter_Calflag &lt;> :FILTER_CALCULATED_OK THEN 
+        RETURN;
+     END IF;   
+
+     SELECT  &quot;VALUE&quot;  INTO VAL_ITEM_CAT
+     FROM &quot;sap.tm.trp.db.systemmanagement::t_config_cust&quot;
+     WHERE CODE =:RESOURCE_CATEGORY AND KEY = 'ITEM_CAT';
+     
+     -- the overdue data provider use the first time interval as the output 
+     SELECT TOP 1 START_TIMESTAMP, END_TIMESTAMP, TIME_INTERVAL_ID, SEQUENCE, INTER_SECONDS
+     INTO FirstStartTime, FirstEndTime, FirstTimeIntervalID, FirstSequene, FirstInterSeconds
+     FROM :shift_filtered_dates ORDER BY SEQUENCE ASC;    
+          
+     -- DEPOT MANAGER, return LOCATION_ID | EQUIP_TYPE | TIME_INTERVAL_ID | OUTPUT_KEY | OUTPUT_VALUE | UNIT
+     -- REGION PLANNER, return REGION_ID | EQUIP_TYPE | TIME_INTERVAL_ID | OUTPUT_KEY | OUTPUT_VALUE | UNIT
+	 
+     -- there is maritime stage for this RP TU, then consider it as maritime repositioning
+	 -- although have concern for the EXISTS performance, but it's faster than counting the maritime stage and do judgment
+     -- for the current stage
+     tmp_out = SELECT t2.DB_KEY AS TU_ITEM_KEY, b.GEO_GROUP_ID , c.EQUIP_GROUP_ID, t2.QUA_PCS_VAL
+              FROM  &quot;sap.tm.trp.db.semantic.order::v_transportation_unit&quot; t1 
+              INNER JOIN  &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_item&quot; t2 ON (t2.TU_KEY = t1.DB_KEY)
+              INNER JOIN &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_stop&quot; t3 ON (t3.TU_KEY = t1.DB_KEY)
+              INNER JOIN :filtered_equiptypes c on (c.EQUIP_CODE = t2.RESOURCE_TYPE) 
+              INNER JOIN  &quot;sap.tm.trp.db.semantic.resource::v_resource_category&quot; t6 
+              ON (t2.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :RESOURCE_CATEGORY)                             
+              INNER JOIN :filtered_locations b on (b.LOCATION_ID = t3.LOCATION_ID)             
+              WHERE t1.MOVEMENT_CAT = 'RP' 
+              AND t2.ITEM_CAT = :VAL_ITEM_CAT AND T3.STOP_ROLE = 'TF' AND T3.DEPARTURED = 0
+              AND T3.SEL_TIME > '19010101000000' AND T3.SEL_TIME &lt; :FirstStartTime 
+              AND EXISTS (SELECT DB_KEY FROM &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_stage&quot; 
+                                     WHERE TU_KEY = t1.DB_KEY AND MOT_CAT = '3');
+                                          
+      IF :ExtQueryAttrGrpId > 0 THEN
+          ATTR_NODE_ID_LIST = SELECT NODE_ID FROM &quot;sap.tm.trp.db.filter::t_attribute_group_item&quot; WHERE GROUP_ID = :ExtQueryAttrGrpId AND LOGIC_OPERATOR IS NULL ORDER BY SEQUENCE;
+          CALL &quot;sap.tm.trp.db.filter::p_attribute_group_filter_generate_dynamic&quot;(
+              :ExtQueryAttrGrpId, 
+              :ATTR_NODE_ID_LIST, 
+              ext_query_str
+          );
+          IF :ext_query_str != '' THEN
+              EXT_TBL = APPLY_FILTER(&quot;sap.tm.trp.db.semantic.order::v_transportation_unit_item_attributes&quot;, :ext_query_str);
+              tmp_out = SELECT MASTER_TBL.* FROM :tmp_out AS MASTER_TBL 
+                  INNER JOIN :EXT_TBL AS EXT_TBL ON (EXT_TBL.DB_KEY = MASTER_TBL.TU_ITEM_KEY);
+          END IF;
+      END IF;
+    
+     -- do aggregation 
+     sd_out =  SELECT GEO_GROUP_ID, EQUIP_GROUP_ID, SUM(QUA_PCS_VAL) AS QUANTITY  
+               FROM :tmp_out
+               GROUP BY GEO_GROUP_ID, EQUIP_GROUP_ID;              
+               
+                                             
+                
+      -- we append the sd values as 0 when there is no data from TOR (for all selected locations/selected types)                             
+      car_out =  SELECT DISTINCT a.GEO_GROUP_ID, a.GEO_NAME, a.GEO_FILTER_TYPE, b.EQUIP_GROUP_ID, b.EQUIP_NAME, b.EQUIP_FILTER_TYPE, 
+                 :FirstTimeIntervalID AS TIME_INTERVAL_ID, :FirstSequene AS SEQUENCE, :FirstStartTime AS START_TIME,
+                 :FirstEndTime AS END_TIME, :FirstInterSeconds AS INTER_SECONDS
+                  FROM :filtered_locations a , :filtered_equiptypes b ;  
+            
+      var_out  = SELECT 'OVERDUE_MARITIME_EMPTY_RP_OUT' AS NODE_ID, a.GEO_GROUP_ID AS GEO_ID, a.GEO_NAME, a.GEO_FILTER_TYPE, a.EQUIP_GROUP_ID AS EQUIP_TYPE,  
+                 a.EQUIP_NAME, a.EQUIP_FILTER_TYPE, a.TIME_INTERVAL_ID, a.SEQUENCE, a.START_TIME, a.END_TIME, a.INTER_SECONDS,
+                 'DEMAND' AS OUTPUT_KEY,  IFNULL(b.QUANTITY,0) AS OUTPUT_VALUE, :Unit AS UNIT
+                 FROM :car_out a 
+                 LEFT OUTER JOIN :sd_out b 
+                 ON (a.GEO_GROUP_ID = b.GEO_GROUP_ID AND a.EQUIP_GROUP_ID = b.EQUIP_GROUP_ID);
+  
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="NODE_ID" order="1">
+        <descriptions defaultDescription="DATA_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="NODE_ID"/>
+      </attribute>
+      <attribute id="GEO_ID" order="2">
+        <descriptions defaultDescription="GEO_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="GEO_ID"/>
+      </attribute>
+      <attribute id="GEO_NAME" hidden="false" order="3">
+        <descriptions defaultDescription="GEO_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="GEO_NAME"/>
+      </attribute>
+      <attribute id="GEO_FILTER_TYPE" hidden="false" order="4">
+        <descriptions defaultDescription="GEO_FILTER_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="GEO_FILTER_TYPE"/>
+      </attribute>
+      <attribute id="EQUIP_TYPE" order="5">
+        <descriptions defaultDescription="EQUIP_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_TYPE"/>
+      </attribute>
+      <attribute id="EQUIP_NAME" hidden="false" order="6">
+        <descriptions defaultDescription="EQUIP_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_NAME"/>
+      </attribute>
+      <attribute id="EQUIP_FILTER_TYPE" hidden="false" order="7">
+        <descriptions defaultDescription="EQUIP_FILTER_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_FILTER_TYPE"/>
+      </attribute>
+      <attribute id="TIME_INTERVAL_ID" order="8">
+        <descriptions defaultDescription="SEQUENCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_INTERVAL_ID"/>
+      </attribute>
+      <attribute id="SEQUENCE" hidden="false" order="9">
+        <descriptions defaultDescription="SEQUENCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SEQUENCE"/>
+      </attribute>
+      <attribute id="START_TIME" hidden="false" order="10">
+        <descriptions defaultDescription="START_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </attribute>
+      <attribute id="END_TIME" hidden="false" order="11">
+        <descriptions defaultDescription="END_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="END_TIME"/>
+      </attribute>
+      <attribute id="INTER_SECONDS" hidden="false" order="12">
+        <descriptions defaultDescription="INTER_SECONDS"/>
+        <keyMapping columnObjectName="Script_View" columnName="INTER_SECONDS"/>
+      </attribute>
+      <attribute id="OUTPUT_KEY" order="13">
+        <descriptions defaultDescription="OUTPUT_KEY"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUTPUT_KEY"/>
+      </attribute>
+      <attribute id="OUTPUT_VALUE" order="14">
+        <descriptions defaultDescription="QUANTITY"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUTPUT_VALUE"/>
+      </attribute>
+      <attribute id="UNIT" order="15">
+        <descriptions defaultDescription="UNIT"/>
+        <keyMapping columnObjectName="Script_View" columnName="UNIT"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

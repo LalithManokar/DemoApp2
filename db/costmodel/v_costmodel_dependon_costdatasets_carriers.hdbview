@@ -1,0 +1,31 @@
+schema = "SAP_TM_TRP";
+
+ query  = " 
+ --for get the cost dataset which defined carriers, the cost model's carrier filter list should be the subset of the cost dataset's carriers
+  SELECT T2.COST_DATASET_ID,T2.ID,T2.NAME1,T2.NAME2,T4.COUNTRY,T4.CITY
+  FROM \"sap.tm.trp.db.costmodel::v_costdatasets_carriers\" T2
+  INNER JOIN
+  (
+	SELECT COST_DATASET_ID,COUNT(1) AS NUM
+	FROM \"sap.tm.trp.db.costmodel::v_costdatasets_carriers\" t1
+	GROUP BY COST_DATASET_ID
+  )T3 ON (T2.COST_DATASET_ID = T3.COST_DATASET_ID AND T3.NUM>0)
+  INNER JOIN \"sap.tm.trp.db.costmodel::v_carrier\" T4 ON (T2.ID = T4.ID)
+UNION ALL
+--for the cost dataset which do not define carriers, the cost model's carrier filter list should be the subset of the v_carrier's subset
+  SELECT T3.COST_DATASET_ID,T2.ID,T2.NAME1,T2.NAME2,T2.COUNTRY,T2.CITY
+  FROM \"sap.tm.trp.db.costmodel::v_carrier\" T2
+  INNER JOIN 
+  (
+	SELECT T0.ID AS COST_DATASET_ID
+	FROM \"sap.tm.trp.db.costmodel::v_cost_dataset\" T0
+	LEFT OUTER JOIN \"sap.tm.trp.db.costmodel::v_costdatasets_carriers\" T1 ON (T0.ID = T1.COST_DATASET_ID)
+	WHERE T1.COST_DATASET_ID IS NULL
+  )T3 ON (1 =1)
+  
+           ";
+                 
+
+depends_on_view = ["sap.tm.trp.db.costmodel::v_carrier",
+"sap.tm.trp.db.costmodel::v_costdatasets_carriers",
+"sap.tm.trp.db.costmodel::v_cost_dataset"]; 

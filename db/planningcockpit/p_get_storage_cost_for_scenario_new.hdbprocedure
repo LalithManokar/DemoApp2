@@ -1,0 +1,66 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_storage_cost_for_scenario_new"    
+    ( IN SIMULATION_PLAN_ID BIGINT,
+      IN SCENARIO_ID BIGINT,      
+      OUT STORAGE_COST DOUBLE ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"   
+	AS
+BEGIN
+   DECLARE COST_MODEL_ID BIGINT := -1;
+   DECLARE V_SD_PLAN_ID BIGINT := -1;
+   DECLARE V_START_TIME TIMESTAMP;
+   DECLARE V_END_TIME TIMESTAMP;
+   DECLARE V_RESOURCE_CATEGORY_TYPE VARCHAR(10);
+   DECLARE V_RESOURCE_CATEGORY VARCHAR(50);
+   
+   DECLARE TMP_EXECUTION_ID BIGINT;
+   DECLARE TMP_NODE_ID BIGINT;
+   
+   --get resource_category_type
+   
+   
+       SELECT T2.RESOURCE_CATEGORY_TYPE, T1.RESOURCE_CATEGORY INTO V_RESOURCE_CATEGORY_TYPE,V_RESOURCE_CATEGORY
+           FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" T1
+   	       INNER JOIN "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings" T2 
+           ON T1.RESOURCE_CATEGORY = T2.CODE
+           WHERE T1.ID = :SIMULATION_PLAN_ID ;
+   
+
+ --Get cost model ID
+ SELECT IFNULL(MAX(T2.MANDATORY_COST_MODEL_ID),-1) INTO COST_MODEL_ID
+ FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" T1
+ INNER JOIN "sap.tm.trp.db.planningcockpit::t_network_setting_group" T2 ON (T1.NETWORK_SETTING_GROUP_ID = T2.ID)
+ INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" T3 ON (T1.ID = T3.REL_SM_PLAN_ID)
+ WHERE T3.ID = :SCENARIO_ID;
+ 
+   SELECT IFNULL(MAX(SD_PLAN_ID),-1) INTO V_SD_PLAN_ID
+   FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan"
+   WHERE ID = :SIMULATION_PLAN_ID ;
+   
+  -- sd results 
+  --CALL "sap.tm.trp.db.pickupreturn::p_get_plan_data_by_sd_planid"(:V_SD_PLAN_ID, NULL, V_SD_LF_ID, V_SD_EF_ID,V_EXECUTION_ID, V_NODE_ID, sd_res);
+  --t_sd_result = SELECT LOCATION_NAME AS LOCATION,EQUIP_TYPE_ID AS RESOURCE_TYPE, START_TIME, END_TIME, SUPPLY - STOCK AS SUPPLY, DEMAND, STOCK FROM :sd_res;
+
+  
+  --get execution id 
+  SELECT IFNULL(MAX(EXCUTE_ID),0) INTO TMP_EXECUTION_ID
+  FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan"
+  WHERE ID = :SIMULATION_PLAN_ID; 
+  --get default node
+  CALL  "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid"(:TMP_EXECUTION_ID, TMP_NODE_ID); 
+        
+  -- sd results 
+  CALL "sap.tm.trp.db.planningcockpit::p_prepare_sd_for_alert_regenerate"(:SCENARIO_ID,:V_SD_PLAN_ID,:TMP_EXECUTION_ID,:TMP_NODE_ID,SD_RESULT);
+   
+  t_sd_result = SELECT LOCATION_NAME AS LOCATION,EQUIP_TYPE_ID AS RESOURCE_TYPE, START_TIME, END_TIME, SUPPLY - STOCK AS SUPPLY, DEMAND, STOCK FROM :SD_RESULT;
+    
+  CALL "sap.tm.trp.db.costmodel.storagecost::p_get_cost_for_rb"(
+       :V_SD_PLAN_ID,
+       :V_RESOURCE_CATEGORY,
+       :COST_MODEL_ID,
+       :t_sd_result,
+       STORAGE_COST
+       );
+             
+END

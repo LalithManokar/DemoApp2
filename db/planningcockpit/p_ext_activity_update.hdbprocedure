@@ -1,0 +1,367 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_ext_activity_update" 
+   (IN ID  BIGINT,
+    IN FROM_LOCATION VARCHAR(22),
+    IN TO_LOCATION VARCHAR(22),
+    IN START_TIME DATETIME,
+    IN END_TIME DATETIME,
+    IN EQUIP_TYPE VARCHAR(22),
+    IN QUANTITY DECIMAL(13,3),
+    IN COST DECIMAL(13,3), 
+    IN CONTRACT_NO BIGINT,
+    IN ROUTE_ID BIGINT,
+    IN DESC VARCHAR(500),
+    IN LOAD_DISCHARGE_DETAIL "sap.tm.trp.db.planningcockpit::tt_load_discharge_detail",    
+    OUT MESSAGE VARCHAR(200),
+    OUT MODIFIED_BY VARCHAR(60)
+    )
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+   DECLARE ACT_EXIST INTEGER;
+   DECLARE USER_ID BIGINT;
+   DECLARE USERNAME VARCHAR(200);
+   DECLARE LOCK_USER VARCHAR(200);      
+   DECLARE V_TIMESTAMP_START  DATETIME  := CURRENT_UTCTIMESTAMP;
+   DECLARE V_LOCK_SESSION_ID  VARCHAR(200);  
+   DECLARE V_LOCK_USER_ID  BIGINT;  
+   DECLARE V_LOCK_LAST_MODIFYED_ON  TIMESTAMP; 
+   DECLARE V_PLAN_STATUS INTEGER;
+   DECLARE V_SIMULATION_ID  BIGINT; 
+   DECLARE SCENARIO_ID BIGINT;
+   DECLARE EXECUTION_ID BIGINT;
+   DECLARE WITHIN_LOC_NUM INTEGER;
+   DECLARE I_COUNT INTEGER; 
+   DECLARE ACTIVITY_TYPE INTEGER;
+   DECLARE STATUS_OK TINYINT :=0;
+   DECLARE STATUS_ACTIVITY_TIME_INVALID TINYINT :=1;
+   DECLARE STATUS_ACTIVITY_LOCATION_INVALID TINYINT :=2;
+   DECLARE STATUS_BOTH_TIME_AND_LOCATION_ARE_INVALID TINYINT :=3;
+   
+   DECLARE SCENARIO_STATUS_OK TINYINT :=0;
+   DECLARE SCENARIO_STATUS_INVALID TINYINT :=1;
+
+   --depot handling capacity check
+   DECLARE LV_SD_PLAN_ID BIGINT;
+   DECLARE LV_NETWORK_SETTING_GROUP_ID BIGINT;
+   DECLARE LV_HANDLING_CAPA INTEGER;
+   DECLARE LV_EXECUTION_ID BIGINT;
+   DECLARE LV_NODE_ID BIGINT;
+   DECLARE LV_RES_CAT NVARCHAR(20);
+   DECLARE LV_SRC_REMAINING_CAPACITY BIGINT;
+   DECLARE LV_DEST_REMAINING_CAPACITY BIGINT;
+   DECLARE LV_COUNT INTEGER;
+
+   DECLARE V_STATUS INTEGER := 0; --- VALID
+   DECLARE LOAD_DISCHARGE_TYPE INTEGER := 11; -- Load and discharge activity
+   DECLARE V_SCHEDULE NVARCHAR(40);
+   DECLARE V_VOYAGE NVARCHAR(10);
+   DECLARE V_TRIP_ID NVARCHAR(50);
+   DECLARE V_SAME_COUNT INTEGER;
+    
+   -- check whether the activity exist 
+   SELECT COUNT(1) INTO ACT_EXIST
+   FROM  "sap.tm.trp.db.planningcockpit::t_activity"
+   WHERE ID = :ID;
+   
+   IF :ACT_EXIST = 0 THEN 
+     MESSAGE:='MSG_ERROR_NODATA';
+     RETURN;      
+   END IF;  
+   
+   --get the activity type 
+   SELECT ACTIVITY_TYPE_ID INTO ACTIVITY_TYPE
+   FROM  "sap.tm.trp.db.planningcockpit::t_activity"
+   WHERE ID = :ID;
+
+   SELECT A.PLAN_STATUS,A.ID, B.ID
+   INTO V_PLAN_STATUS, V_SIMULATION_ID,SCENARIO_ID
+   FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" A,
+        "sap.tm.trp.db.planningcockpit::t_scenario" B,
+        "sap.tm.trp.db.planningcockpit::t_activity" C
+   WHERE A.ID=B.REL_SM_PLAN_ID AND C.REL_SCENARIO_ID=B.ID AND C.ID=:ID;   
+
+   CALL "sap.tm.trp.db.planningcockpit::p_ext_lock_simulation_plan_by_id"(:V_SIMULATION_ID, V_LOCK_SESSION_ID,
+                                        V_LOCK_USER_ID, V_LOCK_LAST_MODIFYED_ON); 
+       
+   SELECT USERNAME INTO USERNAME 
+   FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+   CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+
+   --Note: All the activities should do the location check. for the activity which only have from_location,
+   -- also could use following code to do the check becuase it used "OR" in where clause     
+      
+   SELECT IFNULL(MAX(T2.EXCUTE_ID),-1),MAX(T2.SD_PLAN_ID),MAX(T2.NETWORK_SETTING_GROUP_ID),MAX(T2.RESOURCE_CATEGORY)
+   INTO EXECUTION_ID, LV_SD_PLAN_ID, LV_NETWORK_SETTING_GROUP_ID,LV_RES_CAT
+   FROM "sap.tm.trp.db.planningcockpit::t_scenario" T1
+   INNER JOIN "sap.tm.trp.db.planningcockpit::t_simulation_plan" T2 ON (T2.ID = T1.REL_SM_PLAN_ID)
+   WHERE T1."ID" = :SCENARIO_ID;
+    
+    
+   IF :EXECUTION_ID > 0 THEN 
+         -- get locations within the location filter
+        CALL "sap.tm.trp.db.planningcockpit::p_get_loc_primaryloc_by_executionId"(:EXECUTION_ID, filter_locs);        
+         
+        SELECT COUNT(1) INTO WITHIN_LOC_NUM 
+        FROM :filter_locs	    
+	    WHERE LOCATION_ID = :FROM_LOCATION OR LOCATION_ID = :TO_LOCATION;
+       
+         -- both locations are not in the location filter, report error
+         IF :WITHIN_LOC_NUM = 0 THEN
+           MESSAGE := 'MSG_BOTH_LOCS_NOT_WITHIN_FILTER';
+           RETURN;          
+         END IF;
+         
+        IF :ACTIVITY_TYPE <> 11 THEN  
+                 
+	    --start time validity check:
+	    --The input start time should between now and end_time of the execution 
+	    SELECT COUNT(1) INTO I_COUNT
+	    FROM 
+	    (
+		    SELECT T1.END_DATE 
+		    FROM "sap.tm.trp.db.planningcockpit::v_time_filter_by_plan" T1
+		    INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" T2 ON (T1.SM_PLAN_ID = T2.REL_SM_PLAN_ID)
+			WHERE T2.ID = :SCENARIO_ID
+		)T2
+		WHERE T2.END_DATE > :START_TIME AND :START_TIME >CURRENT_UTCTIMESTAMP;
+		
+		IF :I_COUNT = 0 THEN
+           MESSAGE := 'MSG_ACTIVITY_TIME_INVLAID';
+           RETURN;          
+         END IF;
+        
+        END IF;  
+   ELSE 
+         -- can't get execution id, report error
+         MESSAGE := 'MSG_INVALID_ID';
+         RETURN;
+   END IF;
+   
+    --Location handling capacity check;
+	CALL "sap.tm.trp.db.planningcockpit::p_resource_balance_man_act_validation"(
+		:ID,
+		:ACTIVITY_TYPE,
+		:LV_NETWORK_SETTING_GROUP_ID,
+		:LV_SD_PLAN_ID,
+		:SCENARIO_ID,
+		:LV_RES_CAT,
+		:QUANTITY,
+		:FROM_LOCATION,
+		:TO_LOCATION,
+		:START_TIME,
+		:END_TIME,
+		:LOAD_DISCHARGE_DETAIL,
+		MESSAGE
+	);
+	IF MESSAGE <> '' THEN
+		RETURN;
+	END IF ;     
+   
+    --Route exists check:
+    IF :ROUTE_ID >0 THEN 
+    	 SELECT COUNT(1) INTO I_COUNT
+      	 FROM "sap.tm.trp.routing.db.path::t_route" WHERE ID = :ROUTE_ID; 
+      	  
+	      IF I_COUNT = 0 THEN
+	         MESSAGE := 'MSG_ACTIVITY_ROUTE_NOT_EXISTS';
+	         RETURN;
+	      END IF;
+	      
+	       /*--Check if : Route From/To locations = Activity From / To locations 
+	        SELECT COUNT(1) INTO I_COUNT
+	        FROM "sap.tm.trp.routing.db.path::t_route" T1
+	        INNER JOIN "sap.tm.trp.db.semantic.location::v_all_location" T2 ON (T1.FROM_LOCATION = T2.NAME)
+	        INNER JOIN "sap.tm.trp.db.semantic.location::v_all_location" T3 ON (T1.TO_LOCATION = T3.NAME)
+	        WHERE T1.ID = :ROUTE_ID AND T2.ID = :FROM_LOCATION AND (T3.ID = :TO_LOCATION OR :TO_LOCATION IS NULL OR :TO_LOCATION = '');
+	      */
+	       --Check if : The from/to location of the basic path sequence of the Route should equals the  Activity From / To locations 
+	       --for example: if the route is: A-> B -> C -> D, then, it should mathc the activity which from/to equals: A->B, A->C,A->D,B->C,B->D,C->D.
+	       
+	      SQL_ROUTE_STOPS
+	       = SELECT DISTINCT T3.LOCATION AS FROM_LOCATION,T4.LOCATION AS TO_LOCATION 
+			FROM
+			(
+				SELECT T0.FROM_LOCATION AS LOCATION,T0.SEQUENCE
+				FROM "sap.tm.trp.routing.db.dataset::cv_route_sequence" T0  
+				WHERE T0.ROUTE_ID = :ROUTE_ID
+				UNION ALL 
+				SELECT T1.TO_LOCATION AS LOCATION,T1.SEQUENCE + 1 AS SEQUENCE
+				FROM (SELECT * FROM "sap.tm.trp.routing.db.dataset::cv_route_sequence" WHERE ROUTE_ID = :ROUTE_ID)T1
+				INNER JOIN 
+				(
+				 SELECT MAX(A.SEQUENCE) AS MAX_SEQUENCE 
+				 FROM "sap.tm.trp.routing.db.dataset::cv_route_sequence" A   
+				 WHERE A.ROUTE_ID = :ROUTE_ID
+				)T2 ON(T1.SEQUENCE = T2.MAX_SEQUENCE)
+			)T3
+			INNER JOIN 
+			(
+				SELECT T0.FROM_LOCATION AS LOCATION,T0.SEQUENCE
+				FROM "sap.tm.trp.routing.db.dataset::cv_route_sequence" T0  
+				WHERE T0.ROUTE_ID = :ROUTE_ID
+				UNION ALL 
+				SELECT T1.TO_LOCATION AS LOCATION,T1.SEQUENCE + 1 AS SEQUENCE
+				FROM (SELECT * FROM "sap.tm.trp.routing.db.dataset::cv_route_sequence" WHERE ROUTE_ID = :ROUTE_ID)T1
+				INNER JOIN 
+				(
+				 SELECT MAX(B.SEQUENCE) AS MAX_SEQUENCE 
+				 FROM "sap.tm.trp.routing.db.dataset::cv_route_sequence" B  
+				 WHERE B.ROUTE_ID = :ROUTE_ID
+				)T2 ON(T1.SEQUENCE = T2.MAX_SEQUENCE)
+			)T4 ON (T3.SEQUENCE < T4.SEQUENCE );
+			
+			 SELECT COUNT(1) INTO I_COUNT
+	        FROM :SQL_ROUTE_STOPS T1
+	        INNER JOIN "sap.tm.trp.db.semantic.location::v_all_location" T2 ON (T1.FROM_LOCATION = T2.NAME)
+	        INNER JOIN "sap.tm.trp.db.semantic.location::v_all_location" T3 ON (T1.TO_LOCATION = T3.NAME)
+	        WHERE T2.ID = :FROM_LOCATION 
+	        AND (T3.ID = :TO_LOCATION OR :TO_LOCATION IS NULL OR :TO_LOCATION = '');
+	      
+	      
+	      
+	        IF I_COUNT =0 THEN
+	          MESSAGE := 'MSG_ACTIVITY_LOCATION_NOT_MATCH_WITH_ROUTE';
+	          RETURN;
+	        END IF;
+	        
+	        --Check Route start time & end time is totally in Activity Start & End time
+	        SELECT COUNT(1) INTO I_COUNT
+	        FROM "sap.tm.trp.routing.db.path::t_route" 
+	        WHERE DEPARTURE_TIME BETWEEN :START_TIME AND :END_TIME AND ARRIVAL_TIME BETWEEN :START_TIME AND :END_TIME ;
+	        
+	        IF I_COUNT = 0 THEN
+	          MESSAGE := 'MSG_ROUTE_TIME_NOT_WITHIN_ACTIVITY_TIME';
+	          RETURN;
+	        END IF;
+    END IF;
+        
+   IF  :V_LOCK_USER_ID = :USER_ID  AND 
+       :V_LOCK_LAST_MODIFYED_ON IS NOT NULL THEN
+        
+     IF V_PLAN_STATUS=1 THEN       
+        MESSAGE:='MSG_ERROR_FINALIZED'; 
+        MODIFIED_BY :=USERNAME; 
+     ELSEIF V_PLAN_STATUS=-1 THEN   
+        MESSAGE:='MSG_SD_PLAN_OVERDUE_PC';  
+        MODIFIED_BY :=USERNAME;     
+     ELSE     
+        
+     --update used quota of lease contract for on-hire/off-hire activity
+     IF :ACTIVITY_TYPE = 3 OR :ACTIVITY_TYPE = 4 OR :ACTIVITY_TYPE = 7 OR :ACTIVITY_TYPE = 8 THEN
+         UPDATE "sap.tm.trp.db.planningcockpit::t_used_lease_quota"
+          SET LEASE_CONTRACT_ID = :CONTRACT_NO,
+              LOCATION_ID = :FROM_LOCATION,
+              RESOURCE_TYPE = :EQUIP_TYPE,
+              PLANNED_HIRE_TIME = :START_TIME,
+              ACTUAL_HIRE_TIME = :START_TIME,
+              PLANNED_QUANTITY = :QUANTITY,
+              MODIFIED_BY = :USER_ID,
+              MODIFIED_ON = :V_TIMESTAMP_START;  
+                  
+      -- update load discharge details if it's load/discharge activity
+      ELSEIF :ACTIVITY_TYPE = 11 THEN 
+           
+         DELETE FROM "sap.tm.trp.db.planningcockpit::t_load_discharge_activity_detail" WHERE ACTIVITY_ID = :ID;
+         
+         INSERT INTO "sap.tm.trp.db.planningcockpit::t_load_discharge_activity_detail"
+                   (ACTIVITY_ID,STOP_ID,STOP_NAME,SEQUENCE,ARRIVAL_TIME,DEPARTURE_TIME,SCHEDULE,VOYAGE,TRIP_ID,
+                    VEHICLE,VEHICLE_TYPE,ORIGINAL_LOAD,UPDATED_LOAD,ORIGINAL_DISCHARGE,
+                    UPDATED_DISCHARGE,TOTAL_CAPACITY,EMPTY_STOCK,STATUS,
+                    ORIGINAL_LOAD_TEU,ORIGINAL_DISCHARGE_TEU, TOTAL_CAPACITY_TEU,EMPTY_STOCK_TEU) 
+                   SELECT :ID,STOP_ID,STOP,SEQUENCE,PLAN_ARRIVAL_TIME,PLAN_DEPARTURE_TIME,SCHEDULE,
+                          VOYAGE,TRIP_ID,VEHICLE,VEHICLE_TYPE,LOAD_QUANTITY,UPDATED_LOAD_QUANTITY,DISCHARGE_QUANTITY,
+                          UPDATED_DISCHARGE_QUANTITY,TOTAL_CAPACITY,EMPTY_STOCK,STATUS,
+                          LOAD_QUANTITY_TEU,DISCHARGE_QUANTITY_TEU,TOTAL_CAPACITY_TEU,EMPTY_STOCK_TEU
+                   FROM :LOAD_DISCHARGE_DETAIL; 
+                   
+      -- change to manual reposition activity if it's proposed activity              
+      ELSEIF :ACTIVITY_TYPE = 2 THEN 
+         ACTIVITY_TYPE := 1;              
+         
+      END IF; -- special activity type check 
+
+      UPDATE "sap.tm.trp.db.planningcockpit::t_activity"
+        SET ACTIVITY_TYPE_ID=:ACTIVITY_TYPE,
+            FROM_LOC_ID=:FROM_LOCATION,
+            TO_LOC_ID=:TO_LOCATION,
+            EQUIP_TYPE=:EQUIP_TYPE,
+            QUANTITY=:QUANTITY,
+            COST=:COST,
+            START_TIME=:START_TIME,
+            END_TIME=:END_TIME,
+            CONTRACT_NO=:CONTRACT_NO,
+            ROUTE_ID=:ROUTE_ID,
+            FLAG=0,
+            STATUS=0,
+            MODIFIED_BY=:USER_ID,
+            MODIFIED_ON=:V_TIMESTAMP_START
+      WHERE ID=:ID;
+    
+      UPDATE "sap.tm.trp.db.planningcockpit::t_activity_t"
+        SET DESC=IFNULL(:DESC,'')
+      WHERE ID=:ID;  
+               
+      --update scenario, set the balance cost to be 0
+      UPDATE "sap.tm.trp.db.planningcockpit::t_scenario"
+        SET BALANCING_COST = NULL,
+            STORAGE_COST = NULL,
+            FRESH_FLAG = -1
+      WHERE ID = :SCENARIO_ID;
+      
+      --once the activity has been change, the scenario should be refreshed:
+       UPDATE "sap.tm.trp.db.planningcockpit::t_scenario"
+        SET BALANCING_COST = NULL,
+            STORAGE_COST = NULL,
+            FRESH_FLAG = -1
+      WHERE ID = :SCENARIO_ID;
+      
+      --update the scenario's activity status since one of the activity of the scenario has been changed:
+       UPDATE T0
+            SET T0.ACTIVITY_STATUS = IFNULL(T5.SCENARIO_STATUS,0)
+            FROM "sap.tm.trp.db.planningcockpit::t_scenario" T0
+            LEFT OUTER JOIN 
+            (
+	            SELECT T4.SCENARIO_ID, CASE WHEN STATUS_SUM >0 THEN :SCENARIO_STATUS_INVALID ELSE :SCENARIO_STATUS_OK END AS SCENARIO_STATUS
+	            FROM 
+	            (
+		                SELECT T3.SCENARIO_ID, SUM(T3.STATUS) AS STATUS_SUM
+		                FROM
+		                (
+			              SELECT DISTINCT T1.REL_SCENARIO_ID AS SCENARIO_ID,IFNULL(T1.STATUS,0) AS STATUS
+			               FROM "sap.tm.trp.db.planningcockpit::t_activity" T1
+			               WHERE REL_SCENARIO_ID = :SCENARIO_ID 
+			               AND T1.STATUS IN (:STATUS_ACTIVITY_TIME_INVALID, :STATUS_ACTIVITY_LOCATION_INVALID,:STATUS_BOTH_TIME_AND_LOCATION_ARE_INVALID)
+			             )T3
+			             GROUP BY T3.SCENARIO_ID
+	              )T4
+	           )T5 ON (T0.ID = T5.SCENARIO_ID)
+	           WHERE T0.ID = :SCENARIO_ID
+	           AND T0.ACTIVITY_STATUS <> IFNULL(T5.SCENARIO_STATUS,0);
+                            
+      --update record in t_simulation_plan
+      UPDATE "sap.tm.trp.db.planningcockpit::t_simulation_plan" 
+        SET MODIFIED_ON=:V_TIMESTAMP_START,
+            MODIFIED_BY=:USER_ID
+      WHERE ID=:V_SIMULATION_ID;
+                
+      --update lock  
+      UPDATE "sap.tm.trp.db.planningcockpit::t_lock"
+        SET  USER_ID= :USER_ID,
+            LAST_MODIFYED_ON = :V_TIMESTAMP_START                     
+      WHERE SIMULATION_ID=:V_SIMULATION_ID;                   
+
+      MESSAGE := 'MSG_SUCCESS_STATUS';       
+      MODIFIED_BY := USERNAME;  
+      
+    END IF; -- simulation plan status check
+  
+ ELSE 
+   MESSAGE:='MSG_ERROR_LOCKED';
+   SELECT USERNAME INTO LOCK_USER
+     FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE ID = :V_LOCK_USER_ID;
+          MODIFIED_BY := :LOCK_USER; 
+ END IF;  -- cursor check 
+END;

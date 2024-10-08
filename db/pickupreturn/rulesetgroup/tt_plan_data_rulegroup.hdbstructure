@@ -1,0 +1,25 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "sd and stock of location";
+table.columns = [
+  {name = "PLAN_ID"; sqlType = BIGINT;},
+  {name = "PLAN_EXECUTION_ID"; sqlType = INTEGER; }, 
+  {name = "NODE_ID"; sqlType = BIGINT; },
+  {name = "EQUIP_TYPE_ID"; sqlType = VARCHAR; length=20;},  
+  {name = "EQUIP_TYPE_NAME"; sqlType = VARCHAR; length=20;},
+  {name = "LOCATION_ID"; sqlType = VARCHAR; length=22;},
+  {name = "LOCATION_NAME"; sqlType = VARCHAR; length=50;},     
+  {name = "SUPPLY"; sqlType = INTEGER; },  
+  {name = "DEMAND"; sqlType = INTEGER; }, 
+  {name = "BALANCE_SUPPLY_DEMAND"; sqlType = INTEGER; },  
+  {name = "BALANCE_STOCK_SUPPLY_DEMAND"; sqlType = INTEGER; }, 
+  {name = "MIN_SAFETY_STOCK"; sqlType = INTEGER; },   
+  {name = "MAX_SAFETY_STOCK"; sqlType = INTEGER; },  
+  {name = "MAX_CAPACITY"; sqlType = INTEGER; },
+  {name = "MIN_SAFETY_STOCK_HEADER"; sqlType = INTEGER; },   
+  {name = "MAX_SAFETY_STOCK_HEADER"; sqlType = INTEGER; },  
+  {name = "MAX_CAPACITY_HEADER"; sqlType = INTEGER; },
+  {name = "STOCK_BALANCE_HEADER"; sqlType = INTEGER; },
+  {name = "START_TIME"; sqlType = TIMESTAMP; },
+  {name = "END_TIME"; sqlType = TIMESTAMP; }
+];

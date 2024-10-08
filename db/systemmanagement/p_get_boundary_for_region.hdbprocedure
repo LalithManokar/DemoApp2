@@ -1,0 +1,45 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_get_boundary_for_region" (
+IN ROOT_IDS "sap.tm.trp.db.systemmanagement::tt_division_id",
+OUT BOUNDARY_GEO_TEXT "sap.tm.trp.db.systemmanagement::tt_geotext"
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+
+BEGIN
+
+   
+   --Get boundary by all locations
+   a = 
+		SELECT T1.ID, T2.XPOS, T2.YPOS, T2.COUNTRY_CODE, T2.STATE_CODE FROM
+		:ROOT_IDS T1 
+		INNER JOIN "sap.tm.trp.db.systemmanagement.location::v_region_location_for_boundary" T2
+		ON T1.ID = T2.ROOT_ID
+		WHERE (T2.XPOS IS NOT NULL AND T2.YPOS IS NOT NULL) AND (ABS(T2.XPOS) + ABS(T2.YPOS) > 0);
+		--ORDER BY ID;
+
+
+	
+    
+    BOUNDARY_GEO_TEXT= 
+    SELECT ID, 
+			TO_CLOB(CONCAT
+			(
+				CONCAT(
+					'MultiPoint(',
+							STRING_AGG(
+                     			'(' || XPOS || ' ' || YPOS || ')' , ',')
+          		)--CONCAT2
+          		,')'
+          	) )
+          	 AS GEOTEXT, COUNT(*) AS NUM FROM (
+          	 --SELECT ID, MAP(XPOS,NULL,-9999,0,-9999,XPOS) AS XPOS,MAP(YPOS,NULL,-9999,0,-9999,YPOS) AS YPOS
+          	 SELECT ID,XPOS,YPOS
+          	  FROM :a 
+          	 ) T1 GROUP BY ID;
+          	 
+          	
+          
+  
+END;

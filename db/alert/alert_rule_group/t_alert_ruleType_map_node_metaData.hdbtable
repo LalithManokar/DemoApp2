@@ -1,0 +1,13 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "ALERT_RULE_TYPE_ID"; sqlType = INTEGER; comment="1:STOCK_TODAY, 2:STOCK_TIME_WINDOW, 3:TOR_SUPPLY/FORECAST_SUPPLY, 4:TOR_DEMAND/FORECAST_DEMAND, 5:TOR_SUPPLY_DEMAND/FORECAST_SUPPLY_DEMAND";},
+    {name = "ALERT_RULE_TYPE_DESC"; sqlType = VARCHAR; length = 50; comment="1:STOCK_TODAY, 2:STOCK_TIME_WINDOW, 3:TOR_SUPPLY/FORECAST_SUPPLY, 4:TOR_DEMAND/FORECAST_DEMAND, 5:TOR_SUPPLY_DEMAND/FORECAST_SUPPLY_DEMAND";},
+    {name = "DATA_OBJECT_ID"; sqlType = INTEGER;comment="1:STOCK_TODAY, 2:STOCK_TIME_WINDOW, 3:TOR_SUPPLY/FORECAST_SUPPLY, 4:TOR_DEMAND/FORECAST_DEMAND, 5:TOR_SUPPLY_DEMAND/FORECAST_SUPPLY_DEMAND";},
+    {name = "DATA_OBJECT_FORMAT"; sqlType = VARCHAR; length = 200;comment="1:STOCK, 2:STOCK_SUPPLY_DEMAND, 3:SUPPLY, 4:DEMAND, 5:SUPPLY_DEMAND";},
+    {name = "EXECUTE_CONTEXT_ID"; sqlType = INTEGER;},
+    {name = "EXECUTE_CONTEXT_FORMAT"; sqlType = VARCHAR; length = 400;},
+    {name = "OBJECT_TYPE_ID"; sqlType = INTEGER; comment = "Refer to ID in db.objectregistration::t_object_type";},
+    {name = "PROCEDURE_CONSTRAINT"; sqlType = VARCHAR; length = 100; comment = "Filter value when choosing procedures for alert";}
+    ];
+table.primaryKey.pkcolumns = ["ALERT_RULE_TYPE_ID"];

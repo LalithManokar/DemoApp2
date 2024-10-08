@@ -1,0 +1,332 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_save_virtual_tree"(
+    IN IN_PLAN_MODEL_ID BIGINT  
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+ 
+ DECLARE VAR_LOCATION_TYPE INTEGER :=-1 ;
+ DECLARE VAR_LOCATION_FILTER_ID INTEGER :=-1 ;
+ DECLARE LOCATION_TYPE_LOCATION INTEGER := 1;
+ DECLARE LOCATION_TYPE_LOCATION_GROUP INTEGER := 2;
+ DECLARE LOCATION_TYPE_ZONE INTEGER := 3;
+ DECLARE LOCATION_TYPE_ZONE_GROUP INTEGER := 4;
+ DECLARE LOCATION_TYPE_REGION INTEGER := 5;
+ DECLARE LOCATION_TYPE_REGION_GROUP INTEGER := 6;
+ DECLARE I_COUNT INTEGER := 0;
+ DECLARE VAR_DEPOT_LEVEL INTEGER ;
+ DECLARE METADATA_NODE_ID_NUM INTEGER;
+ DECLARE DEFAULT_METADATA_NODE_NUM INTEGER;
+ DECLARE PP_ID INTEGER;
+ DECLARE DEFAULT_NODE_NAME VARCHAR(200);
+	
+ 
+ --Get the pp list of the vp:
+ PP_ID_LIST = SELECT PERSISTED_PLAN_MODEL_ID AS ID 
+              FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" 
+              WHERE VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_MODEL_ID;
+ 
+ --Get the location type of the vp's location filter
+ 
+ SQL_LOCATION_FILTER = SELECT DISTINCT T3.ID, T3.LOCATION_TYPE
+FROM "sap.tm.trp.db.pipeline::t_plan_model" t1
+INNER JOIN "sap.tm.trp.db.filter::t_filter_location_filter"  t2 on (t1.filter_group_id = t2.filter_group_id)
+INNER JOIN "sap.tm.trp.db.filter::t_location_filter" t3 on (t2.location_filter_id = t3.id) 
+WHERE T1.ID = :IN_PLAN_MODEL_ID;
+
+
+ SELECT COUNT(1) INTO I_COUNT
+ FROM :SQL_LOCATION_FILTER;
+ 
+ IF I_COUNT >0 THEN
+ 	SELECT LOCATION_TYPE,ID 
+	INTO VAR_LOCATION_TYPE,VAR_LOCATION_FILTER_ID
+	FROM :SQL_LOCATION_FILTER;
+ END IF;
+ 
+
+--Get the pps with intersection of node
+   CALL "sap.tm.trp.db.pipeline::p_get_intersection_name_of_nodes_for_plan_model"(:PP_ID_LIST,SQL_INTERSECTION_NAME_LIST);
+   out_virtual_plan_node_name = SELECT NAME FROM :SQL_INTERSECTION_NAME_LIST;
+
+
+--Get the output dataset of the pps of the vp:
+ --Check which location has output dataset of the of the intersection node of the pps of the VP:
+ PPS_LOCATION_LIST = SELECT DISTINCT T4.LOCATION_ID, :LOCATION_TYPE_LOCATION AS LOCATION_TYPE
+ FROM  "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" T1
+ INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T2 ON (T1.PERSISTED_PLAN_MODEL_ID = T2.ID)
+ INNER JOIN "sap.tm.trp.db.filter::t_filter_location_filter" T3 ON (T2.FILTER_GROUP_ID = T3.FILTER_GROUP_ID) 
+ INNER JOIN "sap.tm.trp.db.filter::t_location_filter_location" T4 ON (T3.LOCATION_FILTER_ID = T4.LOCATION_FILTER_ID)
+ WHERE T1.VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_MODEL_ID AND  T4.LOCATION_ID IS NOT NULL
+ UNION ALL 
+ SELECT DISTINCT T4.LOCATION_GROUP_ID AS LOCATION_ID, :LOCATION_TYPE_LOCATION_GROUP AS LOCATION_TYPE
+ FROM  "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" T1
+ INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T2 ON (T1.PERSISTED_PLAN_MODEL_ID = T2.ID)
+ INNER JOIN "sap.tm.trp.db.filter::t_filter_location_filter" T3 ON (T2.FILTER_GROUP_ID = T3.FILTER_GROUP_ID) 
+ INNER JOIN "sap.tm.trp.db.filter::t_location_filter_location" T4 ON (T3.LOCATION_FILTER_ID = T4.LOCATION_FILTER_ID)
+ WHERE T1.VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_MODEL_ID AND  T4.LOCATION_GROUP_ID IS NOT NULL
+ UNION ALL
+ SELECT DISTINCT T4.ZONE_ID AS LOCATION_ID, :LOCATION_TYPE_REGION AS LOCATION_TYPE
+ FROM  "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" T1
+ INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T2 ON (T1.PERSISTED_PLAN_MODEL_ID = T2.ID)
+ INNER JOIN "sap.tm.trp.db.filter::t_filter_location_filter" T3 ON (T2.FILTER_GROUP_ID = T3.FILTER_GROUP_ID) 
+ INNER JOIN "sap.tm.trp.db.filter::t_location_filter_region" T4 ON (T3.LOCATION_FILTER_ID = T4.LOCATION_FILTER_ID)
+ WHERE T1.VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_MODEL_ID AND  T4.ZONE_ID IS NOT NULL
+ UNION ALL
+ SELECT DISTINCT T4.REGION_GROUP_ID AS LOCATION_ID, :LOCATION_TYPE_REGION_GROUP AS LOCATION_TYPE
+ FROM  "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" T1
+ INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T2 ON (T1.PERSISTED_PLAN_MODEL_ID = T2.ID)
+ INNER JOIN "sap.tm.trp.db.filter::t_filter_location_filter" T3 ON (T2.FILTER_GROUP_ID = T3.FILTER_GROUP_ID) 
+ INNER JOIN "sap.tm.trp.db.filter::t_location_filter_region" T4 ON (T3.LOCATION_FILTER_ID = T4.LOCATION_FILTER_ID)
+ WHERE T1.VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_MODEL_ID AND  T4.REGION_GROUP_ID IS NOT NULL;
+ 
+  --only one layer for the location:
+ IF :VAR_LOCATION_TYPE = :LOCATION_TYPE_LOCATION THEN
+  
+  out_vp_location_info = SELECT T1.LOCATION_ID,T2.NAME AS LOCATION_NAME,--:LOCATION_TYPE_LOCATION AS LOCATION_TYPE,
+  T3.LOCATION_TYPE,
+  NULL AS HAS_OUTPUT_DATASET_FLAG,100 AS LEVEL
+  FROM "sap.tm.trp.db.filter::t_location_filter_location" T1
+  INNER JOIN :PPS_LOCATION_LIST T3 ON (T1.LOCATION_ID = T3.LOCATION_ID AND LOCATION_TYPE = :LOCATION_TYPE_LOCATION)
+  INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T2 ON (T1.LOCATION_ID = T2.ID)
+  WHERE T1.LOCATION_FILTER_ID = :VAR_LOCATION_FILTER_ID ;
+  
+   out_vp_hierarchy = SELECT NULL AS LOCATION_ID,NULL AS LOCATION_TYPE,
+                      NULL AS LOCATION_CHILD_ID, NULL AS LOCATION_CHILD_TYPE
+                      FROM DUMMY;
+    
+                      
+  --only one layer for the location group:
+ ELSEIF :VAR_LOCATION_TYPE = :LOCATION_TYPE_LOCATION_GROUP THEN
+ 
+  out_vp_location_info = SELECT  T1.LOCATION_GROUP_ID AS LOCATION_ID,T3.DESC AS LOCATION_NAME, 
+  --:LOCATION_TYPE_LOCATION_GROUP AS LOCATION_TYPE,
+  T2.LOCATION_TYPE,
+  NULL AS HAS_OUTPUT_DATASET_FLAG,100 AS LEVEL
+  FROM "sap.tm.trp.db.filter::t_location_filter_location" T1
+  INNER JOIN :PPS_LOCATION_LIST T2 ON (T1.LOCATION_GROUP_ID = T2.LOCATION_ID)
+  INNER JOIN "sap.tm.trp.db.systemmanagement::t_location_group" T3 ON (T1.LOCATION_GROUP_ID = T3.ID)
+  WHERE T1.LOCATION_FILTER_ID = :VAR_LOCATION_FILTER_ID;
+  
+   
+   out_vp_hierarchy = SELECT NULL AS LOCATION_ID,NULL AS LOCATION_TYPE,
+                      NULL AS LOCATION_CHILD_ID, NULL AS LOCATION_CHILD_TYPE
+                      FROM DUMMY;
+   
+   
+  --max layer: 2 or more than 2 layer: (the region may only have zone and it's related location, or the zone have child zone, and the child zone have child zone.... 
+  -- so the layer is depend on the vp's physical hierarchy tree. )                   
+  ELSEIF :VAR_LOCATION_TYPE = :LOCATION_TYPE_REGION THEN
+		
+		  temp_vp_location_info = 
+		   SELECT DISTINCT T10.LOCATION_ID,T10.LOCATION_NAME,T10.LOCATION_TYPE,T10.HAS_OUTPUT_DATASET_FLAG,T10.LEVEL
+		   FROM
+		( --all the zones belongs to physical tree of the region filter that have been defined in pp list
+		 SELECT t2.ZONE_ID AS LOCATION_ID, T4.NAME AS LOCATION_NAME,
+		 --CASE WHEN T2.ZONE_ID = T2.ROOT_ID THEN :LOCATION_TYPE_REGION ELSE :LOCATION_TYPE_ZONE END AS LOCATION_TYPE,
+		 T3.LOCATION_TYPE,
+		 NULL AS HAS_OUTPUT_DATASET_FLAG,T2.LEVEL
+		 FROM "sap.tm.trp.db.filter::t_location_filter_region" T1
+		 INNER JOIN "sap.tm.trp.db.systemmanagement.location::t_region_item" T2 ON (T1.ZONE_ID = T2.ROOT_ID)
+		 INNER JOIN :PPS_LOCATION_LIST T3 ON (T2.ZONE_ID = T3.LOCATION_ID AND T3.LOCATION_TYPE >1)
+		 LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_zone" T4 ON (T2.ZONE_ID = T4.ID)
+		 WHERE T1.LOCATION_FILTER_ID = :VAR_LOCATION_FILTER_ID
+		 UNION ALL
+		 --the zones that do not been defined in pp list itself, but have children zones that in pp list
+		 SELECT t2.ZONE_ID AS LOCATION_ID, T6.NAME AS LOCATION_NAME,
+		 --CASE WHEN T2.ZONE_ID = T2.ROOT_ID THEN :LOCATION_TYPE_REGION ELSE :LOCATION_TYPE_ZONE END AS LOCATION_TYPE,
+		 --T5.LOCATION_TYPE,
+		 :LOCATION_TYPE_REGION AS LOCATION_TYPE,
+		 NULL AS HAS_OUTPUT_DATASET_FLAG,T2.LEVEL
+		 FROM "sap.tm.trp.db.filter::t_location_filter_region" T1
+		 INNER JOIN "sap.tm.trp.db.systemmanagement.location::t_region_item" T2 ON (T1.ZONE_ID = T2.ROOT_ID)
+		 LEFT OUTER JOIN :PPS_LOCATION_LIST T3 ON (T2.ZONE_ID = T3.LOCATION_ID  AND T3.LOCATION_TYPE >1)
+		 INNER JOIN "sap.tm.trp.db.systemmanagement.location::t_region_item" T4 ON (T2.ZONE_ID = T4.ROOT_ID )
+		       --children in pp list
+		 INNER JOIN :PPS_LOCATION_LIST T5 ON (T4.ZONE_ID = T5.LOCATION_ID AND T5.LOCATION_TYPE >1)
+		 LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_zone" T6 ON (T2.ZONE_ID = T6.ID)
+		 WHERE T1.LOCATION_FILTER_ID = :VAR_LOCATION_FILTER_ID 
+		 AND  T3.LOCATION_ID IS NULL 
+		 --The zones are not in pp list  itself, but have locations  that in pp list
+		 UNION ALL 
+		 SELECT DISTINCT t2.ZONE_ID AS LOCATION_ID, T7.NAME AS LOCATION_NAME,
+		 --CASE WHEN T2.ZONE_ID = T2.ROOT_ID THEN :LOCATION_TYPE_REGION ELSE :LOCATION_TYPE_ZONE END AS LOCATION_TYPE,
+		-- T6.LOCATION_TYPE,
+		 :LOCATION_TYPE_REGION AS LOCATION_TYPE,
+		 NULL AS HAS_OUTPUT_DATASET_FLAG,T2.LEVEL
+		 FROM "sap.tm.trp.db.filter::t_location_filter_region" T1
+		 INNER JOIN "sap.tm.trp.db.systemmanagement.location::t_region_item" T2 ON (T1.ZONE_ID = T2.ROOT_ID)
+		 LEFT OUTER JOIN :PPS_LOCATION_LIST T3 ON (T2.ZONE_ID = T3.LOCATION_ID AND T3.LOCATION_TYPE >1)
+		   --all the zones belongs to the tree of the region filter and it's children 
+		 INNER JOIN "sap.tm.trp.db.systemmanagement.location::t_region_item" T4 ON (T2.ZONE_ID = T4.ROOT_ID)
+		 INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T5 ON (T4.ZONE_ID = T5.ZONE_ID)
+		 INNER JOIN :PPS_LOCATION_LIST T6 ON (T5.LOCATION_ID = T6.LOCATION_ID)
+		 LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_zone" T7 ON (T2.ZONE_ID = T7.ID)
+		 WHERE T1.LOCATION_FILTER_ID = :VAR_LOCATION_FILTER_ID AND T3.LOCATION_ID IS NULL
+		
+		 ) T10;
+		 
+		 --Get the max layer:
+		   --calcualte the max layer:
+		  SELECT IFNULL(MAX(LEVEL_NUM),0) + 100 INTO VAR_DEPOT_LEVEL
+		 FROM
+		 (
+			 SELECT TO_INTEGER (IFNULL(T1.LEVEL,0)) AS LEVEL_NUM
+			FROM :temp_vp_location_info T1
+		 );
+		 
+		 
+	   out_vp_location_info =  SELECT DISTINCT T10.LOCATION_ID,T10.LOCATION_NAME,T10.LOCATION_TYPE,T10.HAS_OUTPUT_DATASET_FLAG,T10.LEVEL
+	   FROM
+	   ( SELECT T1.LOCATION_ID,T1.LOCATION_NAME,T1.LOCATION_TYPE,T1.HAS_OUTPUT_DATASET_FLAG,T1.LEVEL
+	     FROM :temp_vp_location_info T1
+	     UNION ALL 
+	     --all the locations assinged to the vp's region filter :
+		  SELECT T3.LOCATION_ID, T5.NAME AS LOCATION_NAME,:LOCATION_TYPE_LOCATION AS LOCATION_TYPE,NULL AS HAS_OUTPUT_DATASET_FLAG, :VAR_DEPOT_LEVEL AS LEVEL
+		 FROM "sap.tm.trp.db.filter::t_location_filter_region" T1
+		 INNER JOIN "sap.tm.trp.db.systemmanagement.location::t_region_item" T2 ON (T1.ZONE_ID = T2.ROOT_ID)
+		 INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T3 ON (T2.ZONE_ID = T3.ZONE_ID)
+		 INNER JOIN :PPS_LOCATION_LIST T4 ON (T3.LOCATION_ID = T4.LOCATION_ID)
+		 INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T5 ON (T3.LOCATION_ID = T5.ID)
+		 WHERE T1.LOCATION_FILTER_ID = :VAR_LOCATION_FILTER_ID
+	   ) T10;
+	
+	 
+	  temp_vp_hierarchy = 
+	 SELECT T1.LOCATION_ID,T1.LOCATION_TYPE,T2.ZONE_ID AS LOCATION_CHILD_ID,
+	 :LOCATION_TYPE_REGION AS LOCATION_CHILD_TYPE
+	 FROM :out_vp_location_info T1
+	 INNER JOIN "sap.tm.trp.db.semantic.location::v_hierarchy_item" T2 ON (T1.LOCATION_ID = T2.PARENT_ZONE_ID)
+	 INNER JOIN :out_vp_location_info T3 ON (T2.ZONE_ID = T3.LOCATION_ID)
+	 INNER JOIN "sap.tm.trp.db.semantic.common::t_config" T4 ON (T4.ZONE_HIERARCHY_ID = T2.ZONE_HIERARCHY_ID) 
+	 /*UNION ALL 
+	 SELECT T1.LOCATION_ID, T1.LOCATION_TYPE,T2.LOCATION_ID AS LOCATION_CHILD_ID,:LOCATION_TYPE_LOCATION AS LOCATION_CHILD_TYPE
+	 FROM :out_vp_location_info T1
+	 INNER JOIN  "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T2 ON (T1.LOCATION_ID = T2.ZONE_ID)
+	 INNER JOIN :out_vp_location_info T3 ON (T2.LOCATION_ID = T3.LOCATION_ID)
+	 */;
+	 
+	 non_leaf_vp_location = SELECT DISTINCT LOCATION_ID FROM :temp_vp_hierarchy T1;
+	 
+	 leaf_zone_for_the_virtual_tree = 
+	 SELECT T1.LOCATION_ID 
+	 FROM :out_vp_location_info T1
+	 LEFT OUTER JOIN :non_leaf_vp_location T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+	 WHERE T1.LOCATION_TYPE = :LOCATION_TYPE_REGION 
+	 AND  T2.LOCATION_ID IS NULL ;
+	 
+	 out_vp_hierarchy =
+	 SELECT T1.LOCATION_ID,T1.LOCATION_TYPE,T1.LOCATION_CHILD_ID,T1.LOCATION_CHILD_TYPE
+	 FROM :temp_vp_hierarchy T1
+	 UNION ALL
+	 SELECT T1.LOCATION_ID,:LOCATION_TYPE_REGION  AS LOCATION_TYPE,
+	 T2.LOCATION_ID AS LOCATION_CHILD_ID,:LOCATION_TYPE_LOCATION AS LOCATION_CHILD_TYPE
+	 FROM :leaf_zone_for_the_virtual_tree T1
+	 INNER JOIN  "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T2 ON (T1.LOCATION_ID = T2.ZONE_ID)
+	 INNER JOIN :out_vp_location_info T3 ON (T2.LOCATION_ID = T3.LOCATION_ID);
+	 
+	  
+  
+  --LOCATION_TYPE_REGION_GROUP
+  ELSE 
+  
+	   out_vp_location_info = SELECT T1.REGION_GROUP_ID AS LOCATION_ID,T2.DESC AS LOCATION_NAME, 
+	   :LOCATION_TYPE_REGION_GROUP AS LOCATION_TYPE,NULL AS HAS_OUTPUT_DATASET_FLAG, 100 AS LEVEL
+	  FROM "sap.tm.trp.db.filter::t_location_filter_region" T1
+	  LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_region_group" T2 ON (T1.REGION_GROUP_ID = T2.ID)
+	  INNER JOIN :PPS_LOCATION_LIST T3 ON (T1.REGION_GROUP_ID = T3.LOCATION_ID);
+	  
+	  
+	   
+	   out_vp_hierarchy = SELECT NULL AS LOCATION_ID,NULL AS LOCATION_TYPE,
+	                      NULL AS LOCATION_CHILD_ID, NULL AS LOCATION_CHILD_TYPE
+	                      FROM DUMMY;  
+	                                       
+                      
+  END IF;
+ 
+   INSERT INTO  "sap.tm.trp.db.pipeline::t_virtual_tree_location_info" (VIRTUAL_PLAN_MODEL_ID,LOCATION_ID,LOCATION_NAME,LOCATION_TYPE,HAS_OUTPUT_DATASET_FLAG,LEVEL)
+  SELECT :IN_PLAN_MODEL_ID,LOCATION_ID,LOCATION_NAME,LOCATION_TYPE,HAS_OUTPUT_DATASET_FLAG,LEVEL
+  FROM :out_vp_location_info;
+  
+   INSERT INTO "sap.tm.trp.db.pipeline::t_virtual_tree_hierarchy" (VIRTUAL_PLAN_MODEL_ID,LOCATION_ID,LOCATION_TYPE,LOCATION_CHILD_ID,LOCATION_CHILD_TYPE) 
+  SELECT :IN_PLAN_MODEL_ID,LOCATION_ID,LOCATION_TYPE,LOCATION_CHILD_ID,LOCATION_CHILD_TYPE
+  FROM :out_vp_hierarchy;
+  
+ -----------------------Get the default node name:----------------------------------------------
+ 
+ 
+	  -- get the sub persisted plans for this virual plan
+	/* PP_ID_LIST =
+	 	SELECT PERSISTED_PLAN_MODEL_ID AS ID
+	 	FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" 
+	    WHERE VIRTUAL_PLAN_MODEL_ID = :IN_VIRTUAL_PLAN_ID;
+	    */
+	 
+	 -- get calculation model and default node for each persisted plan
+	 PP_ID_LIST_METADATA_NODE_ID = 
+		 SELECT T1.ID AS PLAN_MODEL_ID,T3.DEFAULT_NODE_ID, T4.METADATA_NODE_ID
+		 FROM :PP_ID_LIST T1
+		 INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T2 ON (T1.ID = T2.ID) -- get the calculation model id
+		 INNER JOIN "sap.tm.trp.db.pipeline::v_pipeline_default_node" T3 ON (T2.PIPELINE_MODEL_ID = T3.PIPELINE_MODEL_ID) -- get the default node;
+		 INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T4 ON (T3.DEFAULT_NODE_ID = T4.ID); -- get the default metadata node id
+	    	    
+	    
+	 -- get the intersection of the default nodes
+	 /*
+	 DEFAULT_NODE_LIST = 
+		 SELECT T1.PLAN_MODEL_ID, T1.DEFAULT_NODE_ID, T1.METADATA_NODE_ID
+		 FROM :PP_ID_LIST_METADATA_NODE_ID T1
+		 INNER JOIN :METADATA_NODE_ID_INTERSECTION T2 ON T1.METADATA_NODE_ID = T2.NAME;
+	 */
+	 DEFAULT_NODE_LIST = 
+		 SELECT T1.PLAN_MODEL_ID, T1.DEFAULT_NODE_ID, T1.METADATA_NODE_ID
+		 FROM :PP_ID_LIST_METADATA_NODE_ID T1
+		 INNER JOIN :out_virtual_plan_node_name T2 ON T1.METADATA_NODE_ID = T2.NAME;
+	 
+	 -- get the number of different metadata node id
+	 SELECT COUNT(DISTINCT METADATA_NODE_ID) INTO DEFAULT_METADATA_NODE_NUM FROM :DEFAULT_NODE_LIST;
+	 
+	 -- then apply the following rules
+		-- 1. If there are only one metadata node id for the default nodes, then return this metadata node id
+		-- 2. If there is no default node in the intersection, then just return the metadata node id with maximial node id in the intersection
+		-- 3. If there are multiple metadata node ids for the default nodes, then return the metadata node id with maximal node id in the default node set
+	 IF( :DEFAULT_METADATA_NODE_NUM = 1) THEN
+	 	SELECT TOP 1 METADATA_NODE_ID INTO DEFAULT_NODE_NAME FROM :DEFAULT_NODE_LIST;
+	 ELSE
+	 	-- the node id in the same model can be used to determine the default node in some casess 
+	 	-- get the plan id which will be used to get the node id for each metadata node id
+	 	SELECT TOP 1 ID INTO PP_ID FROM :PP_ID_LIST;
+	 	NODE_ID_LIST = 
+		 	SELECT T3.ID AS NODE_ID, T4.NAME AS METADATA_NODE_ID
+		 	FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+		 	INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_model" T2 ON (T1.PIPELINE_MODEL_ID = T2.ID) -- get the calculation model id
+		 	INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T3 ON (T2.ID = T3.PIPELINE_MODEL_ID) -- get the node id
+		 	INNER JOIN :out_virtual_plan_node_name T4 ON (T3.METADATA_NODE_ID = T4.NAME)
+		 	WHERE T1.ID = :PP_ID -- garantee they are in the same persisted plan i.e. Calculation Model
+		 	ORDER BY T3.ID DESC;
+	 	
+	 	IF (:DEFAULT_METADATA_NODE_NUM = 0) THEN
+		 	SELECT TOP 1 METADATA_NODE_ID INTO DEFAULT_NODE_NAME FROM :NODE_ID_LIST
+		 	ORDER BY NODE_ID DESC; -- from the intesection, get the metadata node id which has the max node id
+	 	ELSE
+		 	SELECT TOP 1 T1.METADATA_NODE_ID FROM :DEFAULT_NODE_LIST T1
+		 	INNER JOIN :NODE_ID_LIST T2 -- get the node id
+		 	ON T1.METADATA_NODE_ID = T2.METADATA_NODE_ID
+		 	ORDER BY DEFAULT_NODE_ID DESC;
+   	    END IF;
+	END IF;   
+
+ 
+ 
+ 
+  INSERT INTO "sap.tm.trp.db.pipeline::t_virtual_tree_node_name"(VIRTUAL_PLAN_MODEL_ID,NAME,DEFAULT_NODE_FLAG)
+  SELECT :IN_PLAN_MODEL_ID,T1.NAME,CASE WHEN T1.NAME = :DEFAULT_NODE_NAME THEN 1 ELSE 0 END AS DEFAULT_NODE_FLAG
+  FROM :out_virtual_plan_node_name T1;
+
+  
+            
+END;

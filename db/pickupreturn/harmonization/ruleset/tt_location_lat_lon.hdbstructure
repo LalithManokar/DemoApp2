@@ -1,0 +1,17 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "List of Location for duration calculation";
+table.columns = [
+	{name = "FROM_LOCATION_ID"; sqlType = NVARCHAR; length = 22;},
+    {name = "TO_LOCATION_ID"; sqlType = NVARCHAR; length = 22;},
+    {name = "LOCATION_FROM"; sqlType = NVARCHAR; length = 20; },
+    {name = "LOCATION_TO"; sqlType = NVARCHAR; length = 20; },
+    {name = "LAT_FROM"; sqlType = DOUBLE ;},
+    {name = "LON_FROM"; sqlType = DOUBLE ;},
+    {name = "LAT_TO"; sqlType = DOUBLE ;},
+    {name = "LON_TO"; sqlType = DOUBLE ;},
+    {name = "TTYPE"; sqlType = NVARCHAR; length = 10 ;},
+    {name = "TRP_MTR"; sqlType = NVARCHAR; length = 10 ;},
+    {name = "TRMID";  sqlType = NVARCHAR; length = 22; },
+    {name = "DISTFAC"; sqlType = DECIMAL; precision = 5; scale = 3;}
+    ];  

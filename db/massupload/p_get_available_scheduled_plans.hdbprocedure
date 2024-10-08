@@ -1,0 +1,236 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_get_available_scheduled_plans" (
+    IN PERSISTED_PLAN_MODEL_TYPE INTEGER,
+    IN LOC_RES_FILTERS "sap.tm.trp.db.massupload::tt_loc_res_filters",    
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),
+    OUT SCHEDULED_PLANS "sap.tm.trp.db.massupload::tt_sd_plans"
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+
+    DECLARE VAR_LOCATION_TYPE INTEGER;
+    DECLARE LOCATION_FILTER INTEGER :=1;
+    DECLARE LOCATION_GROUP_FILTER INTEGER :=2;
+    DECLARE ZONE_FILTER INTEGER := 3;
+    DECLARE ZONE_GROUP_FILTER INTEGER :=4;
+    DECLARE REGION_FILTER INTEGER :=5 ;
+    DECLARE REGION_GROUP_FILTER INTEGER :=6;    
+    DECLARE FILTER_TYPE_COMMON INTEGER :=1;
+    DECLARE FILTER_TYPE_GROUP INTEGER :=2;
+
+------------------------------------------------------------------------------------
+--Resource Filter
+------------------------------------------------------------------------------------
+     
+    PERSISTED_PLAN_IDS_AUTHORIZED = 
+         SELECT T1.ID,T1.FILTER_GROUP_ID
+         FROM  "sap.tm.trp.db.pipeline::t_plan_model" T1
+         INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2 ON T1.FILTER_GROUP_ID = T2.ID
+         WHERE T1.PLAN_MODEL_TYPE_ID = :PERSISTED_PLAN_MODEL_TYPE
+         AND T2.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID;
+         
+     
+        --Get the equip code list of the VP with the IN_VP_EQUIP_FILTER_ID
+    VP_EQUIPMENT_CODE = 
+        SELECT EQUI_CODE, EQUIPMENT_FILTER_ID AS RESOURCE_FILTER_ID --EQUIPMENT CODE
+        FROM "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T1
+        WHERE EQUIPMENT_FILTER_ID IN (SELECT DISTINCT RES_ID FROM :LOC_RES_FILTERS WHERE FILTER_TYPE = :FILTER_TYPE_COMMON)
+        AND EQUI_CODE IS NOT NULL
+        UNION
+        SELECT T1.EQUIPMENT_GROUP_ID AS EQUI_CODE, EQUIPMENT_FILTER_ID AS RESOURCE_FILTER_ID --EQUIPMENT GROUP:
+        FROM "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T1
+        WHERE T1.EQUIPMENT_FILTER_ID IN (SELECT DISTINCT RES_ID FROM :LOC_RES_FILTERS WHERE FILTER_TYPE <> :FILTER_TYPE_COMMON);
+
+  PP_EQUIPMENT_CODE =  
+	 SELECT T3.EQUI_CODE,T1.ID AS PLAN_MODEL_ID --  T2.EQUIPMENT_FILTER_ID AS RESOURCE_FILTER_ID 
+	 FROM  :PERSISTED_PLAN_IDS_AUTHORIZED T1 --EQUIPMENT CODE
+	 INNER JOIN "sap.tm.trp.db.filter::t_filter_equipment_filter" T2 ON (T1.FILTER_GROUP_ID = T2.FILTER_GROUP_ID)
+	 INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T3 ON (T2.EQUIPMENT_FILTER_ID = T3.EQUIPMENT_FILTER_ID)
+ 	WHERE T3.EQUI_CODE IS NOT NULL                      
+    UNION 
+     SELECT T3.EQUIPMENT_GROUP_ID AS EQUI_CODE,T1.ID AS PLAN_MODEL_ID -- T2.EQUIPMENT_FILTER_ID AS RESOURCE_FILTER_ID --EQUIPMENT GROUP
+     FROM  :PERSISTED_PLAN_IDS_AUTHORIZED T1 
+    INNER JOIN "sap.tm.trp.db.filter::t_filter_equipment_filter" T2 ON (T1.FILTER_GROUP_ID = T2.FILTER_GROUP_ID)
+    INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T3 ON (T2.EQUIPMENT_FILTER_ID = T3.EQUIPMENT_FILTER_ID);
+                        
+   
+ --Get the persisted plan list which the VP equip code list is the subset of it the pp's equip code list
+    PERSISTED_PLAN_IDS_OF_VP_EQUIP_FILTER = 
+        
+         SELECT T3.PLAN_MODEL_ID  AS PLAN_MODEL_ID, T3.RESOURCE_FILTER_ID AS RESOURCE_FILTER_ID
+         FROM 
+         (
+             SELECT T1.PLAN_MODEL_ID, T1.RESOURCE_FILTER_ID, CASE WHEN T2.EQUI_CODE IS NULL THEN 0 ELSE 1 END AS NUM
+             FROM 
+             (
+                           SELECT A.EQUI_CODE,B.ID AS PLAN_MODEL_ID, A.RESOURCE_FILTER_ID
+                           FROM :VP_EQUIPMENT_CODE A,:PERSISTED_PLAN_IDS_AUTHORIZED B
+             )T1
+             LEFT OUTER JOIN :PP_EQUIPMENT_CODE T2 ON (T1.EQUI_CODE = T2.EQUI_CODE AND T1.PLAN_MODEL_ID = T2.PLAN_MODEL_ID)
+         ) T3
+         GROUP BY T3.PLAN_MODEL_ID, T3.RESOURCE_FILTER_ID
+         HAVING SUM(NUM) > 0;
+
+    
+------------------------------------------------------------------------------------
+--Location Filter
+------------------------------------------------------------------------------------
+    PERSISTED_PLAN_IDS_AUTHORIZED_LF =
+        
+        SELECT ID,FILTER_GROUP_ID, T2.RESOURCE_FILTER_ID
+        FROM  "sap.tm.trp.db.pipeline::t_plan_model" T1
+        INNER JOIN :PERSISTED_PLAN_IDS_OF_VP_EQUIP_FILTER T2 ON (T1.ID = T2.PLAN_MODEL_ID)
+        WHERE --T1.VISIBILITY_FLAG = :GLOBAL_VISIBILITY_FLAG
+         --AND  
+        T1.PLAN_MODEL_TYPE_ID = :PERSISTED_PLAN_MODEL_TYPE;
+  
+ 
+    SQL_PERSISTED_PLAN_WITH_THE_TIME_FILTER = 
+        
+         --SELECT T3.ID AS PLAN_MODEL_ID,T3.LOCATION_TYPE,T3.ID AS LOCATION_FILTER_ID
+        SELECT T1.ID AS PLAN_MODEL_ID,T3.LOCATION_TYPE,T3.ID AS LOCATION_FILTER_ID, T1.RESOURCE_FILTER_ID AS RESOURCE_FILTER_ID
+        FROM :PERSISTED_PLAN_IDS_AUTHORIZED_LF T1
+        INNER JOIN "sap.tm.trp.db.filter::t_filter_location_filter" T2 ON (T2.FILTER_GROUP_ID = T1.FILTER_GROUP_ID)
+        INNER JOIN "sap.tm.trp.db.filter::t_location_filter" T3 ON (T2.LOCATION_FILTER_ID = T3.ID)
+        INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T4 ON (T1.FILTER_GROUP_ID = T4.ID)
+        INNER JOIN "sap.tm.trp.db.filter::t_time_filter" T5 ON (T4.TIME_FILTER_ID = T5.ID);
+        ---WHERE T5.OFFSET_FLAG = 1; -- remove this line to allow scheduled plans whose time filters doesn't have time offset enabled
+    
+     --Get the location list of the virtual plan location filter 
+    SQL_LOCATION_LIST_VP_FILTER = 
+
+        SELECT T1.LOCATION_ID , T1.LOCATION_FILTER_ID AS LOCATION_FILTER_ID
+        FROM "sap.tm.trp.db.filter::t_location_filter_location" T1
+        WHERE T1.LOCATION_FILTER_ID IN (SELECT DISTINCT LOC_ID FROM :LOC_RES_FILTERS WHERE LOCATION_TYPE = :LOCATION_FILTER);
+
+    --Get the region group list of the virtual plan location filter 
+    SQL_REGION_GROUP_LIST_VP_FILTER = 
+
+        SELECT T1.REGION_GROUP_ID, T1.LOCATION_FILTER_ID AS LOCATION_FILTER_ID
+        FROM "sap.tm.trp.db.filter::t_location_filter_region" T1
+        WHERE T1.LOCATION_FILTER_ID IN (SELECT DISTINCT LOC_ID FROM :LOC_RES_FILTERS WHERE LOCATION_TYPE = :REGION_GROUP_FILTER);
+
+    --Get the location group list of the virtual plan location filter 
+    SQL_LOCATION_GROUP_LIST_VP_FILTER = 
+        
+        SELECT T1.LOCATION_GROUP_ID, T1.LOCATION_FILTER_ID AS LOCATION_FILTER_ID
+        FROM "sap.tm.trp.db.filter::t_location_filter_location" T1
+        WHERE T1.LOCATION_FILTER_ID IN (SELECT DISTINCT LOC_ID FROM :LOC_RES_FILTERS WHERE LOCATION_TYPE = :LOCATION_GROUP_FILTER);
+
+    ---------------------Regions-----------------------------------------------------
+     --children zones belongs to the zones that is defined in region filter of the VP:
+    SQL_ZONE_LIST_VP_FILTER = 
+        
+        SELECT T2.ZONE_ID, T1.LOCATION_FILTER_ID AS LOCATION_FILTER_ID
+        FROM "sap.tm.trp.db.filter::t_location_filter_region" T1
+        INNER JOIN "sap.tm.trp.db.systemmanagement.location::t_region_item" T2 ON (T1.ZONE_ID = T2.ROOT_ID)
+        WHERE T1.LOCATION_FILTER_ID IN (SELECT DISTINCT LOC_ID FROM :LOC_RES_FILTERS WHERE LOCATION_TYPE = :REGION_FILTER);
+
+    SQL_PERSISTED_PLAN_ZONE_LIST = 
+        SELECT T1.PLAN_MODEL_ID,T2.ZONE_ID, T1.RESOURCE_FILTER_ID
+        FROM :SQL_PERSISTED_PLAN_WITH_THE_TIME_FILTER T1
+        INNER JOIN "sap.tm.trp.db.filter::t_location_filter_region" T2 ON (T1.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID);
+           
+   
+    SQL3_2 =  
+        SELECT  T2.PLAN_MODEL_ID , T1.LOCATION_FILTER_ID AS LOC_ID, T2.RESOURCE_FILTER_ID AS RES_ID
+        FROM :SQL_ZONE_LIST_VP_FILTER T1
+        INNER JOIN :SQL_PERSISTED_PLAN_ZONE_LIST T2 ON (T1.ZONE_ID = T2.ZONE_ID);
+       
+    SQL_REGION_LIST_VP_FILTER = 
+        SELECT T2.LOCATION_ID, T1.LOCATION_FILTER_ID AS LOCATION_FILTER_ID
+        FROM "sap.tm.trp.db.filter::t_location_filter_region" T1
+        INNER JOIN "sap.tm.trp.db.systemmanagement.location::v_region_location_all" T2 ON (T1.ZONE_ID = T2.ROOT_ID)
+        WHERE T1.LOCATION_FILTER_ID IN (SELECT DISTINCT LOC_ID FROM :LOC_RES_FILTERS WHERE LOCATION_TYPE = :REGION_FILTER);
+          
+    ---------------------Regions----------------------------------------------------------
+
+
+    --Get the location list of the  persisted plan list of the location type of the defined time filter
+        SQL_PERSISTED_PLAN_LOCATION_LIST = 
+        
+        SELECT T1.PLAN_MODEL_ID,T2.LOCATION_ID, T1.RESOURCE_FILTER_ID
+        FROM :SQL_PERSISTED_PLAN_WITH_THE_TIME_FILTER T1
+        INNER JOIN "sap.tm.trp.db.filter::t_location_filter_location" T2 ON (T1.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID)
+        WHERE T1.LOCATION_TYPE = :LOCATION_FILTER;
+     
+    --Get the location group list of the persisted plan list of the location type of the defined time filter
+        SQL_PERSISTED_PLAN_LOCATION_GROUP_LIST = 
+        
+        SELECT T1.PLAN_MODEL_ID,T2.LOCATION_GROUP_ID, T1.RESOURCE_FILTER_ID
+        FROM :SQL_PERSISTED_PLAN_WITH_THE_TIME_FILTER T1
+        INNER JOIN "sap.tm.trp.db.filter::t_location_filter_location" T2 ON (T1.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID)
+        WHERE T1.LOCATION_TYPE = :LOCATION_GROUP_FILTER;
+
+    --Get the region group list of the persisted plan list of the location type of the defined time filter             
+        SQL_PERSISTED_PLAN_REGION_GROUP_LIST = 
+        
+        SELECT T1.PLAN_MODEL_ID,T2.REGION_GROUP_ID, T1.RESOURCE_FILTER_ID
+        FROM :SQL_PERSISTED_PLAN_WITH_THE_TIME_FILTER T1
+        INNER JOIN "sap.tm.trp.db.filter::t_location_filter_region" T2 ON (T1.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID)
+        WHERE T1.LOCATION_TYPE = :REGION_GROUP_FILTER;             
+    
+     
+        LOC_PLANS = 
+        
+        SELECT DISTINCT T2.PLAN_MODEL_ID AS PLAN_MODEL_ID, T1.LOCATION_FILTER_ID AS LOC_ID, T2.RESOURCE_FILTER_ID AS RES_ID
+        FROM :SQL_LOCATION_LIST_VP_FILTER T1
+        INNER JOIN :SQL_PERSISTED_PLAN_LOCATION_LIST T2 ON (T1.LOCATION_ID = T2.LOCATION_ID);
+         
+         
+        LOC_GRP_PLANS = 
+        
+        SELECT DISTINCT T2.PLAN_MODEL_ID AS PLAN_MODEL_ID, T1.LOCATION_FILTER_ID AS LOC_ID, T2.RESOURCE_FILTER_ID AS RES_ID
+        FROM :SQL_LOCATION_GROUP_LIST_VP_FILTER T1
+        INNER JOIN :SQL_PERSISTED_PLAN_LOCATION_GROUP_LIST T2 ON (T1.LOCATION_GROUP_ID = T2.LOCATION_GROUP_ID);       
+          
+        REG_GRP_PLANS = 
+        
+        SELECT DISTINCT T2.PLAN_MODEL_ID, T1.LOCATION_FILTER_ID AS LOC_ID, T2.RESOURCE_FILTER_ID AS RES_ID
+        FROM :SQL_REGION_GROUP_LIST_VP_FILTER T1
+        INNER JOIN :SQL_PERSISTED_PLAN_REGION_GROUP_LIST T2 ON (T1.REGION_GROUP_ID = T2.REGION_GROUP_ID); 
+         
+        SQL3_3 =  
+             SELECT  T2.PLAN_MODEL_ID, T1.LOCATION_FILTER_ID AS LOC_ID, T2.RESOURCE_FILTER_ID AS RES_ID
+             FROM :SQL_REGION_LIST_VP_FILTER T1
+             INNER JOIN :SQL_PERSISTED_PLAN_LOCATION_LIST T2 ON (T1.LOCATION_ID = T2.LOCATION_ID);
+    
+        REG_PLANS = 
+               SELECT DISTINCT PLAN_MODEL_ID, LOC_ID, RES_ID FROM
+                       (SELECT PLAN_MODEL_ID, LOC_ID, RES_ID FROM :SQL3_2
+                         UNION ALL SELECT PLAN_MODEL_ID, LOC_ID, RES_ID FROM :SQL3_3
+                        ); 
+     
+      
+        SCHEDULED_PLANS = 
+                    SELECT L1.LOC_ID AS LOC_ID, L1.RES_ID AS RES_ID, T1.PLAN_MODEL_ID AS SDP_ID
+                    FROM :LOC_RES_FILTERS AS L1 
+                    INNER JOIN :LOC_PLANS AS T1 
+                    ON L1.LOC_ID = T1.LOC_ID
+                    AND L1.RES_ID = T1.RES_ID
+                    WHERE L1.LOCATION_TYPE = :LOCATION_FILTER
+                    UNION
+                    SELECT L2.LOC_ID AS LOC_ID, L2.RES_ID AS RES_ID, T2.PLAN_MODEL_ID AS SDP_ID
+                    FROM :LOC_RES_FILTERS AS L2 
+                    INNER JOIN :LOC_GRP_PLANS AS T2 
+                    ON L2.LOC_ID = T2.LOC_ID
+                    AND L2.RES_ID = T2.RES_ID
+                    WHERE L2.LOCATION_TYPE = :LOCATION_GROUP_FILTER
+                    UNION
+                    SELECT L3.LOC_ID AS LOC_ID, L3.RES_ID AS RES_ID, T3.PLAN_MODEL_ID AS SDP_ID
+                    FROM :LOC_RES_FILTERS AS L3 
+                    INNER JOIN :REG_GRP_PLANS AS T3 
+                    ON L3.LOC_ID = T3.LOC_ID
+                    AND L3.RES_ID = T3.RES_ID
+                    WHERE L3.LOCATION_TYPE = :REGION_GROUP_FILTER
+                    UNION
+                    SELECT L4.LOC_ID AS LOC_ID, L4.RES_ID AS RES_ID, T4.PLAN_MODEL_ID AS SDP_ID
+                    FROM :LOC_RES_FILTERS AS L4 
+                    INNER JOIN :REG_PLANS AS T4 
+                    ON L4.LOC_ID = T4.LOC_ID
+                    AND L4.RES_ID = T4.RES_ID
+                    WHERE L4.LOCATION_TYPE = :REGION_FILTER;
+
+END;

@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_location_based_cost_upload_result" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_anna_privilege_check"/>
+  <localVariables>
+    <variable id="COST_DATASET_ID" parameter="true">
+      <descriptions defaultDescription="COST_DATASET_ID"/>
+      <variableProperties datatype="BIGINT" defaultValue="-1" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="CONNECTION_ID" parameter="true">
+      <descriptions defaultDescription="CONNECTION_ID"/>
+      <variableProperties datatype="VARCHAR" length="100" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="FROM_LOCATION_NAME" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="TO_LOCATION_NAME" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="TRANSPORTATION_MODE_CODE" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="TRANSPORTATION_MODE_DESC" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_TYPE" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="CARRIER_ID" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="UOM_CODE" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="UOM_DESC" length="200"/>
+        <viewAttribute datatype="DECIMAL" id="COST" length="13" scale="3"/>
+        <viewAttribute datatype="VARCHAR" id="DATA_SOURCE_CODE" length="20"/>
+        <viewAttribute datatype="TIMESTAMP" id="LAST_MODIFIED_ON"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#COST_DATASET_ID</localVariable>
+      <localVariable>#CONNECTION_ID</localVariable>
+      <definition> 
+  
+ BEGIN
+ 
+  --note: if it is a new dataset, then the INPUT OF COST_DATASET_ID SHOULD BE -1.
+   DECLARE HAS_OVERRIDE_ACTION_FLAG INTEGER :=0; --1: HAS OVERRIDE, 0: NO OVERRIDE
+   DECLARE ACTION_CODE_OVERRIDE VARCHAR(20) :='OVERRIDE';
+   DECLARE VAR_DATASOURCE_CSV VARCHAR(20) :='CSV';
+
+
+   --Has override action of the connection?
+   SELECT COUNT(1) INTO HAS_OVERRIDE_ACTION_FLAG
+   FROM &quot;sap.tm.trp.db.costmodel::t_location_based_cost_temporary&quot; 
+   WHERE CONNECTION_ID = :CONNECTION_ID
+   AND ACTION_CODE = :ACTION_CODE_OVERRIDE;
+      
+      --union all the uploaded csv records and the records in the t_handling_based_cost table (the records already saved before)
+       UNION_LOCATION_BASED_COST =
+      SELECT T0.ROW_NUM,T0.SEQUENCE,
+      T0.FROM_LOCATION_NAME,T0.TO_LOCATION_NAME,T0.RESOURCE_TYPE,
+      T0.TRANSPORTATION_MODE_CODE,
+      T0.UOM_CODE,T0.COST,T0.CARRIER_ID,
+	     :VAR_DATASOURCE_CSV AS DATA_SOURCE_CODE,
+	     T0.ACTION_TIME AS LAST_MODIFIED_ON 
+	      FROM &quot;sap.tm.trp.db.costmodel::t_location_based_cost_temporary&quot; T0
+	      WHERE CONNECTION_ID = :CONNECTION_ID 
+	      UNION ALL
+	      --if no verride action for those upload csvs of the specific dataset, then need to add the previous records of the dataset to do the merge (this scenario is for dataset update, for dataset create, the union all select records will be empty, so do not use to write another sql to handle the create situation)
+	       SELECT 0 AS ROW_NUM,0 AS SEQUENCE,
+	       T1.FROM_LOCATION_NAME,T1.TO_LOCATION_NAME,T1.RESOURCE_TYPE,
+	       T1.TRANSPORTATION_MODE_CODE,
+	       T1.UOM_CODE,T1.COST,T1.CARRIER_ID,
+	      T1.DATA_SOURCE_CODE,T1.LAST_MODIFIED_ON
+	      FROM &quot;sap.tm.trp.db.costmodel::t_location_based_cost&quot; T1
+	      WHERE  T1.COST_DATASET_ID = :COST_DATASET_ID AND :HAS_OVERRIDE_ACTION_FLAG =0;
+	   
+       TEMP_OUT = 
+      SELECT  T1.FROM_LOCATION_NAME,T1.TO_LOCATION_NAME,
+      T1.TRANSPORTATION_MODE_CODE,T1.RESOURCE_TYPE,
+      T1.CARRIER_ID,T1.UOM_CODE,
+	       T1.COST,T1.DATA_SOURCE_CODE,T1.LAST_MODIFIED_ON
+      FROM :UNION_LOCATION_BASED_COST T1
+      INNER JOIN
+      (
+	      SELECT T2.FROM_LOCATION_NAME,T2.TO_LOCATION_NAME,T2.RESOURCE_TYPE,T2.TRANSPORTATION_MODE_CODE,MAX(T2.ROW_NUM) AS MAX_ROW_NUM,MAX(T2.SEQUENCE) AS MAX_SEQUENCE
+	      FROM :UNION_LOCATION_BASED_COST T2
+	      GROUP BY T2.FROM_LOCATION_NAME,T2.TO_LOCATION_NAME,T2.RESOURCE_TYPE,T2.TRANSPORTATION_MODE_CODE
+      )T3 ON (T1.FROM_LOCATION_NAME = T3.FROM_LOCATION_NAME
+              AND T1.TO_LOCATION_NAME = T3.TO_LOCATION_NAME 
+              AND T1.RESOURCE_TYPE = T3.RESOURCE_TYPE 
+              AND T1.TRANSPORTATION_MODE_CODE = T3.TRANSPORTATION_MODE_CODE
+              AND T1.ROW_NUM = T3.MAX_ROW_NUM
+              AND T1.SEQUENCE = T3.MAX_SEQUENCE);
+              
+       VAR_OUT =  
+      SELECT T1.FROM_LOCATION_NAME,T1.TO_LOCATION_NAME,
+       T1.TRANSPORTATION_MODE_CODE,
+    T5.DESC AS TRANSPORTATION_MODE_DESC,
+    T1.RESOURCE_TYPE,
+    T1.CARRIER_ID,
+    T1.UOM_CODE,T6.DESC AS UOM_DESC,
+    T1.COST,T1.DATA_SOURCE_CODE,
+    T1.LAST_MODIFIED_ON
+    FROM :TEMP_OUT T1
+    INNER JOIN
+    (
+            SELECT CODE,DESC
+           FROM &quot;sap.tm.trp.db.semantic.common::v_transportation_means&quot; 
+           UNION SELECT '*' AS CODE, '*' AS DESC FROM DUMMY
+             
+     )T5 ON (T1.TRANSPORTATION_MODE_CODE = T5.CODE)
+     INNER JOIN
+    (
+           SELECT T2.CODE,IFNULL(A.DESC ,T2.DESC) AS DESC
+            FROM &quot;sap.tm.trp.db.costmodel::t_uom&quot; T2
+            LEFT OUTER JOIN 
+            ( 
+	                SELECT T3.UOM_CODE,T3.DESC
+	                FROM &quot;sap.tm.trp.db.costmodel::t_uom_t&quot; T3 
+	                INNER JOIN &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot; T4 ON (T3.LANG_CODE = T4.SPRAS)
+             )A ON (T2.CODE = A.UOM_CODE)
+     )T6 ON (T1.UOM_CODE = T6.CODE);
+
+END 
+</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="FROM_LOCATION_NAME" order="1">
+        <descriptions defaultDescription="FROM_LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="FROM_LOCATION_NAME"/>
+      </attribute>
+      <attribute id="TO_LOCATION_NAME" order="2">
+        <descriptions defaultDescription="TO_LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="TO_LOCATION_NAME"/>
+      </attribute>
+      <attribute id="TRANSPORTATION_MODE_CODE" order="3">
+        <descriptions defaultDescription="TRANSPORTATION_MODE_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="TRANSPORTATION_MODE_CODE"/>
+      </attribute>
+      <attribute id="TRANSPORTATION_MODE_DESC" order="4">
+        <descriptions defaultDescription="TRANSPORTATION_MODE_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="TRANSPORTATION_MODE_DESC"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE" order="5">
+        <descriptions defaultDescription="RESOURCE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE"/>
+      </attribute>
+      <attribute id="CARRIER_ID" order="6">
+        <descriptions defaultDescription="CARRIER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="CARRIER_ID"/>
+      </attribute>
+      <attribute id="UOM_CODE" order="7">
+        <descriptions defaultDescription="UOM_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="UOM_CODE"/>
+      </attribute>
+      <attribute id="UOM_DESC" order="8">
+        <descriptions defaultDescription="UOM_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="UOM_DESC"/>
+      </attribute>
+      <attribute id="DATA_SOURCE_CODE" order="10">
+        <descriptions defaultDescription="DATA_SOURCE_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="DATA_SOURCE_CODE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="COST" order="9" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="COST"/>
+        <measureMapping columnObjectName="Script_View" columnName="COST"/>
+      </measure>
+      <measure id="LAST_MODIFIED_ON" order="11" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="LAST_MODIFIED_ON"/>
+        <measureMapping columnObjectName="Script_View" columnName="LAST_MODIFIED_ON"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

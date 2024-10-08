@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_archive_execution_detail" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_archive_execution_detail"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="BIGINT" id="RULE_ID"/>
+        <viewAttribute datatype="NVARCHAR" id="TABLE_NAME" length="100"/>
+        <viewAttribute datatype="BIGINT" id="TABLE_ID"/>
+        <viewAttribute datatype="NVARCHAR" id="EXECUTED_BY_NAME" length="100"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_TIME"/>
+        <viewAttribute datatype="INTEGER" id="RECORD_COUNT"/>
+        <viewAttribute datatype="TINYINT" id="TABLE_STATUS"/>
+        <viewAttribute datatype="TINYINT" id="STATUS"/>
+        <viewAttribute datatype="NVARCHAR" id="MESSAGE" length="1000"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+ BEGIN
+ DECLARE VCOUNT BIGINT;
+ DECLARE ARCHIVE_WRAPPER_NAME VARCHAR(100);
+ DECLARE DELETE_WRAPPER_NAME VARCHAR(100);
+ DECLARE CURR_TIME TIMESTAMP;
+ DECLARE AUTH SMALLINT;
+DECLARE CUSTOMCONDITION CONDITION FOR SQL_ERROR_CODE 10001;/* Custom Error Code = 10001*/
+
+/*User Defined exception handler */
+
+DECLARE EXIT HANDLER FOR CUSTOMCONDITION RESIGNAL ;
+
+CALL &quot;sap.tm.trp.db.archive::p_check_archive_authorization&quot;(
+  	:AUTH
+	);
+	
+
+IF AUTH = 0 THEN
+	/* Signaling Custom error and setting the Custom Error Message */
+	SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'USER DOES NOT HAVE READ ACCESS';
+	
+END IF;
+				  
+				  
+		  
+TEMP_EXEC_DETAIL=SELECT T1.ID,
+					T1.RULE_ID,
+					T1.EXECUTED_BY,
+					T1.START_TIME,
+					T1.END_TIME,
+					T1.RECORD_COUNT,
+					T1.STATUS AS TABLE_STATUS,
+					T1.STATUS AS STATUS, 
+					T1.MESSAGE,
+					T2.TABLE_CODE AS TABLE_NAME,
+					T1.TABLE_ID AS TABLE_ID,
+					T3.USERNAME AS EXECUTED_BY_NAME,
+					T1.HANDLE_ID,
+					T1.HANDLE_TIMESTAMP				 
+            FROM &quot;sap.tm.trp.db.archive::t_archive_execution_detail&quot; T1
+          
+            INNER JOIN &quot;sap.tm.trp.db.archive::t_archive_metadata&quot; T2    
+            ON T1.TABLE_ID = T2.ID 
+            LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot; T3
+            ON T1.EXECUTED_BY=T3.ID;
+            
+CURR_TIME:=CURRENT_UTCTIMESTAMP;   		  
+--CODE TO CHECK FOR THE REAL STATUS.
+--RESULT SET 1 : NULL HANDLE_ID
+EXEC_DETAIL_NULL_HANDLE_IDS= SELECT * FROM :TEMP_EXEC_DETAIL WHERE HANDLE_ID IS NULL;
+
+--RESULT_SET2 : SUCCESS,ERROR,WARNING,PARTIAL 
+EXEC_DETAIL_FINISHED=SELECT * FROM :TEMP_EXEC_DETAIL WHERE STATUS&lt;>3 AND HANDLE_ID IS NOT NULL; --IN(1,2,4,5);
+
+EXEC_DETAIL_IN_PROGRESS_OMIT=SELECT * FROM :TEMP_EXEC_DETAIL WHERE STATUS=3 AND HANDLE_ID IS NOT NULL AND SECONDS_BETWEEN(START_TIME,CURR_TIME)&lt;60;
+
+EXEC_DETAIL_IN_PROGRESS=SELECT * FROM :TEMP_EXEC_DETAIL WHERE STATUS=3 AND HANDLE_ID IS NOT NULL AND SECONDS_BETWEEN(START_TIME,CURR_TIME)>=60;
+
+SELECT COUNT(1) INTO VCOUNT FROM :EXEC_DETAIL_IN_PROGRESS;
+
+IF :VCOUNT>0 THEN
+
+--there can be more than one record here hence distinct
+			IN_PROGRESS_EXECUTION_IDS = SELECT DISTINCT T1.ID 
+											FROM
+											:EXEC_DETAIL_IN_PROGRESS T1
+											INNER JOIN SYS.M_ACTIVE_STATEMENTS T2
+											ON T1.HANDLE_ID=T2.STATEMENT_ID;
+											
+											
+											
+--IN PROGRESS RECORDS
+			EXEC_DETAIL_ACTUAL_IN_PROGRESS=SELECT * 
+											FROM :EXEC_DETAIL_IN_PROGRESS
+											WHERE ID IN (
+											SELECT ID FROM :IN_PROGRESS_EXECUTION_IDS);
+												
+			
+--RECORDS FOR WHICH STATUS IS UPDATED
+			EXEC_DETAIL_MODIFIED_STATUS=SELECT ID,
+										RULE_ID,
+										EXECUTED_BY,
+										START_TIME,
+										END_TIME,
+										RECORD_COUNT,
+										TABLE_STATUS,
+										2 AS STATUS, --FORCEFULLY MAKE ERROR
+										MESSAGE,
+										TABLE_NAME,
+										TABLE_ID,
+										EXECUTED_BY_NAME,
+										HANDLE_ID,
+										HANDLE_TIMESTAMP
+										FROM :EXEC_DETAIL_IN_PROGRESS
+										WHERE ID NOT IN (
+										SELECT ID FROM :IN_PROGRESS_EXECUTION_IDS);
+										
+			RESULT_UNION=	SELECT * FROM 	:EXEC_DETAIL_FINISHED UNION
+							SELECT * FROM 	:EXEC_DETAIL_ACTUAL_IN_PROGRESS UNION
+							SELECT * FROM 	:EXEC_DETAIL_MODIFIED_STATUS UNION 
+							SELECT * FROM 	:EXEC_DETAIL_NULL_HANDLE_IDS UNION
+							SELECT * FROM 	:EXEC_DETAIL_IN_PROGRESS_OMIT;
+			
+ELSE
+	RESULT_UNION=SELECT * FROM :TEMP_EXEC_DETAIL;
+
+END IF;									
+
+VAR_OUT= SELECT ID,
+				RULE_ID,
+				TABLE_NAME,
+				TABLE_ID,
+				EXECUTED_BY_NAME,				
+				START_TIME,
+				END_TIME,
+				RECORD_COUNT,
+				TABLE_STATUS,
+				STATUS,
+				MESSAGE
+				FROM :RESULT_UNION;
+								
+				
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="RULE_ID" order="2">
+        <descriptions defaultDescription="RULE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="RULE_ID"/>
+      </attribute>
+      <attribute id="TABLE_NAME" order="3">
+        <descriptions defaultDescription="TABLE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="TABLE_NAME"/>
+      </attribute>
+      <attribute id="TABLE_ID" order="4">
+        <descriptions defaultDescription="TABLE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TABLE_ID"/>
+      </attribute>
+      <attribute id="EXECUTED_BY_NAME" order="5">
+        <descriptions defaultDescription="EXECUTED_BY_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="EXECUTED_BY_NAME"/>
+      </attribute>
+      <attribute id="END_TIME" order="7">
+        <descriptions defaultDescription="END_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="END_TIME"/>
+      </attribute>
+      <attribute id="TABLE_STATUS" order="9">
+        <descriptions defaultDescription="TABLE_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="TABLE_STATUS"/>
+      </attribute>
+      <attribute id="STATUS" order="10">
+        <descriptions defaultDescription="STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="STATUS"/>
+      </attribute>
+      <attribute id="MESSAGE" order="11">
+        <descriptions defaultDescription="MESSAGE"/>
+        <keyMapping columnObjectName="Script_View" columnName="MESSAGE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="START_TIME" order="6" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="START_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </measure>
+      <measure id="RECORD_COUNT" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="RECORD_COUNT"/>
+        <measureMapping columnObjectName="Script_View" columnName="RECORD_COUNT"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

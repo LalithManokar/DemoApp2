@@ -1,0 +1,22 @@
+schema = "SAP_TM_TRP";
+
+query  = "SELECT P.ID,
+                 
+                 P.NAME,
+                 P.DESC,
+                 1 as TYPE
+            FROM \"sap.tm.trp.db.pickupreturn::v_pickup_sel_date_object_ui\" AS P
+            UNION
+            SELECT 
+            	 R.ID,
+                 R.NAME,
+                 R.DESC,
+                 2 AS TYPE
+               
+            FROM \"sap.tm.trp.db.pickupreturn::v_return_sel_date_object_ui\" AS R "
+            ;
+                    
+                  
+depends_on_view = ["sap.tm.trp.db.pickupreturn::v_pickup_sel_date_object_ui",
+				   "sap.tm.trp.db.pickupreturn::v_return_sel_date_object_ui"];
+				   

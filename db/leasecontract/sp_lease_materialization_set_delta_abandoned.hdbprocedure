@@ -1,0 +1,9 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.leasecontract::sp_lease_materialization_set_delta_abandoned" ( OUT STATUS INTEGER ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+
+update "sap.tm.trp.db.leasecontract::t_lease_object_change_track" set status = 6  where status=1 and object_type !=-1;
+END;

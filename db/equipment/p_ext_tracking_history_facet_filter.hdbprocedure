@@ -1,0 +1,180 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.equipment::p_ext_tracking_history_facet_filter" ( 
+    IN FUZZYSEARCH_TEXT VARCHAR(500),
+    IN RESOURCE_ID VARCHAR(40),
+    IN LOCATION_LIST_INPUT "sap.tm.trp.db.equipment::tt_str_list",
+    IN CHANGED_FIELD_LIST_INPUT "sap.tm.trp.db.equipment::tt_str_list",
+    IN BEFORE_VALUE_LIST_INPUT "sap.tm.trp.db.equipment::tt_str_list",
+    IN NEW_VALUE_LIST_INPUT "sap.tm.trp.db.equipment::tt_str_list",
+    OUT LOCATION_LIST_OUTPUT "sap.tm.trp.db.eventprocessing::tt_tracking_history_facet_filter_string",
+    OUT CHANGED_FIELD_LIST_OUTPUT "sap.tm.trp.db.eventprocessing::tt_tracking_history_facet_filter_string",
+    OUT BEFORE_VALUE_LIST_OUTPUT "sap.tm.trp.db.eventprocessing::tt_tracking_history_facet_filter_string",
+    OUT NEW_VALUE_LIST_OUTPUT "sap.tm.trp.db.eventprocessing::tt_tracking_history_facet_filter_string"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+ 
+
+
+ DECLARE RESOURCE_LIST_CNT INTEGER;
+ DECLARE LOCATION_LIST_CNT INTEGER;
+ DECLARE CHANGED_FIELD_LIST_CNT INTEGER;
+ DECLARE BEFORE_VALUE_LIST_CNT INTEGER;
+ DECLARE NEW_VALUE_LIST_CNT INTEGER;
+                        
+ SELECT COUNT(*) INTO LOCATION_LIST_CNT FROM :LOCATION_LIST_INPUT;
+ SELECT COUNT(*) INTO CHANGED_FIELD_LIST_CNT FROM :CHANGED_FIELD_LIST_INPUT;
+ SELECT COUNT(*) INTO BEFORE_VALUE_LIST_CNT FROM :BEFORE_VALUE_LIST_INPUT;
+ SELECT COUNT(*) INTO NEW_VALUE_LIST_CNT FROM :NEW_VALUE_LIST_INPUT;
+
+ TRACKING_HISTORY = SELECT * 
+                    FROM "sap.tm.trp.db.eventprocessing::cv_tracking_history_by_resid"
+                          (
+                            placeholder."$$IN_RESOURCE_ID$$"=>:RESOURCE_ID
+                          );
+                          
+ IF :LOCATION_LIST_CNT = 0 OR :LOCATION_LIST_CNT IS NULL THEN 
+   LOCATION_LIST_INPUT = SELECT DISTINCT LOCATION AS STR 
+                         FROM :TRACKING_HISTORY;
+ END IF;
+ 
+ IF :CHANGED_FIELD_LIST_CNT = 0 OR :CHANGED_FIELD_LIST_CNT IS NULL THEN 
+   CHANGED_FIELD_LIST_INPUT = SELECT DISTINCT CHANGED_FIELD AS STR
+                              FROM :TRACKING_HISTORY;
+ END IF;
+ 
+ IF :BEFORE_VALUE_LIST_CNT = 0 OR :BEFORE_VALUE_LIST_CNT IS NULL THEN
+   BEFORE_VALUE_LIST_INPUT = SELECT DISTINCT BEFORE_VALUE AS STR
+                             FROM :TRACKING_HISTORY;
+ END IF;
+ 
+ IF :NEW_VALUE_LIST_CNT = 0 OR :NEW_VALUE_LIST_CNT IS NULL THEN
+   NEW_VALUE_LIST_INPUT = SELECT DISTINCT NEW_VALUE AS STR
+                          FROM :TRACKING_HISTORY;
+ END IF;
+
+/* IF FUZZYSEARCH_TEXT = '' OR FUZZYSEARCH_TEXT IS NULL THEN
+   TRACKING_HISTORY_DATA = SELECT T1.LOCATION,
+                                  T1.CHANGED_FIELD,
+                                  T1.BEFORE_VALUE,
+                                  T1.NEW_VALUE  
+                           FROM :TRACKING_HISTORY T1
+                           INNER JOIN :LOCATION_LIST_INPUT AS T2
+                                ON (T1.LOCATION = T2.STR
+                                    OR (T1.LOCATION IS NULL AND T2.STR IS NULL))
+                           INNER JOIN :CHANGED_FIELD_LIST_INPUT AS T3
+                                ON (T1.CHANGED_FIELD = T3.STR
+                                    OR (T1.CHANGED_FIELD IS NULL AND T3.STR IS NULL))
+                           INNER JOIN :BEFORE_VALUE_LIST_INPUT AS T4
+                                ON (T1.BEFORE_VALUE = T4.STR
+                                    OR (T1.BEFORE_VALUE IS NULL AND T4.STR IS NULL))
+                           INNER JOIN :NEW_VALUE_LIST_INPUT AS T5
+                                ON (T1.NEW_VALUE = T5.STR
+                                    OR (T1.NEW_VALUE IS NULL AND T5.STR IS NULL));
+   
+ ELSE
+   TRACKING_HISTORY_DATA = SELECT T1.LOCATION,
+                                  T1.CHANGED_FIELD,
+                                  T1.BEFORE_VALUE,
+                                  T1.NEW_VALUE  
+                           FROM :TRACKING_HISTORY T1
+                           INNER JOIN :LOCATION_LIST_INPUT AS T2
+                                ON (T1.LOCATION = T2.STR
+                                    OR (T1.LOCATION IS NULL AND T2.STR IS NULL))
+                           INNER JOIN :CHANGED_FIELD_LIST_INPUT AS T3
+                                ON (T1.CHANGED_FIELD = T3.STR
+                                    OR (T1.CHANGED_FIELD IS NULL AND T3.STR IS NULL))
+                           INNER JOIN :BEFORE_VALUE_LIST_INPUT AS T4
+                                ON (T1.BEFORE_VALUE = T4.STR
+                                    OR (T1.BEFORE_VALUE IS NULL AND T4.STR IS NULL))
+                           INNER JOIN :NEW_VALUE_LIST_INPUT AS T5
+                                ON (T1.NEW_VALUE = T5.STR
+                                    OR (T1.NEW_VALUE IS NULL AND T5.STR IS NULL))
+                          WHERE (
+                                  LOWER(T1.RESOURCE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                  OR LOWER(T1.LOCATION) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                  OR LOWER(T1.CHANGED_FIELD) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                  OR LOWER(T1.BEFORE_VALUE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                  OR LOWER(T1.NEW_VALUE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                );
+
+ END IF;*/
+
+ --Refactored code start
+    R1=SELECT T1.LOCATION,T1.CHANGED_FIELD,T1.BEFORE_VALUE,T1.NEW_VALUE,T1.RESOURCE 
+                              FROM :TRACKING_HISTORY T1 
+                               INNER JOIN :LOCATION_LIST_INPUT AS T2
+                                    ON T1.LOCATION = T2.STR
+                               UNION ALL 
+                                SELECT T1.LOCATION,T1.CHANGED_FIELD,T1.BEFORE_VALUE,T1.NEW_VALUE,T1.RESOURCE 
+                              FROM :TRACKING_HISTORY T1 
+                               INNER JOIN :LOCATION_LIST_INPUT AS T2
+                                    ON (T1.LOCATION IS NULL AND T2.STR IS NULL);
+                                    
+      R2=SELECT T1.LOCATION,T1.CHANGED_FIELD,T1.BEFORE_VALUE,T1.NEW_VALUE,T1.RESOURCE 
+                              FROM :R1 AS T1 
+                               INNER JOIN :CHANGED_FIELD_LIST_INPUT AS T2
+                                    ON T1.CHANGED_FIELD = T2.STR
+                               UNION ALL 
+                                SELECT T1.LOCATION,T1.CHANGED_FIELD,T1.BEFORE_VALUE,T1.NEW_VALUE,T1.RESOURCE 
+                              FROM :R1 AS T1 
+                               INNER JOIN :CHANGED_FIELD_LIST_INPUT AS T2
+                                    ON (T1.CHANGED_FIELD IS NULL AND T2.STR IS NULL);
+                                    
+      R3=SELECT T1.LOCATION,T1.CHANGED_FIELD,T1.BEFORE_VALUE,T1.NEW_VALUE,T1.RESOURCE 
+                              FROM :R2 AS T1 
+                               INNER JOIN :BEFORE_VALUE_LIST_INPUT AS T2
+                                    ON T1.BEFORE_VALUE = T2.STR
+                               UNION ALL 
+                                SELECT T1.LOCATION,T1.CHANGED_FIELD,T1.BEFORE_VALUE,T1.NEW_VALUE,T1.RESOURCE 
+                              FROM :R2 AS T1 
+                               INNER JOIN :BEFORE_VALUE_LIST_INPUT AS T2
+                                    ON (T1.BEFORE_VALUE IS NULL AND T2.STR IS NULL);
+                                    
+	 R4=SELECT T1.LOCATION,T1.CHANGED_FIELD,T1.BEFORE_VALUE,T1.NEW_VALUE,T1.RESOURCE 
+                              FROM :R3 AS T1 
+                               INNER JOIN :NEW_VALUE_LIST_INPUT AS T2
+                                    ON T1.NEW_VALUE = T2.STR
+                               UNION ALL 
+                                SELECT T1.LOCATION,T1.CHANGED_FIELD,T1.BEFORE_VALUE,T1.NEW_VALUE,T1.RESOURCE 
+                              FROM :R3 AS T1 
+                               INNER JOIN :NEW_VALUE_LIST_INPUT AS T2
+                                    ON (T1.NEW_VALUE IS NULL AND T2.STR IS NULL);
+ 
+IF FUZZYSEARCH_TEXT = '' OR FUZZYSEARCH_TEXT IS NULL THEN
+    
+    TRACKING_HISTORY_DATA = SELECT * FROM :R4;
+
+
+ELSE
+
+    TRACKING_HISTORY_DATA = SELECT * FROM :R4 AS T1
+                            WHERE (
+                                  LOWER(T1.RESOURCE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                  OR LOWER(T1.LOCATION) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                  OR LOWER(T1.CHANGED_FIELD) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                  OR LOWER(T1.BEFORE_VALUE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                  OR LOWER(T1.NEW_VALUE) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+                                );
+ END IF; 
+ --Refactored code end
+ 
+ LOCATION_LIST_OUTPUT = SELECT DISTINCT LOCATION AS KEY, LOCATION AS TEXT 
+                        FROM :TRACKING_HISTORY_DATA
+                        ORDER BY LOCATION;
+                        
+ CHANGED_FIELD_LIST_OUTPUT = SELECT DISTINCT IFNULL(CHANGED_FIELD,'') AS KEY, IFNULL(CHANGED_FIELD,'') AS TEXT 
+                             FROM :TRACKING_HISTORY_DATA
+                             ORDER BY KEY;
+                             
+ BEFORE_VALUE_LIST_OUTPUT = SELECT DISTINCT IFNULL(BEFORE_VALUE,'') AS KEY, IFNULL(BEFORE_VALUE,'') AS TEXT
+                            FROM :TRACKING_HISTORY_DATA
+                            ORDER BY KEY;
+                            
+ NEW_VALUE_LIST_OUTPUT = SELECT DISTINCT IFNULL(NEW_VALUE,'') AS KEY, IFNULL(NEW_VALUE,'') AS TEXT
+                         FROM :TRACKING_HISTORY_DATA
+                         ORDER BY KEY;
+
+END;

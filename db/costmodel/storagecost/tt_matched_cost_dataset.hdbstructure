@@ -1,0 +1,15 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "settlement stock";
+table.columns = [
+  	{name = "LOCATION"; sqlType = VARCHAR; length = 20;},
+    {name = "RESOURCE_TYPE"; sqlType = NVARCHAR; length = 20;},  
+  	{name = "TYPE"; sqlType = VARCHAR; length = 20;},
+    {name = "FREE_POOL_TYPE"; sqlType = VARCHAR; length = 10;},
+    {name = "START_AT"; sqlType = INTEGER;},
+    {name = "START_TIME"; sqlType = VARCHAR;length = 50;},
+    {name = "THRESHOLD_FROM"; sqlType = INTEGER;},
+    {name = "THRESHOLD_TO"; sqlType = INTEGER;},
+    {name = "UOM_CODE"; sqlType = VARCHAR; length = 20;},
+    {name = "PER_DIEM_COST"; sqlType = DECIMAL; precision = 13; scale = 3;}
+];

@@ -1,0 +1,19 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "a list of Street Turn TU info";
+table.columns = [
+	{name = "RANK"; sqlType = INTEGER;},
+    {name = "TU_ID"; sqlType = VARCHAR; length = 20;},
+    {name = "SRC_LOC";sqlType = VARCHAR; length = 20;},
+    {name = "DES_LOC";sqlType = VARCHAR; length = 20;},
+    {name = "SRC_UN_LOCODE";sqlType = VARCHAR; length = 20;},
+    {name = "DES_UN_LOCODE";sqlType = VARCHAR; length = 20;},    
+    {name = "SHIPPER";sqlType = VARCHAR; length = 20;},
+    {name = "CONSIGNEE";sqlType = VARCHAR; length = 20;},
+	{name = "DANG_GOODS";sqlType = VARCHAR; length = 10;},
+	{name = "DOC_TYPE";sqlType = VARCHAR; length = 10;},
+	{name = "EQUI_TYPE";sqlType = VARCHAR; length = 10;},
+	{name = "EQUI_GROUP";sqlType = VARCHAR; length = 10;},
+	{name = "EST_COST"; sqlType = DOUBLE;}, 
+	{name = "ASSIGNED"; sqlType = INTEGER;} 
+];

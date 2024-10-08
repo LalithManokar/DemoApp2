@@ -1,0 +1,56 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::p_pipeline_procedure_wrapper_generator" ( out output NCLOB) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	AS
+BEGIN
+	
+	DECLARE script NCLOB;
+	DECLARE header NCLOB;
+	DECLARE body NCLOB;
+	DECLARE footer NCLOB;
+	
+	/*DECLARE CURSOR lc_cursor FOR
+	SELECT DISTINCT T1."NAME" AS NAME,T2.SCHEMA_NAME AS SCHEMA_NAME,T2."OBJECT_NAME" AS OBJECT_NAME,T1.INSTANT_ENABLED AS INSTANT_ENABLED FROM "sap.tm.trp.db.pipeline::t_pipeline_model" T1 
+	INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_entry_point" T2 ON T1.ENTRY_POINT_ID = T2.ID
+	WHERE T2.ENTRY_POINT_TYPE = 'PROCEDURE' ;--AND PIPELINE_MODEL_TYPE_ID = 1;-- AND T1.INSTANT_ENABLED = 'X'
+	
+	-- header part to alter the wrapper procedure
+	header := 'ALTER PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::p_pipeline_procedure_wrapper" ('
+			 || 'IN PIPELINE_NAME NVARCHAR(200),'
+			 || 'IN RESOURCE_CATEGORY VARCHAR(20),'
+			 || 'IN LOCATION "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_location",'
+			 || 'IN RESOURCE "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_resource",'
+			 || 'IN TIME_PERIOD "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_time_period",'
+			 || 'IN NODE_LIST "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_node",'
+			 || 'IN ATTRIBUTE_FILTER NVARCHAR(500),'
+			 || 'OUT DATASET "sap.tm.trp.db.supplydemand.instant::tt_sd_output" )'
+			 || ' LANGUAGE SQLSCRIPT '
+			 || ' SQL SECURITY INVOKER '
+			 || ' DEFAULT SCHEMA SAP_TM_TRP '
+			 || ' READS SQL DATA AS '
+			 || ' BEGIN ';	
+	
+	--build the body of the procedure	
+	body := '';	
+	FOR cur_row AS lc_cursor DO
+		body := :body || ' IF :PIPELINE_NAME = ''' || '' || cur_row.NAME || '''' ;
+		IF cur_row.INSTANT_ENABLED = 'X' THEN
+			body := :body || ' THEN SCALAR_INPUTS = SELECT :PIPELINE_NAME AS PIPELINE_NAME , :RESOURCE_CATEGORY AS RESOURCE_CATEGORY, :ATTRIBUTE_FILTER AS ATTRIBUTE_FILTER FROM DUMMY;';
+			body := :body || ' CALL ' || '"' || cur_row.SCHEMA_NAME || '".' || '"' || cur_row.OBJECT_NAME || '"' || '(:LOCATION,:RESOURCE,:TIME_PERIOD,:NODE_LIST,:SCALAR_INPUTS,:DATASET); RETURN;' ;
+		ELSE
+			body := :body || ' THEN CALL ' || '"' || cur_row.SCHEMA_NAME || '".' || '"' || cur_row.OBJECT_NAME || '"' || '( :DATASET); RETURN;' ;
+		END IF ;
+		body := :body || ' END IF;';
+	END FOR;
+	
+	-- footer part of the wrapper procedure 
+	footer := ' END; ';	
+	
+	script := :header || :body || :footer;
+	
+	output := :script;
+	
+	EXECUTE IMMEDIATE :script;*/
+	
+END;

@@ -1,0 +1,60 @@
+procedure "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.locking::p_lock_acquire2" (               
+    in i_object_type varchar(50), -- TODO: Where are object types stored? As constants/enum in service layer?
+    in i_object_id nvarchar(32), -- TODO: Double-check that this data type is OK
+    in i_user_id varchar(22), -- TODO: Double-check data type. Does not support usernames with special characters? 
+    in i_token varchar(200), -- TODO: Would a session id really be that long, i.e. is 200 really necessary?
+    out o_message varchar(200),
+    out o_user_id varchar(22), -- TODO: Double-check data type. Does not support usernames with special characters? 
+    out o_timestamp timestamp
+    ) 
+language sqlscript
+sql security invoker 
+default schema "SAP_TM_TRP"
+as
+/**
+ * Tries to lock an object using provided user ID and token. 
+ *
+ * To implement user-level locking, simply use the username as token. 
+ * To implement session-level locking, use a session ID as token.
+ * Returns: - a message indicating success or failure
+ *          - the resulting owner: provided user ID if successfully locked, 
+ *                                 original user ID if failed to lock
+ *          - the resulting timestamp: current timestamp if successfully locked,
+ *                                     original timestamp if failed to lock
+ **/
+begin
+    declare v_timestamp      timestamp := current_utctimestamp;
+    declare v_timeout		 int       := 20; -- 20 seconds
+    declare v_msg_success    char(18)  := 'MSG_SUCCESS_STATUS';
+    declare v_msg_err_locked char(14)  := 'MSG_ERR_LOCKED';
+
+    declare exit handler for sql_error_code 301 -- Unique constraint violation, i.e. locked with different token and no timeout
+    begin
+    -- Note: A concurrent update of the lock just before this select is acceptable, because the returned data will still reflect the latest lock status.
+        o_message := :v_msg_err_locked;
+        select  lo.user_id, lo.timestamp
+        into    o_user_id, o_timestamp
+        from    "sap.tm.trp.db.systemmanagement.locking::t_lock" lo
+        where   lo.object_type = :i_object_type
+        and     lo.object_id = :i_object_id;
+    end;
+
+    -- Use upsert to insert, update or fail with error. Fail with error means object is locked with different token.
+    -- If below where clause is true (token match or timout), UPSERT will update the lock with new user, token and timestamp
+    -- If below where clause is false, UPSERT will try to insert a new record. If no lock exists for the object, the insert will succeed.
+    -- Otherwise (lock exists for this object), the insert will fail with error 301, unique contraint violation. 
+    -- The error will be caught by the exit handler and a proper message is returned.
+    -- For full UPSERT docu see https://go.sap.corp/upsert
+    upsert  "sap.tm.trp.db.systemmanagement.locking::t_lock"(
+            object_type, object_id, user_id, token, timestamp)
+    values( :i_object_type, :i_object_id, :i_user_id, :i_token, :v_timestamp)
+    where   object_type = :i_object_type
+    and     object_id = :i_object_id
+    and     ((user_id = :i_user_id and token = :i_token)
+            or seconds_between(timestamp, :v_timestamp) > :v_timeout);
+
+    -- Reaching this point means success
+    o_message   := :v_msg_success;
+    o_user_id     := :i_user_id;
+    o_timestamp := v_timestamp;
+end;

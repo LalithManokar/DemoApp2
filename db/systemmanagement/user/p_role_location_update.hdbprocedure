@@ -1,0 +1,13 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_role_location_update" (
+  IN ROLE_ID BIGINT,
+  IN LOCATION_IDS "sap.tm.trp.db.systemmanagement.location::tt_regional_id") 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+  
+    CALL "sap.tm.trp.db.systemmanagement.user::p_role_location_delete"(:ROLE_ID);
+    CALL "sap.tm.trp.db.systemmanagement.user::p_role_location_create"(:ROLE_ID, :LOCATION_IDS);
+    
+END;

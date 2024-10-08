@@ -1,0 +1,933 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_booking_rp" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_booking_rp"/>
+  <localVariables>
+    <variable id="EQUIPMENT_FILTER_ID" parameter="true">
+      <descriptions defaultDescription=" EQUIPMENT_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="LOCATION_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="LOCATION_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="FILTER_ON" parameter="true">
+      <descriptions defaultDescription="FILTER_ON"/>
+      <variableProperties datatype="TINYINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="FROM_DATE" parameter="true">
+      <descriptions defaultDescription="FROM_DATE"/>
+      <variableProperties datatype="TIMESTAMP" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="TO_DATE" parameter="true">
+      <descriptions defaultDescription="TO_DATE"/>
+      <variableProperties datatype="TIMESTAMP" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="BOOKING_TYPE" parameter="true">
+      <descriptions defaultDescription="BOOKING_TYPE"/>
+      <variableProperties datatype="NVARCHAR" length="2" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="LOCATION" parameter="true">
+      <descriptions defaultDescription="LOCATION"/>
+      <variableProperties datatype="NVARCHAR" length="20" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="EQUIPMENT_TYPE" parameter="true">
+      <descriptions defaultDescription="EQUIPMENT_TYPE"/>
+      <variableProperties datatype="VARCHAR" length="10" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="DATA_PROVIDER_TYPE" parameter="true">
+      <descriptions defaultDescription="DATA_PROVIDER_TYPE"/>
+      <variableProperties datatype="NVARCHAR" length="2" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="NAV_TYPE" parameter="true">
+      <descriptions defaultDescription="NAV_TYPE"/>
+      <variableProperties datatype="VARCHAR" length="500" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="ORDER_ID" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="TU_TYPE_CODE" length="10"/>
+        <viewAttribute datatype="NVARCHAR" id="TU_TYPE" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="CUSTOMER_NAME" length="40"/>
+        <viewAttribute datatype="NVARCHAR" id="RESOURCE_TYPE" length="10"/>
+        <viewAttribute datatype="TIMESTAMP" id="PLANNED_DEPARTURE_TIME"/>
+        <viewAttribute datatype="NVARCHAR" id="SOURCE_LOCATION" length="20"/>
+        <viewAttribute datatype="TIMESTAMP" id="PLANNED_ARRIVAL_TIME"/>
+        <viewAttribute datatype="NVARCHAR" id="DESTINATION_LOCATION" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="SHIPPER" length="40"/>
+        <viewAttribute datatype="NVARCHAR" id="CONSIGNEE" length="40"/>
+        <viewAttribute datatype="DATE" id="BOOKING_DATE"/>
+        <viewAttribute datatype="NVARCHAR" id="PORT_OF_LOADING" length="30"/>
+        <viewAttribute datatype="NVARCHAR" id="PORT_OF_DISCHARGE" length="30"/>
+        <viewAttribute datatype="TIMESTAMP" id="VESSEL_CUTOFF_UTC"/>
+        <viewAttribute datatype="VARCHAR" id="VESSEL_POL" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="VESSEL_POD" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="VOYAGE_POL" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="VOYAGE_POD" length="100"/>
+        <viewAttribute datatype="INTEGER" id="HAULAGE_TYPE"/>
+        <viewAttribute datatype="VARCHAR" id="BOOKING_REFERENCE" length="35"/>
+        <viewAttribute datatype="VARCHAR" id="EXECUTION_STATUS_CODE" length="2"/>
+        <viewAttribute datatype="NVARCHAR" id="EXECUTION_STATUS" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="LIFECYCLE_STATUS_CODE" length="2"/>
+        <viewAttribute datatype="NVARCHAR" id="LIFECYCLE_STATUS" length="60"/>
+        <viewAttribute datatype="INTEGER" id="QUANTITY"/>
+        <viewAttribute datatype="INTEGER" id="ASSIGN_QUANTITY"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_NUMBER" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="LEASE_AGREEMENT" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="LEASE_TYPE_CODE" length="1"/>
+        <viewAttribute datatype="NVARCHAR" id="LEASE_TYPE" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="SPECIAL_INSTRUCTION_CODE" length="3"/>
+        <viewAttribute datatype="VARCHAR" id="SPECIAL_INSTRUCTION_NAME" length="30"/>
+        <viewAttribute datatype="VARCHAR" id="MOT" length="2"/>
+        <viewAttribute datatype="VARCHAR" id="MEANS_OF_TRANSPORTATION" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="CARRIER_POL" length="40"/>
+        <viewAttribute datatype="VARCHAR" id="CARRIER_POD" length="40"/>
+        <viewAttribute datatype="VARCHAR" id="PICKUP_LOCATION_NAME" length="20"/>
+        <viewAttribute datatype="DATE" id="PICKUP_DATE"/>
+        <viewAttribute datatype="VARCHAR" id="RETURN_LOCATION_NAME" length="20"/>
+        <viewAttribute datatype="DATE" id="RETURN_DATE"/>
+        <viewAttribute datatype="TIMESTAMP" id="VESSEL_ARRIVAL_DATE"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_LAST_LOCATION" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_NAME" length="40"/>
+        <viewAttribute datatype="VARCHAR" id="ITE_KEY" length="32"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#EQUIPMENT_FILTER_ID</localVariable>
+      <localVariable>#LOCATION_FILTER_ID</localVariable>
+      <localVariable>#FILTER_ON</localVariable>
+      <localVariable>#FROM_DATE</localVariable>
+      <localVariable>#TO_DATE</localVariable>
+      <localVariable>#BOOKING_TYPE</localVariable>
+      <localVariable>#LOCATION</localVariable>
+      <localVariable>#EQUIPMENT_TYPE</localVariable>
+      <localVariable>#DATA_PROVIDER_TYPE</localVariable>
+      <localVariable>#NAV_TYPE</localVariable>
+      <definition> 
+ /********* Begin Procedusource_name Script ************/ 
+ BEGIN 
+
+DECLARE LOC_AUTH SMALLINT;
+DECLARE EQUIP_AUTH SMALLINT;
+  DECLARE GEO_FLAG INT;
+  DECLARE EQUIP_FLAG INT;
+  DECLARE END_DECIMAL INTEGER;
+  DECLARE RES_CAT NVARCHAR(20); -- CURRENT RESOURCE CATEGORY ACCORDING TO EQUIP FILTER 
+  DECLARE RES_CAT_TYPE NVARCHAR(10);
+  DECLARE ITEM_CAT NVARCHAR(50); -- TU ITEM CATEGORY
+  DECLARE MOT_CAT NVARCHAR(50) := -1; -- TU TRANSPORTATION MODE CATEGORY  
+   
+   
+ SELECT IFNULL(MAX(LOCATION_TYPE),1) INTO GEO_FLAG
+  FROM (SELECT LOCATION_TYPE 
+        FROM &quot;sap.tm.trp.db.filter::t_location_filter&quot;
+        WHERE ID = :LOCATION_FILTER_ID);
+  
+        
+  --CURRENT RESOURCE CATEGORY BY EQUIP ID
+  SELECT RESOURCE_CATEGORY INTO RES_CAT
+  FROM &quot;sap.tm.trp.db.filter::t_equipment_filter&quot; T1
+  WHERE ID = :EQUIPMENT_FILTER_ID;
+  
+  -- GET RESOURCE CATEGORY TYPE
+  SELECT RESOURCE_CATEGORY_TYPE INTO RES_CAT_TYPE 
+  FROM &quot;sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings&quot;
+  WHERE CODE = :RES_CAT;  
+  
+  --ITEM CATEGORY BY RESOURCE CATEGORY
+  SELECT VALUE INTO ITEM_CAT from &quot;sap.tm.trp.db.systemmanagement::t_config_cust&quot; where code =:RES_CAT and KEY = 'ITEM_CAT';
+  
+   IF :FROM_DATE &lt;> '' AND :TO_DATE &lt;> '' THEN 
+    SELECT ADD_DAYS(:FROM_DATE,IFNULL(MAX(DATE_OFFSET),0)), ADD_DAYS(:TO_DATE,IFNULL(MAX(DATE_OFFSET),0))
+    INTO FROM_DATE, TO_DATE
+    FROM &quot;sap.tm.trp.db.stock::t_start_time_for_user&quot;
+    WHERE USER = (SELECT USERNAME FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;);             
+  END IF;
+  
+  
+ SELECT IFNULL(MAX(FILTER_TYPE),1) INTO EQUIP_FLAG 
+  FROM (SELECT FILTER_TYPE 
+        FROM &quot;sap.tm.trp.db.filter::t_equipment_filter&quot; T1
+        WHERE ID = :EQUIPMENT_FILTER_ID
+        );
+          
+          
+
+EQUIPMENT_ID = SELECT * FROM &quot;sap.tm.trp.db.booking::cv_get_equipment_id_by_equipment_filter_id&quot;(
+				PLACEHOLDER.&quot;$$EQUIPMENT_FILTER_ID$$&quot;=> :EQUIPMENT_FILTER_ID,
+				PLACEHOLDER.&quot;$$EQUIPMENT_TYPE$$&quot;=> :EQUIPMENT_TYPE );
+				
+LOCATION_ID = SELECT * FROM &quot;sap.tm.trp.db.booking::cv_get_location_id_by_location_filter_id&quot;(
+				PLACEHOLDER.&quot;$$EQUIPMENT_FILTER_ID$$&quot;=> :EQUIPMENT_FILTER_ID,
+				PLACEHOLDER.&quot;$$LOCATION_FILTER_ID$$&quot;=> :LOCATION_FILTER_ID );
+
+-- tu related trq category type                               
+lt_t_trq_category =  select * from &quot;sap.tm.trp.db.systemmanagement::t_trq_category&quot; CAT  
+                     where CAT.ACTIVE = 1;
+                     
+  --MOT_CAT BY RESOURCE CATEGORY TYPE
+  -- Only Container and Railcar need to cal POL/POD 
+  IF :RES_CAT_TYPE = 'CN' THEN 
+     MOT_CAT := '3';
+  ELSEIF :RES_CAT_TYPE = 'RC' THEN 
+     MOT_CAT := '2';
+  END IF;        
+  
+    		
+ CALL &quot;sap.tm.trp.db.filter::p_get_locations_by_geo_name&quot;(:LOCATION, :GEO_FLAG, provided_locations);
+
+ IF LENGTH(:DATA_PROVIDER_TYPE) > 0 THEN
+    IF LENGTH(:LOCATION) > 0 THEN
+       -- CALL &quot;sap.tm.trp.db.filter::p_get_locations_by_geo_name&quot;(:LOCATION, :GEO_FLAG, provided_locations);
+      IF :DATA_PROVIDER_TYPE = '0' THEN
+          lt_temp_orders_filter_by_loc_time = SELECT DISTINCT t1.DB_KEY AS TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT, 
+				                                  t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, 
+				                                  t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+				                               t3.LOCATION_ID AS SOURCE_LOCATION_ID, 
+				                               t3.LOCATION_NAME AS SOURCE_LOCATION_NAME,
+				                               CASE WHEN t3.SEL_TIME = '' THEN NULL 
+				                                 ELSE t3.SEL_TIME END AS PLANNED_DEPARTURE_TIME,
+				                               t4.LOCATION_ID AS DESTINATION_LOCATION_ID, 
+				                               t4.LOCATION_NAME AS DESTINATION_LOCATION_NAME, 
+				                               CASE WHEN t4.SEL_TIME = '' THEN NULL 
+				                                 ELSE t4.SEL_TIME END AS PLANNED_ARRIVAL_TIME,
+				                               t3.DEPARTURED, 
+				                               t4.UNLOADED,
+				                               CASE t1.MOVEMENT_CAT WHEN 'EP' THEN t3.LOCATION_ID -- Need to add 'RP's
+				                                ELSE '' END AS PICKUP_LOCATION_ID, 
+				                               CASE t1.MOVEMENT_CAT WHEN 'EP' THEN t3.LOCATION_NAME 
+				                                ELSE '' END AS PICKUP_LOCATION_NAME,
+				                               CASE WHEN (t1.MOVEMENT_CAT = 'EP' AND t3.SEL_TIME &lt;> '') 
+				                                 THEN t3.SEL_TIME
+				                                 ELSE NULL END AS PICKUP_DATE,
+				                               CASE t1.MOVEMENT_CAT WHEN 'ER' THEN t4.LOCATION_ID 
+				                                ELSE '' END AS RETURN_LOCATION_ID, 
+				                               CASE t1.MOVEMENT_CAT WHEN 'ER' THEN t4.LOCATION_NAME 
+				                                ELSE '' END AS RETURN_LOCATION_NAME,
+				                               CASE WHEN (t1.MOVEMENT_CAT = 'ER' AND t4.SEL_TIME &lt;> '') 
+				                                 THEN t4.SEL_TIME
+				                                 ELSE NULL END AS RETURN_DATE,
+				                               TRQ.SHIPPER, 
+				                               TRQ.CONSIGNEE,
+				                               TRQ.CUSTOMER_NAME,
+				                               TRQ.ORDER_DATE AS BOOKING_DATE,
+				                               TRQ.TRQ_ID,  
+				                               t3.SEL_TIME as first_stop_loc_time,
+				                               t4.SEL_TIME as last_stop_loc_time                               
+				                 FROM &quot;sap.tm.trp.db.semantic.order::v_transportation_unit&quot; t1
+				                        INNER JOIN &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_stop&quot; t3 
+				                        ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')         
+				                        INNER JOIN &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_stop&quot; t4 
+				                        ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')
+				                    	INNER JOIN :provided_locations T6 
+                                     	ON (T4.LOCATION_ID = T6.LOCATION_ID)
+				                        INNER JOIN &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_item&quot; T5 
+				                        ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :ITEM_CAT )                        
+				                        LEFT JOIN &quot;sap.tm.trp.db.semantic.order::v_customer_order&quot; TRQ ON(t5.TRQ_KEY = TRQ.DB_KEY)
+				                        WHERE t1.TOR_CAT = 'TU'
+		                        		AND t1.MOVEMENT_CAT = 'RP' AND T4.UNLOADED = 0
+		                        		AND T1.TRQ_CAT IN (SELECT TRQ_TYPE FROM :lt_t_trq_category);
+		                        		
+      ELSEIF :DATA_PROVIDER_TYPE = '1' THEN
+            lt_temp_orders_filter_by_loc_time =
+             SELECT DISTINCT t1.DB_KEY AS TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT, 
+				                                  t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, 
+				                                  t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+				                               t3.LOCATION_ID AS SOURCE_LOCATION_ID, 
+				                               t3.LOCATION_NAME AS SOURCE_LOCATION_NAME,
+				                               CASE WHEN t3.SEL_TIME = '' THEN NULL 
+				                                 ELSE t3.SEL_TIME END AS PLANNED_DEPARTURE_TIME,
+				                               t4.LOCATION_ID AS DESTINATION_LOCATION_ID, 
+				                               t4.LOCATION_NAME AS DESTINATION_LOCATION_NAME, 
+				                               CASE WHEN t4.SEL_TIME = '' THEN NULL 
+				                                 ELSE t4.SEL_TIME END AS PLANNED_ARRIVAL_TIME,
+				                               t3.DEPARTURED, 
+				                               t4.UNLOADED,
+				                               CASE t1.MOVEMENT_CAT WHEN 'EP' THEN t3.LOCATION_ID -- Need to add 'RP's
+				                                ELSE '' END AS PICKUP_LOCATION_ID, 
+				                               CASE t1.MOVEMENT_CAT WHEN 'EP' THEN t3.LOCATION_NAME 
+				                                ELSE '' END AS PICKUP_LOCATION_NAME,
+				                               CASE WHEN (t1.MOVEMENT_CAT = 'EP' AND t3.SEL_TIME &lt;> '') 
+				                                 THEN t3.SEL_TIME
+				                                 ELSE NULL END AS PICKUP_DATE,
+				                               CASE t1.MOVEMENT_CAT WHEN 'ER' THEN t4.LOCATION_ID 
+				                                ELSE '' END AS RETURN_LOCATION_ID, 
+				                               CASE t1.MOVEMENT_CAT WHEN 'ER' THEN t4.LOCATION_NAME 
+				                                ELSE '' END AS RETURN_LOCATION_NAME,
+				                               CASE WHEN (t1.MOVEMENT_CAT = 'ER' AND t4.SEL_TIME &lt;> '') 
+				                                 THEN t4.SEL_TIME
+				                                 ELSE NULL END AS RETURN_DATE,
+				                               TRQ.SHIPPER, 
+				                               TRQ.CONSIGNEE,
+				                               TRQ.CUSTOMER_NAME,
+				                               TRQ.ORDER_DATE AS BOOKING_DATE,
+				                               TRQ.TRQ_ID , 
+				                               t3.SEL_TIME as first_stop_loc_time,
+				                               t4.SEL_TIME as last_stop_loc_time                               
+				                 FROM &quot;sap.tm.trp.db.semantic.order::v_transportation_unit&quot; t1
+				                        INNER JOIN &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_stop&quot; t3 
+				                        ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')         
+				                        INNER JOIN &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_stop&quot; t4 
+				                        ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')
+                                        INNER JOIN :provided_locations T6 
+                                        ON (T6.LOCATION_ID = T3.LOCATION_ID)
+				                        INNER JOIN &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_item&quot; T5 
+				                        ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :ITEM_CAT )                        
+				                        LEFT JOIN &quot;sap.tm.trp.db.semantic.order::v_customer_order&quot; TRQ ON(t5.TRQ_KEY = TRQ.DB_KEY)
+				                        WHERE t1.TOR_CAT = 'TU'
+		                        		AND t1.MOVEMENT_CAT = 'RP'
+                                     	AND T3.DEPARTURED = 0
+                                     	AND t1.TRQ_CAT IN (SELECT TRQ_TYPE FROM :lt_t_trq_category);
+        END IF;
+    --END IF;
+    
+    ELSE
+     lt_temp_orders_filter_by_loc_time =
+             SELECT DISTINCT t1.DB_KEY AS TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT, 
+				                                  t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, 
+				                                  t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+				                               t3.LOCATION_ID AS SOURCE_LOCATION_ID, 
+				                               t3.LOCATION_NAME AS SOURCE_LOCATION_NAME,
+				                               CASE WHEN t3.SEL_TIME = '' THEN NULL 
+				                                 ELSE t3.SEL_TIME END AS PLANNED_DEPARTURE_TIME,
+				                               t4.LOCATION_ID AS DESTINATION_LOCATION_ID, 
+				                               t4.LOCATION_NAME AS DESTINATION_LOCATION_NAME, 
+				                               CASE WHEN t4.SEL_TIME = '' THEN NULL 
+				                                 ELSE t4.SEL_TIME END AS PLANNED_ARRIVAL_TIME,
+				                               t3.DEPARTURED, 
+				                               t4.UNLOADED,
+				                               CASE t1.MOVEMENT_CAT WHEN 'EP' THEN t3.LOCATION_ID -- Need to add 'RP's
+				                                ELSE '' END AS PICKUP_LOCATION_ID, 
+				                               CASE t1.MOVEMENT_CAT WHEN 'EP' THEN t3.LOCATION_NAME 
+				                                ELSE '' END AS PICKUP_LOCATION_NAME,
+				                               CASE WHEN (t1.MOVEMENT_CAT = 'EP' AND t3.SEL_TIME &lt;> '') 
+				                                 THEN t3.SEL_TIME
+				                                 ELSE NULL END AS PICKUP_DATE,
+				                               CASE t1.MOVEMENT_CAT WHEN 'ER' THEN t4.LOCATION_ID 
+				                                ELSE '' END AS RETURN_LOCATION_ID, 
+				                               CASE t1.MOVEMENT_CAT WHEN 'ER' THEN t4.LOCATION_NAME 
+				                                ELSE '' END AS RETURN_LOCATION_NAME,
+				                               CASE WHEN (t1.MOVEMENT_CAT = 'ER' AND t4.SEL_TIME &lt;> '') 
+				                                 THEN t4.SEL_TIME
+				                                 ELSE NULL END AS RETURN_DATE,
+				                               TRQ.SHIPPER, 
+				                               TRQ.CONSIGNEE,
+				                               TRQ.CUSTOMER_NAME,
+				                               TRQ.ORDER_DATE AS BOOKING_DATE,
+				                               TRQ.TRQ_ID  ,
+				                               t3.SEL_TIME as first_stop_loc_time,
+				                               t4.SEL_TIME as last_stop_loc_time                               
+				                 FROM &quot;sap.tm.trp.db.semantic.order::v_transportation_unit&quot; t1
+				                        INNER JOIN &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_stop&quot; t3 
+				                        ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')         
+				                        INNER JOIN &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_stop&quot; t4 
+				                        ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')
+				                        INNER JOIN &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_item&quot; T5 
+				                        ON (t5.TU_KEY = t1.DB_KEY AND t5.ITEM_CAT = :ITEM_CAT )                        
+				                        LEFT JOIN &quot;sap.tm.trp.db.semantic.order::v_customer_order&quot; TRQ ON(t5.TRQ_KEY = TRQ.DB_KEY)
+				                        WHERE t1.TOR_CAT = 'TU'
+		                        		AND t1.MOVEMENT_CAT = 'RP'
+		                        		AND T1.TRQ_CAT IN (SELECT TRQ_TYPE FROM :lt_t_trq_category);
+    	
+  END IF;  
+  END IF;
+   
+   if :nav_type = 'MRIN' then        		                       
+    		lt_temp_result =  SELECT DISTINCT t1.TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT,t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+							t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,t1.PLANNED_DEPARTURE_TIME,t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME, 
+							t1.PLANNED_ARRIVAL_TIME,t1.DEPARTURED, t1.UNLOADED,t1.PICKUP_LOCATION_ID, t1.PICKUP_LOCATION_NAME,t1.PICKUP_DATE,t1.RETURN_LOCATION_ID, 
+							t1.RETURN_LOCATION_NAME,t1.RETURN_DATE,t1.SHIPPER, t1.CONSIGNEE,t1.CUSTOMER_NAME,t1.BOOKING_DATE,t1.TRQ_ID
+									from :lt_temp_orders_filter_by_loc_time  t1 
+                           			INNER JOIN :LOCATION_ID FL 
+                                    ON (T1.DESTINATION_LOCATION_ID=FL.LOCATION_ID)
+    		                        WHERE (t1.last_stop_loc_time BETWEEN :FROM_DATE AND :TO_DATE)
+    		                        AND EXISTS (SELECT DB_KEY FROM &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_stage&quot; t3
+                                    WHERE t3.TU_KEY = t1.TU_KEY AND MOT_CAT = '3');	
+		
+	elseif :nav_type = 'MROUT' then		  
+		                       
+		    lt_temp_result =    SELECT DISTINCT t1.TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT,t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+							t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,t1.PLANNED_DEPARTURE_TIME,t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME, 
+							t1.PLANNED_ARRIVAL_TIME,t1.DEPARTURED, t1.UNLOADED,t1.PICKUP_LOCATION_ID, t1.PICKUP_LOCATION_NAME,t1.PICKUP_DATE,t1.RETURN_LOCATION_ID, 
+							t1.RETURN_LOCATION_NAME,t1.RETURN_DATE,t1.SHIPPER, t1.CONSIGNEE,t1.CUSTOMER_NAME,t1.BOOKING_DATE,t1.TRQ_ID
+								from :lt_temp_orders_filter_by_loc_time t1
+		   						 INNER JOIN :LOCATION_ID FL 
+                                 ON (t1.SOURCE_LOCATION_ID=FL.LOCATION_ID)                               
+		                        WHERE (t1.first_stop_loc_time BETWEEN :FROM_DATE AND :TO_DATE)
+		                        AND EXISTS (SELECT DB_KEY FROM &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_stage&quot; 
+                                			 WHERE TU_KEY = t1.TU_KEY AND MOT_CAT = '3');
+	elseif :nav_type = 'OMERIN' then	 
+		                       
+		    lt_temp_result =    SELECT DISTINCT t1.TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT,t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+							t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,t1.PLANNED_DEPARTURE_TIME,t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME, 
+							t1.PLANNED_ARRIVAL_TIME,t1.DEPARTURED, t1.UNLOADED,t1.PICKUP_LOCATION_ID, t1.PICKUP_LOCATION_NAME,t1.PICKUP_DATE,t1.RETURN_LOCATION_ID, 
+							t1.RETURN_LOCATION_NAME,t1.RETURN_DATE,t1.SHIPPER, t1.CONSIGNEE,t1.CUSTOMER_NAME,t1.BOOKING_DATE,t1.TRQ_ID
+								from :lt_temp_orders_filter_by_loc_time t1
+		    	                INNER JOIN :LOCATION_ID FL 
+                                ON (T1.DESTINATION_LOCATION_ID=FL.LOCATION_ID)     
+		                        WHERE (t1.last_stop_loc_time &lt; :FROM_DATE)
+		                        AND EXISTS (SELECT DB_KEY FROM &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_stage&quot; 
+                                			 WHERE TU_KEY = t1.TU_KEY AND MOT_CAT = '3');	 
+		
+	elseif :nav_type = 'OMEROUT' then	
+		 
+		     lt_temp_result =  SELECT DISTINCT t1.TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT,t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+							t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,t1.PLANNED_DEPARTURE_TIME,t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME, 
+							t1.PLANNED_ARRIVAL_TIME,t1.DEPARTURED, t1.UNLOADED,t1.PICKUP_LOCATION_ID, t1.PICKUP_LOCATION_NAME,t1.PICKUP_DATE,t1.RETURN_LOCATION_ID, 
+							t1.RETURN_LOCATION_NAME,t1.RETURN_DATE,t1.SHIPPER, t1.CONSIGNEE,t1.CUSTOMER_NAME,t1.BOOKING_DATE,t1.TRQ_ID
+								from :lt_temp_orders_filter_by_loc_time  t1
+		                        INNER JOIN :LOCATION_ID FL 
+                                ON (t1.SOURCE_LOCATION_ID=FL.LOCATION_ID)         
+		                        WHERE (t1.first_stop_loc_time &lt; :FROM_DATE)
+		                        AND EXISTS (SELECT DB_KEY FROM &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_stage&quot; 
+                                			 WHERE TU_KEY = t1.TU_KEY AND MOT_CAT = '3');
+
+  elseif :nav_type = 'IERIN'	THEN         
+                                          
+              lt_temp_result =   SELECT DISTINCT t1.TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT,t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+							t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,t1.PLANNED_DEPARTURE_TIME,t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME, 
+							t1.PLANNED_ARRIVAL_TIME,t1.DEPARTURED, t1.UNLOADED,t1.PICKUP_LOCATION_ID, t1.PICKUP_LOCATION_NAME,t1.PICKUP_DATE,t1.RETURN_LOCATION_ID, 
+							t1.RETURN_LOCATION_NAME,t1.RETURN_DATE,t1.SHIPPER, t1.CONSIGNEE,t1.CUSTOMER_NAME,t1.BOOKING_DATE,t1.TRQ_ID
+								from :lt_temp_orders_filter_by_loc_time  t1
+              					INNER JOIN :LOCATION_ID FL 
+                                ON (T1.DESTINATION_LOCATION_ID=FL.LOCATION_ID)
+                                 WHERE (t1.last_stop_loc_time BETWEEN :FROM_DATE AND :TO_DATE)
+                                 AND NOT EXISTS (SELECT DB_KEY FROM &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_stage&quot; 
+                                                     WHERE TU_KEY = t1.TU_KEY AND MOT_CAT = '3');
+
+ elseif	:nav_type = 'OIERIN' THEN
+               lt_temp_result =  SELECT DISTINCT t1.TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT,t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+							t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,t1.PLANNED_DEPARTURE_TIME,t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME, 
+							t1.PLANNED_ARRIVAL_TIME,t1.DEPARTURED, t1.UNLOADED,t1.PICKUP_LOCATION_ID, t1.PICKUP_LOCATION_NAME,t1.PICKUP_DATE,t1.RETURN_LOCATION_ID, 
+							t1.RETURN_LOCATION_NAME,t1.RETURN_DATE,t1.SHIPPER, t1.CONSIGNEE,t1.CUSTOMER_NAME,t1.BOOKING_DATE,t1.TRQ_ID
+								from :lt_temp_orders_filter_by_loc_time t1
+               					INNER JOIN :LOCATION_ID FL 
+                                ON (T1.DESTINATION_LOCATION_ID=FL.LOCATION_ID)                         
+                                 WHERE (t1.last_stop_loc_time &lt; :FROM_DATE)
+                                 AND NOT EXISTS (SELECT DB_KEY FROM &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_stage&quot; 
+                                                     WHERE TU_KEY = t1.TU_KEY AND MOT_CAT = '3');
+                
+elseif :nav_type = 'IERO' THEN
+               lt_temp_result = SELECT DISTINCT t1.TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT,t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+							t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,t1.PLANNED_DEPARTURE_TIME,t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME, 
+							t1.PLANNED_ARRIVAL_TIME,t1.DEPARTURED, t1.UNLOADED,t1.PICKUP_LOCATION_ID, t1.PICKUP_LOCATION_NAME,t1.PICKUP_DATE,t1.RETURN_LOCATION_ID, 
+							t1.RETURN_LOCATION_NAME,t1.RETURN_DATE,t1.SHIPPER, t1.CONSIGNEE,t1.CUSTOMER_NAME,t1.BOOKING_DATE,t1.TRQ_ID
+								from :lt_temp_orders_filter_by_loc_time t1
+               					INNER JOIN :LOCATION_ID FL 
+                                ON (t1.SOURCE_LOCATION_ID=FL.LOCATION_ID)                   
+                                 WHERE (t1.first_stop_loc_time BETWEEN :FROM_DATE AND :TO_DATE)
+                                 AND NOT EXISTS (SELECT DB_KEY FROM &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_stage&quot; 
+                                                     WHERE TU_KEY = t1.TU_KEY AND MOT_CAT = '3');
+
+elseif :nav_type = 'OIEROUT' THEN
+               lt_temp_result = 
+               				SELECT DISTINCT t1.TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT,t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+							t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,t1.PLANNED_DEPARTURE_TIME,t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME, 
+							t1.PLANNED_ARRIVAL_TIME,t1.DEPARTURED, t1.UNLOADED,t1.PICKUP_LOCATION_ID, t1.PICKUP_LOCATION_NAME,t1.PICKUP_DATE,t1.RETURN_LOCATION_ID, 
+							t1.RETURN_LOCATION_NAME,t1.RETURN_DATE,t1.SHIPPER, t1.CONSIGNEE,t1.CUSTOMER_NAME,t1.BOOKING_DATE,t1.TRQ_ID
+								from :lt_temp_orders_filter_by_loc_time  t1 
+								INNER JOIN :LOCATION_ID FL 
+                                ON (t1.SOURCE_LOCATION_ID=FL.LOCATION_ID)                        
+                                 WHERE (t1.first_stop_loc_time &lt; :FROM_DATE)
+                                 AND NOT EXISTS (SELECT DB_KEY FROM &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_stage&quot; 
+                                                     WHERE TU_KEY = t1.TU_KEY AND MOT_CAT = '3');    
+elseif :nav_type is null or :nav_type = '' then
+	  
+	  CALL &quot;sap.tm.trp.db.booking::p_cargo_tu_booking&quot;(:ITEM_CAT, :BOOKING_TYPE, :FROM_DATE, :TO_DATE, :LOCATION_ID, :FILTER_ON, :main_cargo_orders,:main_cargo_s4);
+	
+		if :filter_on = 0 then
+			  lt_temp_result = 
+                			SELECT DISTINCT t1.TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT,t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+							t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,t1.PLANNED_DEPARTURE_TIME,t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME, 
+							t1.PLANNED_ARRIVAL_TIME,t1.DEPARTURED, t1.UNLOADED,t1.PICKUP_LOCATION_ID, t1.PICKUP_LOCATION_NAME,t1.PICKUP_DATE,t1.RETURN_LOCATION_ID, 
+							t1.RETURN_LOCATION_NAME,t1.RETURN_DATE,t1.SHIPPER, t1.CONSIGNEE,t1.CUSTOMER_NAME,t1.BOOKING_DATE,t1.TRQ_ID
+								from :lt_temp_orders_filter_by_loc_time  t1 
+								INNER JOIN :LOCATION_ID FL 
+                                ON (t1.SOURCE_LOCATION_ID=FL.LOCATION_ID)                        
+                              union 
+                            SELECT DISTINCT t1.TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT,t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+							t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,t1.PLANNED_DEPARTURE_TIME,t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME, 
+							t1.PLANNED_ARRIVAL_TIME,t1.DEPARTURED, t1.UNLOADED,t1.PICKUP_LOCATION_ID, t1.PICKUP_LOCATION_NAME,t1.PICKUP_DATE,t1.RETURN_LOCATION_ID, 
+							t1.RETURN_LOCATION_NAME,t1.RETURN_DATE,t1.SHIPPER, t1.CONSIGNEE,t1.CUSTOMER_NAME,t1.BOOKING_DATE,t1.TRQ_ID
+								from :lt_temp_orders_filter_by_loc_time  t1 
+								INNER JOIN :LOCATION_ID FL 
+                                ON (t1.DESTINATION_LOCATION_ID=FL.LOCATION_ID) 
+                                UNION 
+                                select distinct * from :main_cargo_orders
+                                union 
+                               select distinct * from  :main_cargo_s4;
+
+	 	
+	 	elseif :filter_on = 1 THEN	
+			  lt_temp_result = 
+                				select distinct t1.TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT,t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+								t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,t1.PLANNED_DEPARTURE_TIME,t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME, 
+								t1.PLANNED_ARRIVAL_TIME,t1.DEPARTURED, t1.UNLOADED,t1.PICKUP_LOCATION_ID, t1.PICKUP_LOCATION_NAME,t1.PICKUP_DATE,t1.RETURN_LOCATION_ID, 
+								t1.RETURN_LOCATION_NAME,t1.RETURN_DATE,t1.SHIPPER, t1.CONSIGNEE,t1.CUSTOMER_NAME,t1.BOOKING_DATE,t1.TRQ_ID
+								from :lt_temp_orders_filter_by_loc_time  t1 
+									INNER JOIN :LOCATION_ID FL 
+	                                ON (t1.SOURCE_LOCATION_ID=FL.LOCATION_ID) 
+	                                where (t1.first_stop_loc_time BETWEEN :FROM_DATE AND :TO_DATE OR
+                            			 t1.last_stop_loc_time BETWEEN :FROM_DATE AND :TO_DATE)
+                                 union 
+                               select distinct t1.TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT,t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+								t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,t1.PLANNED_DEPARTURE_TIME,t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME, 
+								t1.PLANNED_ARRIVAL_TIME,t1.DEPARTURED, t1.UNLOADED,t1.PICKUP_LOCATION_ID, t1.PICKUP_LOCATION_NAME,t1.PICKUP_DATE,t1.RETURN_LOCATION_ID, 
+								t1.RETURN_LOCATION_NAME,t1.RETURN_DATE,t1.SHIPPER, t1.CONSIGNEE,t1.CUSTOMER_NAME,t1.BOOKING_DATE,t1.TRQ_ID
+								from :lt_temp_orders_filter_by_loc_time  t1 
+									INNER JOIN :LOCATION_ID FL 
+	                                ON (t1.DESTINATION_LOCATION_ID=FL.LOCATION_ID) 
+	                                where (t1.first_stop_loc_time BETWEEN :FROM_DATE AND :TO_DATE OR
+                            			 t1.last_stop_loc_time BETWEEN :FROM_DATE AND :TO_DATE)
+                                UNION 
+                                select distinct * from :main_cargo_orders
+                                union
+                                select distinct * from  :main_cargo_s4;                                                                               			 
+
+		else
+			lt_temp_result =	select distinct t1.TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT,t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+								t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,t1.PLANNED_DEPARTURE_TIME,t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME, 
+								t1.PLANNED_ARRIVAL_TIME,t1.DEPARTURED, t1.UNLOADED,t1.PICKUP_LOCATION_ID, t1.PICKUP_LOCATION_NAME,t1.PICKUP_DATE,t1.RETURN_LOCATION_ID, 
+								t1.RETURN_LOCATION_NAME,t1.RETURN_DATE,t1.SHIPPER, t1.CONSIGNEE,t1.CUSTOMER_NAME,t1.BOOKING_DATE,t1.TRQ_ID
+								from :lt_temp_orders_filter_by_loc_time  t1 
+								INNER JOIN :LOCATION_ID FL 
+                                ON (t1.SOURCE_LOCATION_ID=FL.LOCATION_ID)
+                                 WHERE TO_TIMESTAMP(t1.BOOKING_DATE) BETWEEN :FROM_DATE AND :TO_DATE                        
+                                UNION 
+                                select distinct t1.TU_KEY,t1.TOR_ID, t1.MOVEMENT_CAT,t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+								t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME,t1.PLANNED_DEPARTURE_TIME,t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME, 
+								t1.PLANNED_ARRIVAL_TIME,t1.DEPARTURED, t1.UNLOADED,t1.PICKUP_LOCATION_ID, t1.PICKUP_LOCATION_NAME,t1.PICKUP_DATE,t1.RETURN_LOCATION_ID, 
+								t1.RETURN_LOCATION_NAME,t1.RETURN_DATE,t1.SHIPPER, t1.CONSIGNEE,t1.CUSTOMER_NAME,t1.BOOKING_DATE,t1.TRQ_ID
+								from :lt_temp_orders_filter_by_loc_time  t1
+								INNER JOIN :LOCATION_ID FL 
+                                ON (t1.DESTINATION_LOCATION_ID=FL.LOCATION_ID)
+                                 WHERE TO_TIMESTAMP(t1.BOOKING_DATE) BETWEEN :FROM_DATE AND :TO_DATE   
+                                UNION 
+                                SELECT MAIN_CARGO.* FROM :main_cargo_orders MAIN_CARGO
+			                     INNER JOIN &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_item&quot; T5 
+								 ON (t5.TU_KEY = MAIN_CARGO.ID AND t5.ITEM_CAT = :ITEM_CAT )
+			                     INNER JOIN &quot;sap.tm.trp.db.semantic.order::v_customer_order&quot; TRQ ON t5.TRQ_KEY = TRQ.DB_KEY
+			                     WHERE TO_TIMESTAMP(TRQ.ORDER_DATE) BETWEEN :FROM_DATE AND :TO_DATE
+                                UNION 
+                                SELECT * FROM :main_cargo_s4
+                       			WHERE TO_TIMESTAMP(BOOKING_DATE) BETWEEN :FROM_DATE AND :TO_DATE  ;
+                       			
+			                                                   
+                                                   
+	end if;
+
+end if;	
+  
+  order_items_AGGby_EQUType = SELECT DISTINCT t1.TU_KEY ,MAX(t2.DB_KEY) AS ITE_KEY, t1.TOR_ID TU_ID, t1.MOVEMENT_CAT , 
+                                   EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+                                   t1.TRQ_ID, MAX(t2.RESOURCE_TYPE) AS RESOURCE_TYPE, SUM(t2.QUA_PCS_VAL) AS QUANTITY   
+                                   , SUM(CASE WHEN t2.RESOURCE_NAME &lt;> '' THEN 1 ELSE 0 END) AS ASSIGN_QUANTITY,
+                                   t3.PLANNING_RELEVANT,
+                                   MAX(t2.RESOURCE_NAME) AS RESOURCE_NAME,MAX(T2.PLATENUMBER) AS RESOURCE_NUMBER,
+                                   t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME, t1.PLANNED_DEPARTURE_TIME,
+                                t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME, t1.PLANNED_ARRIVAL_TIME, 
+                                 t1.PICKUP_LOCATION_ID, t1.PICKUP_LOCATION_NAME,t1.PICKUP_DATE,t1.RETURN_LOCATION_ID, 
+                                t1.RETURN_LOCATION_NAME, t1.RETURN_DATE,t1.SHIPPER, 
+                             t1.CONSIGNEE,t1.CUSTOMER_NAME,t1.BOOKING_DATE
+                           FROM :lt_temp_result t1         
+                           INNER JOIN &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_item_resource&quot; t2 
+                           ON (t2.TU_KEY = t1.TU_KEY AND t2.ITEM_CAT = :ITEM_CAT) 
+						   INNER JOIN &quot;sap.tm.trp.db.semantic.resource::v_resource_category&quot; t6
+						   ON(t2.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :RES_CAT)
+                           INNER JOIN :EQUIPMENT_ID FE ON t2.RESOURCE_TYPE=FE.EQUIPMENT_ID
+                           LEFT OUTER JOIN &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_haulage_type&quot; t3
+                           ON (t1.TU_KEY=t3.TU_KEY )
+                           GROUP BY t1.TU_KEY, t1.TOR_ID, t1.MOVEMENT_CAT, EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, t1.LIFECYCLE,t1.LIFECYCLE_TEXT
+                           ,t1.TRQ_ID,T3.PLANNING_RELEVANT,
+                           t1.SOURCE_LOCATION_ID, t1.SOURCE_LOCATION_NAME, t1.PLANNED_DEPARTURE_TIME,
+                           t1.DESTINATION_LOCATION_ID, t1.DESTINATION_LOCATION_NAME, t1.PLANNED_ARRIVAL_TIME, 
+                           t1.PICKUP_LOCATION_ID, t1.PICKUP_LOCATION_NAME,t1.PICKUP_DATE,t1.RETURN_LOCATION_ID, 
+                           t1.RETURN_LOCATION_NAME, t1.RETURN_DATE,t1.SHIPPER, 
+                           t1.CONSIGNEE,t1.CUSTOMER_NAME,t1.BOOKING_DATE;
+  
+  orders_item_with_extrainfo =  SELECT DISTINCT T1.*,
+                               T2.LEASE_CONTRACT_REF AS LEASE_AGREEMENT, 
+                               T2.OWNERSHIP_CODE AS LEASE_TYPE_CODE,
+                               T4.DESC AS LEASE_TYPE,
+                               T2.SPECIAL_INSTRUCTION AS SPECIAL_INSTRUCTION_CODE,
+                               T3.DESC AS SPECIAL_INSTRUCTION_NAME,
+                               T5.CURRENT_LOCATION AS RESOURCE_LAST_LOCATION
+                          FROM :order_items_AGGby_EQUType T1
+                          LEFT OUTER JOIN &quot;sap.tm.trp.db.semantic.resource::v_resource_master&quot; T2 ON (T1.RESOURCE_NAME = T2.RESOURCE_NAME)
+                          LEFT OUTER JOIN &quot;sap.tm.trp.db.semantic.resource::v_ownership_t&quot; T4 ON (T2.OWNERSHIP_CODE = T4.CODE)
+                          LEFT JOIN &quot;sap.tm.trp.db.semantic.resource::v_special_instruction_t&quot; T3 ON(T2.SPECIAL_INSTRUCTION = T3.CODE)                                   
+                          LEFT JOIN &quot;sap.tm.trp.db.semantic.resource::v_resource_status&quot; T5 ON (T1.RESOURCE_NAME = T5.RESOURCE_NAME)  
+                          WHERE T1.ASSIGN_QUANTITY = 1
+                          UNION ALL
+                          SELECT DISTINCT T1.*, 
+                                 '' AS LEASE_AGREEMENT,
+                                 '' AS LEASE_TYPE_CODE,
+                                 '' AS LEASE_TYPE,
+                                 '' AS SPECIAL_INSTRUCTION_CODE,
+                                 '' AS SPECIAL_INSTRUCTION_NAME,
+                                 '' AS RESOURCE_LAST_LOCATION
+                          FROM :order_items_AGGby_EQUType T1
+                          WHERE  T1.ASSIGN_QUANTITY &lt;> 1                  
+                          ;
+                         
+  tu_list = SELECT TU_ID AS TOR_ID, MOVEMENT_CAT TU_TYPE FROM :order_items_AGGby_EQUType;
+      
+      CALL &quot;sap.tm.trp.db.semantic.order::p_cal_pol_pod_voyage&quot;(:tu_list,:MOT_CAT,tu_pol_pod_voyage); 
+
+      mot = SELECT ITE_KEY, MOT, MEANS_OF_TRANSPORTATION FROM 
+            (
+            SELECT T1.ITE_KEY AS ITE_KEY, T2.MOT, T4.DESC AS MEANS_OF_TRANSPORTATION,
+                   RANK() OVER (PARTITION BY T1.ITE_KEY ORDER BY T2.MOT_CAT DESC) AS PRIORITY_SEQ  
+            FROM :order_items_AGGby_EQUType T1
+            LEFT OUTER JOIN &quot;sap.tm.trp.db.semantic.order::v_transportation_unit_stage&quot; T2 ON (T1.TU_KEY = T2.TU_KEY)
+            LEFT OUTER JOIN &quot;sap.tm.trp.db.semantic.common::v_mtr_map&quot; T3 ON (T2.MOT = T3.MOT AND T2.MTR_TCO = T3.MTR)
+            LEFT OUTER JOIN &quot;sap.tm.trp.db.semantic.common::v_transportation_means&quot; T4 ON (T3.TRP_MTR = T4.CODE)
+            )
+            WHERE PRIORITY_SEQ = 1;  
+            
+               
+                 
+  withAdditionalColumn = SELECT DISTINCT t1.TU_ID AS ORDER_ID,
+                                   t1.ITE_KEY,
+                                   t1.MOVEMENT_CAT TU_TYPE, 
+                                   t1.TRQ_ID, 
+                                   t1.RESOURCE_TYPE, 
+                                   t1.QUANTITY, 
+                                   t1.ASSIGN_QUANTITY,
+                                   t1.RESOURCE_NUMBER,
+                                   t1.PLANNED_DEPARTURE_TIME,
+                                   t1.SOURCE_LOCATION_NAME,
+                                   t1.PLANNED_ARRIVAL_TIME,
+                                   t1.DESTINATION_LOCATION_NAME,
+                                   t1.SHIPPER, 
+                                   t1.CONSIGNEE,
+                                   t2.POL_NAME AS PORT_OF_LOADING,
+                                   t2.POD_NAME AS PORT_OF_DISCHARGE,
+                                   t2.CUTOFF_UTC AS VESSEL_CUTOFF_UTC,
+                                   t1.PLANNING_RELEVANT AS HAULAGE_TYPE,             
+                                   t1.CUSTOMER_NAME,
+                                   t1.BOOKING_DATE,
+                                   t1.EXECUTION_STATUS EXECUTION_STATUS_CODE,
+                                   t1.EXECUTION_STATUS_TEXT EXECUTION_STATUS,
+                                   t1.LIFECYCLE LIFECYCLE_STATUS_CODE,
+                                   t1.LIFECYCLE_TEXT LIFECYCLE_STATUS,              
+                                   t2.VESSEL_POL,
+                                   t2.VESSEL_POD,
+                                   t2.VOYAGE_POL,
+                                   t2.VOYAGE_POD,              
+                                   TO_VARCHAR(t1.TRQ_ID) AS BOOKING_REFERENCE,
+                                   t1.LEASE_AGREEMENT,
+                                   t1.LEASE_TYPE_CODE,
+                                   t1.LEASE_TYPE,
+                                   t9.MOT,
+                                   t9.MEANS_OF_TRANSPORTATION,              
+                                   t1.SPECIAL_INSTRUCTION_CODE,
+                                   t1.SPECIAL_INSTRUCTION_NAME,
+                                   t2.CARRIER_POL,
+                                   t2.CARRIER_POD,
+                                   t1.PICKUP_DATE,
+                                   t1.PICKUP_LOCATION_ID,
+                                   t1.PICKUP_LOCATION_NAME,
+                                   t1.RETURN_DATE,
+                                   t1.RETURN_LOCATION_ID,
+                                   t1.RETURN_LOCATION_NAME,
+                                   t2.ARRIVAL_UTC AS VESSEL_ARRIVAL_DATE,
+                                   t1.RESOURCE_LAST_LOCATION,
+                                   t1.RESOURCE_NAME
+                         FROM :orders_item_with_extrainfo t1
+                         LEFT OUTER JOIN :tu_pol_pod_voyage t2 ON(t1.TU_ID = t2.TOR_ID)
+                         LEFT JOIN :mot t9 ON (T1.ITE_KEY = t9.ITE_KEY); 
+            
+ var_out =
+ SELECT DISTINCT EI.ORDER_ID AS ORDER_ID,
+                   CASE EI.TU_TYPE WHEN '' THEN TXT.DESC
+                   ELSE EI.TU_TYPE END AS TU_TYPE_CODE,  -- special case for 'cargo tu'
+                   TXT.DESC AS TU_TYPE,
+                   EI.CUSTOMER_NAME,
+                   EI.RESOURCE_TYPE,
+                   EI.PLANNED_DEPARTURE_TIME,
+                   EI.SOURCE_LOCATION_NAME AS SOURCE_LOCATION,
+                   EI.PLANNED_ARRIVAL_TIME,
+                   EI.DESTINATION_LOCATION_NAME AS DESTINATION_LOCATION,
+                   EI.SHIPPER,
+                   EI.CONSIGNEE,
+                   EI.BOOKING_DATE,
+                   EI.PORT_OF_LOADING,
+                   EI.PORT_OF_DISCHARGE,
+                   EI.VESSEL_CUTOFF_UTC,
+                   EI.VESSEL_POL,
+                   EI.VESSEL_POD,
+                   EI.VOYAGE_POL,
+                   EI.VOYAGE_POD,
+                   EI.HAULAGE_TYPE,
+                   EI.BOOKING_REFERENCE,
+                   EI.EXECUTION_STATUS_CODE,
+                   EI.EXECUTION_STATUS,
+                   EI.LIFECYCLE_STATUS_CODE,
+                   EI.LIFECYCLE_STATUS,
+                   EI.QUANTITY,
+                   EI.ASSIGN_QUANTITY,
+                   EI.RESOURCE_NUMBER,
+                   EI.LEASE_AGREEMENT,
+                   EI.LEASE_TYPE_CODE,
+                   EI.LEASE_TYPE,
+                   EI.SPECIAL_INSTRUCTION_CODE,
+                   EI.SPECIAL_INSTRUCTION_NAME,
+                   EI.MOT,
+                   EI.MEANS_OF_TRANSPORTATION,
+                   EI.CARRIER_POL,
+                   EI.CARRIER_POD,
+                   EI.PICKUP_LOCATION_NAME,
+                   EI.PICKUP_DATE,
+                   EI.RETURN_LOCATION_NAME,
+                   EI.RETURN_DATE,
+                   EI.VESSEL_ARRIVAL_DATE,
+                   EI.RESOURCE_LAST_LOCATION,
+                   EI.RESOURCE_NAME,
+                   TO_VARCHAR(EI.ITE_KEY) AS ITE_KEY
+           FROM :withAdditionalColumn EI 
+           LEFT OUTER JOIN &quot;sap.tm.trp.db.semantic.order::v_tor_movement_category_t&quot; TXT ON (EI.TU_TYPE = TXT.CODE );                    			 
+           
+ END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ORDER_ID" order="1">
+        <descriptions defaultDescription="ORDER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ORDER_ID"/>
+      </attribute>
+      <attribute id="TU_TYPE_CODE" order="2">
+        <descriptions defaultDescription="TU_TYPE_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="TU_TYPE_CODE"/>
+      </attribute>
+      <attribute id="TU_TYPE" order="3">
+        <descriptions defaultDescription="TU_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="TU_TYPE"/>
+      </attribute>
+      <attribute id="CUSTOMER_NAME" order="4">
+        <descriptions defaultDescription="CUSTOMER_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="CUSTOMER_NAME"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE" order="5">
+        <descriptions defaultDescription="RESOURCE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE"/>
+      </attribute>
+      <attribute id="PLANNED_DEPARTURE_TIME" order="6">
+        <descriptions defaultDescription="PLANNED_DEPARTURE_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLANNED_DEPARTURE_TIME"/>
+      </attribute>
+      <attribute id="SOURCE_LOCATION" order="7">
+        <descriptions defaultDescription="SOURCE_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="SOURCE_LOCATION"/>
+      </attribute>
+      <attribute id="PLANNED_ARRIVAL_TIME" order="8">
+        <descriptions defaultDescription="PLANNED_ARRIVAL_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLANNED_ARRIVAL_TIME"/>
+      </attribute>
+      <attribute id="DESTINATION_LOCATION" order="9">
+        <descriptions defaultDescription="DESTINATION_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESTINATION_LOCATION"/>
+      </attribute>
+      <attribute id="SHIPPER" order="10">
+        <descriptions defaultDescription="SHIPPER"/>
+        <keyMapping columnObjectName="Script_View" columnName="SHIPPER"/>
+      </attribute>
+      <attribute id="CONSIGNEE" order="11">
+        <descriptions defaultDescription="CONSIGNEE"/>
+        <keyMapping columnObjectName="Script_View" columnName="CONSIGNEE"/>
+      </attribute>
+      <attribute id="BOOKING_DATE" order="12">
+        <descriptions defaultDescription="BOOKING_DATE"/>
+        <keyMapping columnObjectName="Script_View" columnName="BOOKING_DATE"/>
+      </attribute>
+      <attribute id="PORT_OF_LOADING" order="13">
+        <descriptions defaultDescription="PORT_OF_LOADING"/>
+        <keyMapping columnObjectName="Script_View" columnName="PORT_OF_LOADING"/>
+      </attribute>
+      <attribute id="PORT_OF_DISCHARGE" order="14">
+        <descriptions defaultDescription="PORT_OF_DISCHARGE"/>
+        <keyMapping columnObjectName="Script_View" columnName="PORT_OF_DISCHARGE"/>
+      </attribute>
+      <attribute id="VESSEL_CUTOFF_UTC" order="15">
+        <descriptions defaultDescription="VESSEL_CUTOFF_UTC"/>
+        <keyMapping columnObjectName="Script_View" columnName="VESSEL_CUTOFF_UTC"/>
+      </attribute>
+      <attribute id="VESSEL_POL" order="16">
+        <descriptions defaultDescription="VESSEL_POL"/>
+        <keyMapping columnObjectName="Script_View" columnName="VESSEL_POL"/>
+      </attribute>
+      <attribute id="VESSEL_POD" order="17">
+        <descriptions defaultDescription="VESSEL_POD"/>
+        <keyMapping columnObjectName="Script_View" columnName="VESSEL_POD"/>
+      </attribute>
+      <attribute id="VOYAGE_POL" order="18">
+        <descriptions defaultDescription="VOYAGE_POL"/>
+        <keyMapping columnObjectName="Script_View" columnName="VOYAGE_POL"/>
+      </attribute>
+      <attribute id="VOYAGE_POD" order="19">
+        <descriptions defaultDescription="VOYAGE_POD"/>
+        <keyMapping columnObjectName="Script_View" columnName="VOYAGE_POD"/>
+      </attribute>
+      <attribute id="HAULAGE_TYPE" order="20">
+        <descriptions defaultDescription="HAULAGE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="HAULAGE_TYPE"/>
+      </attribute>
+      <attribute id="BOOKING_REFERENCE" order="21">
+        <descriptions defaultDescription="BOOKING_REFERENCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="BOOKING_REFERENCE"/>
+      </attribute>
+      <attribute id="EXECUTION_STATUS_CODE" order="22">
+        <descriptions defaultDescription="EXECUTION_STATUS_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EXECUTION_STATUS_CODE"/>
+      </attribute>
+      <attribute id="EXECUTION_STATUS" order="23">
+        <descriptions defaultDescription="EXECUTION_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="EXECUTION_STATUS"/>
+      </attribute>
+      <attribute id="LIFECYCLE_STATUS_CODE" order="24">
+        <descriptions defaultDescription="LIFECYCLE_STATUS_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LIFECYCLE_STATUS_CODE"/>
+      </attribute>
+      <attribute id="LIFECYCLE_STATUS" order="25">
+        <descriptions defaultDescription="LIFECYCLE_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="LIFECYCLE_STATUS"/>
+      </attribute>
+      <attribute id="RESOURCE_NUMBER" order="28">
+        <descriptions defaultDescription="RESOURCE_NUMBER"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_NUMBER"/>
+      </attribute>
+      <attribute id="LEASE_AGREEMENT" order="29">
+        <descriptions defaultDescription="LEASE_AGREEMENT"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASE_AGREEMENT"/>
+      </attribute>
+      <attribute id="LEASE_TYPE_CODE" order="30">
+        <descriptions defaultDescription="LEASE_TYPE_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASE_TYPE_CODE"/>
+      </attribute>
+      <attribute id="LEASE_TYPE" order="31">
+        <descriptions defaultDescription="LEASE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASE_TYPE"/>
+      </attribute>
+      <attribute id="SPECIAL_INSTRUCTION_CODE" order="32">
+        <descriptions defaultDescription="SPECIAL_INSTRUCTION_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SPECIAL_INSTRUCTION_CODE"/>
+      </attribute>
+      <attribute id="SPECIAL_INSTRUCTION_NAME" order="33">
+        <descriptions defaultDescription="SPECIAL_INSTRUCTION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="SPECIAL_INSTRUCTION_NAME"/>
+      </attribute>
+      <attribute id="MOT" order="34">
+        <descriptions defaultDescription="MOT"/>
+        <keyMapping columnObjectName="Script_View" columnName="MOT"/>
+      </attribute>
+      <attribute id="MEANS_OF_TRANSPORTATION" order="35">
+        <descriptions defaultDescription="MEANS_OF_TRANSPORTATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="MEANS_OF_TRANSPORTATION"/>
+      </attribute>
+      <attribute id="CARRIER_POL" order="36">
+        <descriptions defaultDescription="CARRIER"/>
+        <keyMapping columnObjectName="Script_View" columnName="CARRIER_POL"/>
+      </attribute>
+      <attribute id="CARRIER_POD" order="37">
+        <descriptions defaultDescription="CARRIER_POD"/>
+        <keyMapping columnObjectName="Script_View" columnName="CARRIER_POD"/>
+      </attribute>
+      <attribute id="PICKUP_LOCATION_NAME" order="38">
+        <descriptions defaultDescription="PICKUP_LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="PICKUP_LOCATION_NAME"/>
+      </attribute>
+      <attribute id="RETURN_LOCATION_NAME" order="40">
+        <descriptions defaultDescription="RETURN_LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="RETURN_LOCATION_NAME"/>
+      </attribute>
+      <attribute id="RESOURCE_LAST_LOCATION" order="43">
+        <descriptions defaultDescription="RESOURCE_LAST_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_LAST_LOCATION"/>
+      </attribute>
+      <attribute id="RESOURCE_NAME" order="44">
+        <descriptions defaultDescription="RESOURCE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_NAME"/>
+      </attribute>
+      <attribute id="ITE_KEY" order="45">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="ITE_KEY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="QUANTITY" order="26" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="QUANTITY"/>
+      </measure>
+      <measure id="ASSIGN_QUANTITY" order="27" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ASSIGN_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="ASSIGN_QUANTITY"/>
+      </measure>
+      <measure id="PICKUP_DATE" order="39" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="PICKUP_DATE"/>
+        <measureMapping columnObjectName="Script_View" columnName="PICKUP_DATE"/>
+      </measure>
+      <measure id="RETURN_DATE" order="41" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="RETURN_DATE"/>
+        <measureMapping columnObjectName="Script_View" columnName="RETURN_DATE"/>
+      </measure>
+      <measure id="VESSEL_ARRIVAL_DATE" order="42" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="VESSEL_ARRIVAL_DATE"/>
+        <measureMapping columnObjectName="Script_View" columnName="VESSEL_ARRIVAL_DATE"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

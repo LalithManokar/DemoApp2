@@ -1,0 +1,374 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.stock::p_get_alert_stock" (
+    IN EQUIPMENT_FILTER_ID BIGINT,
+    IN RESOURCE_TYPE_CODE VARCHAR(50),
+    IN LOCATION_FILTER_ID BIGINT,
+    IN LOCATION_ID VARCHAR(22),
+    IN LOCATION_NAME VARCHAR(22),
+    IN LOCATION_TYPE INTEGER,
+    IN RESOURCE_CATEGORY VARCHAR(20),
+    OUT STOCK "sap.tm.trp.db.hrf.resourceStock::t_location_stock"
+) 
+      LANGUAGE SQLSCRIPT
+      SQL SECURITY INVOKER 
+      DEFAULT SCHEMA SAP_TM_TRP
+READS SQL DATA 
+AS
+EQUIP_FLAG INT;
+LANGUAGE_CODE CHAR(1);
+RESOURCE_CATEGORY_TYPE VARCHAR(3);
+BEGIN
+
+--    DECLARE CONTSTANT
+DECLARE DEPOT INTEGER := 1;
+DECLARE DEPOT_GROUP INTEGER := 2;
+DECLARE REGION INTEGER := 5;
+DECLARE REGION_GROUP INTEGER := 6;
+DECLARE EQUIP_TYPE INTEGER := 1;
+DECLARE EQUIP_TYPE_GROUP INTEGER := 2;
+
+-- GET LANGUAGE CODE
+SELECT IFNULL(MAX(SPRAS),'E') INTO LANGUAGE_CODE FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+
+SELECT IFNULL(MAX(RESOURCE_CATEGORY_TYPE),'CN') INTO RESOURCE_CATEGORY_TYPE 
+FROM "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings" WHERE CODE = :RESOURCE_CATEGORY;
+
+RESOURCE_TYPES = SELECT DISTINCT RESOURCE_TYPE_CODE, RESOURCE_TYPE_DESC
+                FROM "sap.tm.trp.db.semantic.resource::v_resource_type_with_category"
+                WHERE RESOURCE_CATEGORY = :RESOURCE_CATEGORY;
+
+-- GET FILTER_TYPE & LOCATION_TYPE
+IF :EQUIPMENT_FILTER_ID = -1
+THEN
+	EQUIP_FLAG := :EQUIP_TYPE;
+	IF :RESOURCE_TYPE_CODE = ''
+	THEN
+	RESOURCE_TYPE_LIST = SELECT DISTINCT RESOURCE_TYPE_CODE, :EQUIP_FLAG AS RESOURCE_TYPE 
+	                     FROM "sap.tm.trp.db.semantic.resource::v_resource_type_with_category"
+	                     WHERE RESOURCE_CATEGORY = :RESOURCE_CATEGORY;
+	ELSE
+	RESOURCE_TYPE_LIST = SELECT :RESOURCE_TYPE_CODE AS RESOURCE_TYPE_CODE, :EQUIP_FLAG AS RESOURCE_TYPE FROM DUMMY;
+	END IF;
+ELSE
+	SELECT FILTER_TYPE INTO EQUIP_FLAG 
+	FROM "sap.tm.trp.db.filter::t_equipment_filter"
+	WHERE ID = :EQUIPMENT_FILTER_ID
+	;
+	RESOURCE_TYPE_LIST =
+		SELECT IFNULL(EQUI_CODE,EQUIPMENT_GROUP_ID) AS RESOURCE_TYPE_CODE,:EQUIP_FLAG AS RESOURCE_TYPE 
+		FROM "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T1
+		WHERE EQUIPMENT_FILTER_ID = :EQUIPMENT_FILTER_ID
+	;
+END IF;
+
+IF :LOCATION_FILTER_ID = -1
+THEN
+	IF LOCATION_TYPE = 5
+	THEN
+		ZONE_LIST = SELECT :LOCATION_ID AS ZONEID FROM DUMMY;
+		CALL "sap.tm.trp.db.stock::p_location_stock_hierarchy_from_zone_id"(:ZONE_LIST,LOCATION_LIST,LOCATION_RELATION);
+		LOCATION_ID_LIST = SELECT LOCATION_ID, LOCATION_NAME, LOCATION_TYPE, LEVEL FROM :LOCATION_LIST;
+	ELSE
+		LOCATION_ID_LIST = SELECT :LOCATION_ID AS LOCATION_ID, :LOCATION_NAME AS LOCATION_NAME, :LOCATION_TYPE AS LOCATION_TYPE, 100 AS LEVEL FROM DUMMY;
+	END IF;
+ELSE
+	CALL "sap.tm.trp.db.stock::p_location_filter_stock_hierarchy_detail" (:LOCATION_FILTER_ID,LOCATION_LIST,LOCATION_RELATION);
+	LOCATION_ID_LIST = SELECT LOCATION_ID, NAME AS LOCATION_NAME, LOCATION_TYPE, LEVEL FROM :LOCATION_LIST;
+END IF;
+
+-- GET INPUT LOCATION LIST
+
+IF :LOCATION_TYPE = 1 THEN 
+--LOCATION
+
+LOCATION_ID_HIERARCHY_LIST =
+    SELECT DISTINCT
+        T0.LOCATION_ID AS ID
+        ,T0.LOCATION_NAME AS NAME
+        ,T1.DESC AS DESC
+        ,T0.LOCATION_TYPE AS TYPE
+        ,T0.LOCATION_ID AS LOCATION_ID
+        ,T0.LEVEL
+    FROM :LOCATION_ID_LIST T0
+              LEFT JOIN "sap.tm.trp.db.semantic.location::v_location" T1 ON T1.ID = T0.LOCATION_ID
+              ;
+
+ELSEIF :LOCATION_TYPE = 2 THEN 
+--LOCATION GROUP
+
+LOCATION_ID_HIERARCHY_LIST =    
+    SELECT DISTINCT
+        T0.LOCATION_ID AS ID
+        ,T0.LOCATION_NAME AS NAME
+        ,T4.DESC AS DESC
+        ,T0.LOCATION_TYPE AS TYPE
+        ,T2.LOCATION_ID AS LOCATION_ID
+        ,T0.LEVEL
+    FROM :LOCATION_ID_LIST T0
+    LEFT JOIN "sap.tm.trp.db.systemmanagement::t_location_group_item" T2 ON T2.LOCATION_GROUP_ID = T0.LOCATION_ID
+    LEFT JOIN "sap.tm.trp.db.systemmanagement::t_location_group" T3 ON T3.ID = T0.LOCATION_ID
+    LEFT JOIN "sap.tm.trp.db.systemmanagement::t_location_group_t" T4 ON T4.ID = T3.ID AND T4.SPRAS = :LANGUAGE_CODE
+              ;    
+    
+ELSEIF :LOCATION_TYPE = 5 THEN 
+--REGION
+
+LOCATION_ID_HIERARCHY_LIST =    
+    SELECT DISTINCT
+       T0.LOCATION_ID AS ID
+        ,T0.LOCATION_NAME AS NAME
+        ,T6.DESC AS DESC
+        ,T0.LOCATION_TYPE AS TYPE
+       ,T5.LOCATION_ID AS LOCATION_ID
+       ,T0.LEVEL
+    FROM :LOCATION_ID_LIST T0
+    LEFT JOIN "sap.tm.trp.db.systemmanagement.location::t_region_item" A ON A.ROOT_ID = T0.LOCATION_ID
+              LEFT JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_loc_of_regions" T5 ON T5.ZONE_ID = A.ROOT_ID
+              LEFT JOIN "sap.tm.trp.db.semantic.location::v_zone" T6 ON T6.ID = T0.LOCATION_ID
+              ;  
+
+ELSEIF :LOCATION_TYPE = 6 THEN 
+--REGION GROUP
+
+LOCATION_ID_HIERARCHY_LIST =    
+    SELECT DISTINCT
+       T0.LOCATION_ID AS ID
+        ,T0.LOCATION_NAME AS NAME
+        ,T10.DESC AS DESC
+        ,T0.LOCATION_TYPE AS TYPE
+        ,T8.LOCATION_ID AS LOCATION_ID
+        ,T0.LEVEL
+    FROM :LOCATION_ID_LIST T0
+              LEFT JOIN "sap.tm.trp.db.systemmanagement::t_region_group_item" T7 ON T7.REGION_GROUP_ID = T0.LOCATION_ID
+              LEFT JOIN "sap.tm.trp.db.systemmanagement.location::t_region_item" B ON B.ROOT_ID = T7.ZONE_ID 
+              LEFT JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_loc_of_regions" T8 ON T8.ZONE_ID = B.ZONE_ID
+              LEFT JOIN "sap.tm.trp.db.systemmanagement::t_region_group" T9 ON T9.ID = T0.LOCATION_ID
+              LEFT JOIN "sap.tm.trp.db.systemmanagement::t_region_group_t" T10 ON T10.ID = T9.ID AND T10.SPRAS = :LANGUAGE_CODE
+              ;  
+
+END IF;
+
+/*LOCATION_ID_HIERARCHY_LIST =
+       SELECT
+            T0.LOCATION_ID AS ID
+		,T0.LOCATION_NAME AS NAME
+            ,CASE WHEN T0.LOCATION_TYPE = 1 THEN T1.DESC
+                    WHEN T0.LOCATION_TYPE = 2 THEN T4.DESC
+                    WHEN T0.LOCATION_TYPE = 5 THEN T6.DESC
+                    WHEN T0.LOCATION_TYPE = 6 THEN T10.DESC
+            END AS DESC
+            ,T0.LOCATION_TYPE AS TYPE
+            ,CASE WHEN T0.LOCATION_TYPE = 1 THEN T0.LOCATION_ID
+                    WHEN T0.LOCATION_TYPE = 2 THEN T2.LOCATION_ID
+                    WHEN T0.LOCATION_TYPE = 5 THEN T5.LOCATION_ID
+                    WHEN T0.LOCATION_TYPE = 6 THEN T8.LOCATION_ID
+            END AS LOCATION_ID
+            ,T0.LEVEL
+      FROM :LOCATION_ID_LIST T0
+      LEFT JOIN "sap.tm.trp.db.semantic.location::v_location" T1 ON T1.ID = T0.LOCATION_ID
+      LEFT JOIN "sap.tm.trp.db.systemmanagement::t_location_group_item" T2 ON T2.LOCATION_GROUP_ID = T0.LOCATION_ID
+    LEFT JOIN "sap.tm.trp.db.systemmanagement::t_location_group" T3 ON T3.ID = T0.LOCATION_ID
+    LEFT JOIN "sap.tm.trp.db.systemmanagement::t_location_group_t" T4 ON T4.ID = T3.ID AND T4.SPRAS = :LANGUAGE_CODE
+      LEFT JOIN "sap.tm.trp.db.systemmanagement.location::v_region_location_all" T5 ON T5.ROOT_ID = T0.LOCATION_ID
+      LEFT JOIN "sap.tm.trp.db.semantic.location::v_zone" T6 ON T6.ID = T0.LOCATION_ID
+      LEFT JOIN "sap.tm.trp.db.systemmanagement::t_region_group_item" T7 ON T7.REGION_GROUP_ID = T0.LOCATION_ID
+      LEFT JOIN "sap.tm.trp.db.systemmanagement.location::v_region_location_all" T8 ON T8.ROOT_ID = T7.ZONE_ID
+      LEFT JOIN "sap.tm.trp.db.systemmanagement::t_region_group" T9 ON T9.ID = T0.LOCATION_ID
+      LEFT JOIN "sap.tm.trp.db.systemmanagement::t_region_group_t" T10 ON T10.ID = T9.ID AND T10.SPRAS = :LANGUAGE_CODE
+      ;*/
+      
+-- GET ALL VALID RESOURCE FILTERED
+T_RESOURCE_BASE =
+     SELECT DISTINCT
+            T0.RESOURCE_NAME AS EQUIPMENT_ID
+            ,T1.RESOURCE_TYPE_CODE AS SIZE_TYPE
+            ,T1.RESOURCE_TYPE_DESC AS SIZE_TYPE_DESC
+            ,T0.TEU_COUNT
+            ,T2.MOVEMENT_STATUS_CODE AS MOVEMENT_STATUS
+            ,T2.CURRENT_LOCATION_ID AS CURRENT_LOCATION
+            ,T2.RESOURCE_ID AS RESID
+    FROM "sap.tm.trp.db.semantic.resource::v_resource_master" T0
+	INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_category" TRC ON TRC.MAPPING_CODE = T0.EQUITYPE
+    LEFT JOIN "sap.tm.trp.db.semantic.resource::v_resource_type" T1 
+    ON (T1.RESOURCE_TYPE_CODE = T0.RESOURCE_TYPE_CODE AND T1.EQUI_TYPE = T0.EQUITYPE)
+    LEFT JOIN "sap.tm.trp.db.semantic.resource::v_resource_status" T2 ON T2.RESOURCE_ID = T0.RESOURCE_ID
+    INNER JOIN (SELECT DISTINCT LOCATION_ID FROM :LOCATION_ID_HIERARCHY_LIST) T12 ON T12.LOCATION_ID = T2.CURRENT_LOCATION_ID
+    WHERE T2.MOVEMENT_STATUS_CODE = 'NIT' AND TRC.CODE = :RESOURCE_CATEGORY;
+
+-- GET ALL EQUIP TYPE LIST & RESOURCE
+
+    IF :EQUIP_FLAG = :EQUIP_TYPE THEN
+      EQUIP_TYPE_LIST =
+            SELECT 
+            T1.RESOURCE_TYPE_CODE AS ID
+            ,T2.RESOURCE_TYPE_CODE AS NAME
+            ,T2.RESOURCE_TYPE_DESC AS DESC
+            FROM :RESOURCE_TYPE_LIST T1
+        INNER JOIN :RESOURCE_TYPES T2 ON T2.RESOURCE_TYPE_CODE = T1.RESOURCE_TYPE_CODE
+            ;
+            T_RESOURCE = 
+                  SELECT 
+                        T1.CURRENT_LOCATION AS LOCATION_ID
+                        ,T1.RESID AS RESOURCE_ID
+				,T2.RESOURCE_TYPE_CODE AS EQUIPMENT_TYPE_ID
+                        ,T1.TEU_COUNT
+                        ,:EQUIP_FLAG AS EQUIP_CODE_TYPE
+                        ,T1.SIZE_TYPE_DESC AS EQUIPMENT_TYPE
+                  FROM :T_RESOURCE_BASE T1
+			INNER JOIN :RESOURCE_TYPE_LIST T2 ON T2.RESOURCE_TYPE_CODE = T1.SIZE_TYPE
+                  ;
+    ELSEIF :EQUIP_FLAG = :EQUIP_TYPE_GROUP THEN
+      EQUIP_TYPE_LIST = 
+            SELECT 
+			T1.RESOURCE_TYPE_CODE AS ID
+                  ,T2.DESC AS NAME
+                  ,T3.DESC AS DESC
+            FROM :RESOURCE_TYPE_LIST T1
+		LEFT JOIN "sap.tm.trp.db.systemmanagement::t_equipment_group" T2 ON T2.ID = T1.RESOURCE_TYPE_CODE
+		LEFT JOIN "sap.tm.trp.db.systemmanagement::t_equipment_group_t" T3 ON T3.ID = T1.RESOURCE_TYPE_CODE AND T3.SPRAS = :LANGUAGE_CODE
+            WHERE EQUIPMENT_FILTER_ID = :EQUIPMENT_FILTER_ID
+            ;
+      T_RESOURCE = 
+            SELECT
+                  T0.CURRENT_LOCATION AS LOCATION_ID
+                  ,T0.RESID AS RESOURCE_ID
+			,T3.RESOURCE_TYPE_CODE AS EQUIPMENT_TYPE_ID
+                  ,T0.TEU_COUNT
+                  ,:EQUIP_FLAG AS EQUIP_CODE_TYPE
+                  ,T2.DESC AS EQUIPMENT_TYPE
+            FROM :T_RESOURCE_BASE T0
+            INNER JOIN "sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth" T1 ON T1.EQUI_CODE = T0.SIZE_TYPE
+            LEFT JOIN "sap.tm.trp.db.systemmanagement::t_equipment_group" T2 ON T2.ID = T1.EQUIPMENT_GROUP_ID AND T2.RESOURCE_CATEGORY = T1.RESOURCE_CATEGORY
+		INNER JOIN :RESOURCE_TYPE_LIST T3 ON T3.RESOURCE_TYPE_CODE = T1.EQUIPMENT_GROUP_ID
+		;
+    END IF;
+
+-- GET STOCK RESULT BASE ON DEPOT LOCATION & EQUIPMENT TYPE
+T_STOCK_DEPOT_EQUIPMENT = 
+      SELECT      
+            T0.LOC_ID
+            ,T0.EQUIPMENT_TYPE_ID
+            ,T0.EQUIPMENT_NAME
+            ,T0.EQUIPMENT_DESC
+            ,COUNT(T1.RESOURCE_ID) AS CURRENT_STOCK_PCS
+            ,SUM(T1.TEU_COUNT) AS CURRENT_STOCK_TEU
+      FROM (
+            SELECT T1.LOCATION_ID AS LOC_ID, T2.ID AS EQUIPMENT_TYPE_ID, T2.NAME AS EQUIPMENT_NAME, T2.DESC AS EQUIPMENT_DESC
+            FROM (SELECT DISTINCT IFNULL(LOCATION_ID,ID) AS LOCATION_ID FROM :LOCATION_ID_HIERARCHY_LIST) T1      -- USE ID AS LOCATION_ID IN CASE THERE IS NO DEPOT(CHILD) UNDER THIS LOCATION(PARENT)
+            CROSS JOIN :EQUIP_TYPE_LIST T2
+            ) T0
+      LEFT JOIN :T_RESOURCE T1 ON T1.LOCATION_ID = T0.LOC_ID AND T1.EQUIPMENT_TYPE_ID = T0.EQUIPMENT_TYPE_ID
+      GROUP BY T0.LOC_ID,T0.EQUIPMENT_TYPE_ID, T0.EQUIPMENT_NAME, T0.EQUIPMENT_DESC
+      ;
+T_STOCK_DEPOT_HEAD =
+      SELECT      
+            T0.LOC_ID
+            ,COUNT(T1.EQUIPMENT_ID) AS CURRENT_STOCK_PCS
+		,SUM(T1.TEU_COUNT) AS CURRENT_STOCK_TEU
+      FROM (
+            SELECT DISTINCT IFNULL(LOCATION_ID,ID) AS LOC_ID FROM :LOCATION_ID_HIERARCHY_LIST
+            ) T0
+      LEFT JOIN :T_RESOURCE_BASE T1 ON T1.CURRENT_LOCATION = T0.LOC_ID
+      GROUP BY T0.LOC_ID
+      ;
+-- GET STOCK WITH EQUIPMENT TYPE FOR INPUT LOCATION (CHILD RESULT)
+T_STOCK_EQUIP = 
+      SELECT 
+            T1.LOCATION_ID
+            ,T1.LOCATION_NAME
+            ,T1.LOCATION_DESC
+            ,T1.LOCATION_TYPE
+            ,T1.LOCATION_LEVEL
+            ,T1.EQUIP_TYPE_ID
+            ,T1.EQUIP_TYPE_NAME
+            ,T1.EQUIP_TYPE_DESC
+            ,T1.STOCK_PCS AS STOCK
+            ,T2.MIN_SAFETY AS MIN_SAFETY_STOCK
+            ,T2.MAX_SAFETY AS MAX_SAFETY_STOCK
+            ,T2.MAX_CAPACITY AS MAX_CAPACITY
+      FROM (
+            SELECT 
+                  T0.ID AS LOCATION_ID
+                  ,T0.TYPE AS LOCATION_TYPE
+                  ,T0.NAME AS LOCATION_NAME
+                  ,T0.DESC AS LOCATION_DESC
+                  ,T0.LEVEL AS LOCATION_LEVEL
+                  ,T1.EQUIPMENT_TYPE_ID AS EQUIP_TYPE_ID
+                  ,T1.EQUIPMENT_NAME AS EQUIP_TYPE_NAME
+                  ,T1.EQUIPMENT_DESC AS EQUIP_TYPE_DESC
+                  ,SUM(IFNULL(T1.CURRENT_STOCK_PCS,0)) AS STOCK_PCS
+            FROM (select * from :LOCATION_ID_HIERARCHY_LIST 
+            group by ID, NAME, DESC, TYPE, LOCATION_ID, LEVEL) T0   
+            LEFT JOIN :T_STOCK_DEPOT_EQUIPMENT T1 ON T1.LOC_ID = IFNULL(T0.LOCATION_ID,T0.ID)  -- USE ID AS LOCATION_ID IN CASE THERE IS NO DEPOT(CHILD) UNDER THIS LOCATION(PARENT)
+            GROUP BY T0.ID,T0.TYPE,T0.NAME,T0.DESC,T0.LEVEL,T1.EQUIPMENT_TYPE_ID,T1.EQUIPMENT_NAME,T1.EQUIPMENT_DESC
+                  ) T1
+      LEFT JOIN "sap.tm.trp.db.stock::t_stock_config" T2 
+            ON T2.LOCATION_ID = T1.LOCATION_ID AND T2.LOCATION_TYPE = T1.LOCATION_TYPE
+            AND T2.EQUIP_CODE = EQUIP_TYPE_ID 
+            --AND T2.EQUIP_CODE_TYPE = T1.LOCATION_TYPE
+		AND T2.LOCATION_HEAD_FLAG = 0 AND T2.RESOURCE_CATEGORY = :RESOURCE_CATEGORY
+      ;
+T_STOCK_HEAD =
+      SELECT 
+            T1.LOCATION_ID
+            ,T1.LOCATION_NAME
+            ,T1.LOCATION_DESC
+            ,T1.LOCATION_TYPE
+            ,T1.LOCATION_LEVEL
+			,T1.STOCK_PCS
+			,T1.STOCK_TEU
+            ,T2.MIN_SAFETY AS MIN_SAFETY_STOCK
+            ,T2.MAX_SAFETY AS MAX_SAFETY_STOCK
+            ,T2.MAX_CAPACITY AS MAX_CAPACITY
+      FROM (
+            SELECT 
+				T0.ID AS LOCATION_ID
+				,T0.TYPE AS LOCATION_TYPE
+				,T0.NAME AS LOCATION_NAME
+				,T0.DESC AS LOCATION_DESC
+				,T0.LEVEL AS LOCATION_LEVEL
+				,SUM(IFNULL(T1.CURRENT_STOCK_PCS,0)) AS STOCK_PCS
+				,SUM(IFNULL(T1.CURRENT_STOCK_TEU,0)) AS STOCK_TEU
+            FROM (select * from :LOCATION_ID_HIERARCHY_LIST 
+            group by ID, NAME, DESC, TYPE, LOCATION_ID, LEVEL) T0   
+            LEFT JOIN :T_STOCK_DEPOT_HEAD T1 ON T1.LOC_ID = IFNULL(T0.LOCATION_ID,T0.ID)
+            -- USE ID AS LOCATION_ID IN CASE THERE IS NO DEPOT(CHILD) UNDER THIS LOCATION(PARENT)
+            GROUP BY T0.ID,T0.TYPE,T0.NAME,T0.DESC,T0.LEVEL
+                  ) T1
+      LEFT JOIN "sap.tm.trp.db.stock::t_stock_config" T2
+            ON T2.LOCATION_ID = T1.LOCATION_ID AND T2.LOCATION_TYPE = T1.LOCATION_TYPE
+		AND T2.LOCATION_HEAD_FLAG = 1 AND T2.RESOURCE_CATEGORY = :RESOURCE_CATEGORY
+      ;
+
+STOCK =
+      SELECT 
+            LOCATION_ID
+            ,LOCATION_NAME
+            ,LOCATION_TYPE
+            ,LOCATION_LEVEL
+            ,EQUIP_TYPE_ID
+            ,EQUIP_TYPE_NAME
+            ,:EQUIP_FLAG AS EQUIP_TYPE_CATEGORY
+            ,CURRENT_DATE AS DATE
+            ,STOCK
+            ,MIN_SAFETY_STOCK
+            ,MAX_SAFETY_STOCK
+            ,MAX_CAPACITY
+      FROM :T_STOCK_EQUIP
+      UNION ALL
+      SELECT 
+            LOCATION_ID
+            ,LOCATION_NAME
+            ,LOCATION_TYPE
+            ,LOCATION_LEVEL
+            ,'N/A' AS EQUIP_TYPE_ID
+            ,'N/A' AS EQUIP_TYPE_NAME
+            ,-1 AS EQUIP_TYPE_CATEGORY
+            ,CURRENT_DATE AS DATE
+            ,CASE WHEN :RESOURCE_CATEGORY_TYPE = 'CN' THEN STOCK_TEU ELSE STOCK_PCS END AS STOCK
+            ,MIN_SAFETY_STOCK
+            ,MAX_SAFETY_STOCK
+            ,MAX_CAPACITY
+      FROM :T_STOCK_HEAD
+      ;
+
+END;

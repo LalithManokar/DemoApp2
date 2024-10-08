@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_trip_details" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_trip_location"/>
+  <localVariables>
+    <variable id="TRIP_ID" parameter="true">
+      <descriptions defaultDescription="TRIP_ID"/>
+      <variableProperties datatype="NVARCHAR" length="100" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="TRIP_NAME" parameter="true">
+      <descriptions defaultDescription="TRIP_NAME"/>
+      <variableProperties datatype="NVARCHAR" length="100" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="SIM_PLAN_ID" parameter="true">
+      <descriptions defaultDescription="SIM_PLAN_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="SCENARIO_ID" parameter="true">
+      <descriptions defaultDescription="SCENARIO_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="ID" length="100"/>
+        <viewAttribute datatype="INTEGER" id="SEQUENCE"/>
+        <viewAttribute datatype="NVARCHAR" id="LOCATION" length="50"/>
+        <viewAttribute datatype="TIMESTAMP" id="DEPARTURE_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="ARRIVAL_TIME"/>
+        <viewAttribute datatype="DECIMAL" id="REMAIN_CAPACITY" length="15" scale="3"/>
+        <viewAttribute datatype="DECIMAL" id="TOTAL_CAPACITY" length="15" scale="3"/>
+        <viewAttribute datatype="NVARCHAR" id="CAPACITY_UOM" length="10"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#TRIP_ID</localVariable>
+      <localVariable>#TRIP_NAME</localVariable>
+      <localVariable>#SIM_PLAN_ID</localVariable>
+      <localVariable>#SCENARIO_ID</localVariable>
+      <definition>BEGIN 
+    DECLARE DATASET_CODE NVARCHAR(50);
+    DECLARE MESSAGE VARCHAR(200);
+    DECLARE UOM VARCHAR(10);
+    DECLARE V_MIN_SEQUENCE INTEGER := 0;
+
+    CALL &quot;sap.tm.trp.db.planningcockpit::p_get_dataset_code_by_simulation_scenario_id&quot;(:SIM_PLAN_ID,:SCENARIO_ID, DATASET_CODE, MESSAGE);
+
+    trip_ids = SELECT :trip_id AS trip_id FROM DUMMY;
+
+    call &quot;SAP_TM_ROUTING&quot;.&quot;sap.tm.trp.routing.db.dataset::p_query_trip_locations&quot;
+    (
+    	:trip_ids, trip_locations
+    );
+    /*
+    CALL &quot;sap.tm.trp.routing.db.dataset::p_query_trip_location_capacity&quot; (
+        :dataset_code,
+        :trip_ids, 
+        trip_location_capacity 
+    );
+*/
+CALL &quot;sap.tm.trp.db.planningcockpit::p_calculate_voyage_location_capcities&quot; (
+  :SIM_PLAN_ID,
+  :SCENARIO_ID,  
+  :trip_ids,
+  TRIP_CAPACITY_INFO
+ );
+    
+   SELECT MIN(SEQUENCE) INTO V_MIN_SEQUENCE FROM :TRIP_CAPACITY_INFO;
+   IF :V_MIN_SEQUENCE &lt; 1 THEN 
+   	TRIP_CAPACITY_INFO = SELECT TRIP_ID, SEQUENCE + 1 AS SEQUENCE,
+   	                  REMAIN_CAPACITY,TOTAL_CAPACITY,CAPACITY_UOM
+   	            FROM :TRIP_CAPACITY_INFO;
+   END IF;
+   -- call &quot;sap.tm.trp.db.planningcockpit::p_get_uom_by_simulation_id&quot;(:SIM_PLAN_ID,UOM);
+    
+    
+    var_out = 
+		    SELECT TO_VARCHAR(:TRIP_ID) AS ID,
+		           A.sequence, 
+		           A.location, 
+		           A.departure_time, 
+		           A.arrival_time,
+		           B.REMAIN_CAPACITY,
+		           B.TOTAL_CAPACITY,
+		           B.CAPACITY_UOM
+	         FROM :trip_locations A
+             --LEFT OUTER JOIN :trip_location_capacity B
+              -- ON A.TRIP_ID =B.TRIP_ID
+             -- AND A.SEQUENCE =B.SEQUENCE
+              --AND B.capacity_uom=:UOM;
+             LEFT OUTER JOIN :TRIP_CAPACITY_INFO B ON (A.TRIP_ID = B.TRIP_ID
+             AND A.SEQUENCE = B.SEQUENCE);
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="SEQUENCE" order="2">
+        <descriptions defaultDescription="SEQUENCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SEQUENCE"/>
+      </attribute>
+      <attribute id="LOCATION" order="3">
+        <descriptions defaultDescription="LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION"/>
+      </attribute>
+      <attribute id="DEPARTURE_TIME" order="4">
+        <descriptions defaultDescription="DEPARTURE_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="DEPARTURE_TIME"/>
+      </attribute>
+      <attribute id="ARRIVAL_TIME" order="5">
+        <descriptions defaultDescription="ARRIVAL_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="ARRIVAL_TIME"/>
+      </attribute>
+      <attribute id="REMAIN_CAPACITY" order="6">
+        <descriptions defaultDescription="CAPACITY"/>
+        <keyMapping columnObjectName="Script_View" columnName="REMAIN_CAPACITY"/>
+      </attribute>
+      <attribute id="CAPACITY_UOM" order="8">
+        <descriptions defaultDescription="CAPACITY_UOM"/>
+        <keyMapping columnObjectName="Script_View" columnName="CAPACITY_UOM"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="TOTAL_CAPACITY" order="7" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TOTAL_CAPACITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="TOTAL_CAPACITY"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

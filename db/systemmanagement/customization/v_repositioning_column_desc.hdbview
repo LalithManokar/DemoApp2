@@ -1,0 +1,118 @@
+schema = "SAP_TM_TRP";
+query = "SELECT T1.RESOURCE_CATEGORY_NAME,
+                T1.ID,
+                T1.VALUE,
+                T2.DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters_value\" AS T1 
+         LEFT OUTER JOIN \"sap.tm.trp.db.semantic.order::v_trq_item_category_t\" AS T2 
+         ON (T1.VALUE = T2.CODE)
+         WHERE T1.ID = 1
+         UNION
+         SELECT T1.RESOURCE_CATEGORY_NAME,
+                T1.ID,
+                T1.VALUE,
+                T2.DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters_value\" AS T1 
+         LEFT OUTER JOIN \"sap.tm.trp.db.semantic.order::v_movement_type_t\" AS T2 ON (T1.VALUE = T2.CODE)
+         WHERE T1.ID = 2
+         UNION
+         SELECT T1.RESOURCE_CATEGORY_NAME,
+                T1.ID,
+                T1.VALUE,
+                T2.UOM_DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters_value\" AS T1 
+         LEFT OUTER JOIN \"sap.tm.trp.db.semantic.common::v_uom\" AS T2 
+         ON (T1.VALUE = T2.UOM)
+         WHERE T1.ID = 3
+         UNION
+         SELECT T1.RESOURCE_CATEGORY_NAME,
+                T1.ID,
+                T1.VALUE,
+                '' AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters_value\" AS T1 
+         LEFT OUTER JOIN \"sap.tm.trp.db.semantic.common::v_sales_orgnization\" AS T2 
+         ON (T1.VALUE = T2.SALES_ORGNIZATION)
+         WHERE T1.ID = 4
+         UNION
+         SELECT T1.RESOURCE_CATEGORY_NAME,
+                T1.ID,
+                T1.VALUE,
+                CASE WHEN T1.VALUE IS NULL THEN ''
+                     WHEN T1.VALUE = ' ' THEN ''
+                     WHEN T1.VALUE = '' THEN ''
+                     ELSE T2.DESC
+                END AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters_value\" AS T1 
+         LEFT OUTER JOIN \"sap.tm.trp.db.semantic.order::v_trq_category_t\" AS T2 
+         ON (T1.VALUE = T2.CODE)
+         WHERE T1.ID = 5
+         UNION
+         SELECT T1.RESOURCE_CATEGORY_NAME,
+                T1.ID,
+                T1.VALUE,
+                T2.DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters_value\" AS T1 
+         LEFT OUTER JOIN \"sap.tm.trp.db.semantic.order::v_trq_item_type_t\" AS T2 
+         ON (T1.VALUE = T2.CODE)
+         WHERE T1.ID = 6
+         UNION
+         SELECT T1.RESOURCE_CATEGORY_NAME,
+                T1.ID,
+                T1.VALUE,
+                T2.DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters_value\" AS T1 
+         LEFT OUTER JOIN \"sap.tm.trp.db.semantic.order::v_trq_type_t\" AS T2 ON (T1.VALUE = T2.CODE)
+         WHERE T1.ID = 7
+         UNION
+         SELECT T1.RESOURCE_CATEGORY_NAME,
+                T1.ID,
+                T1.VALUE,
+                CASE WHEN T1.VALUE IS NULL THEN ''
+                  WHEN T1.VALUE = '' THEN ''
+                  WHEN T1.VALUE = ' ' THEN ''
+                  ELSE T2.DESC END AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters_value\" AS T1 
+         LEFT OUTER JOIN \"sap.tm.trp.db.semantic.order::v_build_tu_t\" AS T2 
+         ON (T1.VALUE = T2.CODE)
+         WHERE T1.ID = 8
+         UNION
+         SELECT T1.RESOURCE_CATEGORY_NAME,
+                T1.ID,
+                T1.VALUE,
+                T2.DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters_value\" AS T1 
+         LEFT OUTER JOIN \"sap.tm.trp.db.semantic.common::v_traffic_direction_t\" AS T2 
+         ON (T1.VALUE = T2.CODE)
+         WHERE T1.ID = 9
+         UNION
+         SELECT T1.RESOURCE_CATEGORY_NAME,
+                T1.ID,
+                T1.VALUE,
+                T2.DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters_value\" AS T1 
+         LEFT OUTER JOIN \"sap.tm.trp.db.semantic.order::v_transportation_mode_cat_t\" AS T2 
+         ON (T1.VALUE = T2.CODE)
+         WHERE T1.ID = 10
+         UNION
+         SELECT T1.RESOURCE_CATEGORY_NAME,
+                T1.ID,
+                T1.VALUE,
+                T2.DESC AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters_value\" AS T1 
+         LEFT OUTER JOIN \"sap.tm.trp.db.semantic.order::v_transportation_mode_t\" AS T2 
+         ON (T1.VALUE = T2.CODE)
+         WHERE T1.ID = 11";
+                
+depends_on_view = ["sap.tm.trp.db.semantic.order::v_trq_item_category_t",
+                   "sap.tm.trp.db.semantic.order::v_trq_category_t",
+                   "sap.tm.trp.db.semantic.order::v_build_tu_t",
+                   "sap.tm.trp.db.semantic.order::v_movement_type_t",
+                   "sap.tm.trp.db.semantic.common::v_uom",
+                   "sap.tm.trp.db.semantic.common::v_sales_orgnization",
+                   "sap.tm.trp.db.semantic.order::v_trq_item_type_t",
+                   "sap.tm.trp.db.semantic.order::v_trq_type_t",
+                   "sap.tm.trp.db.semantic.common::v_traffic_direction_t",
+                   "sap.tm.trp.db.semantic.order::v_transportation_mode_cat_t",
+                   "sap.tm.trp.db.semantic.order::v_transportation_mode_t"];
+                   
+depends_on_table = ["sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters_value"];             

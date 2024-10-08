@@ -1,0 +1,155 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_get_lanes" (
+    IN IT_FROM_LOC "sap.tm.trp.db.pickupreturn::tt_location_list",
+    IN IT_TO_LOC "sap.tm.trp.db.pickupreturn::tt_location_list",
+    IN IT_TM_MTR "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_mtr_lane",
+    OUT LANE_LIST "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_lane_list",
+    OUT CARRIER "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_carrier_list"
+) 
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_TRP
+   READS SQL DATA AS
+BEGIN
+
+    declare lc_pi_div_180 double := 0.017453292519943278;
+    declare lv_current_time timestamp;
+    declare lc_million double := 1000000;
+    declare lc_60 integer := 60;
+
+    select current_timestamp into lv_current_time from dummy;
+
+    lt_locations = select location from :it_from_loc union select location from :it_to_loc;
+    
+    lt_location_data = select b.LOCID as location_id, a.location, (b.XPOS * lc_million) as xpos, (b.YPOS * lc_million) as ypos, c.country_code, c.postal_code, c.state_code, 
+                        ((cast((b.XPOS * lc_million) as integer)) / 1000000 * lc_pi_div_180) as lon, ((cast((b.YPOS * lc_million) as integer)) / 1000000 * lc_pi_div_180) as lat
+                        from :lt_locations a
+                        inner join "sap.tm.trp.db.semantic.location::v_location_lane" b on a.location = b.LOCNO
+                        left join "sap.tm.trp.db.semantic.location::v_address" c on b.ADRNUMMER = c.id;
+    
+    lt_input_loc = SELECT location_id , location, country_code, postal_code, state_code
+                    FROM :lt_location_data;
+                    
+    CALL "sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_get_region_zone"(:lt_input_loc, lt_zones );
+    
+    CALL "sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_get_parent_zone"(:lt_zones, lt_final_loc_zone);
+
+    lt_from_loc = select b.location_id, b.location_id as loc_fr
+                    from :IT_FROM_LOC a
+                    inner join :lt_location_data b on a.location = b.location
+                    union 
+                    select b.location_id as location_id, c.zone_id as loc_fr
+                    from :IT_FROM_LOC a 
+                    inner join :lt_location_data b on a.location = b.location
+                    inner join :lt_final_loc_zone c on b.location_id = c.location_id
+                    WHERE C.ZONE_id IS NOT NULL;
+    
+    lt_to_loc = select b.location_id, b.location_id as loc_to
+                    from :IT_to_LOC a
+                    inner join :lt_location_data b on a.location = b.location
+                    union 
+                    select b.location_id as location_id, c.zone_id as loc_to
+                    from :IT_to_LOC a 
+                    inner join :lt_location_data b on a.location = b.location
+                    inner join :lt_final_loc_zone c on b.location_id = c.location_id
+                    WHERE C.ZONE_id IS NOT NULL;
+                    
+    lt_lane_info = select DISTINCT a.TRNAME, b.LOCFR, b.LOCTO, CAST (c.child_id as NVARCHAR(10)) as ttype, b.TRMID, b.DIST as DISTANCE_KM, b.DURAT as DURATION, b.DISTFX, b.DURFX
+                        from "sap.tm.trp.db.semantic.order::v_transportation_lane" a
+                        INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_lane_trm" b
+                        on a.TRNAME = b.TRNAME and a.LOCFR = b.LOCFR and a.LOCTO = b.LOCTO
+                        left join "sap.tm.trp.db.pickupreturn.harmonization.ruleset::v_trptype_item" c on b.TTYPE = c.parent_id
+                      where a.LOCFR in (select distinct loc_fr from :lt_from_loc)
+                        and a.LOCTO in (select distinct loc_to from :lt_to_loc)
+                        and (TO_TIMESTAMP(b.VALFR) <= lv_current_time and TO_TIMESTAMP(b.VALTO) >= lv_current_time);
+    
+    lt_lane_from_to = select a.trname, a.locfr, a.locto, a.ttype, a.trmid, a.distance_km, a.duration, a.distfx, a.durfx,
+                      b.trp_mtr, b.distfac, b.avgvel
+                      from :lt_lane_info a
+                      left join :it_tm_mtr b on a.ttype = b.mtr;
+                        
+    lt_from_to_pair = select a.location_id as from_location_id, a.loc_fr as locfr, b.location_id as to_location_id, b.loc_to as locto   
+                        from :lt_from_loc a cross join :lt_to_loc b;
+
+    lt_from_to_pair_filtered = SELECT b.trname, a.from_location_id, a.to_location_id, a.locfr, b.locto, b.ttype,
+                                b.TRP_MTR, b.TRMID, b.DISTANCE_KM, b.DURATION, b.DISTFX, b.DURFX, b.DISTFAC, b.AVGVEL
+                                from :lt_from_to_pair a
+                                inner join :lt_lane_from_to b
+                                on a.locfr = b.locfr and a.locto = b.locto;
+                                
+    lt_calc_distance = select a.from_location_id, a.to_location_id, b.location as location_from,  c.location as location_to,
+                               case when b.xpos < c.xpos then b.lat 
+                                    else c.lat 
+                                end as lat_from,
+                                case when b.xpos < c.xpos then b.lon
+                                    else c.lon
+                                end as lon_from,
+                                case when b.xpos < c.xpos then c.lat
+                                    else b.lat
+                                end as lat_to,
+                                case when b.xpos < c.xpos then c.lon
+                                    else b.lon
+                               end as lon_to,
+                               a.ttype, a.trp_mtr, a.trmid , a.distfac from
+                            :LT_FROM_TO_PAIR_FILTERED a 
+                            left join :lt_location_data b
+                            on a.from_location_id = b.location_id
+                            left join :lt_location_data c
+                            on a.to_location_id = c.location_id;
+    
+    call "sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_cal_distance"(:lt_calc_distance, lt_cal_distance_final );
+
+    lt_calc_duration = select distinct a.from_location_id, a.to_location_id, b.location as location_from, a.trmid, a.ttype, a.trp_mtr,
+                            c.location as location_to, a.avgvel
+                            from :lt_from_to_pair_filtered a
+                            left join :lt_location_data b on a.from_location_id = b.location_id
+                            left join :lt_location_data c on a.to_location_id = c.location_id;
+    
+    lt_calc_duration_h = select distinct a.from_location_id, a.to_location_id, a.location_from, a.location_to,
+                             NDIV0(b.distance,a.avgvel) as duration_h, a.trmid, a.ttype, a.trp_mtr
+                                from :lt_calc_duration a
+                                left join :lt_cal_distance_final b
+                                on a.from_location_id = b.from_location_id and a.to_location_id = b.to_location_id;
+    
+    lt_calc_duration_final_interim = select from_location_id, to_location_id, location_from, location_to, trmid, ttype, trp_mtr,
+    							duration_h,
+    							floor(duration_h) as trunc_dur,
+    							duration_h-floor(duration_h) as frac_dur,
+    							(duration_h-floor(duration_h)) * lc_60 as frac_dur_by_60
+                         from :lt_calc_duration_h;
+
+   lt_calc_duration_interim = select from_location_id, to_location_id, location_from, location_to, trmid, ttype, trp_mtr,
+                                    duration_h, 
+                                    ceil(trunc_dur * 10000 + floor(frac_dur * lc_60) * 100 + (frac_dur_by_60-floor(frac_dur_by_60)) * lc_60) as duration                        
+                                    from :lt_calc_duration_final_interim;
+							
+	lt_calc_duration_final = select from_location_id, to_location_id, location_from, location_to, trmid, ttype, trp_mtr,
+    							duration_h, concat(left(duration, length(duration)-2),'00') as duration
+    							from :lt_calc_duration_interim;
+    
+    lane_list = SELECT DISTINCT * FROM (select  a.trmid as id, d.location as from_location, e.location as to_location, a.trp_mtr as mtr,
+                        case when a.distfx = 'X' then a.distance_km 
+                            else b.distance 
+                        end as distance,
+                        case when a.durfx = 'X' then cast((floor(ceil(a.DURATION) / 10000) * 3600 + 
+                        floor(MOD (ceil(a.DURATION) , 10000) / 100) * 60 + 
+                        MOD (ceil(a.DURATION) ,100)) as integer)
+                            else cast((floor(ceil(c.DURATION) / 10000) * 3600 + 
+                        floor(MOD (ceil(c.DURATION) , 10000) / 100) * 60 + 
+                        MOD (ceil(c.DURATION) ,100)) as integer)
+                        end as duration
+                    from :LT_FROM_TO_PAIR_FILTERED a
+                    left join :lt_cal_distance_final b 
+                        on a.from_location_id = b.from_location_id and a.to_location_id = b.to_location_id
+                        and a.trmid = b.trmid and a.ttype = b.ttype
+                    left join :lt_calc_duration_final c on a.from_location_id = c.from_location_id and a.to_location_id = c.to_location_id
+                         and a.trmid = c.trmid and a.ttype = c.ttype
+                    left join :lt_location_data d on a.from_location_id = d.location_id
+                    left join :lt_location_data e on a.to_location_id = e.location_id);
+    
+    carrier = select distinct a.trmid as connection_id, b.PARTNER as carrier_id
+                from :LT_FROM_TO_PAIR_FILTERED A
+                inner join "sap.tm.trp.db.semantic.order::v_carrier"  b
+                on a.locfr = b.LOCFR and  a.locto = b.LOCTO and a.ttype = b.TTYPE and a.trname = b.TRNAME
+                where (TO_TIMESTAMP(b.VALFR) <= lv_current_time and TO_TIMESTAMP(b.VALTO) >= lv_current_time);
+END;
+

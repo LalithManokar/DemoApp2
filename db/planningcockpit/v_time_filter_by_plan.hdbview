@@ -1,0 +1,10 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT T1.ID AS SM_PLAN_ID,
+			     MIN(T2.START_TIME) AS START_DATE,
+			     MAX(T2.END_TIME) AS END_DATE,
+			     CURRENT_UTCTIMESTAMP AS CUR_DATE
+          FROM \"sap.tm.trp.db.planningcockpit::t_simulation_plan\" AS T1
+          LEFT OUTER JOIN \"sap.tm.trp.db.pipeline::t_pipeline_output_dataset\" AS T2 ON T1.EXCUTE_ID = T2.PLAN_EXECUTION_ID                 
+          GROUP BY T1.ID";
+
+depends_on_table = ["sap.tm.trp.db.planningcockpit::t_simulation_plan", "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"];

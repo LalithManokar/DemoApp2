@@ -1,0 +1,77 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_location_stock_settings_save"(
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),
+    IN CONNECTION_ID VARCHAR(100),
+    OUT EXECUTION_RESULTS "sap.tm.trp.db.massupload::tt_massupload_execution_result" )
+
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    
+AS
+USER_ID BIGINT;
+BEGIN
+
+    
+    --Declarations
+     DECLARE LOCATION_TYPE_LOCATION INTEGER :=1; 
+     declare UPDT_REC_CNT integer;
+     declare TOTAL_REC_CNT integer;
+    
+    --Select data from temporary table
+     SOURCE = 
+     			SELECT * 
+     			FROM "sap.tm.trp.db.massupload::t_location_stock_settings_temporary" 
+     			WHERE CONNECTION_ID = :CONNECTION_ID 
+     			AND RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID;    
+
+
+    --Delete all the records in t_stock_config for the locations
+     DELETE FROM "sap.tm.trp.db.stock::t_stock_config" 
+     where LOCATION_ID IN (SELECT LOCATION_ID FROM :SOURCE)
+     AND LOCATION_TYPE = :LOCATION_TYPE_LOCATION 
+     AND RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID;
+
+    --Insert Location Stock Settings
+    UPSERT "sap.tm.trp.db.stock::t_stock_config"
+     ( LOCATION_ID,
+	   LOCATION_TYPE,
+	   EQUIP_CODE,
+	   EQUIP_CODE_TYPE,
+	   MIN_SAFETY,
+	   MAX_SAFETY,
+	   MAX_CAPACITY,
+       HANDLING_CAPACITY,
+	   LOCATION_HEAD_FLAG,
+	   RESOURCE_CATEGORY )
+     SELECT 
+	   LOCATION_ID,
+	   LOCATION_TYPE,
+       RESOURCE_TYPE,
+       RESOURCE_FILTER_TYPE,
+       MIN_SAFETY_STOCK,
+       MAX_SAFETY_STOCK,
+       MAX_PHYSICAL_STOCK,
+       HANDLING_CAPACITY,
+       LOCATION_HEAD_FLAG,
+       RESOURCE_CATEGORY
+     FROM :SOURCE;        
+   
+   -- Get total records updated.
+     UPDT_REC_CNT := ::ROWCOUNT;
+   
+   -- Get total records
+     select count(*) into total_rec_cnt from :SOURCE;
+     
+	-- Delete the records in temporary table.
+ 	DELETE FROM "sap.tm.trp.db.massupload::t_location_stock_settings_temporary" 
+    WHERE CONNECTION_ID = :CONNECTION_ID;
+    
+	
+   --Update Mass Upload Execution History table
+    EXECUTION_RESULTS = 
+		SELECT 
+			0 AS REC_CRTD,
+			:UPDT_REC_CNT AS REC_upd,
+			:total_rec_cnt AS RECORD_CNT from dummy;
+
+END;

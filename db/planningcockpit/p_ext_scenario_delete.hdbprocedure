@@ -1,0 +1,80 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_ext_scenario_delete"(
+   --IN SESSION_ID VARCHAR(200),
+    IN ID BIGINT,
+    OUT MESSAGE VARCHAR(200),
+    OUT MODIFIED_BY VARCHAR(200)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE V_TIMESTAMP_START DATETIME := CURRENT_UTCTIMESTAMP;
+    DECLARE V_LOCK_SESSION_ID VARCHAR(200);
+    DECLARE USER_ID BIGINT;
+    DECLARE USERNAME VARCHAR(200);
+    DECLARE LOCK_USER VARCHAR(200);
+    DECLARE V_LOCK_USER_ID BIGINT;
+    DECLARE V_SIMULATION_ID BIGINT;
+    DECLARE V_LOCK_LAST_MODIFYED_ON TIMESTAMP;
+    DECLARE V_PLAN_STATUS INTEGER;
+    
+    CALL "sap.tm.trp.db.planningcockpit::p_ext_lock_simulation_plan_by_scenario_id"(:ID, V_LOCK_SESSION_ID, V_LOCK_USER_ID, V_SIMULATION_ID, V_LOCK_LAST_MODIFYED_ON);
+
+    SELECT B.PLAN_STATUS
+      INTO V_PLAN_STATUS 
+      FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" B
+           INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" C
+           ON B.ID = C.REL_SM_PLAN_ID
+     WHERE C.ID = :ID; 
+    
+    SELECT USERNAME INTO USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+    
+    IF :V_LOCK_USER_ID = :USER_ID AND 
+       :V_LOCK_LAST_MODIFYED_ON IS NOT NULL THEN
+    
+        IF :V_PLAN_STATUS = 1 THEN
+            MESSAGE := 'MSG_ERROR_FINALIZED'; 
+            MODIFIED_BY := USERNAME; 
+        ELSE
+            -- Delete Activities
+            DELETE FROM "sap.tm.trp.db.planningcockpit::t_activity_t"
+            WHERE ID IN (SELECT ID FROM "sap.tm.trp.db.planningcockpit::t_activity"
+                          WHERE REL_SCENARIO_ID = :ID);
+                                  
+            DELETE FROM "sap.tm.trp.db.planningcockpit::t_activity"
+            WHERE REL_SCENARIO_ID = :ID;
+
+        
+            -- Delete Scenario
+            DELETE FROM "sap.tm.trp.db.planningcockpit::t_scenario"
+            WHERE ID = :ID;
+        
+            DELETE FROM "sap.tm.trp.db.planningcockpit::t_scenario_t"
+            WHERE ID = :ID;
+            
+            -- Delete used lease contract quota
+            DELETE FROM "sap.tm.trp.db.planningcockpit::t_used_lease_quota"
+            WHERE SCENARIO_ID = :ID
+            AND FINALIZE_FLAG <> 1;
+            
+              
+            --update the record in the lock table 
+            UPDATE "sap.tm.trp.db.planningcockpit::t_lock"
+               SET --SESSION_ID = :SESSION_ID,
+                   USER_ID = :USER_ID,
+                   LAST_MODIFYED_ON = :V_TIMESTAMP_START
+             WHERE SIMULATION_ID = (SELECT REL_SM_PLAN_ID FROM "sap.tm.trp.db.planningcockpit::t_scenario" WHERE ID = :ID);
+        
+            -- Change Status
+            MESSAGE := 'MSG_SUCCESS_STATUS';
+            MODIFIED_BY := USERNAME;
+        END IF;
+    ELSE
+        MESSAGE := 'MSG_ERROR_LOCKED';
+        SELECT USERNAME INTO LOCK_USER
+        FROM "sap.tm.trp.db.systemmanagement.user::t_user" WHERE ID = :V_LOCK_USER_ID;
+        MODIFIED_BY := :LOCK_USER;
+    END IF; 
+END;

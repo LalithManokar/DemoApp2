@@ -1,0 +1,69 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_get_division_for_crtedit_depotmanager_gis_disable" ( 
+IN IN_POLYGON CLOB,
+IN MAP_LEVEL INTEGER,
+IN CURRENT_ID BIGINT,
+IN SELECTED_IDS "sap.tm.trp.db.systemmanagement::tt_division_id",
+OUT TOO_MUCH_LOCATION_FLAG SMALLINT,
+--20150108 change dynamic sql to normal
+OUT OUT_DIVISION "sap.tm.trp.db.systemmanagement::t_out_division",
+OUT OUT_LOCATIONS_XPOS_YPOS_INVALID  "sap.tm.trp.db.pipeline::tt_location_info_list" 
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP" 
+AS
+BEGIN 
+
+   DECLARE OUT_UUID VARCHAR(32);
+   DECLARE ROLE_TYPE VARCHAR(32);
+   DECLARE MAX_LOCATION_NUM_ON_MAP INTEGER :=2000;
+   DECLARE VAR_LOCATION_NUM INTEGER :=0 ;  
+   TOO_MUCH_LOCATION_FLAG :=0;
+   
+   ROLE_TYPE := 'DEPOT_PLANNER';
+ 
+   OUT_UUID := SYSUUID;
+   INSERT INTO  "sap.tm.trp.db.systemmanagement::t_geo_type.t_polygon" VALUES(NEW ST_GEOMETRY(:IN_POLYGON),:OUT_UUID);
+  
+  
+   --MAP_LEVEL =4 -> city view, Output: location list:
+   --IF :MAP_LEVEL = 4 THEN
+       --STATUS =1: used, =2: note used
+        LOCATIONS = SELECT DISTINCT T2.ID, T2.NAME, T2.DESC, T2.XPOS AS LATITUDE, T2.YPOS AS LONGITUDE ,
+                    CASE WHEN T3.ROLE_ID IS NOT NULL THEN  1 ELSE 2 END AS STATUS
+                    FROM :SELECTED_IDS T1
+                    INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T2 ON (T1.ID = T2.ID)
+                    LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement.user::v_role_location_all" T3 ON (T1.ID = T3.LOCATION_ID AND T3.ROLE_TYPE = :ROLE_TYPE AND T3.ROLE_ID <> :CURRENT_ID); 
+        
+        OUT_LOCATIONS_XPOS_YPOS_INVALID = SELECT  T1.ID AS LOCATION_ID,T1.NAME AS LOCATION_NAME,
+        T1.LATITUDE AS XPOS,T1.LONGITUDE AS YPOS
+		 FROM :LOCATIONS T1
+	     WHERE (T1.LATITUDE IS NULL OR T1.LONGITUDE IS NULL) OR (ABS(T1.LATITUDE) + ABS(T1.LONGITUDE) =0);
+	     
+	                                                            
+        -- insert the location information into table
+        INSERT INTO "sap.tm.trp.db.systemmanagement::t_out_division" (ID,NAME,DESC,LATITUDE,LONGITUDE,STATUS,UUID) 
+        SELECT ID,NAME,DESC,LATITUDE,LONGITUDE,STATUS,:OUT_UUID FROM :LOCATIONS T1
+        WHERE (T1.LATITUDE IS NOT NULL AND T1.LONGITUDE IS NOT NULL) AND (ABS(T1.LATITUDE) + ABS(T1.LONGITUDE) > 0);
+         
+        
+		OUT_DIVISION =  SELECT T1.ID,T1.NAME,T1.LATITUDE,T1.LONGITUDE,T1.STATUS,T1.UUID,IFNULL(T1.DESC,T1.NAME) AS "DESC"
+		 		 FROM  "sap.tm.trp.db.systemmanagement::t_out_division"  T1  
+                 INNER JOIN "sap.tm.trp.db.systemmanagement::t_geo_type.t_polygon"  T2 ON (T1.UUID = T2.UUID)
+                 WHERE T1.UUID = TO_VARCHAR( :OUT_UUID) AND GEOMETRY.ST_CONTAINS(NEW ST_POINT(T1.LATITUDE,T1.LONGITUDE)) =1 ;
+
+        DELETE FROM "sap.tm.trp.db.systemmanagement::t_out_division" WHERE UUID = :OUT_UUID;
+  
+  	
+  	--20150109 If there's too many locations 
+  	--return null
+  	SELECT COUNT(1) AS LOCATION_NUM INTO VAR_LOCATION_NUM
+	FROM :OUT_DIVISION;
+  	IF VAR_LOCATION_NUM > :MAX_LOCATION_NUM_ON_MAP THEN
+	    OUT_DIVISION = 
+	    		  SELECT NULL AS "ID",NULL AS "NAME", NULL AS LATITUDE,NULL AS LONGITUDE,NULL AS STATUS,
+                  NULL AS UUID,NULL AS "DESC" FROM DUMMY;
+	    TOO_MUCH_LOCATION_FLAG := 1;
+	END IF;
+    DELETE FROM "sap.tm.trp.db.systemmanagement::t_geo_type.t_polygon" WHERE UUID = :OUT_UUID;  
+END;

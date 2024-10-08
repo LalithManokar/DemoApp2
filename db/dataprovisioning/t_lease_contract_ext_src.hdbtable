@@ -1,0 +1,23 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "CODE"; sqlType = NVARCHAR; length = 22; nullable = false;},
+	{name = "LEASE_CONTRACT_REFERENCE"; sqlType = NVARCHAR; length = 100; comment = "Actual lease contract reference";  nullable = true;},
+	{name = "LEASE_TYPE_CODE"; sqlType = NVARCHAR; length = 22; nullable = false;},
+    {name = "LESSOR_CODE"; sqlType = NVARCHAR; length = 22; nullable = false;},
+	{name = "START_TIME"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "END_TIME"; sqlType = TIMESTAMP; nullable = true;},
+	{name = "CURRENCY_CODE"; sqlType = NVARCHAR; length = 3; nullable = false; comment = "lease contract currency code";},
+	{name = "UNIT"; sqlType = NVARCHAR; length = 3; nullable = true; comment = "lease contract unit value";},
+	{name = "CREATED_ON"; sqlType = TIMESTAMP; nullable = true;},
+	{name = "CREATED_BY"; sqlType = BIGINT; nullable = true;},
+	{name = "MODIFIED_ON"; sqlType = TIMESTAMP; nullable = true;},
+	{name = "MODIFIED_BY"; sqlType = BIGINT; nullable = true;},
+	{name = "MAX_HIRE_QUANTITY"; sqlType = INTEGER; nullable = true; comment = "Contract level maximum hire quantity"; },
+	{name = "MIN_HIRE_QUANTITY"; sqlType = INTEGER; nullable = true; comment = "Contract level minimum hire quantity"; },
+	{name = "ACTIVE"; sqlType = TINYINT; nullable = false; defaultValue = "1";},
+	{name = "RESOURCE_CATEGORY"; sqlType = NVARCHAR; length = 50; nullable = false;},
+	{name = "UNIT_TYPE"; sqlType = NVARCHAR; length = 50; nullable = false;}
+	
+];
+table.primaryKey.pkcolumns = ["CODE"];

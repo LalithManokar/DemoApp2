@@ -1,0 +1,119 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_get_connection_by_hash" (
+    IN dataset_id BIGINT,
+    IN filter "sap.tm.trp.routing.db.dataset::tt_hash",
+    OUT connection TABLE (
+        "ID" BIGINT,
+        "EXTERNAL_ID" NVARCHAR(50),
+        "FROM_LOCATION" NVARCHAR(50),
+        "TO_LOCATION" NVARCHAR(50),
+        "MTR" NVARCHAR(10),
+        "DISTANCE" DOUBLE, 
+        "DURATION" INTEGER,
+        "ACTION" CHAR,
+        "HASH" VARBINARY(32),
+        "CREATED_BY" NVARCHAR(50),
+        "CREATED_ON" TIMESTAMP,
+        "CHANGED_BY"  NVARCHAR(50),
+        "CHANGED_ON" TIMESTAMP
+    )
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING"
+   READS SQL DATA AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+	DECLARE count INTEGER;
+	DECLARE CURSOR c_dataset(dataset "sap.tm.trp.routing.db.common::tt_id")
+	FOR SELECT id FROM :dataset;
+	DECLARE CURSOR c_connection(connection "sap.tm.trp.routing.db.dataset::tt_path_merge")
+	FOR SELECT * FROM :connection;
+	
+	DECLARE ACTION_CREATE CHAR = 'C';
+	DECLARE ACTION_DELETE CHAR = 'D';
+	DECLARE ACTION_UPDATE CHAR = 'U';
+	DECLARE SOURCE_MANUAL CHAR = 'M';
+	DECLARE SOURCE_SYSTEM CHAR = 'S';
+	
+	-- Get dataset chain
+	CALL "sap.tm.trp.routing.db.dataset::p_get_dataset_chain"(
+	    :dataset_id,
+	    :dataset_chain
+	);
+	
+	-- Revert dataset chain
+	dataset_chain_reverted = SELECT id
+	FROM (SELECT id, ROW_NUMBER() OVER() AS row_number
+	FROM :dataset_chain) ORDER BY row_number DESC;
+	
+	connection_tmp = SELECT 0 AS id, to_binary('') AS hash, '' AS action
+	FROM DUMMY WHERE 1 <> 1; 
+	
+	FOR row AS c_dataset(:dataset_chain_reverted) DO
+        -- For sytem connection, upper layer wins
+        connection_tmp_current =
+	    SELECT c.id, c.hash, '' AS action
+	    FROM "sap.tm.trp.routing.db.dataset::t_connection" AS c
+	    INNER JOIN :filter AS f
+	    ON c.hash = f.hash
+	    WHERE c.dataset_id = row.id AND c.source = :SOURCE_SYSTEM;
+        
+	    connection_tmp = SELECT id, hash, '' AS action FROM :connection_tmp
+	    WHERE hash NOT IN (SELECT DISTINCT hash FROM :connection_tmp_current)
+	    UNION ALL
+	    SELECT * FROM :connection_tmp_current;
+	    
+	    connection_delta = SELECT c.hash, c.id, c.action
+	    FROM "sap.tm.trp.routing.db.dataset::t_connection" AS c
+	    INNER JOIN :filter AS f
+	    ON c.hash = f.hash
+	    WHERE c.dataset_id = row.id AND c.source = :SOURCE_MANUAL;
+	    
+	    SELECT count(*) INTO count FROM :connection_delta;
+	    
+	    IF :count = 0 THEN
+	        CONTINUE;
+	    END IF;
+	    
+	    -- E means exists
+    	-- E | C => E -> Conflicted
+    	-- E | U => U
+    	-- E | D => 
+    	--   | C => C
+    	--   | D =>   -> Conflicted
+    	--   | U =>   -> Conflicted
+    	
+    	creation_delta = SELECT id, hash, action
+    	FROM :connection_delta
+    	WHERE action = :ACTION_CREATE
+    	AND hash NOT IN (SELECT DISTINCT hash FROM :connection_tmp);
+    	
+    	update_delta = SELECT id, hash, action
+    	FROM :connection_delta
+    	WHERE action = :ACTION_UPDATE
+    	AND hash IN (SELECT DISTINCT hash FROM :connection_tmp);
+    	
+    	delete_delta = SELECT id, hash, action
+    	FROM :connection_delta
+    	WHERE action = :ACTION_DELETE;
+    	
+    	connection_tmp = 
+    	SELECT * FROM :creation_delta
+    	UNION ALL
+    	SELECT * FROM :update_delta
+    	UNION ALL
+    	SELECT * FROM :connection_tmp
+    	WHERE hash NOT IN (SELECT hash FROM :delete_delta 
+    	UNION ALL SELECT hash FROM :update_delta);
+	    
+	END FOR;
+	
+	connection = SELECT c.id, external_id, from_location, to_location, mtr, distance,
+    duration, t.action, c.hash, created_by, created_on, changed_by, changed_on
+    FROM :connection_tmp AS t
+    INNER JOIN "sap.tm.trp.routing.db.dataset::t_connection" AS c
+    ON t.id = c.id;
+	
+END

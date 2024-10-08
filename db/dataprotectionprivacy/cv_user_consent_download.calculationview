@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_user_consent_download" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_user_consent_download"/>
+  <localVariables>
+    <variable id="USER_NAME" parameter="true">
+      <descriptions defaultDescription="user name"/>
+      <variableProperties datatype="NVARCHAR" defaultValue="" length="60" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="TIME_ZONE_SET" parameter="true">
+      <descriptions defaultDescription="TIME_ZONE_SET"/>
+      <variableProperties datatype="VARCHAR" length="10" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="FIELD" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="VALUE" length="1000"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#USER_NAME</localVariable>
+      <localVariable>#TIME_ZONE_SET</localVariable>
+      <definition>
+ /********* Begin Procedure Script ************/
+ BEGIN
+     DECLARE TIMEZONESET INTEGER;
+     DECLARE UTCTIMEZONE VARCHAR(10);
+
+     SELECT LENGTH(:TIME_ZONE_SET) INTO TIMEZONESET
+     FROM DUMMY;
+
+     -- IF :TIMEZONESET = 1 THEN
+     -- UTCTIMEZONE := 'UTC'||'+'||RTRIM(:TIME_ZONE_SET);
+     -- ELSE
+     --  UTCTIMEZONE := 'UTC'||RTRIM(:TIME_ZONE_SET);
+     -- END IF;
+
+     USER_CONSENT = SELECT ENABLED_FLAG,
+                           VALID_FROM,
+                           VALID_TO,
+                           CREATE_ON,
+                           LAST_MODIFIED_ON,
+                           CONSENT_STATEMENT
+                    FROM &quot;sap.tm.trp.db.dataprotectionprivacy::t_user_consent&quot;
+                    WHERE USERNAME = :USER_NAME;
+
+    var_out = 	SELECT 'Consent Enabled' AS FIELD,
+                  	                    CASE WHEN ENABLED_FLAG = 0 THEN 'No'
+                  	                      ELSE 'Yes' END AS VALUE
+                  	            FROM  :USER_CONSENT
+                  	            UNION ALL
+                  	            SELECT 'Valid From' AS FIELD,
+                  	                    CASE WHEN TO_TIMESTAMP(VALID_FROM) = ''
+                  	                          THEN null
+                  	                    ELSE TO_VARCHAR(ADD_SECONDS(TO_TIMESTAMP(VALID_FROM),:UTCTIMEZONE)) END AS VALUE
+                  	            FROM  :USER_CONSENT
+                  	            UNION ALL
+                  	            SELECT 'Valid To' AS FIELD,
+                  	                    CASE WHEN TO_TIMESTAMP(VALID_TO) = ''
+                  	                          THEN null
+                  	                    ELSE TO_VARCHAR(ADD_SECONDS(TO_TIMESTAMP(VALID_TO),:UTCTIMEZONE)) END AS VALUE
+                  	            FROM  :USER_CONSENT
+                  	            UNION ALL
+                  	            SELECT 'Created On' AS FIELD,
+                  	                    CASE WHEN TO_TIMESTAMP(CREATE_ON) = ''
+                  	                          THEN null
+                  	                   ELSE  TO_VARCHAR(ADD_SECONDS(TO_TIMESTAMP(CREATE_ON),:UTCTIMEZONE)) END AS VALUE
+                  	            FROM  :USER_CONSENT
+                  	            UNION ALL
+                  	            SELECT 'Last Changed On' AS FIELD,
+                  	                    CASE WHEN TO_TIMESTAMP(LAST_MODIFIED_ON) = ''
+                  	                          THEN null
+                  	                    ELSE TO_VARCHAR(ADD_SECONDS(TO_TIMESTAMP(LAST_MODIFIED_ON),:UTCTIMEZONE)) END AS VALUE
+                  	            FROM  :USER_CONSENT
+                  	            UNION ALL
+                  	            SELECT 'Consent statement' AS FIELD,
+                  	                    CONSENT_STATEMENT AS VALUE
+                  	            FROM  :USER_CONSENT;
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="FIELD" order="1">
+        <descriptions defaultDescription="FIELD"/>
+        <keyMapping columnObjectName="Script_View" columnName="FIELD"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="VALUE" order="2" aggregationType="max" measureType="simple">
+        <descriptions defaultDescription="VALUE"/>
+        <measureMapping columnObjectName="Script_View" columnName="VALUE"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

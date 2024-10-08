@@ -1,0 +1,27 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_time_filter_delete" (IN TIME_FILTER_ID BIGINT) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	--READS SQL DATA 
+AS
+BEGIN
+ 
+
+
+
+-- DELETE ITEM INTERVAL
+DELETE FROM "sap.tm.trp.db.filter::t_time_filter_interval"
+WHERE TIME_FILTER_ID = :TIME_FILTER_ID
+;
+
+-- DELETE TIME FILTER ITEM
+DELETE FROM "sap.tm.trp.db.filter::t_time_filter_item"
+WHERE TIME_FILTER_ID = :TIME_FILTER_ID
+;
+
+-- DELETE TIME FILTER METADATA
+DELETE FROM "sap.tm.trp.db.filter::t_time_filter"
+WHERE ID = :TIME_FILTER_ID
+;
+
+END;

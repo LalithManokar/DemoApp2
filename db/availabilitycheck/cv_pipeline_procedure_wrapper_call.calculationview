@@ -1,0 +1,394 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_pipeline_procedure_wrapper_call" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_pipeline_procedure_wrapper_call"/>
+  <localVariables>
+    <variable id="PLAN_ID" parameter="true">
+      <descriptions defaultDescription="PLAN_ID"/>
+      <variableProperties datatype="BIGINT" defaultValue="undefined" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="PLAN_EXECUTION_ID"/>
+        <viewAttribute datatype="NVARCHAR" id="NODE_ID" length="32"/>
+        <viewAttribute datatype="NVARCHAR" id="LOCATION_ID" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="LOCATION_NAME" length="100"/>
+        <viewAttribute datatype="INTEGER" id="LOCATION_FILTER_TYPE"/>
+        <viewAttribute datatype="NVARCHAR" id="EQUIP_TYPE_ID" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="EQUIP_TYPE_NAME" length="100"/>
+        <viewAttribute datatype="INTEGER" id="EQUIP_FILTER_TYPE"/>
+        <viewAttribute datatype="NVARCHAR" id="OUTPUT_KEY" length="200"/>
+        <viewAttribute datatype="NVARCHAR" id="OUTPUT_VALUE" length="300"/>
+        <viewAttribute datatype="BIGINT" id="TIME_INTERVAL_ID"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_TIME"/>
+        <viewAttribute datatype="INTEGER" id="SEQUENCE"/>
+        <viewAttribute datatype="BIGINT" id="TIME_INTERVAL"/>
+        <viewAttribute datatype="VARCHAR" id="UNIT" length="32"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#PLAN_ID</localVariable>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+ BEGIN 
+ 	 --var_out = .. 
+
+DECLARE LV_LOCATION_COUNT INTEGER;	
+DECLARE V_MAX_EXECUTION_ID BIGINT; 	
+DECLARE SCHEDULED_PLAN_ID BIGINT; 
+--Filter ID
+DECLARE LOCATION_FILTER_ID BIGINT;
+DECLARE RESOURCE_FILTER_ID BIGINT;
+DECLARE TIME_FILTER_ID BIGINT;
+DECLARE ATTRIBUTE_FILTER_ID BIGINT;	
+--pipeline model info
+DECLARE PIPELINE_MODEL_ID BIGINT;
+DECLARE PIPELINE_MODEL VARCHAR(200);
+DECLARE INSTANT_ENABLED CHAR(1) DEFAULT '';	
+DECLARE ATTRIBUTE_FILTER NVARCHAR(500);
+DECLARE RESOURCE_CATEGORY VARCHAR(20);
+DECLARE TIMEZONE NVARCHAR(50);
+
+DECLARE PLAN_MODEL_TYPE_ID INTEGER;
+DECLARE FILTER_GROUP_ID BIGINT;
+
+DECLARE LV_RESOURCE_COUNT INTEGER;
+DECLARE In_Filter_Group_ID INTEGER;
+
+DECLARE LV_LOCATION_COUNT1 INTEGER;
+DECLARE filter_type INTEGER;
+DECLARE LOCATION_TYPE INTEGER := 1;
+DECLARE LOCATION_GROUP_TYPE INTEGER := 2;	
+DECLARE REGION_TYPE INTEGER :=5;
+DECLARE REGION_GROUP_TYPE INTEGER :=6;
+DECLARE EXIT HANDLER FOR SQLEXCEPTION
+   SELECT ::SQL_ERROR_CODE, ::SQL_ERROR_MESSAGE FROM DUMMY;
+
+
+----sap.tm.trp.db.supplydemand::p_get_supply_demand_result_by_plan---
+LOCATION = SELECT * FROM &quot;sap.tm.trp.db.supplydemand.instant::t_cm_execution_parameter_location_temp&quot;;
+RESOURCE = SELECT * FROM &quot;sap.tm.trp.db.supplydemand.instant::t_cm_execution_parameter_resource_temp&quot;;
+
+--PLAN_ID := 471283;
+
+--CALL &quot;sap.tm.trp.db.supplydemand.instant::p_sd_parameter_scheduled_plan_id&quot;(:PLAN_ID, SCHEDULED_PLAN_ID);
+		IF :PLAN_ID IS NOT NULL THEN
+		--)handle virtual supply demand plan
+		SELECT PLAN_MODEL_TYPE_ID INTO PLAN_MODEL_TYPE_ID FROM &quot;sap.tm.trp.db.pipeline::t_plan_model&quot; WHERE ID = :PLAN_ID;
+		IF :PLAN_MODEL_TYPE_ID = 3 THEN
+			SELECT TOP 1 PERSISTED_PLAN_MODEL_ID INTO SCHEDULED_PLAN_ID 
+			FROM &quot;sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan&quot; 
+			WHERE VIRTUAL_PLAN_MODEL_ID = :PLAN_ID;
+		ELSE
+			SCHEDULED_PLAN_ID := :PLAN_ID;	
+		END	IF ;
+	END IF;
+	
+--CALL &quot;sap.tm.trp.db.supplydemand.instant::p_sd_parameter_pipeline_model_by_plan&quot;(:SCHEDULED_PLAN_ID, PIPELINE_MODEL_ID, PIPELINE_MODEL, INSTANT_ENABLED);
+    SELECT T2.ID, T2.NAME, IFNULL (T2.INSTANT_ENABLED,'') INTO PIPELINE_MODEL_ID, PIPELINE_MODEL, INSTANT_ENABLED
+	FROM &quot;sap.tm.trp.db.pipeline::t_plan_model&quot; AS T1
+	INNER JOIN &quot;sap.tm.trp.db.pipeline::t_pipeline_model&quot; AS T2 ON T1.PIPELINE_MODEL_ID = T2.ID
+	WHERE T1.ID = :SCHEDULED_PLAN_ID;
+
+--CALL &quot;sap.tm.trp.db.supplydemand.instant::p_sd_parameter_filterid_by_plan&quot;(:PLAN_ID,LOCATION_FILTER_ID,RESOURCE_FILTER_ID,TIME_FILTER_ID,ATTRIBUTE_FILTER_ID);
+    SELECT FILTER_GROUP_ID INTO FILTER_GROUP_ID FROM &quot;sap.tm.trp.db.pipeline::t_plan_model&quot; WHERE ID = :PLAN_ID;
+	
+	SELECT IFNULL(MAX(T2.ID),0) INTO LOCATION_FILTER_ID 
+		FROM &quot;sap.tm.trp.db.filter::t_filter_location_filter&quot; T1
+		INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+		WHERE T1.FILTER_GROUP_ID = :FILTER_GROUP_ID;  
+     
+    SELECT EQUIPMENT_FILTER_ID INTO RESOURCE_FILTER_ID 
+		FROM &quot;sap.tm.trp.db.filter::t_filter_equipment_filter&quot;
+		WHERE FILTER_GROUP_ID = :FILTER_GROUP_ID;
+		
+	SELECT TIME_FILTER_ID INTO TIME_FILTER_ID FROM &quot;sap.tm.trp.db.filter::t_filter_group&quot; WHERE ID = :FILTER_GROUP_ID;  
+	
+	SELECT IFNULL (MAX(ATTRIBUTE_GROUP_ID),0) INTO ATTRIBUTE_FILTER_ID FROM &quot;sap.tm.trp.db.pipeline::t_plan_model&quot; WHERE ID = :PLAN_ID;
+
+--CALL &quot;sap.tm.trp.db.supplydemand.instant::p_sd_parameter_node_list_by_plan&quot;(:PIPELINE_MODEL_ID, NODE_LIST);
+	NODE_LIST = SELECT NODE, OVERDUE_NAME 
+		    	FROM &quot;sap.tm.trp.db.pipeline::t_pipeline_node_list&quot; WHERE PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;
+		    		
+--CALL &quot;sap.tm.trp.db.supplydemand.instant::p_sd_parameter_location_by_plan&quot;(:LOCATION_FILTER_ID, :LOCATION, LT_LOCATIONS);
+ 
+     -- there are 3 levels for the ids:GEO_GROUP_ID, GEO_ID and LOCATION_ID
+     -- and only 1 name is needed GEO_NAME, the name is a bit ambiguous here as it's not always corresponding to the GEO_ID
+     -- it returns different object name based on the location filter type 
+     -- Location Filter --> Location name
+     -- Location Group Filter --> Location Group name
+     -- Region filter --> Region name
+     -- Region Group filter --> Region Group name
+     filter_type := 0 ;
+     
+     SELECT IFNULL(MAX(t2.LOCATION_TYPE),0) INTO filter_type 
+     FROM &quot;sap.tm.trp.db.filter::t_filter_location_filter&quot; t1
+     INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; t2 ON (t1.LOCATION_FILTER_ID = t2.ID)
+     WHERE t1.LOCATION_FILTER_ID = :LOCATION_FILTER_ID;  
+     
+     -- Location filter
+     IF :filter_type = :LOCATION_TYPE THEN 
+     LT_LOCATIONS = SELECT DISTINCT LOCATION_ID AS GEO_ID, LOCATION_ID, 1 AS GEO_FILTER_TYPE, LOCATION_ID AS GEO_GROUP_ID, b.NAME AS GEO_NAME 
+               FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; a
+               INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; b ON (a.LOCATION_ID = b.ID)
+               WHERE LOCATION_FILTER_ID = :LOCATION_FILTER_ID;
+                
+     -- Location group filter           
+     ELSEIF :filter_type = :LOCATION_GROUP_TYPE THEN           
+     LT_LOCATIONS = SELECT DISTINCT  c.LOCATION_ID AS GEO_ID, c.LOCATION_ID, :filter_type AS GEO_FILTER_TYPE, b.LOCATION_GROUP_ID AS GEO_GROUP_ID,
+                       d.DESC AS GEO_NAME
+               FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; b 
+               INNER JOIN  &quot;sap.tm.trp.db.systemmanagement::t_location_group_item&quot; c ON (b.LOCATION_GROUP_ID = c.LOCATION_GROUP_ID) 
+               INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_location_group&quot; d ON (c.LOCATION_GROUP_ID = d.ID)
+               WHERE b.LOCATION_FILTER_ID = :LOCATION_FILTER_ID;
+                 
+      -- there may be regions without any location, the UI show supply and demand values for these regions with 0
+      -- so use left outer join with v_region_location_all  
+       -- region filter(currently, there is no concept of region, that's always zone. But some region related views still can be used to 
+       -- avoid mass code changes)      
+       ELSEIF :filter_type = :REGION_TYPE THEN
+       /*ET_LOCATION = SELECT DISTINCT b.ZONE_ID AS GEO_ID, c.LOCATION_ID, :filter_type AS GEO_FILTER_TYPE, b.ZONE_ID AS GEO_GROUP_ID, d.NAME AS GEO_NAME
+                 FROM &quot;sap.tm.trp.db.filter::t_location_filter_region&quot; b
+                 LEFT OUTER JOIN  &quot;sap.tm.trp.db.systemmanagement.location::v_region_location_all&quot; c ON (b.ZONE_ID = c.ROOT_ID)
+                 LEFT OUTER JOIN &quot;sap.tm.trp.db.semantic.location::v_zone&quot; d ON (b.ZONE_ID = d.ID)                 
+                 WHERE b.LOCATION_FILTER_ID = :LOCATION_FILTER_ID;*/
+                 
+       -- Optimized code
+       		ZONE_IDS =  SELECT zone_id FROM &quot;sap.tm.trp.db.filter::t_location_filter_region&quot; 
+       		            WHERE LOCATION_FILTER_ID = :LOCATION_FILTER_ID;
+	       
+	        lt_zone_loc_info =  SELECT ROOT_ID,LOCATION_ID 
+	                            FROM &quot;sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions_sd&quot;(PLACEHOLDER.&quot;$$IP_LOCATION_FILTER_ID$$&quot;=>:LOCATION_FILTER_ID,PLACEHOLDER.&quot;$$IP_FILTER_TYPE$$&quot;=>5);	        
+	        
+	        LT_LOCATIONS = SELECT DISTINCT  b.ZONE_ID AS GEO_ID,  c.LOCATION_ID, :filter_type AS GEO_FILTER_TYPE, b.ZONE_ID AS GEO_GROUP_ID, d.NAME AS GEO_NAME
+                          FROM :ZONE_IDS b                 
+                          LEFT OUTER JOIN :lt_zone_loc_info c on (b.ZONE_ID = c.ROOT_ID)
+                          LEFT OUTER JOIN &quot;sap.tm.trp.db.semantic.location::v_zone&quot; d ON (b.ZONE_ID = d.ID);          
+        -- Optimized code end
+                  
+       -- region group filter           
+       ELSEIF :filter_type = :REGION_GROUP_TYPE THEN            
+       
+       /*ET_LOCATION =  SELECT DISTINCT c.ZONE_ID AS GEO_ID, d.LOCATION_ID, :filter_type AS GEO_FILTER_TYPE, b.REGION_GROUP_ID AS GEO_GROUP_ID, e.DESC AS GEO_NAME
+                  FROM &quot;sap.tm.trp.db.filter::t_location_filter_region&quot; b             
+                  INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_region_group_item&quot; c ON  (b.REGION_GROUP_ID = c.REGION_GROUP_ID)
+                  LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement.location::v_region_location_all&quot; d ON (c.ZONE_ID = d.ROOT_ID)
+                  LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement::t_region_group&quot; e ON (b.REGION_GROUP_ID = e.ID)
+                  WHERE  b.LOCATION_FILTER_ID = :LOCATION_FILTER_ID;*/
+          
+         -- Optimized code start
+                   
+         lt_loc_reg_group = SELECT DISTINCT b.ZONE_ID,a.REGION_GROUP_ID
+                            FROM &quot;sap.tm.trp.db.filter::t_location_filter_region&quot; a            
+                            INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_region_group_item&quot; b ON  (a.REGION_GROUP_ID = b.REGION_GROUP_ID)
+                            WHERE  a.LOCATION_FILTER_ID = :LOCATION_FILTER_ID;
+                   
+	     ZONE_IDS = SELECT DISTINCT zone_id FROM :lt_loc_reg_group;  
+
+         lt_zone_loc_info =  select ROOT_ID,LOCATION_ID from &quot;sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions_sd&quot;(PLACEHOLDER.&quot;$$IP_LOCATION_FILTER_ID$$&quot;=>:LOCATION_FILTER_ID,PLACEHOLDER.&quot;$$IP_FILTER_TYPE$$&quot;=>6); 
+         
+         LT_LOCATIONS = SELECT DISTINCT a.ZONE_ID AS GEO_ID, d.LOCATION_ID, :filter_type AS GEO_FILTER_TYPE, a.REGION_GROUP_ID AS GEO_GROUP_ID, e.DESC AS GEO_NAME
+                  FROM :lt_loc_reg_group a                  
+                  LEFT OUTER JOIN :lt_zone_loc_info d ON (a.ZONE_ID = d.ROOT_ID)
+                  LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement::t_region_group&quot; e ON (a.REGION_GROUP_ID = e.ID); 
+                   
+         -- Optimized code end         
+        END IF;  	
+	
+	-- replace with pass in location
+  	SELECT COUNT(*) INTO LV_LOCATION_COUNT1 FROM :LOCATION;
+  	IF :LV_LOCATION_COUNT1 &lt;> 0 THEN
+	  	LT_LOCATIONS = SELECT T1.* FROM :LT_LOCATIONS T1
+	  	INNER JOIN :LOCATION T2 ON T1.LOCATION_ID = T2.LOCATION_ID;
+ 	END IF;
+
+--CALL &quot;sap.tm.trp.db.supplydemand.instant::p_sd_parameter_resource_by_plan&quot;(:RESOURCE_FILTER_ID, :RESOURCE, LT_RESOURCES);
+	
+	select IFNULL(MAX(filter_group_id),0) INTO In_Filter_Group_ID
+				from &quot;sap.tm.trp.db.filter::t_filter_equipment_filter&quot;
+				where equipment_filter_id = :RESOURCE_FILTER_ID;
+				
+	lt_equipment_filter = select a.equipment_filter_id, a.filter_group_id, b.equi_code, b.equipment_group_id
+				from &quot;sap.tm.trp.db.filter::t_filter_equipment_filter&quot; a
+				inner join &quot;sap.tm.trp.db.filter::v_equipment_filter_equipment_auth&quot; b
+				on (a.EQUIPMENT_FILTER_ID = b.EQUIPMENT_FILTER_ID)
+				where a.FILTER_GROUP_ID = :In_Filter_Group_ID;
+
+     -- for equipment, we show the equip_name same as equip_code as no long description is needed
+     -- for equipment group, we show the equip_name as the equipment group name     
+     LT_RESOURCES = ( SELECT b.EQUI_CODE AS EQUIP_CODE, b.EQUI_CODE AS EQUIP_GROUP_ID, b.EQUI_CODE AS EQUIP_NAME, 1 AS EQUIP_FILTER_TYPE
+                 FROM :lt_equipment_filter b
+                 WHERE b.EQUI_CODE IS NOT NULL
+                 )
+               UNION ALL
+               ( 
+                 SELECT c.EQUI_CODE AS EQUIP_CODE, b.EQUIPMENT_GROUP_ID AS EQUIP_GROUP_ID, d.DESC AS EQUIP_NAME, 2 AS EQUIP_FILTER_TYPE
+                 FROM :lt_equipment_filter b  
+                 INNER JOIN &quot;sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth&quot; c ON (b.EQUIPMENT_GROUP_ID = c.EQUIPMENT_GROUP_ID) 
+                 INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_equipment_group&quot; d ON (c.EQUIPMENT_GROUP_ID = d.ID)
+                 WHERE  b.EQUIPMENT_GROUP_ID IS NOT NULL
+               );
+	
+  	SELECT COUNT(*) INTO LV_RESOURCE_COUNT FROM :RESOURCE;
+  	IF :LV_RESOURCE_COUNT &lt;> 0 THEN
+	  	LT_RESOURCES = SELECT T1.* FROM :LT_RESOURCES T1
+	  	INNER JOIN :RESOURCE T2 ON T1.EQUIP_CODE = T2.EQUIP_CODE;
+ 	END IF;
+ 	
+--CALL &quot;sap.tm.trp.db.supplydemand.instant::p_sd_parameter_time_period_by_plan&quot;(:TIME_FILTER_ID, :TIMEZONE, LT_TIMES);
+	CALL &quot;sap.tm.trp.db.filter::p_time_filter_interval_4_timezone&quot;(:TIME_FILTER_ID,:TIMEZONE,TIME_INTERVAL);
+	
+	LT_TIMES = SELECT TIME_INTERVAL_ID, SEQUENCE, START_TIME AS START_TIMESTAMP, END_TIME AS END_TIMESTAMP,
+     				  INTERVAL AS INTER_SECONDS
+                 FROM :TIME_INTERVAL;
+
+--CALL &quot;sap.tm.trp.db.supplydemand.instant::p_sd_parameter_attribute_filter&quot;(:ATTRIBUTE_FILTER_ID, ATTRIBUTE_FILTER);
+     IF ATTRIBUTE_FILTER_ID > 0 THEN
+		ATTR_NODE_ID_LIST =
+			SELECT NODE_ID FROM &quot;sap.tm.trp.db.filter::t_attribute_group_item&quot;
+            WHERE GROUP_ID = :ATTRIBUTE_FILTER_ID AND LOGIC_OPERATOR IS NULL ORDER BY SEQUENCE;
+            
+		CALL &quot;sap.tm.trp.db.filter::p_attribute_group_filter_generate_dynamic&quot;(
+			:ATTRIBUTE_FILTER_ID, 
+			:ATTR_NODE_ID_LIST, 
+			ATTRIBUTE_FILTER
+		);
+	ELSE
+		SELECT '' INTO ATTRIBUTE_FILTER FROM DUMMY;
+	END IF;
+
+--CALL &quot;sap.tm.trp.db.supplydemand.instant::p_sd_parameter_resource_category&quot;(:RESOURCE_FILTER_ID, RESOURCE_CATEGORY);
+	SELECT  RESOURCE_CATEGORY INTO RESOURCE_CATEGORY FROM &quot;sap.tm.trp.db.filter::t_equipment_filter&quot; WHERE ID = :RESOURCE_FILTER_ID;
+
+CALL &quot;sap.tm.trp.db.supplydemand.instant::p_pipeline_procedure_wrapper&quot;(:PIPELINE_MODEL, :RESOURCE_CATEGORY, :LT_LOCATIONS,:LT_RESOURCES,:LT_TIMES,:NODE_LIST,:ATTRIBUTE_FILTER, INSTANT_DATASET);
+--CALL &quot;ztest.leanmodel::p_pipeline_procedure_wrapper&quot;(:PIPELINE_MODEL, :RESOURCE_CATEGORY, :LT_LOCATIONS,:LT_RESOURCES,:LT_TIMES,:NODE_LIST,:ATTRIBUTE_FILTER, INSTANT_DATASET);
+
+	DATASET = SELECT 
+		TO_BIGINT(0) AS PLAN_EXECUTION_ID,
+		T2.ID AS NODE_ID, 
+		CAST(T1.GEO_ID AS VARCHAR(32)) AS LOCATION_ID, 
+		CAST(T1.GEO_NAME AS VARCHAR(200)) AS LOCATION_NAME, 
+		T1.GEO_FILTER_TYPE AS LOCATION_FILTER_TYPE, 
+		CAST(T1.EQUIP_TYPE AS VARCHAR(32)) AS EQUIP_TYPE_ID, 
+		CAST(T1.EQUIP_NAME AS VARCHAR(100)) AS EQUIP_TYPE_NAME, 
+		T1.EQUIP_FILTER_TYPE AS EQUIP_FILTER_TYPE, 
+		CAST(T1.OUTPUT_KEY AS VARCHAR(200)) OUTPUT_KEY, 
+		T1.OUTPUT_VALUE, 
+		T1.TIME_INTERVAL_ID, 
+		T1.START_TIME, 
+		T1.END_TIME, 
+		TO_INT(T1.SEQUENCE) AS SEQUENCE, 
+		T1.INTER_SECONDS AS TIME_INTERVAL,
+		CAST(T1.UNIT AS VARCHAR(32)) AS UNIT 
+		FROM :INSTANT_DATASET AS T1 
+		INNER JOIN &quot;sap.tm.trp.db.pipeline::t_pipeline_node&quot; T2
+		ON T2.METADATA_NODE_ID = T1.NODE_ID AND PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID
+		WHERE TO_DECIMAL(T1.OUTPUT_VALUE) &lt;> 0;
+
+
+-- replace with pass in location
+  	SELECT COUNT(*) INTO LV_LOCATION_COUNT FROM :LOCATION;
+  	IF :LV_LOCATION_COUNT &lt;> 0 THEN
+		DATASET = SELECT T1.* FROM :DATASET T1 INNER JOIN :LOCATION T2 ON T1.LOCATION_ID = T2.LOCATION_ID;
+ 	END IF;		
+var_out = select * from :DATASET;
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="PLAN_EXECUTION_ID" order="1">
+        <descriptions defaultDescription="PLAN_EXECUTION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_EXECUTION_ID"/>
+      </attribute>
+      <attribute id="NODE_ID" order="2">
+        <descriptions defaultDescription="NODE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="NODE_ID"/>
+      </attribute>
+      <attribute id="LOCATION_ID" order="3">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_ID"/>
+      </attribute>
+      <attribute id="LOCATION_NAME" order="4">
+        <descriptions defaultDescription="LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_NAME"/>
+      </attribute>
+      <attribute id="LOCATION_FILTER_TYPE" order="5">
+        <descriptions defaultDescription="LOCATION_FILTER_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_FILTER_TYPE"/>
+      </attribute>
+      <attribute id="EQUIP_TYPE_ID" order="6">
+        <descriptions defaultDescription="EQUIP_TYPE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_TYPE_ID"/>
+      </attribute>
+      <attribute id="EQUIP_TYPE_NAME" order="7">
+        <descriptions defaultDescription="EQUIP_TYPE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_TYPE_NAME"/>
+      </attribute>
+      <attribute id="EQUIP_FILTER_TYPE" order="8">
+        <descriptions defaultDescription="EQUIP_FILTER_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_FILTER_TYPE"/>
+      </attribute>
+      <attribute id="OUTPUT_KEY" order="9">
+        <descriptions defaultDescription="OUTPUT_KEY"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUTPUT_KEY"/>
+      </attribute>
+      <attribute id="OUTPUT_VALUE" order="10">
+        <descriptions defaultDescription="OUTPUT_VALUE"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUTPUT_VALUE"/>
+      </attribute>
+      <attribute id="TIME_INTERVAL_ID" order="11">
+        <descriptions defaultDescription="TIME_INTEVAL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_INTERVAL_ID"/>
+      </attribute>
+      <attribute id="START_TIME" order="12">
+        <descriptions defaultDescription="START_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </attribute>
+      <attribute id="END_TIME" order="13">
+        <descriptions defaultDescription="END_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="END_TIME"/>
+      </attribute>
+      <attribute id="SEQUENCE" order="14">
+        <descriptions defaultDescription="SEQUENCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SEQUENCE"/>
+      </attribute>
+      <attribute id="TIME_INTERVAL" order="15">
+        <descriptions defaultDescription="TIME_INTERVAL"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_INTERVAL"/>
+      </attribute>
+      <attribute id="UNIT" order="16">
+        <descriptions defaultDescription="UNIT"/>
+        <keyMapping columnObjectName="Script_View" columnName="UNIT"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

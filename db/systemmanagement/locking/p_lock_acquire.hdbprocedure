@@ -1,0 +1,98 @@
+procedure "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.locking::p_lock_acquire" (               
+    in i_object_type varchar(50), -- TODO: where are object types stored? as constants/enum in service layer?
+    in i_object_id nvarchar(32), -- TODO: double-check that this data type is ok
+    in i_user_id varchar(22), -- TODO: double-check data type. does not support usernames with special characters? 
+    in i_token varchar(200), -- TODO: would a session id really be that long, i.e. is 200 really necessary?
+    out o_message varchar(200),
+    out o_user_id varchar(22), -- TODO: double-check data type. does not support usernames with special characters? 
+    out o_timestamp timestamp
+) 
+language sqlscript
+sql security invoker 
+default schema "SAP_TM_TRP"
+as
+/**
+ * Tries to lock an object using provided user ID and token. 
+ *
+ * To implement user-level locking, simply use the username as token. 
+ * To implement session-level locking, use a session ID as token.
+ * Returns: - a message indicating success or failure
+ *          - the resulting owner: provided user ID if successfully locked, 
+ *                                 original user ID if failed to lock
+ *          - the resulting timestamp: current timestamp if successfully locked,
+ *                                     original timestamp if failed to lock
+ **/
+begin
+    declare v_timestamp      timestamp     := current_utctimestamp;
+    declare v_timeout		 int           := 20; -- 20 seconds
+    declare v_msg_success    char(18)      := 'MSG_SUCCESS_STATUS';
+    declare v_msg_err_locked char(14)      := 'MSG_ERR_LOCKED';
+    declare v_lock_token     varchar(200);  
+    declare v_lock_user_id   varchar(60);  
+    declare v_lock_timestamp timestamp; 
+    
+    -- Use cursor to simultaneously lock and allow conveniently fetching results into variables.
+    -- Using select into is also possible but may throw no data found error. 
+    -- In contrast, cursor allows checking cursor::notfound or cursor::rowcount without error.
+    declare cursor c_lock for
+    select  l.token, l.user_id, l.timestamp
+    from    "sap.tm.trp.db.systemmanagement.locking::t_lock" l
+    where   l.object_type = :i_object_type
+    and     l.object_id   = :i_object_id 
+    for update of l.object_type, l.object_id; 
+    
+    -- Someone simultaneously acquired the lock for the same object 
+    declare exit handler for sql_error_code 301 -- unique constraint violation
+    begin
+        -- Note: A concurrent update of the lock just before this select is acceptable, because the returned data will still reflect the latest lock status.
+        select  l.user_id, l.timestamp
+        into    o_user_id, o_timestamp
+        from    "sap.tm.trp.db.systemmanagement.locking::t_lock" l
+        where   l.object_type = :i_object_type
+        and     l.object_id = :i_object_id;
+        
+        o_message := :v_msg_err_locked;
+    end;
+    
+    open c_lock;  
+    fetch c_lock into v_lock_token, v_lock_user_id, v_lock_timestamp;
+    
+    if c_lock::notfound then
+        -- Object was not locked. Insert new lock entry and return success. 
+        -- There is a slight chance someone else locks simultaneously, so error 301, 
+        -- unique constraint violation could be raised. That error is handled above.
+        insert into "sap.tm.trp.db.systemmanagement.locking::t_lock"(
+                object_type, object_id, user_id, token, timestamp)
+        values( :i_object_type, :i_object_id, :i_user_id, :i_token, :v_timestamp);
+        
+        o_user_id := :i_user_id;
+        o_timestamp := :v_timestamp;
+        o_message := :v_msg_success;
+    else
+        -- Existing lock. Check user, token and time.
+        if (:v_lock_user_id = :i_user_id and :v_lock_token = :i_token)
+        or seconds_between(:v_lock_timestamp, :v_timestamp) > :v_timeout then
+            -- Same token or timeout. Overwrite with input values and return success.
+            update  "sap.tm.trp.db.systemmanagement.locking::t_lock"
+            set     token     = :i_token,
+                    user_id   = :i_user_id,
+                    timestamp = :v_timestamp                     
+            where   object_type = :i_object_type
+            and     object_id   = :i_object_id; 
+            
+            o_user_id := :i_user_id;  
+            o_timestamp := :v_timestamp;
+            o_message := :v_msg_success;       
+        else
+            -- Locked with different user or token and no timeout. Return lock info and error message.
+            o_user_id   := :v_lock_user_id;
+            o_timestamp := :v_lock_timestamp;
+            o_message   := :v_msg_err_locked;
+        end if;
+    end if;           
+    
+    close c_lock; 
+end;
+
+
+

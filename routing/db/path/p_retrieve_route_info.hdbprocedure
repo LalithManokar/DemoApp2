@@ -1,0 +1,136 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_retrieve_route_info" ( 
+    IN network_code NVARCHAR(50),
+	IN loc_pair "sap.tm.trp.routing.db.path::tt_location_pair",
+	OUT route_path "sap.tm.trp.routing.db.path::tt_route_path",
+	OUT route_sequence "sap.tm.trp.routing.db.path::tt_route_sequence",
+	OUT message "sap.tm.trp.routing.db.common::tt_message",
+	OUT log_message "sap.tm.trp.routing.db.common::tt_message", 
+	OUT return_code INTEGER 
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING"
+   AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+    /*************************************
+       Write your procedure logic 
+    *************************************/
+    DECLARE network_id BIGINT;
+    DECLARE count INTEGER;
+    DECLARE cost_model_id BIGINT;
+    DECLARE setting_group_id BIGINT;
+    DECLARE base_resource_type NVARCHAR(50);
+    DECLARE cost_currency NVARCHAR(10);  
+    DECLARE network_exist INTEGER;
+    DECLARE route_usage CONSTANT VARCHAR(50) := 'ROUTE';
+    
+    return_code = 0;
+    message = SELECT '' AS severity, '' AS message FROM DUMMY WHERE 1 <> 1;
+    log_message = SELECT '' AS severity, '' AS message FROM DUMMY WHERE 1 <> 1;
+    
+   
+    SELECT COUNT(*) INTO network_exist FROM "sap.tm.trp.routing.db.path::t_network_model" 
+    WHERE code = :network_code;
+    IF :network_exist = 0 THEN
+        msg_param = SELECT 0 AS PLACEHOLDER, :network_code AS VALUE FROM DUMMY;
+        CALL "sap.tm.trp.routing.db.common::p_get_text"('MSG_NETWORK_CODE_NOT_EXIST', 
+        :msg_param, 'E', :message);
+        return_code = 1;
+        RETURN;
+    END IF;
+    
+    SELECT id INTO network_id FROM "sap.tm.trp.routing.db.path::t_network_model" 
+    WHERE code = :network_code;
+    
+    -- Get location from stack
+	CALL "sap.tm.trp.routing.db.path::p_get_network_chain"(:network_id, :network_chain);
+	
+	locations = SELECT location_id
+	FROM "sap.tm.trp.routing.db.dataset::t_dataset_location" AS l
+	INNER JOIN "sap.tm.trp.routing.db.dataset::t_dataset" AS d
+	ON l.dataset_id = d.id
+	INNER JOIN "sap.tm.trp.routing.db.path::t_network_model" AS n
+	ON n.dataset_id = d.id
+	WHERE n.id IN (SELECT id from :network_chain);
+    
+    ----validate all locations in location pairs exist, otherwise terminate the program
+    invalid_locations = SELECT DISTINCT from_location AS location_id
+    FROM :loc_pair AS A 
+    WHERE from_location NOT IN 
+    (SELECT location_id FROM :locations)
+    UNION 
+    SELECT DISTINCT to_location AS location_id
+    FROM :loc_pair AS A 
+    WHERE to_location NOT IN 
+    (SELECT location_id FROM :locations);
+    
+    SELECT COUNT(*) INTO count
+    FROM :invalid_locations;
+    
+    IF count > 0 THEN
+        return_code = 1;
+        msg_params = SELECT location_id AS group_id, 0 AS placeholder,
+        location_id AS value FROM :invalid_locations;
+ 
+	    call "sap.tm.trp.routing.db.common::p_get_text_batch"
+        ('MSG_SPECIFIC_LOCATION_MISSING', :msg_params, 'E', :message_tmp);
+        message = SELECT * FROM :message 
+        UNION ALL SELECT * FROM :message_tmp;
+        
+        RETURN;
+    END IF;
+
+    invalid_time_range = SELECT DISTINCT dpt_time, arv_time
+    FROM :loc_pair
+    WHERE dpt_time IS NULL OR arv_time IS NULL OR dpt_time >= arv_time;
+    
+    SELECT COUNT(*) INTO count
+    FROM :invalid_time_range;
+    
+    IF count > 0 THEN
+        return_code = 1;
+        invalid_time_range_numbered = SELECT ROW_NUMBER() OVER () AS group_id, dpt_time, arv_time
+        FROM :invalid_time_range;
+        
+        msg_params = SELECT group_id, 0 AS placeholder,
+        TO_NVARCHAR(dpt_time) AS value FROM :invalid_time_range_numbered
+        UNION ALL
+        SELECT group_id, 0 AS placeholder,
+        TO_NVARCHAR(arv_time) AS value FROM :invalid_time_range_numbered;
+ 
+	    call "sap.tm.trp.routing.db.common::p_get_text_batch"
+        ('MSG_TIME_RANGE_INVALID', :msg_params, 'E', :message_tmp);
+        message = SELECT * FROM :message 
+        UNION ALL SELECT * FROM :message_tmp;
+        
+        RETURN; 
+    END IF;
+	
+	SELECT id INTO network_id FROM "sap.tm.trp.routing.db.path::t_network_model"
+	WHERE code = :network_code;
+	
+	CALL "sap.tm.trp.routing.db.path::p_get_network_attr"(:network_id, :route_usage, cost_model_id, base_resource_type);
+	cost_currency = 'EUR';
+	
+	CALL "sap.tm.trp.routing.db.path::p_get_network_config_info"(:network_id, :route_usage, options);
+	
+	composite_path_id = SELECT 0 AS id FROM DUMMY WHERE 1 <> 1;
+	
+    CALL "sap.tm.trp.routing.db.path::p_build_route"(
+	    :network_id,
+	    :cost_model_id,
+	    :base_resource_type,
+	    :loc_pair,
+	    :composite_path_id,
+	    :options,
+	    route_path,
+	    route_sequence,
+	    message,
+	    log,
+	    return_code
+	); 
+    
+END

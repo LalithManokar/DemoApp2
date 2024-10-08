@@ -1,0 +1,14 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+  {name = "ID"; sqlType = BIGINT; nullable = false;},
+  {name = "USER_ID"; sqlType = BIGINT; nullable = false;},
+  {name = "FILTER_TYPE"; sqlType = INTEGER; comment="1:Depot Manager, 2:Local Planner, 3:Regional Planner";},
+  {name = "TIME_FILTER_ID"; sqlType = BIGINT;},
+  {name = "CREATE_AT"; sqlType = TIMESTAMP;},
+  {name = "LAST_MODIFIED_AT"; sqlType = TIMESTAMP;},
+  {name = "LAST_MODIFIED_BY"; sqlType = BIGINT;},
+  {name = "CODE";sqlType = NVARCHAR; length = 20; nullable = true; unique = true;},
+  {name = "RESOURCE_CATEGORY";sqlType = VARCHAR; length = 50;}
+];
+table.primaryKey.pkcolumns = ["ID"];

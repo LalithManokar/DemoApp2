@@ -1,0 +1,20 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.tests.stock::p_get_stock_alert_for_map" (
+    IN stocks "sap.tm.trp.db.hrf.resourceStock::t_location_stock",
+    OUT var_out "sap.tm.trp.db.hrf.resourceStock::tt_stock_alert_for_map"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	READS SQL DATA AS
+BEGIN
+  
+  
+   var_out = 
+   SELECT T1.LOCATION_ID,
+         T1.LOCATION_TYPE,
+         T1.DATE AS TIME,
+         1 AS ALERT_NUM,
+         10 AS ALERT_SCORE
+   FROM :stocks T1;
+   
+  
+END;

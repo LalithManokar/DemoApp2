@@ -1,0 +1,28 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.kpi::p_get_kpi_plan_type" (
+    IN PLAN_ID_LIST "sap.tm.trp.db.pipeline::tt_id_list", 
+    OUT NODE_ATTR_LIST "sap.tm.trp.db.pipeline::tt_pipeline_node_attr") 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    READS SQL DATA AS
+BEGIN
+    
+    --GET the unique NODE_ID relating to the PLAN_MODEL_ID
+    NODE_ID_LIST = 
+        SELECT T1.ID AS PLAN_ID, MAX(T3.ID) AS NODE_ID FROM "sap.tm.trp.db.pipeline::t_plan_model" T1 
+        INNER JOIN :PLAN_ID_LIST T2 ON T1.ID = T2.ID
+        INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T3 ON T1.PIPELINE_MODEL_ID = T3.PIPELINE_MODEL_ID
+        GROUP BY T1.ID;
+        
+    NODE_ATTR_LIST = 
+        SELECT PLAN_ID, T1.NODE_ID, T2.NAME AS TYPE,T3.UNIT
+            FROM :NODE_ID_LIST T1
+            --LEFT OUTER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node_layout" T2 on T1.NODE_ID = T2.NODE_ID AND UCASE(T2.KEY) = 'OUTPUTKEY'
+            LEFT OUTER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T2 on T1.NODE_ID = T2.ID
+            LEFT OUTER JOIN  
+                    (
+                        SELECT  A.NODE_ID, MIN(UNIT) AS UNIT FROM  "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" A 
+                        GROUP BY A.NODE_ID
+                    ) T3 on T3.NODE_ID = T1.NODE_ID
+            ;
+END;

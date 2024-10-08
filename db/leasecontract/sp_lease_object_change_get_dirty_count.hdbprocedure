@@ -1,0 +1,9 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.leasecontract::sp_lease_object_change_get_dirty_count" ( OUT STATUS INTEGER ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+
+select count(1) into STATUS from "sap.tm.trp.db.leasecontract::t_lease_object_change_track"  where status = 1;
+END;

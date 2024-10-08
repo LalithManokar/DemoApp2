@@ -1,0 +1,380 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_lease_contract_term_details" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_lease_contract_term_details"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="LEASE_CONTRACT_ID" parameter="true">
+      <descriptions defaultDescription="LEASE_CONTRACT_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="HIRE_TYPE" parameter="true">
+      <descriptions defaultDescription="HIRE_TYPE"/>
+      <variableProperties datatype="TINYINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="EQUIPMENT_TYPE" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="LOCATION" length="22"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_TIME"/>
+        <viewAttribute datatype="INTEGER" id="MAX_QUOTA"/>
+        <viewAttribute datatype="DECIMAL" id="FEE" length="13" scale="3"/>
+        <viewAttribute datatype="DECIMAL" id="PER_DIEM" length="13" scale="3"/>
+        <viewAttribute datatype="INTEGER" id="TRACKING_QUANTITY"/>
+        <viewAttribute datatype="VARCHAR" id="UNIT" length="3"/>
+        <viewAttribute datatype="VARCHAR" id="CURRENCY" length="3"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#LEASE_CONTRACT_ID</localVariable>
+      <localVariable>#HIRE_TYPE</localVariable>
+      <definition>BEGIN
+               DECLARE V_COUNT INTEGER;
+              DECLARE NAME VARCHAR(60);     
+               DECLARE PERDIEMAUTH INTEGER;
+    DECLARE AUTH SMALLINT;
+              DECLARE CUSTOMCONDITION CONDITION FOR SQL_ERROR_CODE 10001;/* Custom Error Code = 10001*/
+               /*User Defined exception handler */
+               
+               DECLARE EXIT HANDLER FOR CUSTOMCONDITION RESIGNAL ;
+               
+               CALL &quot;sap.tm.trp.db.leasecontract::p_check_lease_authorization&quot;(
+                              :AUTH
+                              );
+                              
+
+               IF AUTH = 0 THEN
+                              /* Signaling Custom error and setting the Custom Error Message */
+                              SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'USER IS NOT AUTHORIZED TO ACCESS LEASE ';
+               END IF;     
+               
+--Check per diem authorizarion
+               SELECT IFNULL(MAX(USERNAME),'') INTO NAME FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+               
+               SELECT COUNT(1) INTO PERDIEMAUTH FROM &quot;SYS&quot;.&quot;EFFECTIVE_APPLICATION_PRIVILEGES&quot;  T1              
+               WHERE  T1.PRIVILEGE = 'sap.tm.trp.service::DisplayPerdiem' AND T1.USER_NAME=:NAME AND IS_VALID='TRUE';
+
+--Global Currency. 
+--TO DO: Need to discuss about logic with Jagan. 
+--Table is: &quot;sap.tm.trp.db.costmodel::t_currency&quot;
+--Conclusion: Do not look for Global Currency. Use the local currency only.
+
+--CMA requirement: No check with Lease Contract Category
+RESOURCE_TYPES = SELECT DISTINCT T1.RESOURCE_TYPE_CODE,T1.RESOURCE_CATEGORY
+                     FROM &quot;sap.tm.trp.db.semantic.resource::v_resource_type_with_category&quot; T1
+                     INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot; T2
+                     ON (T1.RESOURCE_CATEGORY = T2.RESOURCE_CATEGORY)
+                    WHERE T2.ID = :LEASE_CONTRACT_ID;
+
+HT_EXPANDED=               
+SELECT *
+FROM &quot;sap.tm.trp.db.leasecontract::t_lease_contract_hire_term_materialized&quot; 
+WHERE LEASE_CONTRACT_ID = :LEASE_CONTRACT_ID; 
+
+LH_WITH_EQUIP_CODE = 
+SELECT LH.*, LCT.ID AS LEASE_CONTRACT_ID
+FROM &quot;sap.tm.trp.db.semantic.event::v_lease_resource_history&quot; LH
+INNER JOIN &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot; LCT 
+      ON LH.LEASE_CONTRACT_REFERENCE = LCT.LEASE_CONTRACT_REFERENCE
+WHERE LH.HIRE_TYPE=:HIRE_TYPE AND LCT.ID=:LEASE_CONTRACT_ID;
+                                             
+--TODO : EQUIPMENT AND LOCATION NULL CONDITIONS                                            
+--TODO: GET THE EMPTY EQUIPMENT                                   
+
+TERM_ELD_QUANTITY_P= 
+SELECT
+                 HT.EQUIPMENT_GROUP_NAME AS EQUIPMENT_TYPE,
+                 HT.LOCATION_GROUP_NAME AS LOCATION,
+                 HT.START_TIME AS START_TIME,
+                 HT.END_TIME AS END_TIME,
+                 HT.TERM_MAX_HIRE_QUANTITY AS MAX_QUOTA,
+                 HT.TERM_FEE AS FEE,
+                 HT.PER_DIEM,
+                 COUNT(LH.EVENT_GUID) AS TRACKING_QUANTITY,
+                 LC.CURRENCY_CODE AS CURRENCY,
+                 LC.UNIT_TYPE AS UNIT_TYPE
+FROM  :HT_EXPANDED HT 
+LEFT OUTER JOIN :LH_WITH_EQUIP_CODE LH 
+ON (LH.RESOURCE_TYPE = HT.EQUIPMENT_CODE 
+    AND LH.LOCATION_ID  = HT.LOCATION_GUID 
+    AND (LH.EVENT_TIME BETWEEN HT.START_TIME AND HT.END_TIME))
+LEFT JOIN &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot; LC
+ON LC.ID =:LEASE_CONTRACT_ID                
+WHERE HT.EQUIPMENT_CODE IS NOT NULL 
+AND HT.LOCATION_CODE IS NOT NULL 
+AND HT.HIRE_TYPE = :HIRE_TYPE 
+GROUP BY
+               HT.EQUIPMENT_GROUP_NAME, 
+               HT.LOCATION_GROUP_NAME, 
+               HT.START_TIME, 
+               HT.END_TIME, 
+               HT.TERM_MAX_HIRE_QUANTITY, 
+               HT.TERM_FEE,
+               HT.PER_DIEM,
+               LC.CURRENCY_CODE,
+               LC.UNIT_TYPE;
+               
+TERM_ED_QUANTITY_P= 
+SELECT
+                 HT.EQUIPMENT_GROUP_NAME AS EQUIPMENT_TYPE,
+                 NULL AS LOCATION,
+                 HT.START_TIME AS START_TIME,
+                 HT.END_TIME AS END_TIME,
+                 HT.TERM_MAX_HIRE_QUANTITY AS MAX_QUOTA,
+                 HT.TERM_FEE AS FEE,
+                 HT.PER_DIEM,
+                 COUNT(LH.EVENT_GUID) AS TRACKING_QUANTITY,
+                 LC.CURRENCY_CODE AS CURRENCY,
+                 LC.UNIT_TYPE AS UNIT_TYPE
+FROM  :HT_EXPANDED HT LEFT OUTER JOIN :LH_WITH_EQUIP_CODE LH 
+ON (LH.RESOURCE_TYPE = HT.EQUIPMENT_CODE 
+                 AND (LH.EVENT_TIME BETWEEN HT.START_TIME AND HT.END_TIME))
+LEFT JOIN &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot; LC
+ON LC.ID =:LEASE_CONTRACT_ID
+WHERE HT.LOCATION_CODE IS NULL AND HT.HIRE_TYPE = :HIRE_TYPE 
+GROUP BY
+               HT.EQUIPMENT_GROUP_NAME, 
+               NULL, 
+               HT.START_TIME, 
+               HT.END_TIME, 
+               HT.TERM_MAX_HIRE_QUANTITY, 
+               HT.TERM_FEE,
+               HT.PER_DIEM,
+               LC.CURRENCY_CODE,
+               LC.UNIT_TYPE;
+               
+TERM_LD_QUANTITY_P= 
+SELECT
+                 NULL AS EQUIPMENT_TYPE,
+                 HT.LOCATION_GROUP_NAME AS LOCATION,
+                 HT.START_TIME AS START_TIME,
+                 HT.END_TIME AS END_TIME,
+                 HT.TERM_MAX_HIRE_QUANTITY AS MAX_QUOTA,
+                 HT.TERM_FEE AS FEE,
+                 HT.PER_DIEM,
+                 COUNT(LH.EVENT_GUID) AS TRACKING_QUANTITY,
+                 LC.CURRENCY_CODE AS CURRENCY,
+                 LC.UNIT_TYPE AS UNIT_TYPE
+FROM  :HT_EXPANDED HT LEFT OUTER JOIN :LH_WITH_EQUIP_CODE LH 
+ON (LH.LOCATION_ID  = HT.LOCATION_GUID 
+                 AND (LH.EVENT_TIME BETWEEN HT.START_TIME AND HT.END_TIME))
+LEFT JOIN &quot;sap.tm.trp.db.leasecontract::t_lease_contract&quot; LC
+ON LC.ID =:LEASE_CONTRACT_ID
+WHERE HT.EQUIPMENT_CODE IS NULL AND HT.HIRE_TYPE = :HIRE_TYPE  
+GROUP BY
+               NULL, 
+               HT.LOCATION_GROUP_NAME, 
+               HT.START_TIME, 
+               HT.END_TIME, 
+               HT.TERM_MAX_HIRE_QUANTITY, 
+               HT.TERM_FEE,
+               HT.PER_DIEM,
+               LC.CURRENCY_CODE,
+               LC.UNIT_TYPE;
+
+TERM_ELD_QUANTITY = SELECT TEQ.EQUIPMENT_TYPE,
+                                                                                             TEQ.LOCATION,
+                                                                                             TEQ.START_TIME,
+                                                                                             TEQ.END_TIME,
+                                                                                             TEQ.MAX_QUOTA,
+                                                                                             TEQ.FEE,
+                                                                                             TEQ.PER_DIEM,
+                                                                                             TEQ.TRACKING_QUANTITY,
+                                                                                             C.UNIT_CODE AS UNIT,
+                                                                                             TEQ.CURRENCY
+                    FROM :TERM_ELD_QUANTITY_P TEQ
+                    LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement::v_unit&quot; C
+                    ON TEQ.UNIT_TYPE = C.UNIT_TYPE;
+                          
+TERM_ED_QUANTITY = SELECT TQ.EQUIPMENT_TYPE,
+                                                                                            TQ.LOCATION,
+                                                                                            TQ.START_TIME,
+                                                                                            TQ.END_TIME,
+                                                                                            TQ.MAX_QUOTA,
+                                                                                            TQ.FEE,
+                                                                                            TQ.PER_DIEM,
+                                                                                            TQ.TRACKING_QUANTITY,
+                                                                                            C.UNIT_CODE AS UNIT,
+                                                                                            TQ.CURRENCY
+                                                               FROM :TERM_ED_QUANTITY_P TQ
+                   LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement::v_unit&quot; C
+                   ON TQ.UNIT_TYPE = C.UNIT_TYPE;
+
+TERM_LD_QUANTITY = SELECT TEQ.EQUIPMENT_TYPE,
+                                     TEQ.LOCATION,
+                                     TEQ.START_TIME,
+                                     TEQ.END_TIME,
+                                     TEQ.MAX_QUOTA,
+                                     TEQ.FEE,
+                                     TEQ.PER_DIEM,
+                                     TEQ.TRACKING_QUANTITY,
+                                     C.UNIT_CODE AS UNIT,
+                                     TEQ.CURRENCY
+                              FROM :TERM_LD_QUANTITY_P TEQ
+                   LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement::v_unit&quot; C
+                   ON TEQ.UNIT_TYPE = C.UNIT_TYPE;
+
+TMP = SELECT * FROM :TERM_ELD_QUANTITY UNION  
+      SELECT * FROM :TERM_ED_QUANTITY UNION  
+      SELECT * FROM :TERM_LD_QUANTITY;
+
+-- hire type: 0 = on-hire, 1 = off-hire
+-- hire type: 0 = on-hire, 1 = off-hire
+EQUIP_ID = select * from &quot;sap.tm.trp.db.systemmanagement::cv_equipment_group&quot; T1 inner join :TMP T2 on (T1.name = T2.EQUIPMENT_TYPE); -- for resource groups
+
+RESOURCE_GRP_TYPES = select T4.EQUIPMENT_TYPE as EQUIPMENT_TYPE_NEW , T3.EQUI_CODE , T3.RESOURCE_CATEGORY   from &quot;sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth&quot; T3 inner join :EQUIP_ID T4 on (T3.equipment_group_id = T4.ID);
+--all the resource types for resource groups
+
+
+EQUIP_CODE = select distinct EQUIP_GROUP_ID,EQUIPMENT_CODE_TYPE,EQUIPMENT_GROUP_NAME FROM &quot;sap.tm.trp.db.leasecontract::t_lease_contract_hire_term_materialized&quot; T1 inner join :TMP T2 on T1.EQUIPMENT_GROUP_NAME = T2.EQUIPMENT_TYPE;
+
+sql1 = 
+
+SELECT DISTINCT
+             EQUIPMENT_TYPE, 
+              LOCATION, 
+              START_TIME, 
+              END_TIME, 
+              MAX_QUOTA, 
+              CASE 
+      WHEN :PERDIEMAUTH > 0 THEN FEE 
+      ELSE -1 -- not authorized to see on/off hire fee as CMA required
+     END AS FEE, 
+              CASE 
+                 WHEN :PERDIEMAUTH > 0 THEN PER_DIEM 
+                 ELSE -1 -- not authorized to see per-diem
+             END AS PER_DIEM, 
+              TRACKING_QUANTITY,
+             UNIT,
+             CURRENCY
+FROM (--resource authorization contorl
+      select * from
+        :TMP A
+--                          INNER JOIN
+--                          :RESOURCE_GRP_TYPES B
+--                          ON A.EQUIPMENT_TYPE = B.EQUIPMENT_TYPE_NEW
+--                          INNER JOIN :RESOURCE_TYPES ET
+--                          ON(ET.RESOURCE_CATEGORY = B.RESOURCE_CATEGORY
+--                          AND ET.RESOURCE_TYPE_CODE = B.equi_code)
+              inner join :EQUIP_CODE C
+              ON (A.EQUIPMENT_TYPE = C.EQUIPMENT_GROUP_NAME and C.EQUIPMENT_CODE_TYPE = 2)
+              );
+
+
+
+sql2 = 
+SELECT DISTINCT
+              EQUIPMENT_TYPE, 
+              LOCATION, 
+              START_TIME, 
+              END_TIME, 
+              MAX_QUOTA, 
+              CASE 
+      WHEN :PERDIEMAUTH > 0 THEN FEE 
+      ELSE -1 -- not authorized to see on/off hire fee as CMA required
+    END AS FEE, 
+              CASE 
+                 WHEN :PERDIEMAUTH > 0 THEN PER_DIEM 
+                 ELSE -1 -- not authorized to see per-diem
+              END AS PER_DIEM, 
+              TRACKING_QUANTITY, 
+              UNIT,
+              CURRENCY
+FROM (--resource authorization control
+      select * from
+        :TMP A
+                             INNER JOIN
+                          &quot;sap.tm.trp.db.systemmanagement.user::v_resource_auth&quot; B
+                             ON A.EQUIPMENT_TYPE = B.res_type
+                             INNER JOIN :RESOURCE_TYPES ET
+                             ON(ET.RESOURCE_CATEGORY = B.RESOURCE_CATEGORY
+                             AND ET.RESOURCE_TYPE_CODE = B.res_type)
+              inner join :EQUIP_CODE C
+              ON (A.EQUIPMENT_TYPE = C.EQUIPMENT_GROUP_NAME and C.EQUIPMENT_CODE_TYPE = 1)
+              );
+              
+var_out = select * from :sql1 union select * from :sql2;
+ 
+
+END;
+
+</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="EQUIPMENT_TYPE" order="1">
+        <descriptions defaultDescription="EQUIPMENT_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_TYPE"/>
+      </attribute>
+      <attribute id="LOCATION" order="2">
+        <descriptions defaultDescription="LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION"/>
+      </attribute>
+      <attribute id="START_TIME" order="3">
+        <descriptions defaultDescription="START_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </attribute>
+      <attribute id="END_TIME" order="4">
+        <descriptions defaultDescription="END_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="END_TIME"/>
+      </attribute>
+      <attribute id="UNIT" order="9">
+        <descriptions defaultDescription="UNIT"/>
+        <keyMapping columnObjectName="Script_View" columnName="UNIT"/>
+      </attribute>
+      <attribute id="CURRENCY" order="10">
+        <descriptions defaultDescription="CURRENCY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CURRENCY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="MAX_QUOTA" order="5" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MAX_QUOTA"/>
+        <measureMapping columnObjectName="Script_View" columnName="MAX_QUOTA"/>
+      </measure>
+      <measure id="FEE" order="6" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="FEE"/>
+        <measureMapping columnObjectName="Script_View" columnName="FEE"/>
+      </measure>
+      <measure id="PER_DIEM" order="7" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="PER_DIEM"/>
+        <measureMapping columnObjectName="Script_View" columnName="PER_DIEM"/>
+      </measure>
+      <measure id="TRACKING_QUANTITY" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TRACKING_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="TRACKING_QUANTITY"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

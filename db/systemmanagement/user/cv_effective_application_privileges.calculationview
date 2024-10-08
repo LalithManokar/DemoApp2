@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_effective_application_privileges" applyPrivilegeType="NONE" checkAnalyticPrivileges="false" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_effective_application_privileges"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="APPLICATION_PRIIVILEGE" length="256"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> 
+ 
+BEGIN 
+
+   /*  var_out = 
+    SELECT DISTINCT PRIVILEGE AS APPLICATION_PRIIVILEGE
+    FROM EFFECTIVE_APPLICATION_PRIVILEGES 
+    WHERE USER_NAME = (SELECT USERNAME FROM &amp;quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&amp;quot;)
+    AND PRIVILEGE LIKE 'sap.tm.trp.service::%'; 
+    */
+    
+   DECLARE NAME_USER VARCHAR(50);
+   
+   SELECT USERNAME INTO NAME_USER FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+   
+   var_out = 
+    SELECT DISTINCT PRIVILEGE AS APPLICATION_PRIIVILEGE
+    FROM EFFECTIVE_APPLICATION_PRIVILEGES 
+    WHERE USER_NAME = NAME_USER 
+    AND PRIVILEGE LIKE 'sap.tm.trp.service::%'; 
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="APPLICATION_PRIIVILEGE" order="1">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="APPLICATION_PRIIVILEGE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

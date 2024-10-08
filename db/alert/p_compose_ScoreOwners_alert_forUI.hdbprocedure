@@ -1,0 +1,168 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert::p_compose_ScoreOwners_alert_forUI" (
+IN IN_EXECUTION_ID BIGINT, 
+IN IN_FILTER_TYPE INTEGER,
+IN IN_TBL "sap.tm.trp.db.alert::tt_location_owners",
+OUT OUTPUT_RECORDS INTEGER  
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+LOCATION_SQL = 
+          SELECT 
+           t1.PLAN_EXECUTION_ID,
+           t1.PLAN_MODEL_ID,
+           t1.PLAN_MODEL_TYPE_ID,
+           t1.PLAN_MODEL_CATEGORY_ID,
+           t1.FILTER_TYPE,  
+           t1.FILTER_GROUP_ID,
+           t1.PIPELINE_MODEL_ID,
+           t1.NODE_ID,
+           t1.NODE_NAME,
+           t1.NODE_VISIBLE,
+           t1.DATA_OBJECT_FORMAT,
+           t1.LOCATION_ID,
+           t1.LOCATION_NAME,
+           t1.EQUIP_TYPE_ID, 
+           t1.EQUIP_TYPE_NAME,
+           t1.TIME_INTERVAL_ID,
+           t1.SEQUENCE,
+           t1.START_TIME,
+           t1.TIME_STEP,  
+           t1.STOCK,
+           t1.SUPPLY,
+           t1.DEMAND,
+           t1.BALANCE_SUPPLY_DEMAND,
+           t1.BALANCE_STOCK_SUPPLY_DEMAND,
+           t1.MIN_SAFETY_STOCK,
+           t1.MAX_SAFETY_STOCK,
+           t1.MESSAGE,
+           t1.ALERT_REASON, 
+           t1.ALERT_SCORE_NORMALIZING
+           FROM "sap.tm.trp.db.alert::t_alert_DT_output_alertScore_timeInterval" t1 
+           WHERE T1. PLAN_EXECUTION_ID = :IN_EXECUTION_ID;
+           
+PLAN_MODEL_ALERT_FOR_UI_TBL  =  
+   SELECT     
+       T01.PLAN_EXECUTION_ID,
+       PLAN_MODEL_ID,
+       PLAN_MODEL_TYPE_ID,
+       PLAN_MODEL_CATEGORY_ID,
+       FILTER_TYPE,  
+       FILTER_GROUP_ID,
+       PIPELINE_MODEL_ID,
+       NODE_ID,
+       NODE_NAME,
+       NODE_VISIBLE,
+       DATA_OBJECT_FORMAT,
+       T01.LOCATION_ID,
+       LOCATION_NAME,
+       EQUIP_TYPE_ID, 
+       EQUIP_TYPE_NAME,
+       TIME_INTERVAL_ID,
+       SEQUENCE,
+       START_TIME,
+       TIME_STEP,     
+       STOCK,
+       SUPPLY,
+       DEMAND,
+       BALANCE_SUPPLY_DEMAND,
+       BALANCE_STOCK_SUPPLY_DEMAND,
+       MIN_SAFETY_STOCK,
+       MAX_SAFETY_STOCK,
+       MESSAGE,
+       ALERT_REASON, 
+       T01.ALERT_SCORE_NORMALIZING AS ALERT_SCORE,
+       T02.OWNERS AS OWNER
+       FROM :LOCATION_SQL AS T01
+       LEFT OUTER JOIN  :IN_TBL AS T02
+       ON (T01.LOCATION_ID = T02.LOCATION_ID);
+       
+  INSERT INTO "sap.tm.trp.db.alert::t_planModel_alert_forUI_timeInterval_withoutGis" 
+  --INSERT INTO "sap.tm.trp.db.test.preLoad.withoutGis::t_planModel_alert_forUI_timeInterval_withoutGis"
+       (PLAN_EXECUTION_ID, 
+        PLAN_MODEL_ID, 
+        PLAN_MODEL_TYPE_ID,  
+        PLAN_MODEL_CATEGORY_ID,
+        FILTER_TYPE,
+        FILTER_GROUP_ID, 
+        PIPELINE_MODEL_ID, 
+        NODE_ID,
+        NODE_NAME,
+        NODE_VISIBLE,
+        DATA_OBJECT_FORMAT, 
+        LOCATION_ID,
+        LOCATION_NAME,
+        EQUIP_TYPE_ID,
+        EQUIP_TYPE_NAME,
+        TIME_INTERVAL_ID,
+        SEQUENCE,     
+        START_TIME,
+        TIME_STEP,
+        STOCK,
+        SUPPLY,
+        DEMAND,
+        BALANCE_SUPPLY_DEMAND,
+        BALANCE_STOCK_SUPPLY_DEMAND,
+        MIN_SAFETY_STOCK, 
+        MAX_SAFETY_STOCK,
+        MESSAGE,
+        ALERT_REASON, 
+        ALERT_SCORE,
+        OWNER,
+        LOCATION_FILTER_TYPE)
+     SELECT 
+        PLAN_EXECUTION_ID, 
+        PLAN_MODEL_ID, 
+        PLAN_MODEL_TYPE_ID,  
+        PLAN_MODEL_CATEGORY_ID,
+        FILTER_TYPE,
+        FILTER_GROUP_ID, 
+        PIPELINE_MODEL_ID, 
+        NODE_ID,
+        NODE_NAME,
+        NODE_VISIBLE,
+        DATA_OBJECT_FORMAT, 
+        LOCATION_ID,
+        LOCATION_NAME,
+        EQUIP_TYPE_ID,
+        EQUIP_TYPE_NAME,
+        TIME_INTERVAL_ID,
+        SEQUENCE,     
+        START_TIME,
+        TIME_STEP,
+        STOCK,
+        SUPPLY,
+        DEMAND,
+        BALANCE_SUPPLY_DEMAND,
+        BALANCE_STOCK_SUPPLY_DEMAND,
+        MIN_SAFETY_STOCK, 
+        MAX_SAFETY_STOCK,
+        MESSAGE,
+        ALERT_REASON, 
+        ALERT_SCORE,
+        OWNER,
+        case 
+        when FILTER_TYPE = 1 or FILTER_TYPE = 7
+           then 1
+        when FILTER_TYPE = 2 or FILTER_TYPE = 8
+           then 3
+        when FILTER_TYPE = 3 or FILTER_TYPE = 9
+           then 5
+        when FILTER_TYPE = 4 or FILTER_TYPE = 10
+           then 2
+        when FILTER_TYPE = 5 or FILTER_TYPE = 11
+       	   then 4
+        when FILTER_TYPE = 6 or FILTER_TYPE = 12
+       	   then 6
+        end as LOCATION_FILTER_TYPE 
+     FROM :PLAN_MODEL_ALERT_FOR_UI_TBL T1
+     where T1.PLAN_EXECUTION_ID = :IN_EXECUTION_ID;
+     
+     select count(*) into OUTPUT_RECORDS 
+     from "sap.tm.trp.db.alert::t_planModel_alert_forUI_timeInterval_withoutGis" t1
+     --from "sap.tm.trp.db.test.preLoad.withoutGis::t_planModel_alert_forUI_timeInterval_withoutGis" t1
+     where t1.PLAN_EXECUTION_ID = :IN_EXECUTION_ID;
+           
+END;

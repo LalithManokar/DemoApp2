@@ -1,0 +1,100 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_query_composite_path"(
+	IN network_model_id BIGINT,
+	IN view_type CHAR,  -- F: full view; D: delta view; M: merged view; S: merged view with system generated only
+	IN from_location NVARCHAR(50),  -- Either a specific location or empty value which means pattern '*'
+	IN to_location NVARCHAR(50),  -- Either a specific location or emtpy value which means pattern '*'
+	IN mtr NVARCHAR(10),  -- Either a specific means of transportation mode or empty value which means pattern '*'
+	OUT paths "sap.tm.trp.routing.db.path::tt_composite_path",
+	OUT path_connection "sap.tm.trp.routing.db.path::tt_composite_connection"
+)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA "SAP_TM_ROUTING"
+	READS SQL DATA
+AS
+BEGIN
+	-- decl_list
+	DECLARE manual_source CONSTANT CHAR = 'M';
+	DECLARE system_source CONSTANT CHAR = 'S';
+	DECLARE accumulate_path_id TABLE(id BIGINT);
+	DECLARE accumulate_conflict_path_id TABLE(id BIGINT);
+	
+	-- exception_list
+	-- stmt_list
+	accumulate_path_id = 
+	SELECT 0 AS id
+	FROM DUMMY
+	WHERE 1 != 1;
+
+	accumulate_conflict_path_id = 
+	SELECT 0 AS id
+	FROM DUMMY
+	WHERE 1 != 1;
+
+	IF :view_type = 'M' THEN
+		CALL "sap.tm.trp.routing.db.path::p_get_composite_path_merged_view" (:network_model_id, :from_location, :to_location, :mtr, accumulate_path_id, accumulate_conflict_path_id);
+	ELSEIF :view_type = 'S' THEN
+	    -- Used only when build delta network, do not consider manual composite path
+		CALL "sap.tm.trp.routing.db.path::p_get_composite_path_auto_gen_merge" (:network_model_id, :from_location, :to_location, :mtr, accumulate_path_id, accumulate_conflict_path_id);
+	ELSEIF :view_type = 'D' THEN
+		path_data_all = 
+		SELECT id, network_model_id, action, source, hash
+		FROM "sap.tm.trp.routing.db.path::t_path"
+		WHERE network_model_id = :network_model_id AND source = :manual_source;
+		
+		CALL "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_filter_composite_path_by_from_to_loc_mtr"(:path_data_all, :from_location, :to_location, :mtr, path_data);
+		
+		accumulate_path_id = 
+		SELECT id
+		FROM :path_data;
+	ELSEIF :view_type = 'F' THEN
+		CALL "sap.tm.trp.routing.db.path::p_get_composite_path_merged_view" (:network_model_id, :from_location, :to_location, :mtr, accumulate_path_id, accumulate_conflict_path_id);
+
+		path_data_all = 
+		SELECT id, network_model_id, action, source, hash
+		FROM "sap.tm.trp.routing.db.path::t_path"
+		WHERE network_model_id = :network_model_id AND source = :manual_source;
+		
+		CALL "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_filter_composite_path_by_from_to_loc_mtr"(:path_data_all, :from_location, :to_location, :mtr, path_data);
+		
+		accumulate_path_id = 
+		SELECT id
+		FROM :accumulate_path_id
+		UNION
+		SELECT id
+		FROM :path_data;
+	END IF;
+
+	-- Fetch merged path and path_connection data
+	IF :view_type != 'F' THEN
+    	paths = 
+    	SELECT A.id AS path_id, target,
+    	CASE WHEN A.network_model_id = :network_model_id AND source = :manual_source THEN action ELSE null END AS action, -- only return current network model's action
+    	source, from_location, to_location, total_distance, loading_cost, unloading_cost, total_cost, cost_currency, loading_duration, unloading_duration, total_duration, '' AS conflict_flag
+    	FROM "sap.tm.trp.routing.db.path::t_path" AS A INNER JOIN (
+    	    SELECT id, IFNULL(STRING_AGG(target, ',' ORDER BY target), '') AS target
+    	    FROM :accumulate_path_id LEFT OUTER JOIN "sap.tm.trp.routing.db.path::t_path_target" ON id = path_id
+    	    GROUP BY id
+    	) AS B ON A.id = B.id;
+    ELSE
+        top_conflict_path_id = 
+		SELECT A.id, 'X' AS conflict_flag
+		FROM "sap.tm.trp.routing.db.path::t_path" AS A INNER JOIN :accumulate_conflict_path_id AS B ON A.id = B.id
+		WHERE network_model_id = :network_model_id AND source = :manual_source;
+
+    	paths = 
+    	SELECT A.id AS path_id, target,
+    	CASE WHEN A.network_model_id = :network_model_id AND source = :manual_source THEN action ELSE null END AS action, -- only return current network model's action
+    	source, from_location, to_location, total_distance, loading_cost, unloading_cost, total_cost, cost_currency, loading_duration, unloading_duration, total_duration, IFNULL(conflict_flag, '') AS conflict_flag
+    	FROM "sap.tm.trp.routing.db.path::t_path" AS A INNER JOIN (
+    	    SELECT id, IFNULL(STRING_AGG(target, ',' ORDER BY target), '') AS target
+    	    FROM :accumulate_path_id LEFT OUTER JOIN "sap.tm.trp.routing.db.path::t_path_target" ON id = path_id
+    	    GROUP BY id
+    	) AS B ON A.id = B.id
+    	LEFT OUTER JOIN :top_conflict_path_id AS C ON B.id = C.id;
+	END IF;
+	
+	path_connection = 
+	SELECT A.path_id, sequence, basic_path_id, path_type, from_location, to_location, from_bp_sequence, to_bp_sequence, mtr, distance, transport_duration, transship_duration, transport_cost, transship_cost
+	FROM "sap.tm.trp.routing.db.path::t_path_sequence" AS A INNER JOIN :accumulate_path_id AS B ON A.path_id = B.id;
+END;

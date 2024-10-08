@@ -1,0 +1,9 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "used for getting users resource categories, like user A has resource categories including container in Euro and railcar in China";
+table.columns = [
+  {name = "CODE"; sqlType = NVARCHAR; nullable = false; length = 20; comment = "code of resource category defined in User&Role, like RC1, CN1 and etc";},
+  {name = "TYPE"; sqlType = NVARCHAR; nullable = false; length = 20; comment = "type of resource category predelivered, including RC/CN/GENERIC";},
+  {name = "DESC"; sqlType = NVARCHAR; length = 500; comment = "description of resource category, like RC1's description is railcar in China";},
+  {name = "CONTRACT"; sqlType = TINYINT; nullable = false;}
+];

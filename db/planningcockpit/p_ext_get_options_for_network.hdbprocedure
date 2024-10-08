@@ -1,0 +1,29 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_ext_get_options_for_network"(
+    IN SIMULATION_ID BIGINT,      
+    OUT FROM_TIME TIMESTAMP,
+    OUT TO_TIME TIMESTAMP,
+    OUT SCHED_MTR VARCHAR(10),
+    OUT LANE_MTR VARCHAR(10)
+)
+	LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"   
+    AS
+BEGIN
+    DECLARE V_PLAN_MODEL_ID         BIGINT;
+    DECLARE TMP_EXECUTION_ID BIGINT;
+    DECLARE TMP_NODE_ID BIGINT;
+            
+             
+       SELECT  D.SD_PLAN_ID, D.EXCUTE_ID 
+         into  V_PLAN_MODEL_ID, TMP_EXECUTION_ID         
+         FROM  "sap.tm.trp.db.planningcockpit::t_simulation_plan"   D 
+        WHERE  D.id=:SIMULATION_ID;
+        
+    CALL  "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid"(:TMP_EXECUTION_ID, TMP_NODE_ID); 
+    
+    SELECT   CURRENT_UTCTIMESTAMP, max(start_time), '', '0001' INTO FROM_TIME, TO_TIME, SCHED_MTR, LANE_MTR
+       FROM   "sap.tm.trp.db.planningcockpit::cv_get_all_plan_data_with_alert" (placeholder."$$IN_EXECUTION_ID$$"=>:TMP_EXECUTION_ID)
+      where   plan_execution_id=:TMP_EXECUTION_ID  
+        and   node_id = :TMP_NODE_ID ;          
+END;

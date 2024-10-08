@@ -1,0 +1,125 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert.alert_rule_group::p_register_pipeline_node_output_dataObject" (
+IN  PIPELINE_MODEL_ID BIGINT
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+	DECLARE SUPPLY_FLAG INTEGER;
+    DECLARE DEMAND_FLAG INTEGER;
+    DECLARE STOCK_FLAG  INTEGER;
+    DECLARE EXIST_FLAG  INTEGER;
+    
+    DECLARE PIPELINE_NODE_OUTPUT_KEY VARCHAR(20) := 'outputKey';
+    DECLARE OUTPUT_KEY_SUPPLY VARCHAR(20) := 'SUPPLY';
+    DECLARE OUTPUT_KEY_DEMAND VARCHAR(20) := 'DEMAND';
+    DECLARE OUTPUT_KEY_STOCK VARCHAR(20) := 'STOCK';
+    DECLARE DATA_OBJECT_SUPPLY VARCHAR(50) := 'SUPPLY';
+    DECLARE DATA_OBJECT_DEMAND VARCHAR(50) := 'DEMAND';
+    DECLARE DATA_OBJECT_STOCK VARCHAR(50) := 'STOCK';
+    DECLARE DATA_OBJECT_SUPPLY_DEMAND VARCHAR(50) := 'SUPPLY_DEMAND';
+    DECLARE DATA_OBJECT_STOCK_SUPPLY_DEMAND VARCHAR(50) := 'STOCK_SUPPLY_DEMAND';
+    
+    DECLARE CURSOR DISTINCT_NODE_CURSOR FOR
+
+	    select distinct T11.NODE_ID,T11.NODE_NAME from
+	    (select T2.ID as NODE_ID, 
+	            T2.NAME as NODE_NAME, 
+	            T3.VALUE as OUTPUT_KEY  
+	     from "sap.tm.trp.db.pipeline::t_pipeline_model" T1
+         inner join "sap.tm.trp.db.pipeline::t_pipeline_node" T2
+         on (T1.ID = T2.PIPELINE_MODEL_ID and
+            T2.RESULT_VISIBLE = 1 and
+            T1.ID = :PIPELINE_MODEL_ID)
+         inner join "sap.tm.trp.db.pipeline::t_pipeline_node_layout" T3
+         on (T2.ID  = T3.NODE_ID and
+            T3.key = :PIPELINE_NODE_OUTPUT_KEY)
+        ) T11;
+
+    PIPELINE_NODE_OUTPUT_KEYS_TBL =
+
+		select distinct T11.NODE_ID, T11.NODE_NAME,T11.OUTPUT_KEY from 
+		(select T2.ID as NODE_ID, 
+	            T2.NAME as NODE_NAME, 
+	            T3.VALUE as OUTPUT_KEY  
+	     from "sap.tm.trp.db.pipeline::t_pipeline_model" T1
+         inner join "sap.tm.trp.db.pipeline::t_pipeline_node" T2
+         on (T1.ID = T2.PIPELINE_MODEL_ID and
+            T2.RESULT_VISIBLE = 1 and
+            T1.ID = :PIPELINE_MODEL_ID)
+         inner join "sap.tm.trp.db.pipeline::t_pipeline_node_layout" T3
+         on (T2.ID  = T3.NODE_ID and
+            T3.key = :PIPELINE_NODE_OUTPUT_KEY)
+		)T11;  
+
+	FOR NODE_OUTPUT_KEYS as DISTINCT_NODE_CURSOR DO
+	    NODE_OUTPUT_KEYS_TBL = select distinct OUTPUT_KEY 
+	                           from :PIPELINE_NODE_OUTPUT_KEYS_TBL T1
+	                           where T1.NODE_ID = NODE_OUTPUT_KEYS.NODE_ID;
+	    	
+	    select count(*) into SUPPLY_FLAG from :NODE_OUTPUT_KEYS_TBL T1
+		where T1.OUTPUT_KEY = :OUTPUT_KEY_SUPPLY;
+	
+    	select count(*) into DEMAND_FLAG from :NODE_OUTPUT_KEYS_TBL T1
+		where T1.OUTPUT_KEY = :OUTPUT_KEY_DEMAND;
+	
+		select count(*) into STOCK_FLAG from :NODE_OUTPUT_KEYS_TBL T1
+		where T1.OUTPUT_KEY = :OUTPUT_KEY_STOCK;
+	
+		IF ( :STOCK_FLAG > 0 and :SUPPLY_FLAG > 0 and :DEMAND_FLAG >0 )
+		THEN
+        	select count(*) into EXIST_FLAG
+        	from "sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_dataObject_map_nodeName" T1
+        	where T1.PIPELINE_NODE_NAME = NODE_OUTPUT_KEYS.NODE_NAME and T1.DATA_OBJECT_FORMAT = :DATA_OBJECT_STOCK_SUPPLY_DEMAND;
+        
+        	IF ( :EXIST_FLAG = 0 )
+        	THEN 
+            	insert into "sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_dataObject_map_nodeName" values(2,:DATA_OBJECT_STOCK_SUPPLY_DEMAND, NODE_OUTPUT_KEYS.NODE_NAME);
+        	END IF;
+		ELSEIF ( :SUPPLY_FLAG > 0 and :DEMAND_FLAG >0 )
+		THEN
+	    	select count(*) into EXIST_FLAG
+        	from "sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_dataObject_map_nodeName" T1
+        	where T1.PIPELINE_NODE_NAME = NODE_OUTPUT_KEYS.NODE_NAME and T1.DATA_OBJECT_FORMAT = :DATA_OBJECT_SUPPLY_DEMAND;
+        
+        	IF ( :EXIST_FLAG = 0 )
+        	THEN 
+                insert into "sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_dataObject_map_nodeName" values(5,:DATA_OBJECT_SUPPLY_DEMAND, NODE_OUTPUT_KEYS.NODE_NAME);
+        	END IF;
+		ELSEIF ( :SUPPLY_FLAG > 0 )
+		THEN 
+	    	select count(*) into EXIST_FLAG
+        	from "sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_dataObject_map_nodeName" T1
+        	where T1.PIPELINE_NODE_NAME = NODE_OUTPUT_KEYS.NODE_NAME and T1.DATA_OBJECT_FORMAT = :DATA_OBJECT_SUPPLY;
+        
+        	IF ( :EXIST_FLAG = 0 )
+        	THEN 
+            	insert into "sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_dataObject_map_nodeName" values(3,:DATA_OBJECT_SUPPLY, NODE_OUTPUT_KEYS.NODE_NAME);
+        	END IF;          
+		ELSEIF ( :DEMAND_FLAG > 0 )
+		THEN 
+			select count(*) into EXIST_FLAG
+        	from "sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_dataObject_map_nodeName" T1
+        	where T1.PIPELINE_NODE_NAME = NODE_OUTPUT_KEYS.NODE_NAME and T1.DATA_OBJECT_FORMAT = :DATA_OBJECT_DEMAND;
+        
+        	IF ( :EXIST_FLAG = 0 )
+        	THEN 
+                insert into "sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_dataObject_map_nodeName" values(4,:DATA_OBJECT_DEMAND, NODE_OUTPUT_KEYS.NODE_NAME);
+        	END IF;    
+		ELSEIF ( :STOCK_FLAG  > 0 )
+		THEN
+        	select count(*) into EXIST_FLAG
+        	from "sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_dataObject_map_nodeName" T1
+        	where T1.PIPELINE_NODE_NAME = NODE_OUTPUT_KEYS.NODE_NAME and T1.DATA_OBJECT_FORMAT = :DATA_OBJECT_STOCK;
+        
+        	IF ( :EXIST_FLAG = 0 )
+        	THEN 
+                insert into "sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_dataObject_map_nodeName" values(1,:DATA_OBJECT_STOCK, NODE_OUTPUT_KEYS.NODE_NAME);
+        	END IF;
+		ELSE
+		END IF;                       
+	    
+	END FOR;
+    
+END

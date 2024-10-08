@@ -1,0 +1,21 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "Import data from TM Booking";
+table.columns = [
+	{name = "TU_ID"; sqlType = NVARCHAR; length = 32;},
+	{name = "TU_KEY";sqlType = VARCHAR; length = 32;},
+	{name = "EP_SRC_LOC_ID"; sqlType = VARCHAR; length=20;},
+	{name = "EP_SRC_LOC_KEY"; sqlType = VARCHAR; length=32;},
+    {name = "EP_DEST_LOC_ID"; sqlType = VARCHAR; length=20;},
+    {name = "EP_DEST_LOC_KEY"; sqlType = VARCHAR; length=32;},
+    {name = "POL"; sqlType = VARCHAR; length=20;},
+    {name = "RESOURCE_TYPE";sqlType = VARCHAR; length = 10;},  
+    {name = "SHIPPER_ID"; sqlType = NVARCHAR; length = 20;}, 
+    {name = "QUANTITY";sqlType = INTEGER;},
+    {name = "MOT";sqlType = VARCHAR; length = 4;},
+    {name = "MEANS_OF_TRANSPORTATION";sqlType = VARCHAR; length = 10;},    
+    {name = "RELEVANT_PLANNING"; sqlType =INTEGER;},
+    {name = "PICKUP_DATE";sqlType = TIMESTAMP;},   
+    {name = "CUSTOMER_CODE";sqlType = VARCHAR; length = 10;}
+    
+];     

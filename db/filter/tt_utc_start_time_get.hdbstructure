@@ -1,0 +1,12 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "used for time filter api";
+table.columns = [
+  {name = "ID"; sqlType = BIGINT;},
+  {name = "ITEM_ID"; sqlType = BIGINT; },
+  {name = "UNIT_ID"; sqlType = BIGINT; },
+  {name = "TIMEZONE_ID"; sqlType = VARCHAR; length = 50; },
+  {name = "DIRECTION_FLAG"; sqlType = INTEGER; },
+  {name = "OFFSET_FLAG"; sqlType = INTEGER; },
+  {name = "UTC_START_TIMESTAMP"; sqlType = TIMESTAMP; }
+];

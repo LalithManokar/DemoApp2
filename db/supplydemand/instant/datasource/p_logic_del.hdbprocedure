@@ -1,0 +1,155 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant.datasource::p_logic_del" (
+	OUT OUTPUT "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::t_basic_node"
+	 )  
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	AS
+BEGIN
+/***************************** 
+	Write your procedure logic 
+ *****************************/
+ 
+DECLARE MAX_UPDATE_TIME_TU_FROM TIMESTAMP;
+DECLARE MAX_UPDATE_TIME_TU_TO TIMESTAMP;
+DECLARE delete_flag_check INTEGER;
+DECLARE tolerance VARCHAR(500);
+SELECT MAX(UPDATE_TIME) INTO MAX_UPDATE_TIME_TU_FROM FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" WHERE SOURCE_TYPE = 'TU_FROM';
+SELECT MAX(UPDATE_TIME) INTO MAX_UPDATE_TIME_TU_TO FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" WHERE SOURCE_TYPE = 'TU_FROM';
+SELECT COUNT(*) INTO delete_flag_check FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" WHERE DELETE_FLAG = 'X';
+SELECT CASE WHEN VALUE='X' THEN '-3' ELSE VALUE END AS tolerance INTO tolerance FROM "sap.tm.trp.db.systemmanagement.customization::t_general_parameters" 
+WHERE NAME='INSTANT_SD_TOLERANCE';
+
+--when delete_flag_check is zero that means delete_flag update happens first time after initial load and full data volume check must happen
+IF :delete_flag_check=0 THEN 
+  
+ --The tu should be deleted in case it's not existing in source table anymore
+ lt_del_tu_itm_key = 
+	 SELECT SOURCE_KEY,SOURCE_TYPE 
+	 FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" 
+	 WHERE SOURCE_TYPE IN ('TU_FROM') AND DELETE_FLAG = '' AND SOURCE_KEY NOT IN 
+	 (	 
+	    SELECT t2.DB_KEY FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1 
+		INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item"  t2 ON (t2.TU_KEY = t1.DB_KEY) 
+		INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 on (t3.TU_KEY = t1.DB_KEY) 
+		where t3.STOP_ROLE = 'TF' AND t3.DEPARTURED = 0
+	 ) 
+	 
+UNION 
+	 
+	 SELECT SOURCE_KEY,SOURCE_TYPE 
+	 FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" 
+	 WHERE SOURCE_TYPE IN ('TU_TO') AND DELETE_FLAG = '' AND SOURCE_KEY NOT IN 
+	 (	 
+	    SELECT t2.DB_KEY FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1 
+		INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item"  t2 ON (t2.TU_KEY = t1.DB_KEY) 
+		INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 on (t3.TU_KEY = t1.DB_KEY) 
+		where t3.STOP_ROLE = 'TL' AND t3.UNLOADED = 0
+	 );
+ 
+  -- the triangulation Tu's 
+ lt_del_triangulation = SELECT SOURCE_KEY,SOURCE_TYPE 
+						FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" 
+						WHERE SOURCE_TYPE IN ('TU_TO') AND DELETE_FLAG = '' AND NODE = 'EMPTY_RETURN' AND SOURCE_KEY IN 
+							(
+								SELECT t2.DB_KEY FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1 
+								INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item"  t2 on (t2.TU_KEY = t1.DB_KEY)        
+								where t1.MOVEMENT_CAT in ('TR')
+							);     				
+ ELSE --after first run, do not iterate through complete data volumne iterate past 3 days from max update
+ 
+ lt_del_tu_itm_key = 
+	 SELECT SOURCE_KEY,SOURCE_TYPE 
+	 FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" 
+	 WHERE SOURCE_TYPE IN ('TU_FROM') AND DELETE_FLAG = '' AND SOURCE_KEY IN 
+	 (	 
+	    SELECT t2.DB_KEY FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1 
+		INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item"  t2 ON (t2.TU_KEY = t1.DB_KEY) 
+		INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 on (t3.TU_KEY = t1.DB_KEY) 
+		where t3.STOP_ROLE = 'TF' AND t3.DEPARTURED = 1
+		AND TO_TIMESTAMP(T1.CHANGED_ON)> add_days(:MAX_UPDATE_TIME_TU_FROM,:tolerance) --performance change for data volumne
+	 ) 
+	 
+UNION 
+	 
+	 SELECT SOURCE_KEY,SOURCE_TYPE 
+	 FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" 
+	 WHERE SOURCE_TYPE IN ('TU_TO') AND DELETE_FLAG = '' AND SOURCE_KEY IN 
+	 (	 
+	    SELECT t2.DB_KEY FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1 
+		INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item"  t2 ON (t2.TU_KEY = t1.DB_KEY) 
+		INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 on (t3.TU_KEY = t1.DB_KEY) 
+		where t3.STOP_ROLE = 'TL' AND t3.UNLOADED = 1
+		AND TO_TIMESTAMP(T1.CHANGED_ON)> add_days(:MAX_UPDATE_TIME_TU_TO,:tolerance) --performance change for data volumne
+	 )
+ UNION 
+ SELECT SOURCE_KEY,SOURCE_TYPE 
+	 FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" 
+	 WHERE SOURCE_TYPE IN ('TU_FROM','TU_TO') AND DELETE_FLAG = '' AND SOURCE_KEY NOT IN 
+	 (	 
+	    SELECT t2.DB_KEY FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1 
+		INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item"  t2 ON (t2.TU_KEY = t1.DB_KEY)
+	 );
+ 
+  -- the triangulation Tu's 
+ 
+ lt_del_triangulation = SELECT SOURCE_KEY,SOURCE_TYPE 
+						FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" 
+						WHERE SOURCE_TYPE IN ('TU_TO') AND DELETE_FLAG = '' AND NODE = 'EMPTY_RETURN' AND SOURCE_KEY IN 
+							(
+								SELECT t2.DB_KEY FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1 
+								INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item"  t2 on (t2.TU_KEY = t1.DB_KEY)        
+								where t1.MOVEMENT_CAT in ('TR')
+								AND TO_TIMESTAMP(T1.CHANGED_ON)> add_days(:MAX_UPDATE_TIME_TU_TO,:tolerance) --performance change for data volumne
+							);  
+ END IF;
+ 
+ --The resource should be deleted in case the resource is not existing in source table anymore 
+ lt_del_res_key = 
+ 	SELECT SOURCE_KEY,SOURCE_TYPE  
+	FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" 
+	WHERE SOURCE_TYPE IN ('RESOURCE','ON_HIRE','OFF_HIRE') AND DELETE_FLAG = '' AND SOURCE_KEY NOT IN 
+	(
+		--SELECT RESOURCE_ID FROM "sap.tm.trp.db.semantic.resource::v_resource_master"
+		SELECT RESOURCE_ID FROM "sap.tm.trp.db.semantic.resource::v_stock_resource_last_status"  
+	);	 
+ 
+ --the downtime info should be deleted in case the downtime is not existing in source table anymore.
+ lt_del_down_key = 
+ 	SELECT SOURCE_KEY,SOURCE_TYPE 
+	FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" 
+	WHERE SOURCE_TYPE IN ('DOWNTIME_IN','DOWNTIME_OUT') AND DELETE_FLAG = '' AND SOURCE_KEY NOT IN 
+	(
+		SELECT DOWNID FROM "sap.tm.trp.db.semantic.resource::v_resource_downtime"
+		    WHERE LOCATION_ID IS NOT NULL AND LOCATION_ID <> ''
+	);	 
+ 
+
+ 
+  --merge all the source key to be deleted
+ lt_to_be_del = SELECT * FROM :lt_del_tu_itm_key
+                 UNION
+                  SELECT * FROM :lt_del_res_key
+                 UNION
+                  SELECT * FROM :lt_del_down_key
+                UNION
+                 SELECT * FROM :lt_del_triangulation;
+				 
+ --marked the entries in harmonized table as deleted
+OUTPUT = SELECT 
+    CLIENT,
+	COMPANY_CODE,
+	t1.SOURCE_KEY, 
+	t1.SOURCE_TYPE,
+	NODE,
+	LOCATION_ID,
+	RESOURCE_GROUP,
+	RESOURCE_TYPE,
+	OUTPUT_KEY,
+	QUANTITY,
+	UPDATE_TIME, 
+	OCCURRED_TIME, 
+	'X' AS DELETE_FLAG FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" t1
+	INNER JOIN :lt_to_be_del t2 on t1.SOURCE_KEY = t2.SOURCE_KEY AND 
+	                               t1.SOURCE_TYPE = t2.SOURCE_TYPE;		  
+END;

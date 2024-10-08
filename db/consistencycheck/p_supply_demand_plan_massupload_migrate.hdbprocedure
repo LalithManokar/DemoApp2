@@ -1,0 +1,81 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.consistencycheck::p_supply_demand_plan_massupload_migrate" (
+    OUT SD_PLAN_OUTPUT "sap.tm.trp.db.consistencycheck::tt_sd_plan_massupload_migrate"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_TRP
+   READS SQL DATA AS
+BEGIN
+   SD_PLAN_OUTPUT = SELECT  IFNULL(T1.NAME, '') AS SCHEDULED_SUPPLY_AND_DEMAND_PLAN_NAME,
+                            IFNULL(T1.DESC, '') AS DESCRIPTION,
+                            IFNULL(T16.DESC, '') AS PLAN_TYPE,
+                            IFNULL(T9.DESC, '') AS LOCATION_FILTER,
+                            IFNULL(T7.DESC, '') AS RESOURCE_FILTER,
+                            IFNULL(T5.NAME, '') AS TIME_FILTER,
+                            IFNULL(T2.NAME, '') AS CALCULATION_MODEL,
+                            IFNULL(T3.NAME, '') AS ALERT_RULE_GROUP,
+                            IFNULL(T21.NAME, '') AS MULTI_ATTRIBUTE_FILTER,
+                             CASE WHEN T12.RECURRENCE_TYPE = 'WEEK' THEN 'Weeks'
+                            	 WHEN T12.RECURRENCE_TYPE = 'DAY'  THEN 'Days'
+                            	 WHEN T12.RECURRENCE_TYPE = 'MONTH' THEN 'Months'
+                            	 WHEN T12.RECURRENCE_TYPE = 'HOUR'  THEN 'Hours'
+                            	 WHEN T12.RECURRENCE_TYPE = 'MINUTE' THEN 'Minutes'
+                            	 ELSE ''
+                            END AS 	RECURRENCE_TYPE,
+                            IFNULL(T12.RECURRENCE_INTERVAL, 0) AS RECURRENCE_INTERVAL,
+                            CASE WHEN T12.RECURRENCE_TYPE = 'WEEK' 
+                            THEN 
+                            	CASE WHEN T12.RECURRENCE_DAY = 1 THEN 'Monday'
+                            		 WHEN T12.RECURRENCE_DAY = 2 THEN 'Tuesday'
+                            		 WHEN T12.RECURRENCE_DAY = 3 THEN 'Wednesday'
+                            		 WHEN T12.RECURRENCE_DAY = 4 THEN 'Thursday'
+                            		 WHEN T12.RECURRENCE_DAY = 5 THEN 'Friday'	
+                            		 WHEN T12.RECURRENCE_DAY = 6 THEN 'Saturday'
+                            		 WHEN T12.RECURRENCE_DAY = 7 THEN 'Sunday'
+                            		 ELSE ''
+                            	END
+                            ELSE TO_VARCHAR(T12.RECURRENCE_DAY)
+                            END AS 	EXECUTED_ON,
+                            IFNULL((TO_VARCHAR(T12.START_TIME, 'YYYY-MM-DD') || 'T' || LPAD(EXTRACT( HOUR FROM TO_TIME(T12.START_TIME)), 2, 0) || ':' || LPAD(EXTRACT( MINUTE FROM TO_TIME(T12.START_TIME)), 2, 0) || ':' || LPAD(EXTRACT( SECOND FROM TO_TIME(T12.START_TIME)), 2, 0) || '.' || '000Z' ), '0000-00-00T00:00:00.000Z' ) AS START_DATE_TIME,
+                            IFNULL((TO_VARCHAR(T12.EXPIRY_TIME, 'YYYY-MM-DD') || 'T' || LPAD(EXTRACT( HOUR FROM TO_TIME(T12.EXPIRY_TIME)), 2, 0) || ':' || LPAD(EXTRACT( MINUTE FROM TO_TIME(T12.EXPIRY_TIME)), 2, 0) || ':' || LPAD(EXTRACT( SECOND FROM TO_TIME(T12.EXPIRY_TIME)), 2, 0) || '.' || '000Z' ), '0000-00-00T00:00:00.000Z') AS END_DATE_TIME,
+                            IFNULL(TV.DESC, '') AS VISIBILITY,
+                            IFNULL(TO_VARCHAR(T1.KEEP_EXECUTION_RUNS), '') AS KEEP_X_EXECUTION_RUNS,
+                            CASE WHEN T1.USAGE_CODE = 'EARU' THEN 'EAC / Ruleset'
+                            	 WHEN T1.USAGE_CODE = 'GENE' THEN 'Generic S&D Plan'
+                            	 WHEN T1.USAGE_CODE = 'RESO' THEN 'Resource Balancing'
+                            	 WHEN T1.USAGE_CODE = 'OTHR' THEN 'Any other categories for extension'
+                            	 WHEN T1.USAGE_CODE = 'GKPI' THEN 'Generic KPI Plan'
+                            	 ELSE ''
+                            END AS PLAN_USAGE,
+                            CASE WHEN T1.USAGE = 'X' THEN 'Yes'
+                            	 WHEN T1.USAGE = ''  THEN 'No'
+                            	 ELSE ''
+                            END AS DISABLE_INTERMEDIATE_NODE,
+                            CASE WHEN T12.EXECUTE_WORKING_HOUR = 'X' THEN 'Yes'
+                            	 WHEN T12.EXECUTE_WORKING_HOUR = ''  THEN 'No'
+                            	 ELSE ''
+                            END AS EXECUTE_IN_WORKING_HOURS,
+                            IFNULL((LPAD(EXTRACT( HOUR FROM TO_TIME(T12.START_WORKING_HOUR_TIME)), 2, 0) || ':' || LPAD(EXTRACT( MINUTE FROM TO_TIME(T12.START_WORKING_HOUR_TIME)), 2, 0) ), '00:00') AS START_WORKING_HOURS,
+                            IFNULL((LPAD(EXTRACT( HOUR FROM TO_TIME(T12.END_WORKING_HOUR_TIME)), 2, 0) || ':' || LPAD(EXTRACT( MINUTE FROM TO_TIME(T12.END_WORKING_HOUR_TIME)), 2, 0) ), '00:00') AS END_WORKING_HOURS
+                            FROM
+                            "sap.tm.trp.db.pipeline::t_plan_model" T1
+                            LEFT OUTER JOIN ( SELECT T161.ID,IFNULL(T162.DESC,T161.DESC) AS DESC FROM "sap.tm.trp.db.pipeline::t_plan_model_type" T161
+                                LEFT OUTER JOIN ( SELECT T251.ID,T251.DESC FROM "sap.tm.trp.db.pipeline::t_plan_model_type_t" T251
+                                       INNER JOIN "sap.tm.trp.db.semantic.common::v_lang_code" T252 ON (T251.SPRAS = T252.SPRAS)) T162 ON (T161.ID = T162.ID)
+                                )T16 ON T1.PLAN_MODEL_TYPE_ID = T16.ID
+                            LEFT OUTER JOIN "sap.tm.trp.db.filter::t_filter_location_filter" T8 ON T8.FILTER_GROUP_ID = T1.FILTER_GROUP_ID
+                            LEFT OUTER JOIN "sap.tm.trp.db.filter::t_location_filter" T9 ON T9.ID = T8.LOCATION_FILTER_ID
+                            LEFT OUTER JOIN "sap.tm.trp.db.filter::t_filter_equipment_filter" T6 ON T6.FILTER_GROUP_ID = T1.FILTER_GROUP_ID
+                            LEFT OUTER JOIN "sap.tm.trp.db.filter::t_equipment_filter" T7 ON T7.ID = T6.EQUIPMENT_FILTER_ID AND T7.RESOURCE_CATEGORY = T6.RESOURCE_CATEGORY
+                            LEFT OUTER JOIN "sap.tm.trp.db.filter::t_filter_group" T4 ON T1.FILTER_GROUP_ID = T4.ID
+                            LEFT OUTER JOIN "sap.tm.trp.db.filter::t_time_filter" T5 ON T5.ID = T4.TIME_FILTER_ID
+                            LEFT OUTER JOIN "sap.tm.trp.db.pipeline::t_pipeline_model" T2 ON T1.PIPELINE_MODEL_ID = T2.ID
+                            LEFT OUTER JOIN "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group" T3 ON T1.ALERT_RULE_GROUP_ID = T3.ALERT_RULE_GROUP_ID
+                            LEFT OUTER JOIN "sap.tm.trp.db.job::t_model_schedule_detail" t12 on t12.model_id = t1.id
+                            LEFT OUTER JOIN "sap.tm.trp.db.filter::t_attribute_group" AS T21
+                            ON T21.ID = T1.ATTRIBUTE_GROUP_ID
+                            LEFT OUTER JOIN ( SELECT TV1.FLAG, TV1.CODE,IFNULL(TV2.DESC,TV1.DESC)AS DESC FROM "sap.tm.trp.db.systemmanagement::t_visibility_type" TV1
+                                LEFT OUTER JOIN ( SELECT TV21.ID,TV21.DESC FROM "sap.tm.trp.db.systemmanagement::t_visibility_type_t" TV21
+                                    INNER JOIN "sap.tm.trp.db.semantic.common::v_lang_code" TV22 ON (TV21.SPRAS = TV22.SPRAS) )TV2 ON TV1.ID =  TV2.ID
+                                )TV ON (TV.FLAG = T1.VISIBILITY_FLAG) WHERE T16.ID = 1 AND (T1.USAGE_CODE IS NULL OR T1.USAGE IS NULL); 
+END

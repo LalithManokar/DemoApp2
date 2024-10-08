@@ -1,0 +1,15 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel.storagecost::p_get_resource_type_teu" (
+        IN RESOURCE_CATEGORY VARCHAR(20),
+		OUT RESOURCE_TYPE_TEU "sap.tm.trp.db.costmodel.storagecost::tt_resource_type_teu"
+        ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"   
+	 AS
+BEGIN
+      RESOURCE_TYPE_TEU = SELECT DISTINCT T1.RESOURCE_TYPE_CODE AS RESOURCE_TYPE, T2.TEU_COUNT AS TEU
+                                        FROM "sap.tm.trp.db.semantic.resource::v_resource_type_with_category" T1
+                                        INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_type" T2
+                                        ON (T1.RESOURCE_TYPE_CODE = T2.RESOURCE_TYPE_CODE)
+                                        WHERE T1.RESOURCE_CATEGORY = :RESOURCE_CATEGORY;
+END;

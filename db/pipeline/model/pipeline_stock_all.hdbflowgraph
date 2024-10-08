@@ -1,0 +1,926 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<flowgraph:ContainerNode xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:flowgraph="http://www.sap.com/ndb/flowgraph/1.0" xmi:id="_qkD5gKXrEeS9JutGwdiZdw" name="STOCK_ALL_PIPELINE" generateProcedure="true" generateTask="false" targetSchema="SAP_TM_TRP">
+  <annotations xmi:id="_qkEgkKXrEeS9JutGwdiZdw" key="sap.afm.layout">
+    <annotations xmi:id="_qkEgkaXrEeS9JutGwdiZdw" key="x" value="10"/>
+    <annotations xmi:id="_qkEgkqXrEeS9JutGwdiZdw" key="y" value="10"/>
+  </annotations>
+  <annotations xmi:id="_hfrrsKarEeS9JutGwdiZdw" key="sap.afm.nodeType" value="ContainerNode"/>
+  <annotations xmi:id="_hfyZYKarEeS9JutGwdiZdw" key="sap.afm.nodeInputs"/>
+  <annotations xmi:id="_hf2DwKarEeS9JutGwdiZdw" key="sap.afm.nodeOutputs">
+    <annotations xmi:id="_hf5HEKarEeS9JutGwdiZdw" key="OUTPUT_3" value=""/>
+  </annotations>
+  <annotations xmi:id="_78y-gKa9EeS9JutGwdiZdw" key="defaultNode" value="TOTAL_STOCK"/>
+  <annotations xmi:id="_YmvacKa-EeS9JutGwdiZdw" key="planningModelType" value="PIPELINE"/>
+  <annotations xmi:id="_Z3vEoDTOEeW2D5wgA6XO8g" key="sap.afm.palette" value="">
+    <annotations xmi:id="_bmIgIDTOEeW2D5wgA6XO8g" key="additions" value="../../pipeline/palette.hdbflowgraphtemplate"/>
+  </annotations>
+  <outputs xmi:id="_FTEk4KYPEeS9JutGwdiZdw" name="OUTPUT_3" kind="TABLE">
+    <attributes xmi:id="_UAvEEDXWEeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+    <attributes xmi:id="_UCG9EDXWEeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+    <attributes xmi:id="_UD33oDXWEeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+    <attributes xmi:id="_UEnegDXWEeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+    <attributes xmi:id="_UFYTgDXWEeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+    <attributes xmi:id="_UGML0DXWEeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+    <attributes xmi:id="_UG9n4DXWEeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+    <attributes xmi:id="_UHwSEDXWEeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+    <attributes xmi:id="_UIiVMDXWEeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+    <attributes xmi:id="_UJR8EDXWEeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+    <attributes xmi:id="_UKGbcDXWEeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+    <attributes xmi:id="_UK5FoDXWEeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+    <attributes xmi:id="_ULrIwDXWEeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+    <attributes xmi:id="_UMfBEDXWEeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+    <attributes xmi:id="_UNQdIDXWEeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+  </outputs>
+  <tableMappings xmi:id="_Ub5A8DXUEeWFSPoWB1fFvA" source="_1JsQvzXQEeWFSPoWB1fFvA" target="_TejPAzXUEeWFSPoWB1fFvA">
+    <attributeMappings xmi:id="_Ub5A8TXUEeWFSPoWB1fFvA" source="_1JsQwDXQEeWFSPoWB1fFvA" target="_TejPBDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_Ub5A8jXUEeWFSPoWB1fFvA" source="_1JsQwTXQEeWFSPoWB1fFvA" target="_TejPBTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_Ub5A8zXUEeWFSPoWB1fFvA" source="_1JsQwjXQEeWFSPoWB1fFvA" target="_TejPBjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_Ub5A9DXUEeWFSPoWB1fFvA" source="_1JsQwzXQEeWFSPoWB1fFvA" target="_TejPBzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_Ub5A9TXUEeWFSPoWB1fFvA" source="_1JsQxDXQEeWFSPoWB1fFvA" target="_TejPCDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_Ub5A9jXUEeWFSPoWB1fFvA" source="_1JsQxTXQEeWFSPoWB1fFvA" target="_TejPCTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_Ub5A9zXUEeWFSPoWB1fFvA" source="_1JsQxjXQEeWFSPoWB1fFvA" target="_TejPCjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_Ub5A-DXUEeWFSPoWB1fFvA" source="_1JsQxzXQEeWFSPoWB1fFvA" target="_TejPCzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_Ub5A-TXUEeWFSPoWB1fFvA" source="_1JsQyDXQEeWFSPoWB1fFvA" target="_TejPDDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_Ub5A-jXUEeWFSPoWB1fFvA" source="_1JsQyTXQEeWFSPoWB1fFvA" target="_TejPDTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_Ub5A-zXUEeWFSPoWB1fFvA" source="_1JsQyjXQEeWFSPoWB1fFvA" target="_TejPDjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_Ub5A_DXUEeWFSPoWB1fFvA" source="_1JsQyzXQEeWFSPoWB1fFvA" target="_TejPDzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_Ub5A_TXUEeWFSPoWB1fFvA" source="_1JsQzDXQEeWFSPoWB1fFvA" target="_TejPEDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_Ub5A_jXUEeWFSPoWB1fFvA" source="_1JsQzTXQEeWFSPoWB1fFvA" target="_TejPETXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_Ub5A_zXUEeWFSPoWB1fFvA" source="_1JsQzjXQEeWFSPoWB1fFvA" target="_TejPEjXUEeWFSPoWB1fFvA"/>
+  </tableMappings>
+  <tableMappings xmi:id="_VFPf8DXUEeWFSPoWB1fFvA" source="_DE8qrzXREeWFSPoWB1fFvA" target="_TejPEzXUEeWFSPoWB1fFvA">
+    <attributeMappings xmi:id="_VFPf8TXUEeWFSPoWB1fFvA" source="_DE8qsDXREeWFSPoWB1fFvA" target="_TejPFDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VFPf8jXUEeWFSPoWB1fFvA" source="_DE8qsTXREeWFSPoWB1fFvA" target="_TejPFTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VFPf8zXUEeWFSPoWB1fFvA" source="_DE8qsjXREeWFSPoWB1fFvA" target="_TejPFjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VFPf9DXUEeWFSPoWB1fFvA" source="_DE8qszXREeWFSPoWB1fFvA" target="_TejPFzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VFPf9TXUEeWFSPoWB1fFvA" source="_DE8qtDXREeWFSPoWB1fFvA" target="_TejPGDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VFPf9jXUEeWFSPoWB1fFvA" source="_DE8qtTXREeWFSPoWB1fFvA" target="_TejPGTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VFPf9zXUEeWFSPoWB1fFvA" source="_DE8qtjXREeWFSPoWB1fFvA" target="_TejPGjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VFPf-DXUEeWFSPoWB1fFvA" source="_DE8qtzXREeWFSPoWB1fFvA" target="_TejPGzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VFPf-TXUEeWFSPoWB1fFvA" source="_DE8quDXREeWFSPoWB1fFvA" target="_TejPHDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VFPf-jXUEeWFSPoWB1fFvA" source="_DE8quTXREeWFSPoWB1fFvA" target="_TejPHTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VFPf-zXUEeWFSPoWB1fFvA" source="_DE8qujXREeWFSPoWB1fFvA" target="_TejPHjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VFPf_DXUEeWFSPoWB1fFvA" source="_DE8quzXREeWFSPoWB1fFvA" target="_TejPHzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VFPf_TXUEeWFSPoWB1fFvA" source="_DE8qvDXREeWFSPoWB1fFvA" target="_TejPIDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VFPf_jXUEeWFSPoWB1fFvA" source="_DE8qvTXREeWFSPoWB1fFvA" target="_TejPITXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VFPf_zXUEeWFSPoWB1fFvA" source="_DE8qvjXREeWFSPoWB1fFvA" target="_TejPIjXUEeWFSPoWB1fFvA"/>
+  </tableMappings>
+  <tableMappings xmi:id="_VhiaYDXUEeWFSPoWB1fFvA" source="_D_Ia_zXREeWFSPoWB1fFvA" target="_TejPIzXUEeWFSPoWB1fFvA">
+    <attributeMappings xmi:id="_VhiaYTXUEeWFSPoWB1fFvA" source="_D_IbADXREeWFSPoWB1fFvA" target="_TejPJDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VhiaYjXUEeWFSPoWB1fFvA" source="_D_IbATXREeWFSPoWB1fFvA" target="_TejPJTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VhiaYzXUEeWFSPoWB1fFvA" source="_D_IbAjXREeWFSPoWB1fFvA" target="_TejPJjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VhiaZDXUEeWFSPoWB1fFvA" source="_D_IbAzXREeWFSPoWB1fFvA" target="_TejPJzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VhiaZTXUEeWFSPoWB1fFvA" source="_D_IbBDXREeWFSPoWB1fFvA" target="_TejPKDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VhiaZjXUEeWFSPoWB1fFvA" source="_D_IbBTXREeWFSPoWB1fFvA" target="_TejPKTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VhiaZzXUEeWFSPoWB1fFvA" source="_D_IbBjXREeWFSPoWB1fFvA" target="_TejPKjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VhiaaDXUEeWFSPoWB1fFvA" source="_D_IbBzXREeWFSPoWB1fFvA" target="_TejPKzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VhiaaTXUEeWFSPoWB1fFvA" source="_D_IbCDXREeWFSPoWB1fFvA" target="_TejPLDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VhiaajXUEeWFSPoWB1fFvA" source="_D_IbCTXREeWFSPoWB1fFvA" target="_TejPLTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VhiaazXUEeWFSPoWB1fFvA" source="_D_IbCjXREeWFSPoWB1fFvA" target="_TejPLjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VhiabDXUEeWFSPoWB1fFvA" source="_D_IbCzXREeWFSPoWB1fFvA" target="_TejPLzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VhiabTXUEeWFSPoWB1fFvA" source="_D_IbDDXREeWFSPoWB1fFvA" target="_TejPMDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VhiabjXUEeWFSPoWB1fFvA" source="_D_IbDTXREeWFSPoWB1fFvA" target="_TejPMTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_VhiabzXUEeWFSPoWB1fFvA" source="_D_IbDjXREeWFSPoWB1fFvA" target="_TejPMjXUEeWFSPoWB1fFvA"/>
+  </tableMappings>
+  <tableMappings xmi:id="_dOGdcDXUEeWFSPoWB1fFvA" source="_F5IpjzXREeWFSPoWB1fFvA" target="_TejPMzXUEeWFSPoWB1fFvA">
+    <attributeMappings xmi:id="_dOGdcTXUEeWFSPoWB1fFvA" source="_F5IpkDXREeWFSPoWB1fFvA" target="_TejPNDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_dOGdcjXUEeWFSPoWB1fFvA" source="_F5IpkTXREeWFSPoWB1fFvA" target="_TejPNTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_dOGdczXUEeWFSPoWB1fFvA" source="_F5IpkjXREeWFSPoWB1fFvA" target="_TejPNjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_dOGddDXUEeWFSPoWB1fFvA" source="_F5IpkzXREeWFSPoWB1fFvA" target="_TejPNzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_dOGddTXUEeWFSPoWB1fFvA" source="_F5IplDXREeWFSPoWB1fFvA" target="_TejPODXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_dOGddjXUEeWFSPoWB1fFvA" source="_F5IplTXREeWFSPoWB1fFvA" target="_TejPOTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_dOGddzXUEeWFSPoWB1fFvA" source="_F5IpljXREeWFSPoWB1fFvA" target="_TejPOjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_dOGdeDXUEeWFSPoWB1fFvA" source="_F5IplzXREeWFSPoWB1fFvA" target="_TejPOzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_dOGdeTXUEeWFSPoWB1fFvA" source="_F5IpmDXREeWFSPoWB1fFvA" target="_TejPPDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_dOGdejXUEeWFSPoWB1fFvA" source="_F5IpmTXREeWFSPoWB1fFvA" target="_TejPPTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_dOGdezXUEeWFSPoWB1fFvA" source="_F5IpmjXREeWFSPoWB1fFvA" target="_TejPPjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_dOGdfDXUEeWFSPoWB1fFvA" source="_F5IpmzXREeWFSPoWB1fFvA" target="_TejPPzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_dOGdfTXUEeWFSPoWB1fFvA" source="_F5IpnDXREeWFSPoWB1fFvA" target="_TejPQDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_dOGdfjXUEeWFSPoWB1fFvA" source="_F5IpnTXREeWFSPoWB1fFvA" target="_TejPQTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_dOGdfzXUEeWFSPoWB1fFvA" source="_F5IpnjXREeWFSPoWB1fFvA" target="_TejPQjXUEeWFSPoWB1fFvA"/>
+  </tableMappings>
+  <tableMappings xmi:id="_fhdAIDXUEeWFSPoWB1fFvA" source="_KCXIvzXREeWFSPoWB1fFvA" target="_TejPQzXUEeWFSPoWB1fFvA">
+    <attributeMappings xmi:id="_fhdAITXUEeWFSPoWB1fFvA" source="_KCXIwDXREeWFSPoWB1fFvA" target="_TejPRDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_fhdAIjXUEeWFSPoWB1fFvA" source="_KCXIwTXREeWFSPoWB1fFvA" target="_TejPRTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_fhdAIzXUEeWFSPoWB1fFvA" source="_KCXIwjXREeWFSPoWB1fFvA" target="_TejPRjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_fhdAJDXUEeWFSPoWB1fFvA" source="_KCXIwzXREeWFSPoWB1fFvA" target="_TejPRzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_fhdAJTXUEeWFSPoWB1fFvA" source="_KCXIxDXREeWFSPoWB1fFvA" target="_TejPSDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_fhdAJjXUEeWFSPoWB1fFvA" source="_KCXIxTXREeWFSPoWB1fFvA" target="_TejPSTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_fhdAJzXUEeWFSPoWB1fFvA" source="_KCXIxjXREeWFSPoWB1fFvA" target="_TejPSjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_fhdAKDXUEeWFSPoWB1fFvA" source="_KCXIxzXREeWFSPoWB1fFvA" target="_TejPSzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_fhdAKTXUEeWFSPoWB1fFvA" source="_KCXIyDXREeWFSPoWB1fFvA" target="_TejPTDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_fhdAKjXUEeWFSPoWB1fFvA" source="_KCXIyTXREeWFSPoWB1fFvA" target="_TejPTTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_fhdAKzXUEeWFSPoWB1fFvA" source="_KCXIyjXREeWFSPoWB1fFvA" target="_TejPTjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_fhdALDXUEeWFSPoWB1fFvA" source="_KCXIyzXREeWFSPoWB1fFvA" target="_TejPTzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_fhdALTXUEeWFSPoWB1fFvA" source="_KCXIzDXREeWFSPoWB1fFvA" target="_TejPUDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_fhdALjXUEeWFSPoWB1fFvA" source="_KCXIzTXREeWFSPoWB1fFvA" target="_TejPUTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_fhdALzXUEeWFSPoWB1fFvA" source="_KCXIzjXREeWFSPoWB1fFvA" target="_TejPUjXUEeWFSPoWB1fFvA"/>
+  </tableMappings>
+  <tableMappings xmi:id="_gFHt4DXUEeWFSPoWB1fFvA" source="_K0ESfzXREeWFSPoWB1fFvA" target="_TejPUzXUEeWFSPoWB1fFvA">
+    <attributeMappings xmi:id="_gFHt4TXUEeWFSPoWB1fFvA" source="_K0ESgDXREeWFSPoWB1fFvA" target="_TejPVDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_gFHt4jXUEeWFSPoWB1fFvA" source="_K0ESgTXREeWFSPoWB1fFvA" target="_TejPVTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_gFHt4zXUEeWFSPoWB1fFvA" source="_K0ESgjXREeWFSPoWB1fFvA" target="_TejPVjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_gFHt5DXUEeWFSPoWB1fFvA" source="_K0ESgzXREeWFSPoWB1fFvA" target="_TejPVzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_gFHt5TXUEeWFSPoWB1fFvA" source="_K0EShDXREeWFSPoWB1fFvA" target="_TejPWDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_gFHt5jXUEeWFSPoWB1fFvA" source="_K0EShTXREeWFSPoWB1fFvA" target="_TejPWTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_gFHt5zXUEeWFSPoWB1fFvA" source="_K0EShjXREeWFSPoWB1fFvA" target="_TejPWjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_gFHt6DXUEeWFSPoWB1fFvA" source="_K0EShzXREeWFSPoWB1fFvA" target="_TejPWzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_gFHt6TXUEeWFSPoWB1fFvA" source="_K0ESiDXREeWFSPoWB1fFvA" target="_TejPXDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_gFHt6jXUEeWFSPoWB1fFvA" source="_K0ESiTXREeWFSPoWB1fFvA" target="_TejPXTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_gFHt6zXUEeWFSPoWB1fFvA" source="_K0ESijXREeWFSPoWB1fFvA" target="_TejPXjXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_gFHt7DXUEeWFSPoWB1fFvA" source="_K0ESizXREeWFSPoWB1fFvA" target="_TejPXzXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_gFHt7TXUEeWFSPoWB1fFvA" source="_K0ESjDXREeWFSPoWB1fFvA" target="_TejPYDXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_gFHt7jXUEeWFSPoWB1fFvA" source="_K0ESjTXREeWFSPoWB1fFvA" target="_TejPYTXUEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_gFHt7zXUEeWFSPoWB1fFvA" source="_K0ESjjXREeWFSPoWB1fFvA" target="_TejPYjXUEeWFSPoWB1fFvA"/>
+  </tableMappings>
+  <tableMappings xmi:id="_DXvRgDXWEeWFSPoWB1fFvA" source="_1JsQvzXQEeWFSPoWB1fFvA" target="_ECtWmTXVEeWFSPoWB1fFvA">
+    <attributeMappings xmi:id="_DXvRgTXWEeWFSPoWB1fFvA" source="_1JsQwDXQEeWFSPoWB1fFvA" target="_CS6-gDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_DXvRgjXWEeWFSPoWB1fFvA" source="_1JsQwTXQEeWFSPoWB1fFvA" target="_CT09cDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_DXvRgzXWEeWFSPoWB1fFvA" source="_1JsQwjXQEeWFSPoWB1fFvA" target="_CUtuQDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_DXvRhDXWEeWFSPoWB1fFvA" source="_1JsQwzXQEeWFSPoWB1fFvA" target="_CV4L4DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_DXvRhTXWEeWFSPoWB1fFvA" source="_1JsQxDXQEeWFSPoWB1fFvA" target="_CW2cQDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_DXvRhjXWEeWFSPoWB1fFvA" source="_1JsQxTXQEeWFSPoWB1fFvA" target="_CXtX4DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_DXvRhzXWEeWFSPoWB1fFvA" source="_1JsQxjXQEeWFSPoWB1fFvA" target="_CYmIsDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_DXvRiDXWEeWFSPoWB1fFvA" source="_1JsQxzXQEeWFSPoWB1fFvA" target="_CZaBADXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_DXvRiTXWEeWFSPoWB1fFvA" source="_1JsQyDXQEeWFSPoWB1fFvA" target="_CaNSQDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_DXvRijXWEeWFSPoWB1fFvA" source="_1JsQyTXQEeWFSPoWB1fFvA" target="_CbCYsDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_DXvRizXWEeWFSPoWB1fFvA" source="_1JsQyjXQEeWFSPoWB1fFvA" target="_Cb9lwDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_DXvRjDXWEeWFSPoWB1fFvA" source="_1JsQyzXQEeWFSPoWB1fFvA" target="_Cc0hYDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_DXvRjTXWEeWFSPoWB1fFvA" source="_1JsQzDXQEeWFSPoWB1fFvA" target="_CdvucDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_DXvRjjXWEeWFSPoWB1fFvA" source="_1JsQzTXQEeWFSPoWB1fFvA" target="_CenRIDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_DXvRjzXWEeWFSPoWB1fFvA" source="_1JsQzjXQEeWFSPoWB1fFvA" target="_CfkTYDXWEeWFSPoWB1fFvA"/>
+  </tableMappings>
+  <tableMappings xmi:id="_FhPUoDXWEeWFSPoWB1fFvA" source="_DE8qrzXREeWFSPoWB1fFvA" target="_HZCZMDXVEeWFSPoWB1fFvA">
+    <attributeMappings xmi:id="_FhPUoTXWEeWFSPoWB1fFvA" source="_DE8qsDXREeWFSPoWB1fFvA" target="_EwdX8DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_FhPUojXWEeWFSPoWB1fFvA" source="_DE8qsTXREeWFSPoWB1fFvA" target="_ExbBQDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_FhPUozXWEeWFSPoWB1fFvA" source="_DE8qsjXREeWFSPoWB1fFvA" target="_EycU8DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_FhPUpDXWEeWFSPoWB1fFvA" source="_DE8qszXREeWFSPoWB1fFvA" target="_EzUesDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_FhPUpTXWEeWFSPoWB1fFvA" source="_DE8qtDXREeWFSPoWB1fFvA" target="_E0OdoDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_FhPUpjXWEeWFSPoWB1fFvA" source="_DE8qtTXREeWFSPoWB1fFvA" target="_E1ELIDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_FhPUpzXWEeWFSPoWB1fFvA" source="_DE8qtjXREeWFSPoWB1fFvA" target="_E1-KEDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_FhPUqDXWEeWFSPoWB1fFvA" source="_DE8qtzXREeWFSPoWB1fFvA" target="_E24wEDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_FhPUqTXWEeWFSPoWB1fFvA" source="_DE8quDXREeWFSPoWB1fFvA" target="_E3yH8DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_FhPUqjXWEeWFSPoWB1fFvA" source="_DE8quTXREeWFSPoWB1fFvA" target="_E4fSkDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_FhPUqzXWEeWFSPoWB1fFvA" source="_DE8qujXREeWFSPoWB1fFvA" target="_E5MdMDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_FhPUrDXWEeWFSPoWB1fFvA" source="_DE8quzXREeWFSPoWB1fFvA" target="_E5618DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_FhPUrTXWEeWFSPoWB1fFvA" source="_DE8qvDXREeWFSPoWB1fFvA" target="_E6mycDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_FhPUrjXWEeWFSPoWB1fFvA" source="_DE8qvTXREeWFSPoWB1fFvA" target="_E7nfEDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_FhPUrzXWEeWFSPoWB1fFvA" source="_DE8qvjXREeWFSPoWB1fFvA" target="_E80Y8DXWEeWFSPoWB1fFvA"/>
+  </tableMappings>
+  <tableMappings xmi:id="_G0lL0DXWEeWFSPoWB1fFvA" source="_D_Ia_zXREeWFSPoWB1fFvA" target="_I6gL8DXVEeWFSPoWB1fFvA">
+    <attributeMappings xmi:id="_G0lL0TXWEeWFSPoWB1fFvA" source="_D_IbADXREeWFSPoWB1fFvA" target="_GFIr4DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_G0lL0jXWEeWFSPoWB1fFvA" source="_D_IbATXREeWFSPoWB1fFvA" target="_GGORADXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_G0lL0zXWEeWFSPoWB1fFvA" source="_D_IbAjXREeWFSPoWB1fFvA" target="_GG_tEDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_G0lL1DXWEeWFSPoWB1fFvA" source="_D_IbAzXREeWFSPoWB1fFvA" target="_GHuF0DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_G0lL1TXWEeWFSPoWB1fFvA" source="_D_IbBDXREeWFSPoWB1fFvA" target="_GIdssDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_G0lL1jXWEeWFSPoWB1fFvA" source="_D_IbBTXREeWFSPoWB1fFvA" target="_GJSMEDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_G0lL1zXWEeWFSPoWB1fFvA" source="_D_IbBjXREeWFSPoWB1fFvA" target="_GJ_9wDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_G0lL2DXWEeWFSPoWB1fFvA" source="_D_IbBzXREeWFSPoWB1fFvA" target="_GKwLsDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_G0lL2TXWEeWFSPoWB1fFvA" source="_D_IbCDXREeWFSPoWB1fFvA" target="_GLiO0DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_G0lL2jXWEeWFSPoWB1fFvA" source="_D_IbCTXREeWFSPoWB1fFvA" target="_GMScwDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_G0lL2zXWEeWFSPoWB1fFvA" source="_D_IbCjXREeWFSPoWB1fFvA" target="_GNIKQDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_G0lL3DXWEeWFSPoWB1fFvA" source="_D_IbCzXREeWFSPoWB1fFvA" target="_GOGaoDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_G0lL3TXWEeWFSPoWB1fFvA" source="_D_IbDDXREeWFSPoWB1fFvA" target="_GO5E0DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_G0lL3jXWEeWFSPoWB1fFvA" source="_D_IbDTXREeWFSPoWB1fFvA" target="_GPorsDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_G0lL3zXWEeWFSPoWB1fFvA" source="_D_IbDjXREeWFSPoWB1fFvA" target="_GQYSkDXWEeWFSPoWB1fFvA"/>
+  </tableMappings>
+  <tableMappings xmi:id="_IXUJ4DXWEeWFSPoWB1fFvA" source="_F5IpjzXREeWFSPoWB1fFvA" target="_Iw0rgDXVEeWFSPoWB1fFvA">
+    <attributeMappings xmi:id="_IXUJ4TXWEeWFSPoWB1fFvA" source="_F5IpkDXREeWFSPoWB1fFvA" target="_HmV_8DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_IXUJ4jXWEeWFSPoWB1fFvA" source="_F5IpkTXREeWFSPoWB1fFvA" target="_HnfPcDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_IXUJ4zXWEeWFSPoWB1fFvA" source="_F5IpkjXREeWFSPoWB1fFvA" target="_HoLL8DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_IXUJ5DXWEeWFSPoWB1fFvA" source="_F5IpkzXREeWFSPoWB1fFvA" target="_Ho3vgDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_IXUJ5TXWEeWFSPoWB1fFvA" source="_F5IplDXREeWFSPoWB1fFvA" target="_HplhMDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_IXUJ5jXWEeWFSPoWB1fFvA" source="_F5IplTXREeWFSPoWB1fFvA" target="_HqjKgDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_IXUJ5zXWEeWFSPoWB1fFvA" source="_F5IpljXREeWFSPoWB1fFvA" target="_HrwEYDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_IXUJ6DXWEeWFSPoWB1fFvA" source="_F5IplzXREeWFSPoWB1fFvA" target="_HsttsDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_IXUJ6TXWEeWFSPoWB1fFvA" source="_F5IpmDXREeWFSPoWB1fFvA" target="_HtfJwDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_IXUJ6jXWEeWFSPoWB1fFvA" source="_F5IpmTXREeWFSPoWB1fFvA" target="_HuKfMDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_IXUJ6zXWEeWFSPoWB1fFvA" source="_F5IpmjXREeWFSPoWB1fFvA" target="_Hu1NkDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_IXUJ7DXWEeWFSPoWB1fFvA" source="_F5IpmzXREeWFSPoWB1fFvA" target="_Hvps8DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_IXUJ7TXWEeWFSPoWB1fFvA" source="_F5IpnDXREeWFSPoWB1fFvA" target="_HwezYDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_IXUJ7jXWEeWFSPoWB1fFvA" source="_F5IpnTXREeWFSPoWB1fFvA" target="_HxL-ADXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_IXUJ7zXWEeWFSPoWB1fFvA" source="_F5IpnjXREeWFSPoWB1fFvA" target="_Hx8zADXWEeWFSPoWB1fFvA"/>
+  </tableMappings>
+  <tableMappings xmi:id="_JmkLQDXWEeWFSPoWB1fFvA" source="_KCXIvzXREeWFSPoWB1fFvA" target="_IY-zQDXVEeWFSPoWB1fFvA">
+    <attributeMappings xmi:id="_JmkLQTXWEeWFSPoWB1fFvA" source="_KCXIwDXREeWFSPoWB1fFvA" target="_I3FPEDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_JmkLQjXWEeWFSPoWB1fFvA" source="_KCXIwTXREeWFSPoWB1fFvA" target="_I4LbQDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_JmkLQzXWEeWFSPoWB1fFvA" source="_KCXIwjXREeWFSPoWB1fFvA" target="_I47CIDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_JmkLRDXWEeWFSPoWB1fFvA" source="_KCXIwzXREeWFSPoWB1fFvA" target="_I5m-oDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_JmkLRTXWEeWFSPoWB1fFvA" source="_KCXIxDXREeWFSPoWB1fFvA" target="_I6RtADXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_JmkLRjXWEeWFSPoWB1fFvA" source="_KCXIxTXREeWFSPoWB1fFvA" target="_I69CcDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_JmkLRzXWEeWFSPoWB1fFvA" source="_KCXIxjXREeWFSPoWB1fFvA" target="_I7sCQDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_JmkLSDXWEeWFSPoWB1fFvA" source="_KCXIxzXREeWFSPoWB1fFvA" target="_I8Zz8DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_JmkLSTXWEeWFSPoWB1fFvA" source="_KCXIyDXREeWFSPoWB1fFvA" target="_I9gAIDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_JmkLSjXWEeWFSPoWB1fFvA" source="_KCXIyTXREeWFSPoWB1fFvA" target="_I-feoDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_JmkLSzXWEeWFSPoWB1fFvA" source="_KCXIyjXREeWFSPoWB1fFvA" target="_I_PskDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_JmkLTDXWEeWFSPoWB1fFvA" source="_KCXIyzXREeWFSPoWB1fFvA" target="_I_-FUDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_JmkLTTXWEeWFSPoWB1fFvA" source="_KCXIzDXREeWFSPoWB1fFvA" target="_JAr3ADXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_JmkLTjXWEeWFSPoWB1fFvA" source="_KCXIzTXREeWFSPoWB1fFvA" target="_JBZosDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_JmkLTzXWEeWFSPoWB1fFvA" source="_KCXIzjXREeWFSPoWB1fFvA" target="_JCIBcDXWEeWFSPoWB1fFvA"/>
+  </tableMappings>
+  <tableMappings xmi:id="_K6w-EDXWEeWFSPoWB1fFvA" source="_K0ESfzXREeWFSPoWB1fFvA" target="_IFIDIDXVEeWFSPoWB1fFvA">
+    <attributeMappings xmi:id="_K6w-ETXWEeWFSPoWB1fFvA" source="_K0ESgDXREeWFSPoWB1fFvA" target="_KLF0oDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_K6w-EjXWEeWFSPoWB1fFvA" source="_K0ESgTXREeWFSPoWB1fFvA" target="_KMEsEDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_K6w-EzXWEeWFSPoWB1fFvA" source="_K0ESgjXREeWFSPoWB1fFvA" target="_KM3WQDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_K6w-FDXWEeWFSPoWB1fFvA" source="_K0ESgzXREeWFSPoWB1fFvA" target="_KNkg4DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_K6w-FTXWEeWFSPoWB1fFvA" source="_K0EShDXREeWFSPoWB1fFvA" target="_KOYZMDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_K6w-FjXWEeWFSPoWB1fFvA" source="_K0EShTXREeWFSPoWB1fFvA" target="_KPi20DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_K6w-FzXWEeWFSPoWB1fFvA" source="_K0EShjXREeWFSPoWB1fFvA" target="_KQbnoDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_K6w-GDXWEeWFSPoWB1fFvA" source="_K0EShzXREeWFSPoWB1fFvA" target="_KRL1kDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_K6w-GTXWEeWFSPoWB1fFvA" source="_K0ESiDXREeWFSPoWB1fFvA" target="_KR61YDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_K6w-GjXWEeWFSPoWB1fFvA" source="_K0ESiTXREeWFSPoWB1fFvA" target="_KSutsDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_K6w-GzXWEeWFSPoWB1fFvA" source="_K0ESijXREeWFSPoWB1fFvA" target="_KTe7oDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_K6w-HDXWEeWFSPoWB1fFvA" source="_K0ESizXREeWFSPoWB1fFvA" target="_KUPJkDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_K6w-HTXWEeWFSPoWB1fFvA" source="_K0ESjDXREeWFSPoWB1fFvA" target="_KU_-kDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_K6w-HjXWEeWFSPoWB1fFvA" source="_K0ESjTXREeWFSPoWB1fFvA" target="_KVzP0DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_K6w-HzXWEeWFSPoWB1fFvA" source="_K0ESjjXREeWFSPoWB1fFvA" target="_KWgacDXWEeWFSPoWB1fFvA"/>
+  </tableMappings>
+  <tableMappings xmi:id="_UcTlwDXWEeWFSPoWB1fFvA" source="_ECtWmjXVEeWFSPoWB1fFvA" target="_FTEk4KYPEeS9JutGwdiZdw">
+    <attributeMappings xmi:id="_UcTlwTXWEeWFSPoWB1fFvA" source="_Ct_J4DXWEeWFSPoWB1fFvA" target="_UAvEEDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_UcTlwjXWEeWFSPoWB1fFvA" source="_CuxNADXWEeWFSPoWB1fFvA" target="_UCG9EDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_UcTlwzXWEeWFSPoWB1fFvA" source="_CvipEDXWEeWFSPoWB1fFvA" target="_UD33oDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_UcTlxDXWEeWFSPoWB1fFvA" source="_CwYWkDXWEeWFSPoWB1fFvA" target="_UEnegDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_UcTlxTXWEeWFSPoWB1fFvA" source="_CxMO4DXWEeWFSPoWB1fFvA" target="_UFYTgDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_UcTlxjXWEeWFSPoWB1fFvA" source="_CyAHMDXWEeWFSPoWB1fFvA" target="_UGML0DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_UcTlxzXWEeWFSPoWB1fFvA" source="_Cy4Q8DXWEeWFSPoWB1fFvA" target="_UG9n4DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_UcTlyDXWEeWFSPoWB1fFvA" source="_Cz49kDXWEeWFSPoWB1fFvA" target="_UHwSEDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_UcTlyTXWEeWFSPoWB1fFvA" source="_C1HsoDXWEeWFSPoWB1fFvA" target="_UIiVMDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_UcTlyjXWEeWFSPoWB1fFvA" source="_C18MADXWEeWFSPoWB1fFvA" target="_UJR8EDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_UcTlyzXWEeWFSPoWB1fFvA" source="_C2wEUDXWEeWFSPoWB1fFvA" target="_UKGbcDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_UcTlzDXWEeWFSPoWB1fFvA" source="_C3rRYDXWEeWFSPoWB1fFvA" target="_UK5FoDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_UcTlzTXWEeWFSPoWB1fFvA" source="_C5CjUDXWEeWFSPoWB1fFvA" target="_ULrIwDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_UcTlzjXWEeWFSPoWB1fFvA" source="_C5--gDXWEeWFSPoWB1fFvA" target="_UMfBEDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_UcTlzzXWEeWFSPoWB1fFvA" source="_C6xosDXWEeWFSPoWB1fFvA" target="_UNQdIDXWEeWFSPoWB1fFvA"/>
+  </tableMappings>
+  <tableMappings xmi:id="_z9yPgDXWEeWFSPoWB1fFvA" source="_TejPYzXUEeWFSPoWB1fFvA" target="_ECtWmDXVEeWFSPoWB1fFvA">
+    <attributeMappings xmi:id="_z9yPgTXWEeWFSPoWB1fFvA" source="_TejPZDXUEeWFSPoWB1fFvA" target="_zKGv0DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_z9yPgjXWEeWFSPoWB1fFvA" source="_TejPZTXUEeWFSPoWB1fFvA" target="_zLKfwDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_z9yPgzXWEeWFSPoWB1fFvA" source="_TejPZjXUEeWFSPoWB1fFvA" target="_zL770DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_z9yPhDXWEeWFSPoWB1fFvA" source="_TejPZzXUEeWFSPoWB1fFvA" target="_zMsw0DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_z9yPhTXWEeWFSPoWB1fFvA" source="_TejPaDXUEeWFSPoWB1fFvA" target="_zNwgwDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_z9yPhjXWEeWFSPoWB1fFvA" source="_TejPaTXUEeWFSPoWB1fFvA" target="_zOsU4DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_z9yPhzXWEeWFSPoWB1fFvA" source="_TejPajXUEeWFSPoWB1fFvA" target="_zPwr4DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_z9yPiDXWEeWFSPoWB1fFvA" source="_TejPazXUEeWFSPoWB1fFvA" target="_zQr48DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_z9yPiTXWEeWFSPoWB1fFvA" source="_TejPbDXUEeWFSPoWB1fFvA" target="_zRr-gDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_z9yPijXWEeWFSPoWB1fFvA" source="_TejPbTXUEeWFSPoWB1fFvA" target="_zSoZsDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_z9yPizXWEeWFSPoWB1fFvA" source="_TejPbjXUEeWFSPoWB1fFvA" target="_zTnRIDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_z9yPjDXWEeWFSPoWB1fFvA" source="_TejPbzXUEeWFSPoWB1fFvA" target="_zUurcDXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_z9yPjTXWEeWFSPoWB1fFvA" source="_TejPcDXUEeWFSPoWB1fFvA" target="_zV368DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_z9yPjjXWEeWFSPoWB1fFvA" source="_TejPcTXUEeWFSPoWB1fFvA" target="_zWoI4DXWEeWFSPoWB1fFvA"/>
+    <attributeMappings xmi:id="_z9yPjzXWEeWFSPoWB1fFvA" source="_TejPcjXUEeWFSPoWB1fFvA" target="_zXZk8DXWEeWFSPoWB1fFvA"/>
+  </tableMappings>
+  <nodes xsi:type="flowgraph:DataNode" xmi:id="_1JsQsDXQEeWFSPoWB1fFvA" name="STOCK_EMPTY_AND_AVAILABLE" type="DATABASE_VIEW" authoringSchemaName="_SYS_BIC" catalogObjectName="sap.tm.trp.db.stock/cv_pipeline_stock_empty_and_available" dataLayout="COLUMN" truncateTable="false">
+    <annotations xmi:id="_1JsQsTXQEeWFSPoWB1fFvA" key="sap.afm.displayName" value="Empty Available Stock"/>
+    <annotations xmi:id="_1JsQsjXQEeWFSPoWB1fFvA" key="sap.afm.layout">
+      <annotations xmi:id="_1JsQszXQEeWFSPoWB1fFvA" key="x" value="39"/>
+      <annotations xmi:id="_1JsQtDXQEeWFSPoWB1fFvA" key="y" value="40"/>
+      <annotations xmi:id="_1JsQtTXQEeWFSPoWB1fFvA" key="width" value="100"/>
+      <annotations xmi:id="_1JsQtjXQEeWFSPoWB1fFvA" key="height" value="64"/>
+    </annotations>
+    <annotations xmi:id="_1JsQtzXQEeWFSPoWB1fFvA" key="sap.afm.annotations" value="nodeID, nodeType, outputKey, navigationType, layout, outgoingEdge, breakdown, SUPPLY, DEMAND, STOCK, aggregationMethod, BiPolar"/>
+    <annotations xmi:id="_1JsQuDXQEeWFSPoWB1fFvA" key="sap.afm.description" value="Empty &amp; available"/>
+    <annotations xmi:id="_1JsQuTXQEeWFSPoWB1fFvA" key="nodeID" value="STOCK_EMPTY_AND_AVAILABLE"/>
+    <annotations xmi:id="_1JsQujXQEeWFSPoWB1fFvA" key="outputKey" value="STOCK"/>
+    <annotations xmi:id="_1JsQuzXQEeWFSPoWB1fFvA" key="sap.afm.nodeType" value="DataNode"/>
+    <annotations xmi:id="_1JsQvDXQEeWFSPoWB1fFvA" key="sap.afm.nodeInputs"/>
+    <annotations xmi:id="_1JsQvTXQEeWFSPoWB1fFvA" key="sap.afm.nodeOutputs">
+      <annotations xmi:id="_1JsQvjXQEeWFSPoWB1fFvA" key="DATA" value="INPUT1,empty&amp;avaiable"/>
+    </annotations>
+    <annotations xmi:id="_wyBJADXUEeWFSPoWB1fFvA" key="layout" value="">
+      <annotations xmi:id="_x1yTIDXUEeWFSPoWB1fFvA" key="outgoingEdge" value="TOTAL_STOCK"/>
+    </annotations>
+    <outputs xmi:id="_1JsQvzXQEeWFSPoWB1fFvA" name="DATA" kind="TABLE">
+      <attributes xmi:id="_1JsQwDXQEeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_1JsQwTXQEeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_1JsQwjXQEeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_1JsQwzXQEeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_1JsQxDXQEeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_1JsQxTXQEeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_1JsQxjXQEeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_1JsQxzXQEeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_1JsQyDXQEeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_1JsQyTXQEeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_1JsQyjXQEeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_1JsQyzXQEeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_1JsQzDXQEeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_1JsQzTXQEeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_1JsQzjXQEeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </outputs>
+  </nodes>
+  <nodes xsi:type="flowgraph:DataNode" xmi:id="_DE8qoDXREeWFSPoWB1fFvA" name="STOCK_OUT_OF_FLEET" type="DATABASE_VIEW" authoringSchemaName="_SYS_BIC" catalogObjectName="sap.tm.trp.db.stock/cv_pipeline_stock_out_of_fleet" dataLayout="COLUMN" truncateTable="false">
+    <annotations xmi:id="_DE8qoTXREeWFSPoWB1fFvA" key="sap.afm.description" value="Resource is no more part of equipment fleet"/>
+    <annotations xmi:id="_DE8qojXREeWFSPoWB1fFvA" key="sap.afm.displayName" value="Out of Fleet Stock"/>
+    <annotations xmi:id="_DE8qozXREeWFSPoWB1fFvA" key="sap.afm.layout">
+      <annotations xmi:id="_DE8qpDXREeWFSPoWB1fFvA" key="x" value="39"/>
+      <annotations xmi:id="_DE8qpTXREeWFSPoWB1fFvA" key="y" value="144"/>
+      <annotations xmi:id="_DE8qpjXREeWFSPoWB1fFvA" key="width" value="100"/>
+      <annotations xmi:id="_DE8qpzXREeWFSPoWB1fFvA" key="height" value="64"/>
+    </annotations>
+    <annotations xmi:id="_DE8qqDXREeWFSPoWB1fFvA" key="sap.afm.annotations" value="nodeID, nodeType, outputKey, navigationType, layout, outgoingEdge, breakdown, SUPPLY, DEMAND, STOCK, aggregationMethod, BiPolar"/>
+    <annotations xmi:id="_DE8qqTXREeWFSPoWB1fFvA" key="nodeID" value="STOCK_OUT_OF_FLEET"/>
+    <annotations xmi:id="_DE8qqjXREeWFSPoWB1fFvA" key="outputKey" value="STOCK"/>
+    <annotations xmi:id="_DE8qqzXREeWFSPoWB1fFvA" key="sap.afm.nodeType" value="DataNode"/>
+    <annotations xmi:id="_DE8qrDXREeWFSPoWB1fFvA" key="sap.afm.nodeInputs"/>
+    <annotations xmi:id="_DE8qrTXREeWFSPoWB1fFvA" key="sap.afm.nodeOutputs">
+      <annotations xmi:id="_DE8qrjXREeWFSPoWB1fFvA" key="DATA_2" value="INPUT2,out_of_fleet"/>
+    </annotations>
+    <annotations xmi:id="_0ZcisDXUEeWFSPoWB1fFvA" key="layout" value="">
+      <annotations xmi:id="_10Q64DXUEeWFSPoWB1fFvA" key="outgoingEdge" value="TOTAL_STOCK"/>
+    </annotations>
+    <outputs xmi:id="_DE8qrzXREeWFSPoWB1fFvA" name="DATA_2" kind="TABLE">
+      <attributes xmi:id="_DE8qsDXREeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_DE8qsTXREeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_DE8qsjXREeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_DE8qszXREeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_DE8qtDXREeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_DE8qtTXREeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_DE8qtjXREeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_DE8qtzXREeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_DE8quDXREeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_DE8quTXREeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_DE8qujXREeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_DE8quzXREeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_DE8qvDXREeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_DE8qvTXREeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_DE8qvjXREeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </outputs>
+  </nodes>
+  <nodes xsi:type="flowgraph:DataNode" xmi:id="_D_Ia8DXREeWFSPoWB1fFvA" name="STOCK_DAMAGED" type="DATABASE_VIEW" authoringSchemaName="_SYS_BIC" catalogObjectName="sap.tm.trp.db.stock/cv_pipeline_stock_damaged" dataLayout="COLUMN" truncateTable="false">
+    <annotations xmi:id="_D_Ia8TXREeWFSPoWB1fFvA" key="sap.afm.annotations" value="nodeID, nodeType, outputKey, navigationType, layout, outgoingEdge, breakdown, SUPPLY, DEMAND, STOCK, aggregationMethod, BiPolar"/>
+    <annotations xmi:id="_D_Ia8jXREeWFSPoWB1fFvA" key="sap.afm.description" value="Resource is not available"/>
+    <annotations xmi:id="_D_Ia8zXREeWFSPoWB1fFvA" key="sap.afm.displayName" value="Damaged"/>
+    <annotations xmi:id="_D_Ia9DXREeWFSPoWB1fFvA" key="sap.afm.layout">
+      <annotations xmi:id="_D_Ia9TXREeWFSPoWB1fFvA" key="x" value="39"/>
+      <annotations xmi:id="_D_Ia9jXREeWFSPoWB1fFvA" key="y" value="245"/>
+      <annotations xmi:id="_D_Ia9zXREeWFSPoWB1fFvA" key="width" value="100"/>
+      <annotations xmi:id="_D_Ia-DXREeWFSPoWB1fFvA" key="height" value="64"/>
+    </annotations>
+    <annotations xmi:id="_D_Ia-TXREeWFSPoWB1fFvA" key="nodeID" value="STOCK_DAMAGED"/>
+    <annotations xmi:id="_D_Ia-jXREeWFSPoWB1fFvA" key="outputKey" value="STOCK"/>
+    <annotations xmi:id="_D_Ia-zXREeWFSPoWB1fFvA" key="sap.afm.nodeType" value="DataNode"/>
+    <annotations xmi:id="_D_Ia_DXREeWFSPoWB1fFvA" key="sap.afm.nodeInputs"/>
+    <annotations xmi:id="_D_Ia_TXREeWFSPoWB1fFvA" key="sap.afm.nodeOutputs">
+      <annotations xmi:id="_D_Ia_jXREeWFSPoWB1fFvA" key="DATA_3" value="INPUT3,damaged"/>
+    </annotations>
+    <annotations xmi:id="_3Q0YcDXUEeWFSPoWB1fFvA" key="layout" value="">
+      <annotations xmi:id="_4IFXoDXUEeWFSPoWB1fFvA" key="outgoingEdge" value="TOTAL_STOCK"/>
+    </annotations>
+    <outputs xmi:id="_D_Ia_zXREeWFSPoWB1fFvA" name="DATA_3" kind="TABLE">
+      <attributes xmi:id="_D_IbADXREeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_D_IbATXREeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_D_IbAjXREeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_D_IbAzXREeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_D_IbBDXREeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_D_IbBTXREeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_D_IbBjXREeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_D_IbBzXREeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_D_IbCDXREeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_D_IbCTXREeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_D_IbCjXREeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_D_IbCzXREeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_D_IbDDXREeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_D_IbDTXREeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_D_IbDjXREeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </outputs>
+  </nodes>
+  <nodes xsi:type="flowgraph:DataNode" xmi:id="_F5IpgDXREeWFSPoWB1fFvA" name="STOCK_SUBLEASED" type="DATABASE_VIEW" authoringSchemaName="_SYS_BIC" catalogObjectName="sap.tm.trp.db.stock/cv_pipeline_stock_subleased" dataLayout="COLUMN" truncateTable="false">
+    <annotations xmi:id="_F5IpgTXREeWFSPoWB1fFvA" key="sap.afm.description" value="Resource is not available due to sublease"/>
+    <annotations xmi:id="_F5IpgjXREeWFSPoWB1fFvA" key="sap.afm.displayName" value="Subleased Stock"/>
+    <annotations xmi:id="_F5IpgzXREeWFSPoWB1fFvA" key="sap.afm.layout">
+      <annotations xmi:id="_F5IphDXREeWFSPoWB1fFvA" key="x" value="39"/>
+      <annotations xmi:id="_F5IphTXREeWFSPoWB1fFvA" key="y" value="349"/>
+      <annotations xmi:id="_F5IphjXREeWFSPoWB1fFvA" key="width" value="100"/>
+      <annotations xmi:id="_F5IphzXREeWFSPoWB1fFvA" key="height" value="64"/>
+    </annotations>
+    <annotations xmi:id="_F5IpiDXREeWFSPoWB1fFvA" key="sap.afm.annotations" value="nodeID, nodeType, outputKey, navigationType, layout, outgoingEdge, breakdown, SUPPLY, DEMAND, STOCK, aggregationMethod, BiPolar"/>
+    <annotations xmi:id="_F5IpiTXREeWFSPoWB1fFvA" key="nodeID" value="STOCK_SUBLEASED"/>
+    <annotations xmi:id="_F5IpijXREeWFSPoWB1fFvA" key="outputKey" value="STOCK"/>
+    <annotations xmi:id="_F5IpizXREeWFSPoWB1fFvA" key="sap.afm.nodeType" value="DataNode"/>
+    <annotations xmi:id="_F5IpjDXREeWFSPoWB1fFvA" key="sap.afm.nodeInputs"/>
+    <annotations xmi:id="_F5IpjTXREeWFSPoWB1fFvA" key="sap.afm.nodeOutputs">
+      <annotations xmi:id="_F5IpjjXREeWFSPoWB1fFvA" key="DATA_4" value="INPUT4,subleased"/>
+    </annotations>
+    <annotations xmi:id="_5zaRADXUEeWFSPoWB1fFvA" key="layout" value="">
+      <annotations xmi:id="_6xdNoDXUEeWFSPoWB1fFvA" key="outgoingEdge" value="TOTAL_STOCK"/>
+    </annotations>
+    <outputs xmi:id="_F5IpjzXREeWFSPoWB1fFvA" name="DATA_4" kind="TABLE">
+      <attributes xmi:id="_F5IpkDXREeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_F5IpkTXREeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_F5IpkjXREeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_F5IpkzXREeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_F5IplDXREeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_F5IplTXREeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_F5IpljXREeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_F5IplzXREeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_F5IpmDXREeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_F5IpmTXREeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_F5IpmjXREeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_F5IpmzXREeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_F5IpnDXREeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_F5IpnTXREeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_F5IpnjXREeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </outputs>
+  </nodes>
+  <nodes xsi:type="flowgraph:DataNode" xmi:id="_KCXIsDXREeWFSPoWB1fFvA" name="STOCK_RESERVED" type="DATABASE_VIEW" authoringSchemaName="_SYS_BIC" catalogObjectName="sap.tm.trp.db.stock/cv_pipeline_stock_reserved" dataLayout="COLUMN" truncateTable="false">
+    <annotations xmi:id="_KCXIsTXREeWFSPoWB1fFvA" key="sap.afm.annotations" value="nodeID, nodeType, outputKey, navigationType, layout, outgoingEdge, breakdown, SUPPLY, DEMAND, STOCK, aggregationMethod, BiPolar"/>
+    <annotations xmi:id="_KCXIsjXREeWFSPoWB1fFvA" key="sap.afm.description" value="Resource is not available due to a reservation"/>
+    <annotations xmi:id="_KCXIszXREeWFSPoWB1fFvA" key="sap.afm.displayName" value="Reserved Stock"/>
+    <annotations xmi:id="_KCXItDXREeWFSPoWB1fFvA" key="sap.afm.layout">
+      <annotations xmi:id="_KCXItTXREeWFSPoWB1fFvA" key="x" value="39"/>
+      <annotations xmi:id="_KCXItjXREeWFSPoWB1fFvA" key="y" value="451"/>
+      <annotations xmi:id="_KCXItzXREeWFSPoWB1fFvA" key="width" value="100"/>
+      <annotations xmi:id="_KCXIuDXREeWFSPoWB1fFvA" key="height" value="64"/>
+    </annotations>
+    <annotations xmi:id="_KCXIuTXREeWFSPoWB1fFvA" key="nodeID" value="STOCK_RESERVED"/>
+    <annotations xmi:id="_KCXIujXREeWFSPoWB1fFvA" key="outputKey" value="STOCK"/>
+    <annotations xmi:id="_KCXIuzXREeWFSPoWB1fFvA" key="sap.afm.nodeType" value="DataNode"/>
+    <annotations xmi:id="_KCXIvDXREeWFSPoWB1fFvA" key="sap.afm.nodeInputs"/>
+    <annotations xmi:id="_KCXIvTXREeWFSPoWB1fFvA" key="sap.afm.nodeOutputs">
+      <annotations xmi:id="_KCXIvjXREeWFSPoWB1fFvA" key="DATA_5" value="INPUT5,reserved"/>
+    </annotations>
+    <annotations xmi:id="_8nx2EDXUEeWFSPoWB1fFvA" key="layout" value="">
+      <annotations xmi:id="_9tUh0DXUEeWFSPoWB1fFvA" key="outgoingEdge" value="TOTAL_STOCK"/>
+    </annotations>
+    <outputs xmi:id="_KCXIvzXREeWFSPoWB1fFvA" name="DATA_5" kind="TABLE">
+      <attributes xmi:id="_KCXIwDXREeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_KCXIwTXREeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_KCXIwjXREeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_KCXIwzXREeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_KCXIxDXREeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_KCXIxTXREeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_KCXIxjXREeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_KCXIxzXREeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_KCXIyDXREeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_KCXIyTXREeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_KCXIyjXREeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_KCXIyzXREeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_KCXIzDXREeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_KCXIzTXREeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_KCXIzjXREeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </outputs>
+  </nodes>
+  <nodes xsi:type="flowgraph:DataNode" xmi:id="_K0EScDXREeWFSPoWB1fFvA" name="STOCK_OTHERS" type="DATABASE_VIEW" authoringSchemaName="_SYS_BIC" catalogObjectName="sap.tm.trp.db.stock/cv_pipeline_stock_others" dataLayout="COLUMN" truncateTable="false">
+    <annotations xmi:id="_K0EScTXREeWFSPoWB1fFvA" key="sap.afm.annotations" value="nodeID, nodeType, outputKey, navigationType, layout, outgoingEdge, breakdown, SUPPLY, DEMAND, STOCK, aggregationMethod, BiPolar"/>
+    <annotations xmi:id="_K0EScjXREeWFSPoWB1fFvA" key="sap.afm.description" value="Resource is not available due to other reason"/>
+    <annotations xmi:id="_K0ESczXREeWFSPoWB1fFvA" key="sap.afm.displayName" value="Others Stock"/>
+    <annotations xmi:id="_K0ESdDXREeWFSPoWB1fFvA" key="sap.afm.layout">
+      <annotations xmi:id="_K0ESdTXREeWFSPoWB1fFvA" key="x" value="39"/>
+      <annotations xmi:id="_K0ESdjXREeWFSPoWB1fFvA" key="y" value="552"/>
+      <annotations xmi:id="_K0ESdzXREeWFSPoWB1fFvA" key="width" value="100"/>
+      <annotations xmi:id="_K0ESeDXREeWFSPoWB1fFvA" key="height" value="64"/>
+    </annotations>
+    <annotations xmi:id="_K0ESeTXREeWFSPoWB1fFvA" key="nodeID" value="STOCK_OTHERS"/>
+    <annotations xmi:id="_K0ESejXREeWFSPoWB1fFvA" key="outputKey" value="STOCK"/>
+    <annotations xmi:id="_K0ESezXREeWFSPoWB1fFvA" key="sap.afm.nodeType" value="DataNode"/>
+    <annotations xmi:id="_K0ESfDXREeWFSPoWB1fFvA" key="sap.afm.nodeInputs"/>
+    <annotations xmi:id="_K0ESfTXREeWFSPoWB1fFvA" key="sap.afm.nodeOutputs">
+      <annotations xmi:id="_K0ESfjXREeWFSPoWB1fFvA" key="DATA_6" value="INPUT6,others"/>
+    </annotations>
+    <annotations xmi:id="__SP4QDXUEeWFSPoWB1fFvA" key="layout" value="">
+      <annotations xmi:id="_AGTLYDXVEeWFSPoWB1fFvA" key="outgoingEdge" value="TOTAL_STOCK"/>
+    </annotations>
+    <outputs xmi:id="_K0ESfzXREeWFSPoWB1fFvA" name="DATA_6" kind="TABLE">
+      <attributes xmi:id="_K0ESgDXREeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_K0ESgTXREeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_K0ESgjXREeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_K0ESgzXREeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_K0EShDXREeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_K0EShTXREeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_K0EShjXREeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_K0EShzXREeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_K0ESiDXREeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_K0ESiTXREeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_K0ESijXREeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_K0ESizXREeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_K0ESjDXREeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_K0ESjTXREeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_K0ESjjXREeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </outputs>
+  </nodes>
+  <nodes xsi:type="flowgraph:ProcedureNode" xmi:id="_TejO8DXUEeWFSPoWB1fFvA" name="TOTAL_STOCK" type="REPOSITORY" authoringSchemaName="SAP_TM_TRP" procedureName="sap.tm.trp.db.pipeline.operator::p_stock_six_sources" resourceURI="/sap.tm.trp.db.pipeline.operator/hdbprocedure/p_stock_six_sources">
+    <annotations xmi:id="_TejO8TXUEeWFSPoWB1fFvA" key="sap.afm.layout">
+      <annotations xmi:id="_TejO8jXUEeWFSPoWB1fFvA" key="x" value="299"/>
+      <annotations xmi:id="_TejO8zXUEeWFSPoWB1fFvA" key="y" value="214"/>
+    </annotations>
+    <annotations xmi:id="_TejO9DXUEeWFSPoWB1fFvA" key="sap.afm.displayName" value="Stock Union"/>
+    <annotations xmi:id="_TejO9TXUEeWFSPoWB1fFvA" key="sap.afm.annotations" value="nodeID, nodeType, outputKey, navigationType, layout, outgoingEdge, breakdown, SUPPLY, DEMAND, STOCK, aggregationMethod, BiPolar"/>
+    <annotations xmi:id="_TejO9jXUEeWFSPoWB1fFvA" key="nodeID" value="STOCK"/>
+    <annotations xmi:id="_TejO9zXUEeWFSPoWB1fFvA" key="outputKey" value="STOCK"/>
+    <annotations xmi:id="_TejO-DXUEeWFSPoWB1fFvA" key="navigationType" value="STOCK"/>
+    <annotations xmi:id="_TejO-TXUEeWFSPoWB1fFvA" key="sap.afm.nodeType" value="ProcedureNode"/>
+    <annotations xmi:id="_TejO-jXUEeWFSPoWB1fFvA" key="sap.afm.nodeInputs">
+      <annotations xmi:id="_TejO-zXUEeWFSPoWB1fFvA" key="INPUT1" value="DATA"/>
+      <annotations xmi:id="_TejO_DXUEeWFSPoWB1fFvA" key="INPUT2" value="DATA_2"/>
+      <annotations xmi:id="_TejO_TXUEeWFSPoWB1fFvA" key="INPUT3" value="DATA_3"/>
+      <annotations xmi:id="_TejO_jXUEeWFSPoWB1fFvA" key="INPUT4" value="DATA_4"/>
+      <annotations xmi:id="_TejO_zXUEeWFSPoWB1fFvA" key="INPUT5" value="DATA_5"/>
+      <annotations xmi:id="_TejPADXUEeWFSPoWB1fFvA" key="INPUT6" value="DATA_6"/>
+    </annotations>
+    <annotations xmi:id="_TejPATXUEeWFSPoWB1fFvA" key="sap.afm.nodeOutputs">
+      <annotations xmi:id="_TejPAjXUEeWFSPoWB1fFvA" key="SUM" value="total_stock"/>
+    </annotations>
+    <annotations xmi:id="_7Hh5YDXWEeWFSPoWB1fFvA" key="layout" value="">
+      <annotations xmi:id="_8I4osDXWEeWFSPoWB1fFvA" key="outgoingEdge" value="UNION"/>
+    </annotations>
+    <annotations xmi:id="_AAtO0DXXEeWFSPoWB1fFvA" key="breakdown" value="">
+      <annotations xmi:id="_EBBCkDXXEeWFSPoWB1fFvA" key="STOCK" value="STOCK_DAMAGED,STOCK_EMPTY_AND_AVAILABLE,STOCK_OUT_OF_FLEET,STOCK_OTHERS,STOCK_RESERVED,STOCK_SUBLEASED"/>
+    </annotations>
+    <inputs xmi:id="_TejPAzXUEeWFSPoWB1fFvA" name="INPUT1" kind="TABLE">
+      <attributes xmi:id="_TejPBDXUEeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_TejPBTXUEeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_TejPBjXUEeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_TejPBzXUEeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPCDXUEeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_TejPCTXUEeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_TejPCjXUEeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPCzXUEeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPDDXUEeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPDTXUEeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPDjXUEeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPDzXUEeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPEDXUEeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_TejPETXUEeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPEjXUEeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </inputs>
+    <inputs xmi:id="_TejPEzXUEeWFSPoWB1fFvA" name="INPUT2" kind="TABLE">
+      <attributes xmi:id="_TejPFDXUEeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_TejPFTXUEeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_TejPFjXUEeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_TejPFzXUEeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPGDXUEeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_TejPGTXUEeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_TejPGjXUEeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPGzXUEeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPHDXUEeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPHTXUEeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPHjXUEeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPHzXUEeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPIDXUEeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_TejPITXUEeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPIjXUEeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </inputs>
+    <inputs xmi:id="_TejPIzXUEeWFSPoWB1fFvA" name="INPUT3" kind="TABLE">
+      <attributes xmi:id="_TejPJDXUEeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_TejPJTXUEeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_TejPJjXUEeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_TejPJzXUEeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPKDXUEeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_TejPKTXUEeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_TejPKjXUEeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPKzXUEeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPLDXUEeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPLTXUEeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPLjXUEeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPLzXUEeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPMDXUEeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_TejPMTXUEeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPMjXUEeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </inputs>
+    <inputs xmi:id="_TejPMzXUEeWFSPoWB1fFvA" name="INPUT4" kind="TABLE">
+      <attributes xmi:id="_TejPNDXUEeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_TejPNTXUEeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_TejPNjXUEeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_TejPNzXUEeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPODXUEeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_TejPOTXUEeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_TejPOjXUEeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPOzXUEeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPPDXUEeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPPTXUEeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPPjXUEeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPPzXUEeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPQDXUEeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_TejPQTXUEeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPQjXUEeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </inputs>
+    <inputs xmi:id="_TejPQzXUEeWFSPoWB1fFvA" name="INPUT5" kind="TABLE">
+      <attributes xmi:id="_TejPRDXUEeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_TejPRTXUEeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_TejPRjXUEeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_TejPRzXUEeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPSDXUEeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_TejPSTXUEeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_TejPSjXUEeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPSzXUEeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPTDXUEeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPTTXUEeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPTjXUEeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPTzXUEeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPUDXUEeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_TejPUTXUEeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPUjXUEeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </inputs>
+    <inputs xmi:id="_TejPUzXUEeWFSPoWB1fFvA" name="INPUT6" kind="TABLE">
+      <attributes xmi:id="_TejPVDXUEeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_TejPVTXUEeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_TejPVjXUEeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_TejPVzXUEeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPWDXUEeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_TejPWTXUEeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_TejPWjXUEeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPWzXUEeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPXDXUEeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPXTXUEeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPXjXUEeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPXzXUEeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPYDXUEeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_TejPYTXUEeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPYjXUEeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </inputs>
+    <outputs xmi:id="_TejPYzXUEeWFSPoWB1fFvA" name="SUM" kind="TABLE">
+      <attributes xmi:id="_TejPZDXUEeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_TejPZTXUEeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_TejPZjXUEeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_TejPZzXUEeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPaDXUEeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_TejPaTXUEeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_TejPajXUEeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPazXUEeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPbDXUEeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPbTXUEeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPbjXUEeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPbzXUEeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPcDXUEeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_TejPcTXUEeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_TejPcjXUEeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </outputs>
+  </nodes>
+  <nodes xsi:type="flowgraph:UnionNode" xmi:id="_ECtWkDXVEeWFSPoWB1fFvA" name="UNION" unionAll="true">
+    <annotations xmi:id="_ECtWkTXVEeWFSPoWB1fFvA" key="sap.afm.description" value="Union of two input sources"/>
+    <annotations xmi:id="_ECtWkjXVEeWFSPoWB1fFvA" key="sap.afm.displayName" value="Union"/>
+    <annotations xmi:id="_ECtWkzXVEeWFSPoWB1fFvA" key="sap.afm.layout">
+      <annotations xmi:id="_ECtWlDXVEeWFSPoWB1fFvA" key="x" value="516"/>
+      <annotations xmi:id="_ECtWlTXVEeWFSPoWB1fFvA" key="y" value="149"/>
+      <annotations xmi:id="_ECtWljXVEeWFSPoWB1fFvA" key="width" value="100"/>
+      <annotations xmi:id="_ECtWlzXVEeWFSPoWB1fFvA" key="height" value="104"/>
+    </annotations>
+    <annotations xmi:id="_FrpqUDXVEeWFSPoWB1fFvA" key="sap.afm.nodeType" value="UnionNode"/>
+    <annotations xmi:id="_FtMicDXVEeWFSPoWB1fFvA" key="sap.afm.nodeInputs">
+      <annotations xmi:id="_Ft9XcDXVEeWFSPoWB1fFvA" key="total_stock" value="SUM"/>
+      <annotations xmi:id="_FuzE8DXVEeWFSPoWB1fFvA" key="empty&amp;avaiable" value="DATA"/>
+      <annotations xmi:id="_D5UUkDXWEeWFSPoWB1fFvA" key="out_of_fleet" value="DATA_2"/>
+      <annotations xmi:id="_D6EigDXWEeWFSPoWB1fFvA" key="damaged" value="DATA_3"/>
+      <annotations xmi:id="_D60JYDXWEeWFSPoWB1fFvA" key="subleased" value="DATA_4"/>
+      <annotations xmi:id="_D7kXUDXWEeWFSPoWB1fFvA" key="reserved" value="DATA_5"/>
+      <annotations xmi:id="_D8T-MDXWEeWFSPoWB1fFvA" key="others" value="DATA_6"/>
+    </annotations>
+    <annotations xmi:id="_FzQHIDXVEeWFSPoWB1fFvA" key="sap.afm.nodeOutputs">
+      <annotations xmi:id="_F0cZ8DXVEeWFSPoWB1fFvA" key="OUTPUT" value="OUTPUT_3"/>
+    </annotations>
+    <inputs xmi:id="_ECtWmDXVEeWFSPoWB1fFvA" name="total_stock" kind="TABLE">
+      <attributes xmi:id="_zKGv0DXWEeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_zLKfwDXWEeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_zL770DXWEeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_zMsw0DXWEeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_zNwgwDXWEeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_zOsU4DXWEeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_zPwr4DXWEeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_zQr48DXWEeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_zRr-gDXWEeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_zSoZsDXWEeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_zTnRIDXWEeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_zUurcDXWEeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_zV368DXWEeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_zWoI4DXWEeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_zXZk8DXWEeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </inputs>
+    <inputs xmi:id="_ECtWmTXVEeWFSPoWB1fFvA" name="empty&amp;avaiable" kind="TABLE">
+      <attributes xmi:id="_CS6-gDXWEeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_CT09cDXWEeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_CUtuQDXWEeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_CV4L4DXWEeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_CW2cQDXWEeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_CXtX4DXWEeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_CYmIsDXWEeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_CZaBADXWEeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_CaNSQDXWEeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_CbCYsDXWEeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_Cb9lwDXWEeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_Cc0hYDXWEeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_CdvucDXWEeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_CenRIDXWEeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_CfkTYDXWEeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </inputs>
+    <inputs xmi:id="_HZCZMDXVEeWFSPoWB1fFvA" name="out_of_fleet" kind="TABLE">
+      <attributes xmi:id="_EwdX8DXWEeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_ExbBQDXWEeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_EycU8DXWEeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_EzUesDXWEeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_E0OdoDXWEeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_E1ELIDXWEeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_E1-KEDXWEeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_E24wEDXWEeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_E3yH8DXWEeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_E4fSkDXWEeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_E5MdMDXWEeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_E5618DXWEeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_E6mycDXWEeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_E7nfEDXWEeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_E80Y8DXWEeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </inputs>
+    <inputs xmi:id="_I6gL8DXVEeWFSPoWB1fFvA" name="damaged" kind="TABLE">
+      <attributes xmi:id="_GFIr4DXWEeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_GGORADXWEeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_GG_tEDXWEeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_GHuF0DXWEeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_GIdssDXWEeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_GJSMEDXWEeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_GJ_9wDXWEeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_GKwLsDXWEeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_GLiO0DXWEeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_GMScwDXWEeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_GNIKQDXWEeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_GOGaoDXWEeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_GO5E0DXWEeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_GPorsDXWEeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_GQYSkDXWEeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </inputs>
+    <inputs xmi:id="_Iw0rgDXVEeWFSPoWB1fFvA" name="subleased" kind="TABLE">
+      <attributes xmi:id="_HmV_8DXWEeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_HnfPcDXWEeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_HoLL8DXWEeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_Ho3vgDXWEeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_HplhMDXWEeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_HqjKgDXWEeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_HrwEYDXWEeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_HsttsDXWEeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_HtfJwDXWEeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_HuKfMDXWEeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_Hu1NkDXWEeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_Hvps8DXWEeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_HwezYDXWEeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_HxL-ADXWEeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_Hx8zADXWEeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </inputs>
+    <inputs xmi:id="_IY-zQDXVEeWFSPoWB1fFvA" name="reserved" kind="TABLE">
+      <attributes xmi:id="_I3FPEDXWEeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_I4LbQDXWEeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_I47CIDXWEeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_I5m-oDXWEeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_I6RtADXWEeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_I69CcDXWEeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_I7sCQDXWEeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_I8Zz8DXWEeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_I9gAIDXWEeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_I-feoDXWEeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_I_PskDXWEeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_I_-FUDXWEeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_JAr3ADXWEeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_JBZosDXWEeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_JCIBcDXWEeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </inputs>
+    <inputs xmi:id="_IFIDIDXVEeWFSPoWB1fFvA" name="others" kind="TABLE">
+      <attributes xmi:id="_KLF0oDXWEeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_KMEsEDXWEeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_KM3WQDXWEeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_KNkg4DXWEeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_KOYZMDXWEeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_KPi20DXWEeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_KQbnoDXWEeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_KRL1kDXWEeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_KR61YDXWEeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_KSutsDXWEeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_KTe7oDXWEeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_KUPJkDXWEeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_KU_-kDXWEeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_KVzP0DXWEeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_KWgacDXWEeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </inputs>
+    <outputs xmi:id="_ECtWmjXVEeWFSPoWB1fFvA" name="OUTPUT" kind="TABLE">
+      <attributes xmi:id="_Ct_J4DXWEeWFSPoWB1fFvA" name="NODE_ID" type="NVARCHAR" nullable="true" length="32" scale="0"/>
+      <attributes xmi:id="_CuxNADXWEeWFSPoWB1fFvA" name="GEO_ID" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_CvipEDXWEeWFSPoWB1fFvA" name="GEO_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_CwYWkDXWEeWFSPoWB1fFvA" name="GEO_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_CxMO4DXWEeWFSPoWB1fFvA" name="EQUIP_TYPE" type="NVARCHAR" nullable="true" length="22" scale="0"/>
+      <attributes xmi:id="_CyAHMDXWEeWFSPoWB1fFvA" name="EQUIP_NAME" type="NVARCHAR" nullable="true" length="100" scale="0"/>
+      <attributes xmi:id="_Cy4Q8DXWEeWFSPoWB1fFvA" name="EQUIP_FILTER_TYPE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_Cz49kDXWEeWFSPoWB1fFvA" name="TIME_INTERVAL_ID" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_C1HsoDXWEeWFSPoWB1fFvA" name="SEQUENCE" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_C18MADXWEeWFSPoWB1fFvA" name="START_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_C2wEUDXWEeWFSPoWB1fFvA" name="END_TIME" type="TIMESTAMP" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_C3rRYDXWEeWFSPoWB1fFvA" name="INTER_SECONDS" type="BIGINT" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_C5CjUDXWEeWFSPoWB1fFvA" name="OUTPUT_KEY" type="NVARCHAR" nullable="true" length="20" scale="0"/>
+      <attributes xmi:id="_C5--gDXWEeWFSPoWB1fFvA" name="OUTPUT_VALUE" type="INTEGER" nullable="true" length="0" scale="0"/>
+      <attributes xmi:id="_C6xosDXWEeWFSPoWB1fFvA" name="UNIT" type="NVARCHAR" nullable="true" length="10" scale="0"/>
+    </outputs>
+    <tableMappings xmi:id="_C7kS4DXWEeWFSPoWB1fFvA" source="_ECtWmTXVEeWFSPoWB1fFvA" target="_ECtWmjXVEeWFSPoWB1fFvA">
+      <attributeMappings xmi:id="_C9JAMDXWEeWFSPoWB1fFvA" source="_CS6-gDXWEeWFSPoWB1fFvA" target="_Ct_J4DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_C-tGcDXWEeWFSPoWB1fFvA" source="_CT09cDXWEeWFSPoWB1fFvA" target="_CuxNADXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_DARMsDXWEeWFSPoWB1fFvA" source="_CUtuQDXWEeWFSPoWB1fFvA" target="_CvipEDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_DB3IIDXWEeWFSPoWB1fFvA" source="_CV4L4DXWEeWFSPoWB1fFvA" target="_CwYWkDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_DD7ksDXWEeWFSPoWB1fFvA" source="_CW2cQDXWEeWFSPoWB1fFvA" target="_CxMO4DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_DGdUQDXWEeWFSPoWB1fFvA" source="_CXtX4DXWEeWFSPoWB1fFvA" target="_CyAHMDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_DIPc8DXWEeWFSPoWB1fFvA" source="_CYmIsDXWEeWFSPoWB1fFvA" target="_Cy4Q8DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_DKEo8DXWEeWFSPoWB1fFvA" source="_CZaBADXWEeWFSPoWB1fFvA" target="_Cz49kDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_DL9fUDXWEeWFSPoWB1fFvA" source="_CaNSQDXWEeWFSPoWB1fFvA" target="_C1HsoDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_DNr9oDXWEeWFSPoWB1fFvA" source="_CbCYsDXWEeWFSPoWB1fFvA" target="_C18MADXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_DPnQQDXWEeWFSPoWB1fFvA" source="_Cb9lwDXWEeWFSPoWB1fFvA" target="_C2wEUDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_DR1d0DXWEeWFSPoWB1fFvA" source="_Cc0hYDXWEeWFSPoWB1fFvA" target="_C3rRYDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_DTiG8DXWEeWFSPoWB1fFvA" source="_CdvucDXWEeWFSPoWB1fFvA" target="_C5CjUDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_DVMT0DXWEeWFSPoWB1fFvA" source="_CenRIDXWEeWFSPoWB1fFvA" target="_C5--gDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_DW15oDXWEeWFSPoWB1fFvA" source="_CfkTYDXWEeWFSPoWB1fFvA" target="_C6xosDXWEeWFSPoWB1fFvA"/>
+    </tableMappings>
+    <tableMappings xmi:id="_FJ39gDXWEeWFSPoWB1fFvA" source="_HZCZMDXVEeWFSPoWB1fFvA" target="_ECtWmjXVEeWFSPoWB1fFvA">
+      <attributeMappings xmi:id="_FLUvADXWEeWFSPoWB1fFvA" source="_EwdX8DXWEeWFSPoWB1fFvA" target="_Ct_J4DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_FMtPEDXWEeWFSPoWB1fFvA" source="_ExbBQDXWEeWFSPoWB1fFvA" target="_CuxNADXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_FOFvIDXWEeWFSPoWB1fFvA" source="_EycU8DXWEeWFSPoWB1fFvA" target="_CvipEDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_FPe2QDXWEeWFSPoWB1fFvA" source="_EzUesDXWEeWFSPoWB1fFvA" target="_CwYWkDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_FQ4kcDXWEeWFSPoWB1fFvA" source="_E0OdoDXWEeWFSPoWB1fFvA" target="_CxMO4DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_FSRrkDXWEeWFSPoWB1fFvA" source="_E1ELIDXWEeWFSPoWB1fFvA" target="_CyAHMDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_FT1x0DXWEeWFSPoWB1fFvA" source="_E1-KEDXWEeWFSPoWB1fFvA" target="_Cy4Q8DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_FVszADXWEeWFSPoWB1fFvA" source="_E24wEDXWEeWFSPoWB1fFvA" target="_Cz49kDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_FXLZsDXWEeWFSPoWB1fFvA" source="_E3yH8DXWEeWFSPoWB1fFvA" target="_C1HsoDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_FYm9EDXWEeWFSPoWB1fFvA" source="_E4fSkDXWEeWFSPoWB1fFvA" target="_C18MADXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_FaBSUDXWEeWFSPoWB1fFvA" source="_E5MdMDXWEeWFSPoWB1fFvA" target="_C2wEUDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_Fbi8UDXWEeWFSPoWB1fFvA" source="_E5618DXWEeWFSPoWB1fFvA" target="_C3rRYDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_FdFNYDXWEeWFSPoWB1fFvA" source="_E6mycDXWEeWFSPoWB1fFvA" target="_C5CjUDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_FegJsDXWEeWFSPoWB1fFvA" source="_E7nfEDXWEeWFSPoWB1fFvA" target="_C5--gDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_FgXK4DXWEeWFSPoWB1fFvA" source="_E80Y8DXWEeWFSPoWB1fFvA" target="_C6xosDXWEeWFSPoWB1fFvA"/>
+    </tableMappings>
+    <tableMappings xmi:id="_GcteYDXWEeWFSPoWB1fFvA" source="_I6gL8DXVEeWFSPoWB1fFvA" target="_ECtWmjXVEeWFSPoWB1fFvA">
+      <attributeMappings xmi:id="_GeMFEDXWEeWFSPoWB1fFvA" source="_GFIr4DXWEeWFSPoWB1fFvA" target="_Ct_J4DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_GfjXADXWEeWFSPoWB1fFvA" source="_GGORADXWEeWFSPoWB1fFvA" target="_CuxNADXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_GhTqgDXWEeWFSPoWB1fFvA" source="_GG_tEDXWEeWFSPoWB1fFvA" target="_CvipEDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_Gi17kDXWEeWFSPoWB1fFvA" source="_GHuF0DXWEeWFSPoWB1fFvA" target="_CwYWkDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_Gkp5cDXWEeWFSPoWB1fFvA" source="_GIdssDXWEeWFSPoWB1fFvA" target="_CxMO4DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_GmVUcDXWEeWFSPoWB1fFvA" source="_GJSMEDXWEeWFSPoWB1fFvA" target="_CyAHMDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_GnubkDXWEeWFSPoWB1fFvA" source="_GJ_9wDXWEeWFSPoWB1fFvA" target="_Cy4Q8DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_GpXaUDXWEeWFSPoWB1fFvA" source="_GKwLsDXWEeWFSPoWB1fFvA" target="_Cz49kDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_Gq3PIDXWEeWFSPoWB1fFvA" source="_GLiO0DXWEeWFSPoWB1fFvA" target="_C1HsoDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_GsQWQDXWEeWFSPoWB1fFvA" source="_GMScwDXWEeWFSPoWB1fFvA" target="_C18MADXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_GtsgsDXWEeWFSPoWB1fFvA" source="_GNIKQDXWEeWFSPoWB1fFvA" target="_C2wEUDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_GvGO4DXWEeWFSPoWB1fFvA" source="_GOGaoDXWEeWFSPoWB1fFvA" target="_C3rRYDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_Gw6MwDXWEeWFSPoWB1fFvA" source="_GO5E0DXWEeWFSPoWB1fFvA" target="_C5CjUDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_GyhWUDXWEeWFSPoWB1fFvA" source="_GPorsDXWEeWFSPoWB1fFvA" target="_C5--gDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_Gz52YDXWEeWFSPoWB1fFvA" source="_GQYSkDXWEeWFSPoWB1fFvA" target="_C6xosDXWEeWFSPoWB1fFvA"/>
+    </tableMappings>
+    <tableMappings xmi:id="_H-nWADXWEeWFSPoWB1fFvA" source="_Iw0rgDXVEeWFSPoWB1fFvA" target="_ECtWmjXVEeWFSPoWB1fFvA">
+      <attributeMappings xmi:id="_IAOfkDXWEeWFSPoWB1fFvA" source="_HmV_8DXWEeWFSPoWB1fFvA" target="_Ct_J4DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_ICBPUDXWEeWFSPoWB1fFvA" source="_HnfPcDXWEeWFSPoWB1fFvA" target="_CuxNADXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_ID3CYDXWEeWFSPoWB1fFvA" source="_HoLL8DXWEeWFSPoWB1fFvA" target="_CvipEDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_IFQJgDXWEeWFSPoWB1fFvA" source="_Ho3vgDXWEeWFSPoWB1fFvA" target="_CwYWkDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_IGp3sDXWEeWFSPoWB1fFvA" source="_HplhMDXWEeWFSPoWB1fFvA" target="_CxMO4DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_IIJsgDXWEeWFSPoWB1fFvA" source="_HqjKgDXWEeWFSPoWB1fFvA" target="_CyAHMDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_IJo6QDXWEeWFSPoWB1fFvA" source="_HrwEYDXWEeWFSPoWB1fFvA" target="_Cy4Q8DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_ILHg8DXWEeWFSPoWB1fFvA" source="_HsttsDXWEeWFSPoWB1fFvA" target="_Cz49kDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_IMlgkDXWEeWFSPoWB1fFvA" source="_HtfJwDXWEeWFSPoWB1fFvA" target="_C1HsoDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_IOgzMDXWEeWFSPoWB1fFvA" source="_HuKfMDXWEeWFSPoWB1fFvA" target="_C18MADXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_IQJK4DXWEeWFSPoWB1fFvA" source="_Hu1NkDXWEeWFSPoWB1fFvA" target="_C2wEUDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_IR10ADXWEeWFSPoWB1fFvA" source="_Hvps8DXWEeWFSPoWB1fFvA" target="_C3rRYDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_ITTMkDXWEeWFSPoWB1fFvA" source="_HwezYDXWEeWFSPoWB1fFvA" target="_C5CjUDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_IUuv8DXWEeWFSPoWB1fFvA" source="_HxL-ADXWEeWFSPoWB1fFvA" target="_C5--gDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_IWZj4DXWEeWFSPoWB1fFvA" source="_Hx8zADXWEeWFSPoWB1fFvA" target="_C6xosDXWEeWFSPoWB1fFvA"/>
+    </tableMappings>
+    <tableMappings xmi:id="_JOiFwDXWEeWFSPoWB1fFvA" source="_IY-zQDXVEeWFSPoWB1fFvA" target="_ECtWmjXVEeWFSPoWB1fFvA">
+      <attributeMappings xmi:id="_JP-3QDXWEeWFSPoWB1fFvA" source="_I3FPEDXWEeWFSPoWB1fFvA" target="_Ct_J4DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_JRbowDXWEeWFSPoWB1fFvA" source="_I4LbQDXWEeWFSPoWB1fFvA" target="_CuxNADXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_JS3MIDXWEeWFSPoWB1fFvA" source="_I47CIDXWEeWFSPoWB1fFvA" target="_CvipEDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_JUjOMDXWEeWFSPoWB1fFvA" source="_I5m-oDXWEeWFSPoWB1fFvA" target="_CwYWkDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_JWP3UDXWEeWFSPoWB1fFvA" source="_I6RtADXWEeWFSPoWB1fFvA" target="_CxMO4DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_JXt28DXWEeWFSPoWB1fFvA" source="_I69CcDXWEeWFSPoWB1fFvA" target="_CyAHMDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_JZIMMDXWEeWFSPoWB1fFvA" source="_I7sCQDXWEeWFSPoWB1fFvA" target="_Cy4Q8DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_Ja34oDXWEeWFSPoWB1fFvA" source="_I8Zz8DXWEeWFSPoWB1fFvA" target="_Cz49kDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_JcYUgDXWEeWFSPoWB1fFvA" source="_I9gAIDXWEeWFSPoWB1fFvA" target="_C1HsoDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_Jd9o4DXWEeWFSPoWB1fFvA" source="_I-feoDXWEeWFSPoWB1fFvA" target="_C18MADXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_JfhvIDXWEeWFSPoWB1fFvA" source="_I_PskDXWEeWFSPoWB1fFvA" target="_C2wEUDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_JhjvcDXWEeWFSPoWB1fFvA" source="_I_-FUDXWEeWFSPoWB1fFvA" target="_C3rRYDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_JjAg8DXWEeWFSPoWB1fFvA" source="_JAr3ADXWEeWFSPoWB1fFvA" target="_C5CjUDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_JkcEUDXWEeWFSPoWB1fFvA" source="_JBZosDXWEeWFSPoWB1fFvA" target="_C5--gDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_Jl2ZkDXWEeWFSPoWB1fFvA" source="_JCIBcDXWEeWFSPoWB1fFvA" target="_C6xosDXWEeWFSPoWB1fFvA"/>
+    </tableMappings>
+    <tableMappings xmi:id="_Ki4pkDXWEeWFSPoWB1fFvA" source="_IFIDIDXVEeWFSPoWB1fFvA" target="_ECtWmjXVEeWFSPoWB1fFvA">
+      <attributeMappings xmi:id="_KkRwsDXWEeWFSPoWB1fFvA" source="_KLF0oDXWEeWFSPoWB1fFvA" target="_Ct_J4DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_KlyzoDXWEeWFSPoWB1fFvA" source="_KMEsEDXWEeWFSPoWB1fFvA" target="_CuxNADXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_Knv7cDXWEeWFSPoWB1fFvA" source="_KM3WQDXWEeWFSPoWB1fFvA" target="_CvipEDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_KpQXUDXWEeWFSPoWB1fFvA" source="_KNkg4DXWEeWFSPoWB1fFvA" target="_CwYWkDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_Kqtv4DXWEeWFSPoWB1fFvA" source="_KOYZMDXWEeWFSPoWB1fFvA" target="_CxMO4DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_KsOLwDXWEeWFSPoWB1fFvA" source="_KPi20DXWEeWFSPoWB1fFvA" target="_CyAHMDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_KtpvIDXWEeWFSPoWB1fFvA" source="_KQbnoDXWEeWFSPoWB1fFvA" target="_Cy4Q8DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_KvF5kDXWEeWFSPoWB1fFvA" source="_KRL1kDXWEeWFSPoWB1fFvA" target="_Cz49kDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_Kwhc8DXWEeWFSPoWB1fFvA" source="_KR61YDXWEeWFSPoWB1fFvA" target="_C1HsoDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_KyWB4DXWEeWFSPoWB1fFvA" source="_KSutsDXWEeWFSPoWB1fFvA" target="_C18MADXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_Kz_AoDXWEeWFSPoWB1fFvA" source="_KTe7oDXWEeWFSPoWB1fFvA" target="_C2wEUDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_K1dnUDXWEeWFSPoWB1fFvA" source="_KUPJkDXWEeWFSPoWB1fFvA" target="_C3rRYDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_K21gUDXWEeWFSPoWB1fFvA" source="_KU_-kDXWEeWFSPoWB1fFvA" target="_C5CjUDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_K4MyQDXWEeWFSPoWB1fFvA" source="_KVzP0DXWEeWFSPoWB1fFvA" target="_C5--gDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_K6ClUDXWEeWFSPoWB1fFvA" source="_KWgacDXWEeWFSPoWB1fFvA" target="_C6xosDXWEeWFSPoWB1fFvA"/>
+    </tableMappings>
+    <tableMappings xmi:id="_zkNR4DXWEeWFSPoWB1fFvA" source="_ECtWmDXVEeWFSPoWB1fFvA" target="_ECtWmjXVEeWFSPoWB1fFvA">
+      <attributeMappings xmi:id="_zl9lYDXWEeWFSPoWB1fFvA" source="_zKGv0DXWEeWFSPoWB1fFvA" target="_Ct_J4DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_znblADXWEeWFSPoWB1fFvA" source="_zLKfwDXWEeWFSPoWB1fFvA" target="_CuxNADXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_zpbJEDXWEeWFSPoWB1fFvA" source="_zL770DXWEeWFSPoWB1fFvA" target="_CvipEDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_zrbUMDXWEeWFSPoWB1fFvA" source="_zMsw0DXWEeWFSPoWB1fFvA" target="_CwYWkDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_ztlQUDXWEeWFSPoWB1fFvA" source="_zNwgwDXWEeWFSPoWB1fFvA" target="_CxMO4DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_zvCo4DXWEeWFSPoWB1fFvA" source="_zOsU4DXWEeWFSPoWB1fFvA" target="_CyAHMDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_zwh2oDXWEeWFSPoWB1fFvA" source="_zPwr4DXWEeWFSPoWB1fFvA" target="_Cy4Q8DXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_zx_2QDXWEeWFSPoWB1fFvA" source="_zQr48DXWEeWFSPoWB1fFvA" target="_Cz49kDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_zzXvQDXWEeWFSPoWB1fFvA" source="_zRr-gDXWEeWFSPoWB1fFvA" target="_C1HsoDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_z0yrkDXWEeWFSPoWB1fFvA" source="_zSoZsDXWEeWFSPoWB1fFvA" target="_C18MADXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_z2dfgDXWEeWFSPoWB1fFvA" source="_zTnRIDXWEeWFSPoWB1fFvA" target="_C2wEUDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_z4YLEDXWEeWFSPoWB1fFvA" source="_zUurcDXWEeWFSPoWB1fFvA" target="_C3rRYDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_z6E0MDXWEeWFSPoWB1fFvA" source="_zV368DXWEeWFSPoWB1fFvA" target="_C5CjUDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_z7l3IDXWEeWFSPoWB1fFvA" source="_zWoI4DXWEeWFSPoWB1fFvA" target="_C5--gDXWEeWFSPoWB1fFvA"/>
+      <attributeMappings xmi:id="_z9DPsDXWEeWFSPoWB1fFvA" source="_zXZk8DXWEeWFSPoWB1fFvA" target="_C6xosDXWEeWFSPoWB1fFvA"/>
+    </tableMappings>
+  </nodes>
+</flowgraph:ContainerNode>

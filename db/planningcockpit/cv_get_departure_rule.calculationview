@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_departure_rule" applyPrivilegeType="NONE" cacheInvalidationPeriod="DAILY" checkAnalyticPrivileges="false" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="Basic connection filtered"/>
+  <localVariables>
+    <variable id="PATH_ID" parameter="true">
+      <descriptions defaultDescription="Path ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="SMALLINT" id="RULE_NUMBER"/>
+        <viewAttribute datatype="CHAR" id="CYCLE_TYPE" length="1"/>
+        <viewAttribute datatype="VARCHAR" id="PATTERN" length="100"/>
+        <viewAttribute datatype="TIME" id="DEPARTURE_TIME"/>
+        <viewAttribute datatype="VARCHAR" id="TIMEZONE" length="100"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#PATH_ID</localVariable>
+      <definition> 
+BEGIN
+	var_out =
+		SELECT
+			RULE_NUMBER
+			,CYCLE_TYPE
+			,CASE WHEN CYCLE_TYPE = 'W' THEN MOD((PATTERN + 1), 7) ELSE PATTERN END AS PATTERN
+			,DEPARTURE_TIME
+			,TIMEZONE
+		FROM &quot;sap.tm.trp.routing.db.dataset::cv_departure_rule&quot;(
+ 		placeholder.&quot;$$PATH_ID$$&quot;=>:PATH_ID
+ 		); 
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="RULE_NUMBER" order="1">
+        <descriptions defaultDescription="RULE_NUMBER"/>
+        <keyMapping columnObjectName="Script_View" columnName="RULE_NUMBER"/>
+      </attribute>
+      <attribute id="CYCLE_TYPE" order="2">
+        <descriptions defaultDescription="CYCLE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="CYCLE_TYPE"/>
+      </attribute>
+      <attribute id="PATTERN" order="3">
+        <descriptions defaultDescription="PATTERN"/>
+        <keyMapping columnObjectName="Script_View" columnName="PATTERN"/>
+      </attribute>
+      <attribute id="DEPARTURE_TIME" order="4">
+        <descriptions defaultDescription="DEPARTURE_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="DEPARTURE_TIME"/>
+      </attribute>
+      <attribute id="TIMEZONE" order="5">
+        <descriptions defaultDescription="TIMEZONE"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIMEZONE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_path_connection_head_by_id_type" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_path_connection_head_by_id_type"/>
+  <localVariables>
+    <variable id="PATH_ID" parameter="true">
+      <descriptions defaultDescription="PATH_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="PATH_TYPE" parameter="true">
+      <descriptions defaultDescription="PATH_TYPE"/>
+      <variableProperties datatype="VARCHAR" length="10" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="PATH_ID"/>
+        <viewAttribute datatype="VARCHAR" id="PATH_TYPE" length="10"/>
+        <viewAttribute datatype="VARCHAR" id="FROM_LOCATION" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="TO_LOCATION" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="MTR" length="10"/>
+        <viewAttribute datatype="VARCHAR" id="MTR_DESC" length="100"/>
+        <viewAttribute datatype="DECIMAL" id="DISTANCE" length="18" scale="3"/>
+        <viewAttribute datatype="DECIMAL" id="DURATION" length="18" scale="3"/>
+        <viewAttribute datatype="VARCHAR" id="ACTION" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="SOURCE" length="20"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#PATH_ID</localVariable>
+      <localVariable>#PATH_TYPE</localVariable>
+      <definition>
+BEGIN 
+var_out =
+	SELECT
+		PATH_ID
+		,PATH_TYPE
+		,FROM_LOCATION
+		,TO_LOCATION
+		,MTR
+		,MTR_DESC
+		,DISTANCE
+		,DURATION
+		,ACTION
+		,SOURCE
+	FROM (
+		SELECT
+			T1.ID AS PATH_ID
+			,'C' AS PATH_TYPE
+			,T1.FROM_LOCATION
+			,T1.TO_LOCATION
+			,T1.MTR
+			,T2.DESC AS MTR_DESC
+			,T1.DISTANCE
+			,T1.DURATION
+			,T1.ACTION
+			,T1.SOURCE
+		FROM &quot;sap.tm.trp.routing.db.dataset::t_connection&quot; T1
+		LEFT JOIN &quot;sap.tm.trp.db.semantic.common::v_transportation_means&quot; T2 ON T2.CODE = T1.MTR
+		WHERE ID = :PATH_ID
+		UNION
+		SELECT 
+			T0.ID AS PATH_ID
+			,'P' AS PATH_TYPE
+			,T0.FROM_LOCATION
+			,T0.TO_LOCATION
+			,T0.MTR
+			,T2.DESC AS MTR_DESC
+			,SUM(T1.DISTANCE) AS DISTANCE
+			,SUM(T1.DURATION + T1.STAY_TIME) AS DURATION
+			,T0.ACTION
+			,T0.SOURCE	FROM &quot;sap.tm.trp.routing.db.dataset::t_path&quot; T0
+		LEFT JOIN &quot;sap.tm.trp.routing.db.dataset::t_path_connection&quot; T1 ON T1.PATH_ID = T0.ID
+		LEFT JOIN &quot;sap.tm.trp.db.semantic.common::v_transportation_means&quot; T2 ON T2.CODE = T0.MTR
+		WHERE ID = :PATH_ID
+		GROUP BY T0.ID,T0.FROM_LOCATION,T0.TO_LOCATION,T0.MTR,T0.ACTION,T0.SOURCE,T2.DESC
+	)
+	WHERE PATH_TYPE = :PATH_TYPE
+	;
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="PATH_TYPE" order="2">
+        <descriptions defaultDescription="PATH_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="PATH_TYPE"/>
+      </attribute>
+      <attribute id="FROM_LOCATION" order="3">
+        <descriptions defaultDescription="FROM_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="FROM_LOCATION"/>
+      </attribute>
+      <attribute id="TO_LOCATION" order="4">
+        <descriptions defaultDescription="TO_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="TO_LOCATION"/>
+      </attribute>
+      <attribute id="MTR" order="5">
+        <descriptions defaultDescription="MTR"/>
+        <keyMapping columnObjectName="Script_View" columnName="MTR"/>
+      </attribute>
+      <attribute id="MTR_DESC" order="6">
+        <descriptions defaultDescription="MTR_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="MTR_DESC"/>
+      </attribute>
+      <attribute id="ACTION" order="9">
+        <descriptions defaultDescription="ACTION"/>
+        <keyMapping columnObjectName="Script_View" columnName="ACTION"/>
+      </attribute>
+      <attribute id="SOURCE" order="10">
+        <descriptions defaultDescription="SOURCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SOURCE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="PATH_ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="PATH_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="PATH_ID"/>
+      </measure>
+      <measure id="DISTANCE" order="7" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DISTANCE"/>
+        <measureMapping columnObjectName="Script_View" columnName="DISTANCE"/>
+      </measure>
+      <measure id="DURATION" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DURATION"/>
+        <measureMapping columnObjectName="Script_View" columnName="DURATION"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

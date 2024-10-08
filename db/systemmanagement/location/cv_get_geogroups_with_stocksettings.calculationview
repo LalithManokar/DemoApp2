@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_geogroups_with_stocksettings" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="location group list with stock setting info"/>
+  <localVariables>
+    <variable id="RESOURCE_CATEGORY" parameter="true">
+      <descriptions defaultDescription="resource category code"/>
+      <variableProperties datatype="NVARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="ID" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="NAME" length="50"/>
+        <viewAttribute datatype="INTEGER" id="TYPE"/>
+        <viewAttribute datatype="VARCHAR" id="TYPE_DESC" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="DESC" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="VISIBILITY" length="3"/>
+        <viewAttribute datatype="VARCHAR" id="VISIBILITY_DESC" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="CREATED_BY" length="60"/>
+        <viewAttribute datatype="TIMESTAMP" id="CREATED_TIME"/>
+        <viewAttribute datatype="VARCHAR" id="MODIFIED_BY" length="60"/>
+        <viewAttribute datatype="TIMESTAMP" id="MODIFIED_TIME"/>
+        <viewAttribute datatype="INTEGER" id="MIN_SAFETY_STOCK"/>
+        <viewAttribute datatype="INTEGER" id="MAX_SAFETY_STOCK"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#RESOURCE_CATEGORY</localVariable>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+ BEGIN 
+ 	 var_out = SELECT T1.ID,
+		T1.NAME, 
+ 	 	T1.TYPE, 
+		T1.TYPE_DESC,
+		T1.DESC,
+		T1.VISIBILITY,
+		T1.VISIBILITY_DESC, 
+		T1.CREATED_BY AS CREATED_BY, 
+		T1.CREATED_TIME,
+		T1.MODIFIED_BY AS MODIFIED_BY,
+		T1.MODIFIED_TIME,  
+		T2.MIN_SAFETY_STOCK,
+		T2.MAX_SAFETY_STOCK
+	FROM &quot;sap.tm.trp.db.systemmanagement::cv_role_check_geo_group_header&quot; AS T1
+	LEFT JOIN &quot;sap.tm.trp.db.stock::v_location_stock_header_geo_group&quot; AS T2
+	ON T2.ID = T1.ID
+	WHERE T1.RESOURCE_CATEGORY = :RESOURCE_CATEGORY;
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="NAME" order="2">
+        <descriptions defaultDescription="NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="TYPE_DESC" order="4">
+        <descriptions defaultDescription="TYPE_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="TYPE_DESC"/>
+      </attribute>
+      <attribute id="DESC" order="5">
+        <descriptions defaultDescription="DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+      <attribute id="VISIBILITY" order="6">
+        <descriptions defaultDescription="VISIBILITY"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY"/>
+      </attribute>
+      <attribute id="VISIBILITY_DESC" order="7">
+        <descriptions defaultDescription="VISIBILITY_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY_DESC"/>
+      </attribute>
+      <attribute id="CREATED_BY" order="8">
+        <descriptions defaultDescription="CREATED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATED_BY"/>
+      </attribute>
+      <attribute id="MODIFIED_BY" order="10">
+        <descriptions defaultDescription="MODIFIED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="MODIFIED_BY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="TYPE" order="3" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="TYPE"/>
+      </measure>
+      <measure id="CREATED_TIME" order="9" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="CREATED_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="CREATED_TIME"/>
+      </measure>
+      <measure id="MODIFIED_TIME" order="11" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="MODIFIED_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="MODIFIED_TIME"/>
+      </measure>
+      <measure id="MIN_SAFETY_STOCK" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MIN_SAFETY_STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="MIN_SAFETY_STOCK"/>
+      </measure>
+      <measure id="MAX_SAFETY_STOCK" order="13" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MAX_SAFETY_STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="MAX_SAFETY_STOCK"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

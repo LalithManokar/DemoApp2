@@ -1,0 +1,32 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.dashboard::p_ext_tile_update_sequence" (
+    IN SEQ_TILES "sap.tm.trp.db.dashboard::tt_tile"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+USER_ID BIGINT;
+BEGIN
+    SELECT ID INTO USER_ID
+    FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+    tiles =
+    SELECT a.ID, IFNULL(b.SEQ, 999) AS SEQ, a.CREATED_BY, a.RESOURCE_CATEGORY 
+    FROM "sap.tm.trp.db.dashboard::t_tile" AS a 
+    LEFT JOIN :SEQ_TILES AS b
+    ON a.ID = b.ID
+    WHERE CREATED_BY = :USER_ID;
+
+    ordered = 
+    SELECT ID, ROW_NUMBER() OVER(PARTITION BY CREATED_BY, RESOURCE_CATEGORY ORDER BY SEQ ASC) AS SEQ
+    FROM :tiles;
+    
+    UPDATE "sap.tm.trp.db.dashboard::t_tile" AS a
+    SET a.SEQ = b.SEQ,
+        a.MODIFIED_BY = :USER_ID,
+        a.MODIFIED_TIME = CURRENT_UTCTIMESTAMP
+    FROM "sap.tm.trp.db.dashboard::t_tile" AS a
+    INNER JOIN :ordered AS b ON a.ID = b.ID;
+
+END;

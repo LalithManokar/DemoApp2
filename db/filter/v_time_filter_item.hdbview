@@ -1,0 +1,15 @@
+//To define the HDB view file use the following syntax: 
+
+schema="SAP_TM_TRP";
+query="
+	SELECT
+		 T1.ID
+		,T2.CODE AS UNIT
+		,T1.TIME_INTERVAL AS VALUE
+		,T1.REPEAT_TIMES AS REPEAT_TIME
+		,T1.TIME_FILTER_ID
+	FROM \"sap.tm.trp.db.filter::t_time_filter_item\" T1
+	LEFT JOIN \"sap.tm.trp.db.filter::t_time_dimension_unit\" T2 ON T2.ID = T1.TIME_DIMENSION_UNIT_ID
+";
+depends_on_table = ["sap.tm.trp.db.filter::t_time_filter_item","sap.tm.trp.db.filter::t_time_dimension_unit"];
+//depends_on_view=["com.sap.test.tables::02_HDB_DEPARTMENT_VIEW"]; 

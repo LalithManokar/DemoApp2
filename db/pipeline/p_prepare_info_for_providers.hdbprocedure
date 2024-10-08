@@ -1,0 +1,60 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_prepare_info_for_providers" 
+(OUT OUT_DATE "sap.tm.trp.db.pipeline::tt_filter_date",
+ OUT OUT_LOCATION "sap.tm.trp.db.pipeline::tt_filter_location",
+ OUT OUT_RESOURCE "sap.tm.trp.db.pipeline::tt_filter_resource",
+ OUT CAL_FLAG INTEGER,
+ OUT UNIT VARCHAR(3),
+ OUT ExtQueryAttrGrpId BIGINT
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    READS SQL DATA 
+AS BEGIN
+ 
+
+
+     -- Flag constants to indicate the status of the filter information calculation 
+     DECLARE FILTER_NO_RESULT INTEGER := 0;
+     DECLARE FILTER_CALCULATED_OK INTEGER := 1;
+     
+     DECLARE LOC_NUM INTEGER;
+     DECLARE EQUIP_NUM INTEGER;
+     DECLARE INTERVAL_NUM INTEGER;
+     DECLARE EXIT HANDLER FOR SQLEXCEPTION
+     SELECT ::SQL_ERROR_CODE, ::SQL_ERROR_MESSAGE FROM DUMMY;
+
+     SELECT COUNT(1) INTO INTERVAL_NUM FROM  "sap.tm.trp.db.pipeline::t_timefilterinfo_for_pipeline_GlobalTemp" ;
+     SELECT COUNT(1) INTO LOC_NUM FROM  "sap.tm.trp.db.pipeline::t_locationinfo_for_pipeline_GlobalTemp" ;
+     SELECT COUNT(1) INTO EQUIP_NUM FROM  "sap.tm.trp.db.pipeline::t_equipinfo_for_pipeline_GlobalTemp";
+     
+     IF :INTERVAL_NUM > 0 AND :LOC_NUM > 0 AND :EQUIP_NUM > 0 THEN
+          CAL_FLAG := :FILTER_CALCULATED_OK;
+          
+          OUT_DATE =  SELECT START_TIMESTAMP,END_TIMESTAMP,TIME_INTERVAL_ID, INTER_SECONDS,SEQUENCE,
+                      YEAR(START_TIMESTAMP) * 10000000000 + MONTH(START_TIMESTAMP) * 100000000 + DAYOFMONTH(START_TIMESTAMP) * 1000000 +  
+                      HOUR(START_TIMESTAMP) * 10000+ MINUTE(START_TIMESTAMP) * 100 + TO_INTEGER(SECOND(START_TIMESTAMP)) AS START_DECIMAL,
+                      YEAR(END_TIMESTAMP) * 10000000000 + MONTH(END_TIMESTAMP) * 100000000 + DAYOFMONTH(END_TIMESTAMP) * 1000000 +  
+                      HOUR(END_TIMESTAMP) * 10000+ MINUTE(END_TIMESTAMP) * 100 + TO_INTEGER(SECOND(END_TIMESTAMP)) AS END_DECIMAL
+                      FROM "sap.tm.trp.db.pipeline::t_timefilterinfo_for_pipeline_GlobalTemp";
+     
+          OUT_LOCATION = SELECT GEO_ID, LOCATION_ID,GEO_FILTER_TYPE,GEO_GROUP_ID,GEO_NAME FROM "sap.tm.trp.db.pipeline::t_locationinfo_for_pipeline_GlobalTemp";  
+     
+          OUT_RESOURCE = SELECT EQUIP_CODE,EQUIP_GROUP_ID,EQUIP_NAME,EQUIP_FILTER_TYPE FROM "sap.tm.trp.db.pipeline::t_equipinfo_for_pipeline_GlobalTemp";
+       
+     ELSE   
+          CAL_FLAG := :FILTER_NO_RESULT;
+     END IF;   
+
+   
+     -- Get container piece unit 
+     SELECT IFNULL (MAX (UNIT_CODE),'') INTO UNIT
+     FROM "sap.tm.trp.db.systemmanagement::v_unit"
+     WHERE UNIT_TYPE = 'CONTAINER_PC';
+     
+     -- Get attribute group id
+     SELECT IFNULL(MAX(VALUE), -1) INTO ExtQueryAttrGrpId
+     FROM "sap.tm.trp.db.pipeline::t_pipeline_datasrc_input_params"
+     WHERE PARAM = 'In_Attribute_Group_ID' AND CONN_ID = CURRENT_CONNECTION ;
+     
+END;

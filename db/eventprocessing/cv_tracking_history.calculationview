@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_tracking_history" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_tracking_history"/>
+  <localVariables>
+    <variable id="RESOURCE_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="RESOURCE_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="LOCATION_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="LOCATION_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="START_TIME" parameter="true">
+      <descriptions defaultDescription="START_TIME"/>
+      <variableProperties datatype="TIMESTAMP" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="END_TIME" parameter="true">
+      <descriptions defaultDescription="END_TIME"/>
+      <variableProperties datatype="TIMESTAMP" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="RESOURCE_NAME" parameter="true">
+      <descriptions defaultDescription="RESOURCE_NAME"/>
+      <variableProperties datatype="VARCHAR" length="40" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_ID" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_ID" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION" length="50"/>
+        <viewAttribute datatype="TIMESTAMP" id="TIME"/>
+        <viewAttribute datatype="VARCHAR" id="CHANGED_FIELD" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="BEFORE_VALUE" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="NEW_VALUE" length="50"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#RESOURCE_FILTER_ID</localVariable>
+      <localVariable>#LOCATION_FILTER_ID</localVariable>
+      <localVariable>#START_TIME</localVariable>
+      <localVariable>#END_TIME</localVariable>
+      <localVariable>#RESOURCE_NAME</localVariable>
+      <definition> 
+  
+ BEGIN
+    DECLARE GEO_FLAG INT;
+    DECLARE LOC_AUTH SMALLINT;
+    DECLARE RES_AUTH SMALLINT;
+    DECLARE RESOURCE_CATEGORY NVARCHAR(50);
+    DECLARE CUSTOMCONDITION CONDITION FOR SQL_ERROR_CODE 10001;/* Custom Error Code = 10001*/
+    
+    
+    /*User Defined exception handler */
+  LOCATION_FILTER=SELECT :LOCATION_FILTER_ID AS ID FROM DUMMY;
+       
+  CALL &quot;sap.tm.trp.db.systemmanagement::p_check_location_filter_authorization&quot;(:LOCATION_FILTER, :LOC_AUTH );
+
+  RESOURCE_FILTER=SELECT :RESOURCE_FILTER_ID AS ID FROM DUMMY;
+      
+  CALL &quot;sap.tm.trp.db.systemmanagement::p_check_equipment_filter_authorization&quot;(:RESOURCE_FILTER,:RES_AUTH);
+    
+         
+  /*Location authorization */ 
+  IF :LOC_AUTH = 0 THEN
+    /* Signaling Custom error and setting the Custom Error Message */
+    SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'LOCATION FILTER NOT AUTHORIZED';
+  END IF;
+  
+  /*Equipment authorization */             
+  IF :RES_AUTH = 0 THEN
+    /* Signaling Custom error and setting the Custom Error Message */
+    SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'RESOURCE FILTER NOT AUTHORIZED';
+  END IF;
+    
+/* select change history by resource name */
+    IF NOT (:RESOURCE_NAME = '' OR :RESOURCE_NAME IS NULL) THEN
+      var_out = SELECT * 
+                FROM &quot;sap.tm.trp.db.eventprocessing::cv_tracking_history_by_resource_name&quot;
+                (
+                  placeholder.&quot;$$IN_RESOURCE_NAME$$&quot;=>:RESOURCE_NAME
+
+                 );
+    ELSE
+      CALL &quot;sap.tm.trp.db.filter::p_get_locations_by_locfilterid&quot;(:LOCATION_FILTER_ID,locations);
+      CALL &quot;sap.tm.trp.db.filter::p_get_equiptypes_by_equip_filter_id&quot;(:RESOURCE_FILTER_ID,resources);
+      
+      SELECT TOP 1 RESOURCE_CATEGORY INTO RESOURCE_CATEGORY 
+      FROM &quot;sap.tm.trp.db.filter::t_equipment_filter&quot;
+      WHERE ID = :RESOURCE_FILTER_ID;
+       
+      var_out = SELECT DISTINCT T1.RESOURCE_ID,
+                                T1.RESOURCE_NAME AS RESOURCE,
+                                T1.LOCATION_ID,
+                                T1.LOCATION_NAME AS LOCATION,
+                                T1.EVENT_TIME AS TIME,
+                                T5.DESC AS CHANGED_FIELD,
+                                T1.BEFORE_VALUE,
+                                T1.NEW_VALUE
+                  FROM &quot;sap.tm.trp.db.semantic.event::v_tracking_history&quot; T1   
+                  INNER JOIN  &quot;sap.tm.trp.db.semantic.resource::v_resource_category&quot; t6
+                  ON (t1.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :RESOURCE_CATEGORY)
+                  INNER JOIN :resources T2 ON (T1.RESOURCE_TYPE = T2.EQUIPMENT_TYPE) 
+                  INNER JOIN :locations T3 ON (T1.LOCATION_ID = T3.LOCATION_ID)
+                  LEFT OUTER JOIN &quot;sap.tm.trp.db.semantic.event::v_table_field_description&quot; T5 
+                  ON (T1.CHANGED_TABLE = T5.TABNAME AND T1.CHANGED_FIELD = T5.FIELDNAME)
+                  WHERE T1.EVENT_TIME >= :START_TIME AND T1.EVENT_TIME &lt;= :END_TIME;                  
+  
+     END IF;
+    
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="RESOURCE_ID" order="1">
+        <descriptions defaultDescription="RESOURCE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_ID"/>
+      </attribute>
+      <attribute id="RESOURCE" order="2">
+        <descriptions defaultDescription="RESOURCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE"/>
+      </attribute>
+      <attribute id="LOCATION_ID" order="3">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_ID"/>
+      </attribute>
+      <attribute id="LOCATION" order="4">
+        <descriptions defaultDescription="LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION"/>
+      </attribute>
+      <attribute id="CHANGED_FIELD" order="6">
+        <descriptions defaultDescription="CHANGED_FIELD"/>
+        <keyMapping columnObjectName="Script_View" columnName="CHANGED_FIELD"/>
+      </attribute>
+      <attribute id="BEFORE_VALUE" order="7">
+        <descriptions defaultDescription="BEFORE_VALUE"/>
+        <keyMapping columnObjectName="Script_View" columnName="BEFORE_VALUE"/>
+      </attribute>
+      <attribute id="NEW_VALUE" order="8">
+        <descriptions defaultDescription="NEW_VALUE"/>
+        <keyMapping columnObjectName="Script_View" columnName="NEW_VALUE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="TIME" order="5" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="TIME"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

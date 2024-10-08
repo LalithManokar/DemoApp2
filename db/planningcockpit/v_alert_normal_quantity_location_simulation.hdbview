@@ -1,0 +1,20 @@
+//To define the HDB view file use the following syntax: 
+schema = "SAP_TM_TRP";
+query = "SELECT t.SCENARIO_ID,
+                t.PLAN_EXECUTION_ID,
+                t.SEQUENCE,
+                t.LOCATION_ID AS LOC_ZONE_REGION_ID,
+                t.LOCATION_NAME AS LOC_ZONE_REGION_NAME,
+                SUM(CASE WHEN MESSAGE = 'Alert'
+                    THEN 1
+                    ELSE 0
+                    END ) AS ALERT_NUM,
+                MAX(CASE WHEN MESSAGE = 'Alert'
+                    THEN ALERT_SCORE
+                    ELSE 0
+                    END) AS ALERT_SCORE,
+                t.FILTER_TYPE AS LOC_ZONE_REGION_GROUP_FLAG
+         FROM \"sap.tm.trp.db.planningcockpit::t_simulationModel_alert_forUI\" t
+         GROUP BY t.SCENARIO_ID,t.PLAN_EXECUTION_ID,t.SEQUENCE,t.FILTER_TYPE,t.LOCATION_ID, t.LOCATION_NAME";
+
+depends_on_table = ["sap.tm.trp.db.planningcockpit::t_simulationModel_alert_forUI"];

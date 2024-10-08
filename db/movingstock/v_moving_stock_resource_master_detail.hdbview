@@ -1,0 +1,9 @@
+schema = "SAP_TM_TRP";
+query = "SELECT distinct \"VoyageID\" as VOYAGE_ID,\"ScheduleID\" as SCHEDULE_ID  
+		from (select *
+					from \"sap.tm.trp.db.movingstock::v_moving_stock_resource\" 
+					where \"VoyageID\" is not null and 
+					\"VoyageID\" != ''
+		 )";
+
+depends_on = ["sap.tm.trp.db.movingstock::v_moving_stock_resource"];

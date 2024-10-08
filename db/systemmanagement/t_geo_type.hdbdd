@@ -1,0 +1,29 @@
+namespace sap.tm.trp.db.systemmanagement;
+
+@Schema: 'SAP_TM_TRP'
+context t_geo_type {
+	type TUUID  : hana.VARCHAR(32);
+	
+	Entity t_polygon {
+        GEOMETRY: hana.ST_GEOMETRY;
+        key UUID: TUUID;
+    
+    };
+    
+    Entity t_boundary_temp {
+    	ID : hana.VARCHAR(32);
+    	NAME: hana.VARCHAR(100);
+    	GEOTEXT: hana.CLOB;
+    	NUM: hana.SMALLINT;
+    	key UUID: TUUID;
+    	STATUS: hana.SMALLINT;
+    };
+    
+    TYPE tt_geotext { 
+    	ID: TUUID;
+    	GEOTEXT: hana.ST_GEOMETRY;
+    	NUM: hana.SMALLINT; 
+    };
+ 
+
+};

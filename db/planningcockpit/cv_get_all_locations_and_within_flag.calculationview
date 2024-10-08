@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_all_locations_and_within_flag" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_locations_for_repositioning"/>
+  <localVariables>
+    <variable id="SIM_PLAN_ID" parameter="true">
+      <descriptions defaultDescription="SIM_PLAN_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="ID" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="NAME" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_DISPLAY_NAME" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="WITHIN_FLAG" length="5"/>
+        <viewAttribute datatype="NVARCHAR" id="COUNTRY_NAME" length="40"/>
+        <viewAttribute datatype="NVARCHAR" id="STATE_NAME" length="40"/>
+        <viewAttribute datatype="NVARCHAR" id="CITY_NAME" length="40"/>
+        <viewAttribute datatype="NVARCHAR" id="POSTAL_CODE" length="10"/>
+        <viewAttribute datatype="VARCHAR" id="DESC" length="200"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#SIM_PLAN_ID</localVariable>
+      <definition> 
+  
+ BEGIN 
+     DECLARE LOCATION_FILTER_TYPE INTEGER;
+    
+     -- get locations within the location filter(primary location is returned for aggregate location)
+     CALL &quot;sap.tm.trp.db.planningcockpit::p_get_loc_primaryloc_by_simplanId&quot;(:SIM_PLAN_ID, filter_locations);   
+
+     -- if aggregate location, we ouput primary location information, but append the aggregate location name to the primary location name
+     -- for reference
+	 SELECT IFNULL(MAX(GEO_TYPE),0) INTO LOCATION_FILTER_TYPE FROM :filter_locations;
+	 
+	 new_filter_locations = SELECT LOCATION_ID, LOCATION_NAME, CONCAT(CONCAT(CONCAT(LOCATION_NAME,'('), GEO_NAME),')') AS LOCATION_DISPLAY_NAME
+	                        FROM :filter_locations
+	                        WHERE :LOCATION_FILTER_TYPE > 1
+	                        UNION ALL
+	                        SELECT LOCATION_ID, LOCATION_NAME, LOCATION_NAME AS LOCATION_DISPLAY_NAME
+	                        FROM :filter_locations
+	                        WHERE :LOCATION_FILTER_TYPE = 1 ;
+
+ 	 	                  
+ 	 var_out = SELECT t1.LOCATION_ID AS ID, t1.LOCATION_NAME AS NAME,t1.LOCATION_DISPLAY_NAME, 'YES' AS WITHIN_FLAG, T2.COUNTRY_NAME, T2.STATE_NAME,
+ 	           T2.CITY_NAME, T2.POSTAL_CODE, T2.DESC 
+ 	           FROM :new_filter_locations t1
+ 	           INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::v_all_location_ui&quot; t2 ON (t1.LOCATION_ID = t2.ID)
+ 	           UNION ALL
+ 	           SELECT ID,  NAME, NAME AS LOCATION_DISPLAY_NAME, 'NO' AS WITHIN_FLAG, COUNTRY_NAME, STATE_NAME,
+ 	           CITY_NAME, POSTAL_CODE, DESC 
+ 	           FROM &quot;sap.tm.trp.db.systemmanagement.location::v_all_location_ui&quot;
+ 	           WHERE ID NOT IN (SELECT LOCATION_ID FROM :filter_locations);
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="NAME" order="2">
+        <descriptions defaultDescription="LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="LOCATION_DISPLAY_NAME" order="3">
+        <descriptions defaultDescription="LOCATION_DISPLAY_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_DISPLAY_NAME"/>
+      </attribute>
+      <attribute id="WITHIN_FLAG" order="4">
+        <descriptions defaultDescription="WITHIN_FLAG"/>
+        <keyMapping columnObjectName="Script_View" columnName="WITHIN_FLAG"/>
+      </attribute>
+      <attribute id="COUNTRY_NAME" order="5">
+        <descriptions defaultDescription="COUNTRY_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="COUNTRY_NAME"/>
+      </attribute>
+      <attribute id="STATE_NAME" order="6">
+        <descriptions defaultDescription="STATE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="STATE_NAME"/>
+      </attribute>
+      <attribute id="CITY_NAME" order="7">
+        <descriptions defaultDescription="CITY_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="CITY_NAME"/>
+      </attribute>
+      <attribute id="POSTAL_CODE" order="8">
+        <descriptions defaultDescription="POSTAL_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="POSTAL_CODE"/>
+      </attribute>
+      <attribute id="DESC" order="9">
+        <descriptions defaultDescription="DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

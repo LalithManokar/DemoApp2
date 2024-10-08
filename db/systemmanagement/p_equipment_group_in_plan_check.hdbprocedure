@@ -1,0 +1,32 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_equipment_group_in_plan_check"(
+    IN GROUP_ID VARCHAR(22),
+    OUT PLAN_FLAG VARCHAR(3)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE S_NUM INTEGER;
+    DECLARE T_NUM INTEGER;
+    
+    SELECT COUNT(A.ID) INTO S_NUM
+    FROM "sap.tm.trp.db.pipeline::t_plan_model" AS A
+         INNER JOIN "sap.tm.trp.db.filter::t_filter_equipment_filter" AS B ON A.FILTER_GROUP_ID = B.FILTER_GROUP_ID
+         INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" AS C ON B.EQUIPMENT_FILTER_ID = C.EQUIPMENT_FILTER_ID AND C.RESOURCE_CATEGORY = B.RESOURCE_CATEGORY
+    WHERE C.EQUIPMENT_GROUP_ID = :GROUP_ID AND A.PLAN_MODEL_TYPE_ID = 1;
+    
+    SELECT COUNT(A.ID) INTO T_NUM
+    FROM "sap.tm.trp.db.pipeline::t_plan_model" AS A
+         INNER JOIN "sap.tm.trp.db.filter::t_filter_equipment_filter" AS B ON A.FILTER_GROUP_ID = B.FILTER_GROUP_ID
+         INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" AS C ON B.EQUIPMENT_FILTER_ID = C.EQUIPMENT_FILTER_ID AND C.RESOURCE_CATEGORY = B.RESOURCE_CATEGORY
+    WHERE C.EQUIPMENT_GROUP_ID = :GROUP_ID AND A.PLAN_MODEL_TYPE_ID = 2;
+    
+    IF :S_NUM > 0 THEN
+        PLAN_FLAG := 'S';
+    ELSEIF :T_NUM > 0 THEN
+        PLAN_FLAG := 'T';
+    ELSE
+        PLAN_FLAG := 'N';
+    END IF;
+END;

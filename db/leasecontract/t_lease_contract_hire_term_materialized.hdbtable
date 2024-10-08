@@ -1,0 +1,33 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "LEASE_CONTRACT_ID"; sqlType = BIGINT; nullable = false;},
+	{name = "START_TIME"; sqlType = TIMESTAMP; nullable = false;},
+    {name = "END_TIME"; sqlType = TIMESTAMP; nullable = false;},
+	{name = "LOCATION_CODE"; sqlType = NVARCHAR; length = 22; nullable = true; },
+	{name = "LOCATION_GROUP_NAME"; sqlType = NVARCHAR; length = 22; nullable = true; },
+	{name = "LOCATION_TYPE"; sqlType = INTEGER; nullable = true; comment = "1- depo location 2- location group 3 - Zone 4 - Zone group 5 - Region 6 - Region group";},
+	{name = "PARENT_LOCATION_TYPE"; sqlType = INTEGER; nullable = true; comment = "1- depo location 2- location group 3 - Zone 4 - Zone group 5 - Region 6 - Region group";},
+	{name = "LOCATION_GUID"; sqlType = NVARCHAR; length = 22; nullable = true; },
+	{name = "EQUIPMENT_CODE"; sqlType = NVARCHAR; length = 50; nullable = true;},
+	{name = "EQUIPMENT_GROUP_NAME"; sqlType = NVARCHAR; length = 50; nullable = true;},
+	{name = "EQUIPMENT_CODE_TYPE"; sqlType = INTEGER; nullable = true;  comment = "1 - Equipment, 2 - Equipment group";},
+	{name = "CONSOLIDATED_MIN_HIRE_QUANTITY"; sqlType = INTEGER; nullable = true; comment = "Calculated Minimum quantity to be leased";},
+	{name = "TERM_MIN_HIRE_QUANTITY"; sqlType = INTEGER; nullable = true; comment = "Minimum quantity to be leased at term level";},
+	{name = "TERM_MAX_HIRE_QUANTITY"; sqlType = INTEGER; nullable = true; comment = "Maximum quantity to be leased";},  
+	{name = "COND_MAX_HIRE_QUANTITY_EL"; sqlType = INTEGER; nullable = true; comment = "Maximum quantity to be leased";},
+	{name = "COND_MAX_HIRE_QUANTITY_E"; sqlType = INTEGER; nullable = true; comment = "Maximum quantity to be leased";},
+	{name = "COND_MAX_HIRE_QUANTITY_L"; sqlType = INTEGER; nullable = true; comment = "Maximum quantity to be leased";},
+	{name = "TERM_FEE"; sqlType = DECIMAL; precision = 13; scale = 3; nullable = true;},
+	{name = "TERM_PENALTY_FEE"; sqlType = DECIMAL; precision = 13; scale = 3; nullable = true;},
+	{name = "PER_DIEM"; sqlType = DECIMAL; precision = 13; scale = 3; nullable = true; comment = "per diem could be on a contract basis";},
+	{name = "ACTIVE"; sqlType = TINYINT; nullable = false; defaultValue = "1";},
+	{name = "HIRE_TYPE"; sqlType = TINYINT;  comment = "0 -  onhire , 1 - offhire"; nullable = false;},
+	{name = "COND_EL_ID"; sqlType = BIGINT; nullable = true; comment = "Hire Condition ID for EL";},
+	{name = "COND_E_ID"; sqlType = BIGINT; nullable = true; comment = "Hire Condition ID for E";},
+	{name = "COND_L_ID"; sqlType = BIGINT; nullable = true; comment = "Hire Condition ID for L";},
+	{name = "LOC_GROUP_ID"; sqlType = NVARCHAR; length = 22; nullable = true; },
+	{name = "EQUIP_GROUP_ID"; sqlType = NVARCHAR; length = 22; nullable = true; }
+	
+];

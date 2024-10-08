@@ -1,0 +1,110 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.job::p_update_model_schedule_detail"(
+    IN MODEL_ID BIGINT,
+    IN START_TIME TIMESTAMP,
+    IN EXPIRY_TIME TIMESTAMP,
+    IN RECURRENCE_TYPE VARCHAR(50),
+    IN RECURRENCE_INTERVAL INTEGER,
+    IN RECURRENCE_DAY INTEGER,
+    IN SCHEDULE_TYPE VARCHAR(500),
+    IN EXECUTE_WORKING_HOUR VARCHAR(1),
+    IN START_WORKING_HOUR_TIME TIMESTAMP,
+    IN END_WORKING_HOUR_TIME TIMESTAMP,
+    IN TIMEZONE VARCHAR(50),
+    OUT JOB_ACTION VARCHAR(50)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+        DECLARE STATUS_SUSPEND INTEGER := 1;
+        DECLARE MODEL_SCHEDULE_DETAIL_ID BIGINT;
+        DECLARE V_COUNT BIGINT;
+        
+        SELECT COUNT(ID) INTO V_COUNT FROM "sap.tm.trp.db.job::t_model_schedule_detail" WHERE MODEL_ID = :MODEL_ID AND SCHEDULE_TYPE = :SCHEDULE_TYPE;
+         --only create scheduling when Scheduling Job Settings are complete
+        IF START_TIME IS NOT NULL AND EXPIRY_TIME IS NOT NULL AND RECURRENCE_TYPE IS NOT NULL 
+           AND RECURRENCE_TYPE <> '' AND RECURRENCE_INTERVAL IS NOT NULL AND RECURRENCE_INTERVAL <> 0 
+           AND TIMEZONE IS NOT NULL AND TIMEZONE <> ''
+        THEN
+           IF (RECURRENCE_TYPE = 'MONTH' OR RECURRENCE_TYPE = 'WEEK') AND (RECURRENCE_DAY IS NULL OR RECURRENCE_DAY < 0) THEN
+             IF V_COUNT > 0 THEN
+                 JOB_ACTION := 'JOB_CANCEL';
+             ELSE
+                JOB_ACTION := 'NO_ACTION';
+             END IF;
+           ELSE
+              IF EXECUTE_WORKING_HOUR = 'X' AND (START_WORKING_HOUR_TIME IS NULL OR END_WORKING_HOUR_TIME IS NULL) THEN
+                IF V_COUNT > 0 THEN                                 
+                 JOB_ACTION := 'JOB_CANCEL';
+                ELSE
+                 JOB_ACTION := 'NO_ACTION';
+                END IF;
+              ELSE
+                IF V_COUNT > 0 THEN
+                  JOB_ACTION := 'JOB_UPDATE';
+                ELSE
+                  JOB_ACTION := 'JOB_CREATE';
+                END IF;
+              END IF ;
+           END IF ;
+          
+        ELSE
+          IF V_COUNT > 0 THEN            
+             JOB_ACTION := 'JOB_CANCEL';
+          ELSE
+             JOB_ACTION := 'NO_ACTION';
+          END IF;     
+         
+        END IF;
+        
+       IF  JOB_ACTION = 'NO_ACTION' THEN  RETURN;
+       ELSE
+         IF JOB_ACTION = 'JOB_CANCEL' THEN
+           DELETE FROM "sap.tm.trp.db.job::t_model_schedule_detail" WHERE MODEL_ID = :MODEL_ID AND SCHEDULE_TYPE = :SCHEDULE_TYPE;
+         ELSE
+          IF JOB_ACTION = 'JOB_UPDATE' OR JOB_ACTION = 'JOB_CREATE' THEN
+       
+            DELETE FROM "sap.tm.trp.db.job::t_model_schedule_detail" WHERE MODEL_ID = :MODEL_ID AND SCHEDULE_TYPE = :SCHEDULE_TYPE;
+             --add the new schedule details in order to make the old schedule plan available
+            SELECT "sap.tm.trp.db.job::s_model_schedule_detail".NEXTVAL INTO MODEL_SCHEDULE_DETAIL_ID FROM dummy;
+
+            INSERT INTO "sap.tm.trp.db.job::t_model_schedule_detail"
+                (
+                     ID,
+                     MODEL_ID,
+                     START_TIME,
+                     EXPIRY_TIME,
+                     RECURRENCE_TYPE,
+                     RECURRENCE_INTERVAL,
+                     RECURRENCE_DAY,
+                     SCHEDULE_TYPE,
+                     EXECUTE_WORKING_HOUR,
+                     START_WORKING_HOUR_TIME,
+                     END_WORKING_HOUR_TIME,
+                     TIMEZONES
+                )
+            values
+                (
+                     :MODEL_SCHEDULE_DETAIL_ID,
+                     :MODEL_ID,
+                     :START_TIME,
+                     :EXPIRY_TIME,
+                     :RECURRENCE_TYPE,
+                     :RECURRENCE_INTERVAL,
+                     :RECURRENCE_DAY,
+                     :SCHEDULE_TYPE,
+                     :EXECUTE_WORKING_HOUR,
+                     :START_WORKING_HOUR_TIME,
+                     :END_WORKING_HOUR_TIME,
+                     :TIMEZONE
+                );
+
+         UPDATE "sap.tm.trp.db.pipeline::t_plan_model"
+         SET STATUS = STATUS_SUSPEND
+         WHERE ID = :MODEL_ID AND :SCHEDULE_TYPE = 'PLAN';
+       END IF;
+      END IF ;
+     
+      END IF;
+END;

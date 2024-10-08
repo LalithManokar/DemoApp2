@@ -1,0 +1,137 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_lease_contract_upload" ( 
+    IN LEASE_CONTRACT_INPUT "sap.tm.trp.db.massupload::tt_lease_contract_upload",
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),  
+    IN CONNECTION_ID VARCHAR(100)) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS  
+BEGIN
+
+ --Declarations
+    
+    DECLARE USER_ID BIGINT;    
+    DECLARE VAR_CURRENT_UTCTIMESTAMP TIMESTAMP := CURRENT_UTCTIMESTAMP;
+
+ --Get Source data
+    ITEMS = SELECT UPPER(LEASE_CONTRACT_REFERENCE) AS LEASE_CONTRACT_REFERENCE,
+    --UPPER(LEASE_TYPE) AS LEASE_TYPE,
+    --UPPER(LESSOR) AS LESSOR,
+    START_TIME,
+    END_TIME,
+    UPPER(CURRENCY_CODE) AS CURRENCY_CODE,
+    UPPER(UNIT) AS UNIT,
+    MAX_HIRE_QUANTITY,
+    MIN_HIRE_QUANTITY,
+    UPPER(ACTIVE) AS ACTIVE,
+    UPPER(UNIT_TYPE) AS UNIT_TYPE,
+    UPPER(LEASE_TYPE_CODE) AS LEASE_TYPE_CODE,
+    UPPER(LESSOR_CODE) AS LESSOR_CODE,
+    UPPER(EQUIPMENT) AS EQUIPMENT,
+    PER_DIEM,
+    PER_DIEM_ACTIVE,
+    ROW_INDEX
+    FROM :LEASE_CONTRACT_INPUT;
+    
+ --Get User
+    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(:USER_ID);
+    
+SOURCE =     SELECT 
+				   S1.ROW_INDEX	,
+                   S1.LEASE_CONTRACT_REFERENCE,
+                   L0.ID AS LC_ID,
+				   S1.START_TIME,
+				   S1.END_TIME,
+				   S1.CURRENCY_CODE,
+				   S1.UNIT,
+				   S1.MAX_HIRE_QUANTITY,
+				   S1.MIN_HIRE_QUANTITY,
+				   S1.ACTIVE,
+				   S1.UNIT_TYPE,
+				   S1.LEASE_TYPE_CODE,
+                   S1.LESSOR_CODE,
+                   S1.EQUIPMENT,
+                   S1.PER_DIEM,
+                   S1.PER_DIEM_ACTIVE,
+                   D1.ID AS PER_DIEM_ID,
+                   L1.ID AS LEASE_TYPE,
+                   L2.ID AS LESSOR_ID,
+                   L0.CREATED_BY,
+                   L0.CREATED_ON,
+                   CASE
+				       WHEN S1.EQUIPMENT = EQ1.RESOURCE_TYPE_CODE THEN 1
+				       WHEN S1.EQUIPMENT = EQ2.CODE THEN '2' END AS EQP_CODE                  
+                FROM :ITEMS S1
+                LEFT OUTER JOIN "sap.tm.trp.db.leasecontract::t_lease_contract" AS L0
+                ON S1.LEASE_CONTRACT_REFERENCE = L0.LEASE_CONTRACT_REFERENCE
+                LEFT OUTER JOIN "sap.tm.trp.db.leasecontract::t_lease_contract_per_diem" D1
+ 				ON S1.LEASE_CONTRACT_REFERENCE = D1.CONTRACT_CODE
+ 				AND S1.EQUIPMENT =D1.EQUIPMENT_CODE
+                LEFT OUTER JOIN "sap.tm.trp.db.leasecontract::t_lease_contract_type" AS L1
+				ON S1."LEASE_TYPE_CODE" = L1.CODE
+				LEFT OUTER JOIN "sap.tm.trp.db.leasecontract::t_lessor" AS L2
+				ON S1."LESSOR_CODE" = L2.CODE
+				LEFT OUTER JOIN (SELECT DISTINCT RESOURCE_TYPE_CODE FROM "sap.tm.trp.db.semantic.resource::v_resource_type") EQ1
+ 				ON S1.EQUIPMENT = EQ1.RESOURCE_TYPE_CODE
+ 				LEFT OUTER JOIN (SELECT DISTINCT CODE FROM "sap.tm.trp.db.systemmanagement::t_equipment_group") EQ2
+		        ON S1.EQUIPMENT = EQ2.CODE;
+ 				 
+
+				
+ --Delete the records in temporary table in case there're already some uploaded data with same db connection
+    DELETE FROM "sap.tm.trp.db.massupload::t_lease_contract_temporary"
+    WHERE CONNECTION_ID = :CONNECTION_ID;
+    
+ -- Inserting record into temporary table (LEASE_CONTRACT TABLE)
+  INSERT INTO  "sap.tm.trp.db.massupload::t_lease_contract_temporary"
+  ( "ROW_NUM","LC_ID","LEASE_CONTRACT_REFERENCE","LEASE_TYPE","LESSOR_ID","START_TIME","END_TIME","CURRENCY_CODE","UNIT",
+   "CREATED_ON","CREATED_BY","MODIFIED_ON","MODIFIED_BY","MAX_HIRE_QUANTITY","MIN_HIRE_QUANTITY","ACTIVE",
+   "LESSOR_CODE","LEASE_TYPE_CODE","RESOURCE_CATEGORY","UNIT_TYPE","CONNECTION_ID","PER_DIEM_ID",
+   "EQUIPMENT_CODE","EQUIPMENT_CODE_TYPE","PER_DIEM","PER_DIEM_ACTIVE","IND_UPD")
+  
+  SELECT 
+  S.ROW_INDEX,
+  S.LC_ID,
+  S.LEASE_CONTRACT_REFERENCE,
+  S.LEASE_TYPE,
+  S.LESSOR_ID,
+  S.START_TIME,
+  S.END_TIME,
+  S.CURRENCY_CODE,
+  S.UNIT,
+    (CASE
+       WHEN S.CREATED_ON IS NULL
+       THEN :VAR_CURRENT_UTCTIMESTAMP
+       ELSE S.CREATED_ON
+       END) AS CREATE_AT, 
+  (CASE
+       WHEN S.CREATED_BY IS NULL
+       THEN :USER_ID
+       ELSE S.CREATED_BY
+       END) AS CREATE_BY,
+  :VAR_CURRENT_UTCTIMESTAMP,
+  :USER_ID,
+  S.MAX_HIRE_QUANTITY,
+  S.MIN_HIRE_QUANTITY,
+  S.ACTIVE,
+  S.LESSOR_CODE,
+  S.LEASE_TYPE_CODE,
+  :RESOURCE_CATEGORY_ID AS RESOURCE_CATEGORY,
+  S.UNIT_TYPE,
+  :CONNECTION_ID AS CONNECTION_ID,
+  S.PER_DIEM_ID,
+  S.EQUIPMENT,
+  S.EQP_CODE,
+  S.PER_DIEM,
+  S.PER_DIEM_ACTIVE,
+  (CASE
+       WHEN S.PER_DIEM_ID IS NULL
+       THEN '0'
+       ELSE '1'
+       END) AS IND_UPD      
+  FROM :SOURCE S;
+   
+END;
+	   
+	  
+	  

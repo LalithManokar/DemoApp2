@@ -1,0 +1,138 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_create_departure_rule" (
+	IN path_id BIGINT,
+	IN cycle_type CHAR, -- 'D': Daily, 'W': Weekly, 'M': Monthly
+	IN pattern VARCHAR(1000), -- For Daily, only 1 is allowed; For Weekly, only 0 to 6 is allowed; For Monthly, only 1 to 31 is allowed
+	IN departure_time TIME,  -- The fixed time for each cycle day
+	IN timezone NVARCHAR(40),  -- The timezone for the departure rule
+	OUT return_code INTEGER,  -- 0: Successful; 1: Write Duplication; 2: path_id not exist; 3: cycle_type error; 4: pattern day out of range or duplicate pattern day
+	OUT rule_number SMALLINT,  -- Generated rule number
+	OUT message "sap.tm.trp.routing.db.common::tt_message",
+	OUT log "sap.tm.trp.routing.db.common::tt_message"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING
+   AS
+BEGIN
+	-- decl_list
+	DECLARE min_day, max_day TINYINT;
+	DECLARE pattern_str VARCHAR(100);
+	DECLARE PATTERN_SEPARATOR CHAR = ',';
+	DECLARE duplicate_pattern INTEGER;
+	-- exception_list
+	DECLARE EXIT HANDLER FOR SQL_ERROR_CODE 301 -- Unique constraint violated
+    BEGIN
+        return_code = 1;
+        msg_param = SELECT 0 AS PLACEHOLDER, '' AS VALUE FROM DUMMY WHERE 1 != 1;
+	    call "SAP_TM_ROUTING"."sap.tm.trp.routing.db.common::p_get_text"
+        ('MSG_TMP_DEPARTURE_CONFLICT_ERROR', :msg_param, 'E', :message);
+    END;
+	-- stmt_list
+	return_code = 0;
+	-- Validate the existence of path_id
+	SELECT CASE COUNT(*)
+	WHEN 0 THEN 2
+	ELSE 0
+	END INTO return_code
+	FROM "sap.tm.trp.routing.db.dataset::t_path"
+	WHERE id = :path_id;
+
+	IF return_code != 0 THEN
+	    return_code = 2;
+		-- log message
+	    msg_param = SELECT 0 AS PLACEHOLDER, :path_id AS VALUE FROM DUMMY;
+	    call "sap.tm.trp.routing.db.common::p_get_text"
+        ('MSG_PATH_ID_NOT_FOUND', :msg_param, 'E', :message);
+		RETURN;
+	END IF;
+	-- Validate the cycle_type
+	IF :cycle_type != 'D' AND :cycle_type != 'W' AND :cycle_type != 'M' THEN
+		return_code = 3;
+		-- log message
+	    msg_param = SELECT 0 AS PLACEHOLDER, :cycle_type AS VALUE FROM DUMMY;
+	    call "sap.tm.trp.routing.db.common::p_get_text"
+        ('MSG_CYCLE_TYPE_ERROR', :msg_param, 'E', :message);
+		RETURN;
+	END IF;
+
+	-- To-do: check validity of timezone
+	IF :timezone IS NULL OR :timezone = '' THEN
+	    return_code = 5;
+	    msg_param = SELECT 0 AS PLACEHOLDER, '' AS VALUE FROM DUMMY WHERE 1 <> 1;
+	    call "sap.tm.trp.routing.db.common::p_get_text"
+        ('MSG_DEPARTURE_RULE_TIMEZONE_MISSING', :msg_param, 'E', :message);
+		RETURN;
+    END IF;
+
+	IF :cycle_type = 'W' OR :cycle_type = 'M' THEN
+
+    	IF :pattern IS NULL OR :pattern = '' THEN
+    	    return_code = 6;
+    	     msg_param = SELECT 0 AS PLACEHOLDER, '' AS VALUE FROM DUMMY WHERE 1 <> 1;
+    	    call "sap.tm.trp.routing.db.common::p_get_text"
+            ('MSG_DEPARTURE_RULE_PATTERN_MISSING', :msg_param, 'E', :message);
+    		RETURN;
+    	END IF;
+
+    	CALL "sap.tm.trp.routing.db.util::p_split_values"(
+    	    :pattern,
+            :PATTERN_SEPARATOR,
+    	    pattern_values
+    	);
+
+    	pattern_days = SELECT TO_INT(value) AS day
+    	FROM :pattern_values;
+
+    	-- Validate each day in pattern
+    	SELECT COUNT(day) INTO duplicate_pattern
+    	FROM (
+    	SELECT day
+    	FROM :pattern_days
+    	GROUP BY day
+    	HAVING COUNT(day) > 1);
+
+    	IF :duplicate_pattern > 0 THEN
+    	    return_code = 5;
+    	    -- log message
+    	    msg_param = SELECT 0 AS PLACEHOLDER, '' AS VALUE FROM DUMMY WHERE 1 != 1;
+    	    call "sap.tm.trp.routing.db.common::p_get_text"
+            ('MSG_DUPLICATE_PATTERN_DAY', :msg_param, 'E', :message);
+    	    RETURN;
+    	END IF;
+
+    	SELECT MIN(day), MAX(day) INTO min_day, max_day
+    	FROM :pattern_days;
+
+    	IF :cycle_type = 'M' THEN
+    		IF min_day < 1 OR max_day > 31 THEN
+    			return_code = 6;
+    			-- log message
+        	    msg_param = SELECT 0 AS PLACEHOLDER, '' AS VALUE FROM DUMMY WHERE 1 != 1;
+        	    call "sap.tm.trp.routing.db.common::p_get_text"
+                ('MSG_PATTERN_DAY_OUTOFBOUND', :msg_param, 'E', :message);
+    			RETURN;
+    		END IF;
+    	ELSEIF :cycle_type = 'W' THEN
+    		IF min_day < 0 OR max_day > 6 THEN
+    			return_code = 6;
+    			-- log message
+        	    msg_param = SELECT 0 AS PLACEHOLDER, '' AS VALUE FROM DUMMY WHERE 1 != 1;
+        	    call "sap.tm.trp.routing.db.common::p_get_text"
+                ('MSG_PATTERN_DAY_OUTOFBOUND', :msg_param, 'E', :message);
+    			RETURN;
+    		END IF;
+    	END IF;
+	END IF;
+
+	-- Insert data into database
+	SELECT IFNULL(MAX(rule_number), 0) + 1 INTO rule_number
+	FROM "sap.tm.trp.routing.db.dataset::t_path_departure_rule"
+	WHERE path_id = :path_id;
+
+	INSERT INTO "sap.tm.trp.routing.db.dataset::t_path_departure_rule" ( path_id, rule_number, cycle_type, pattern, departure_time, timezone, created_by, created_on, changed_by, changed_on )
+	VALUES (:path_id, :rule_number, :cycle_type, :pattern, :departure_time, :timezone, SESSION_CONTEXT('APPLICATIONUSER'), CURRENT_UTCTIMESTAMP, SESSION_CONTEXT('APPLICATIONUSER'), CURRENT_UTCTIMESTAMP);
+	-- Return Successful Log
+
+    message = SELECT '' AS severity, '' AS message FROM DUMMY WHERE 1 <> 1;
+    log = SELECT '' AS severity, '' AS message FROM DUMMY WHERE 1 <> 1;
+END

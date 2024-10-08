@@ -1,0 +1,19 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+  {name = "TOR_ID"; sqlType = NVARCHAR; length = 100;},
+  {name = "LOC_SEQ"; sqlType = INTEGER; },
+  {name = "LOCATION_ID"; sqlType = NVARCHAR; length = 22; },
+  {name = "LOCATION_NAME"; sqlType = NVARCHAR; length = 22;},
+  {name = "ARRIVAL_UTC"; sqlType = TIMESTAMP; },
+  {name = "DEPARTURE_UTC"; sqlType = TIMESTAMP; },
+  {name = "RESOURCE_TYPE"; sqlType = NVARCHAR; length = 10;},  
+  {name = "QUANTITY_LADEN_UNLOAD"; sqlType = INTEGER;},
+  {name = "QUANTITY_EMPTY_UNLOAD"; sqlType = INTEGER;},
+  {name = "QUANTITY_LADEN_LOAD"; sqlType = INTEGER;}, 
+  {name = "QUANTITY_EMPTY_LOAD"; sqlType = INTEGER;},
+  {name = "SCH_DEP"; sqlType = NVARCHAR; length = 100;},
+  {name = "VOYAGE"; sqlType = NVARCHAR; length = 100;},
+  {name = "VESSEL_ID"; sqlType = NVARCHAR; length=35;}
+  
+];

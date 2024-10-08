@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_composite_path_list_head" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_composite_path_list_head"/>
+  <localVariables>
+    <variable id="SIM_PLAN_ID" parameter="true">
+      <descriptions defaultDescription="SIM_PLAN_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="SCENARIO_ID" parameter="true">
+      <descriptions defaultDescription="SCENARIO_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="VIEW_TYPE" parameter="true">
+      <descriptions defaultDescription="VIEW_TYPE"/>
+      <variableProperties datatype="VARCHAR" length="1" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="FROM_LOCATION" parameter="true">
+      <descriptions defaultDescription="FROM_LOCATION"/>
+      <variableProperties datatype="NVARCHAR" length="100" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="TO_LOCATION" parameter="true">
+      <descriptions defaultDescription="TO_LOCATION"/>
+      <variableProperties datatype="NVARCHAR" length="100" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="MTR" parameter="true">
+      <descriptions defaultDescription="MTR"/>
+      <variableProperties datatype="NVARCHAR" length="10" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="PATH_ID" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="ACTION" length="1"/>
+        <viewAttribute datatype="VARCHAR" id="SOURCE" length="1"/>
+        <viewAttribute datatype="NVARCHAR" id="FROM_LOCATION" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="TO_LOCATION" length="100"/>
+        <viewAttribute datatype="DOUBLE" id="LOADING_COST"/>
+        <viewAttribute datatype="DOUBLE" id="UNLOADING_COST"/>
+        <viewAttribute datatype="INTEGER" id="LOADING_DURATION"/>
+        <viewAttribute datatype="INTEGER" id="UNLOADING_DURATION"/>
+        <viewAttribute datatype="INTEGER" id="TOTAL_DURATION"/>
+        <viewAttribute datatype="DOUBLE" id="TOTAL_DISTANCE"/>
+        <viewAttribute datatype="DOUBLE" id="TOTAL_COST"/>
+        <viewAttribute datatype="VARCHAR" id="CURRENCY" length="10"/>
+        <viewAttribute datatype="CHAR" id="CONFLICT_FLAG" length="1"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#SIM_PLAN_ID</localVariable>
+      <localVariable>#SCENARIO_ID</localVariable>
+      <localVariable>#VIEW_TYPE</localVariable>
+      <localVariable>#FROM_LOCATION</localVariable>
+      <localVariable>#TO_LOCATION</localVariable>
+      <localVariable>#MTR</localVariable>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+ BEGIN
+ DECLARE NETWORK_MODEL_ID BIGINT;
+ DECLARE NUM_AMOUNT_DECIMAL_POINT INTEGER := 2;
+ 
+ 	CALL &quot;sap.tm.trp.db.planningcockpit::p_get_networkid_by_simulation_scenario_id&quot;(:SIM_PLAN_ID, :SCENARIO_ID, NETWORK_MODEL_ID);
+
+	IF :NETWORK_MODEL_ID = -1
+	THEN
+		var_out = 
+		SELECT
+			NULL AS PATH_ID
+			,NULL AS ACTION
+			,NULL AS SOURCE
+			,NULL AS FROM_LOCATION
+			,NULL AS TO_LOCATION
+			,NULL AS LOADING_COST
+			,NULL AS UNLOADING_COST
+			,NULL AS LOADING_DURATION
+			,NULL AS UNLOADING_DURATION
+			,NULL AS TOTAL_DURATION
+			,NULL AS TOTAL_DISTANCE
+			,NULL AS TOTAL_COST
+			,NULL AS CURRENCY
+			,NULL AS CONFLICT_FLAG
+		FROM DUMMY
+		;
+	ELSE
+		CALL &quot;sap.tm.trp.routing.db.path::p_query_composite_path&quot;(:NETWORK_MODEL_ID, :VIEW_TYPE, :FROM_LOCATION, :TO_LOCATION,MTR, PATH_HEAD, PATH_DETAILS);
+	
+		var_out = 
+			SELECT
+				PATH_ID
+				,ACTION
+				,SOURCE
+				,FROM_LOCATION
+				,TO_LOCATION
+				,ROUND(LOADING_COST,:NUM_AMOUNT_DECIMAL_POINT) AS LOADING_COST
+				,ROUND(UNLOADING_COST,:NUM_AMOUNT_DECIMAL_POINT) AS UNLOADING_COST
+				,LOADING_DURATION
+				,UNLOADING_DURATION
+				,TOTAL_DURATION
+				,ROUND(TOTAL_DISTANCE,:NUM_AMOUNT_DECIMAL_POINT) AS TOTAL_DISTANCE
+				,ROUND(TOTAL_COST,:NUM_AMOUNT_DECIMAL_POINT) AS TOTAL_COST
+				,COST_CURRENCY AS CURRENCY
+			    ,CONFLICT_FLAG
+			FROM :PATH_HEAD
+		;
+	END IF;
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="PATH_ID" order="1">
+        <descriptions defaultDescription="PATH_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PATH_ID"/>
+      </attribute>
+      <attribute id="SOURCE" order="3">
+        <descriptions defaultDescription="SOURCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SOURCE"/>
+      </attribute>
+      <attribute id="FROM_LOCATION" order="4">
+        <descriptions defaultDescription="FROM_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="FROM_LOCATION"/>
+      </attribute>
+      <attribute id="TO_LOCATION" order="5">
+        <descriptions defaultDescription="TO_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="TO_LOCATION"/>
+      </attribute>
+      <attribute id="UNLOADING_COST" order="7">
+        <descriptions defaultDescription="UNLOADING_COST"/>
+        <keyMapping columnObjectName="Script_View" columnName="UNLOADING_COST"/>
+      </attribute>
+      <attribute id="CURRENCY" order="13">
+        <descriptions defaultDescription="CURRENCY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CURRENCY"/>
+      </attribute>
+      <attribute id="CONFLICT_FLAG" order="14">
+        <descriptions defaultDescription="CONFLICT_FLAG"/>
+        <keyMapping columnObjectName="Script_View" columnName="CONFLICT_FLAG"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="ACTION" order="2" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ACTION"/>
+        <measureMapping columnObjectName="Script_View" columnName="ACTION"/>
+      </measure>
+      <measure id="LOADING_COST" order="6" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LOADING_COST"/>
+        <measureMapping columnObjectName="Script_View" columnName="LOADING_COST"/>
+      </measure>
+      <measure id="LOADING_DURATION" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LOADING_DURATION"/>
+        <measureMapping columnObjectName="Script_View" columnName="LOADING_DURATION"/>
+      </measure>
+      <measure id="UNLOADING_DURATION" order="9" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="UNLOADING_DURATION"/>
+        <measureMapping columnObjectName="Script_View" columnName="UNLOADING_DURATION"/>
+      </measure>
+      <measure id="TOTAL_DURATION" order="10" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TOTAL_DURATION"/>
+        <measureMapping columnObjectName="Script_View" columnName="TOTAL_DURATION"/>
+      </measure>
+      <measure id="TOTAL_DISTANCE" order="11" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TOTAL_DISTANCE"/>
+        <measureMapping columnObjectName="Script_View" columnName="TOTAL_DISTANCE"/>
+      </measure>
+      <measure id="TOTAL_COST" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TOTAL_COST"/>
+        <measureMapping columnObjectName="Script_View" columnName="TOTAL_COST"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

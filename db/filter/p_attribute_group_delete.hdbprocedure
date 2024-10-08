@@ -1,0 +1,28 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_attribute_group_delete" (IN GROUP_ID BIGINT) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	--READS SQL DATA 
+AS
+BEGIN
+ 
+
+
+-- DELETE ITEM NODE & VALUES
+DELETE FROM "sap.tm.trp.db.filter::t_attribute_group_item_node_values"
+WHERE GROUP_ID = :GROUP_ID
+;
+DELETE FROM "sap.tm.trp.db.filter::t_attribute_group_item_node"
+WHERE GROUP_ID = :GROUP_ID
+;
+-- DELETE ATTRIBUTE GROUP ITEMS
+DELETE FROM "sap.tm.trp.db.filter::t_attribute_group_item"
+WHERE GROUP_ID = :GROUP_ID
+;
+
+-- DELETE ATTRIBUTE GROUP METADATA
+DELETE FROM "sap.tm.trp.db.filter::t_attribute_group"
+WHERE ID = :GROUP_ID
+;
+
+END;

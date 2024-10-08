@@ -1,0 +1,182 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_ext_determination_for_facet_filter_harmonized" (
+    IN RULE_ID  BIGINT
+      )
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_TRP
+ --  READS SQL DATA
+   AS
+BEGIN
+	DECLARE COST_MODEL BIGINT;
+	DECLARE IV_LOCATION_BASED_COST CLOB;
+	---------------------prepare info codt
+	 DECLARE TOTAL_COUNT INTEGER;
+    DECLARE COUNT INTEGER;
+    DECLARE SD_LOCATION_FILTER INTEGER;
+    --Rule INFO
+    DECLARE V_RULE_TYPE INTEGER;
+    DECLARE V_SD_PLAN_ID BIGINT;
+    DECLARE V_TIME_RANGE_ID INTEGER;
+    DECLARE V_EQUIP_FILTER_ID BIGINT;
+    DECLARE V_LOCATION_FILTER_ID BIGINT;
+    DECLARE V_NETWORK_SETTING_GROUP_ID BIGINT;
+    DECLARE V_OP_SETTING_TYPE INTEGER;
+    DECLARE V_OPTIMIZATION INTEGER;
+    DECLARE V_SCHEDULE_TIME_TYPE INTEGER;
+    DECLARE V_LDR_RULE_ID INTEGER;
+    DECLARE V_OPTIMIZATION_OPTION VARCHAR(50);
+    DECLARE V_EXCLUSIVE_RULE_ID INTEGER;
+    DECLARE V_FILTER_EXECUTION SMALLINT;
+    DECLARE USERNAME VARCHAR(50);
+    DECLARE RESOURCE_CATEGORY VARCHAR(20);
+    
+    SELECT USERNAME INTO USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+    
+    ----------------------loc_eqip type----------------------------
+     
+    --get realted location rule info
+    CALL "sap.tm.trp.db.pickupreturn::p_location_ruleset_info" (
+      :RULE_ID,
+      V_RULE_TYPE,
+      V_SD_PLAN_ID,
+      V_TIME_RANGE_ID,
+      V_EQUIP_FILTER_ID,
+      V_LOCATION_FILTER_ID,
+      V_NETWORK_SETTING_GROUP_ID,
+      V_OP_SETTING_TYPE,
+      V_OPTIMIZATION,
+      V_SCHEDULE_TIME_TYPE,
+      V_LDR_RULE_ID,
+      V_EXCLUSIVE_RULE_ID,
+      V_FILTER_EXECUTION,
+      RESOURCE_CATEGORY
+    ); 
+     
+    select T2.LOCATION_FILTER_ID INTO SD_LOCATION_FILTER from "sap.tm.trp.db.pipeline::t_plan_model" T1 
+       INNER JOIN "sap.tm.trp.db.filter::t_filter_location_filter" T2 ON T1.FILTER_GROUP_ID = T2.FILTER_GROUP_ID
+       WHERE ID = :V_SD_PLAN_ID;
+                             
+    CALL "sap.tm.trp.db.pickupreturn::p_ext_get_staging_tu"(:RULE_ID, TU_INFO);
+    
+      SELECTED_TU = SELECT DISTINCT b.SOURCE_LOCATION_ID,
+                           b.SOURCE_LOCATION,
+                           b.POD, 
+                           b.POD_NAME,
+                           b.DESTINATION_LOCATION_ID, 
+                           b.DESTINATION_LOCATION,
+                           b.POL,
+                           b.POL_NAME 
+                    FROM :TU_INFO AS b;
+
+    CALL "sap.tm.trp.db.filter::p_get_locations_by_locfilterid"(:SD_LOCATION_FILTER,LOCATION_LIST);
+     
+    SD_PLAN_LOCATION_LIST = SELECT DISTINCT B.NAME AS LOCATION
+                            FROM :LOCATION_LIST AS A
+                            INNER JOIN "sap.tm.trp.db.semantic.location::v_location" AS B
+                            ON (A.LOCATION_ID = B.ID);
+    
+    -- If return, pod as the from location and SD locations as the to locations. 
+    -- Else, pol as the to location and SD locations as the from locations
+    IF :V_RULE_TYPE=2 THEN
+    
+      LT_FROM_LOC = SELECT DISTINCT (CASE IFNULL(SOURCE_LOCATION, '') 
+                                              WHEN '' THEN POD_NAME ELSE SOURCE_LOCATION END) AS LOCATION
+                           FROM :SELECTED_TU;
+                                   
+      LT_TO_LOC = SELECT DISTINCT LOCATION FROM :SD_PLAN_LOCATION_LIST;
+    ELSE 
+         
+      LT_TO_LOC = SELECT DISTINCT (CASE IFNULL(DESTINATION_LOCATION, '') 
+                                              WHEN '' THEN POL_NAME ELSE DESTINATION_LOCATION END) AS LOCATION
+                         FROM :SELECTED_TU;
+                                   
+      LT_FROM_LOC = SELECT DISTINCT LOCATION FROM :SD_PLAN_LOCATION_LIST;
+         
+    END IF;
+    
+    --Get cost model
+    SELECT IFNULL (MAX (MANDATORY_COST_MODEL_ID),0) INTO COST_MODEL
+    FROM "sap.tm.trp.db.planningcockpit::v_network_setting_group"
+    WHERE ID = :V_NETWORK_SETTING_GROUP_ID;
+
+    ----------------------loc_equip end----------------------------
+    CALL "sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_get_lanes_wrapper" (:LT_FROM_LOC, :LT_TO_LOC, LANE_LIST, CARRIER_LIST);
+    
+    
+    SELECT IFNULL (MAX (RULE_TYPE),0) INTO V_RULE_TYPE
+    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID = :RULE_ID;
+                             
+   QUERY_LIST = SELECT DISTINCT T1.FROM_LOCATION AS FROM_LOCATION_NAME,
+                        T1.TO_LOCATION AS TO_LOCATION_NAME,
+                        T1.MTR AS TRANSPORTATION_MODE_CODE,
+                        IFNULL(T2.CARRIER_ID,'') AS CARRIER_ID,
+                        T1.DISTANCE,
+                        T1.DURATION
+                 FROM :LANE_LIST T1
+                 LEFT OUTER JOIN :CARRIER_LIST T2
+                 ON (T1.ID = T2.CONNECTION_ID);
+    
+    -- If return, pod as the from location and SD locations as the to locations. 
+    -- Else, pol as the to location and SD locations as the from locations
+    IF :V_RULE_TYPE=2 THEN
+    
+      from_location_list = SELECT DISTINCT RESOURCE_TYPE,
+                                  (CASE IFNULL(SOURCE_LOCATION, '') 
+                                     WHEN '' THEN POD_NAME ELSE SOURCE_LOCATION END) AS LOCATION
+                           FROM :TU_INFO;
+                                   
+      lane_info = SELECT DISTINCT T1.FROM_LOCATION_NAME,
+                          T1.TO_LOCATION_NAME,
+                          T1.TRANSPORTATION_MODE_CODE,
+                          T2.RESOURCE_TYPE,
+                          T1.CARRIER_ID,
+                          T1.DISTANCE,
+                          T1.DURATION
+                   FROM :QUERY_LIST T1
+                   INNER JOIN :from_location_list T2
+                   ON (T1.FROM_LOCATION_NAME = T2.LOCATION);
+                   
+    ELSEIF :V_RULE_TYPE=1 THEN
+         
+      to_location_list = SELECT DISTINCT RESOURCE_TYPE,
+                                (CASE IFNULL(DESTINATION_LOCATION, '') 
+                                   WHEN '' THEN POL_NAME ELSE DESTINATION_LOCATION END) AS LOCATION
+                         FROM :TU_INFO;
+                                   
+      lane_info = SELECT DISTINCT T1.FROM_LOCATION_NAME,
+                          T1.TO_LOCATION_NAME,
+                          T1.TRANSPORTATION_MODE_CODE,
+                          T2.RESOURCE_TYPE,
+                          T1.CARRIER_ID,
+                          T1.DISTANCE,
+                          T1.DURATION
+                   FROM :QUERY_LIST T1
+                   INNER JOIN :to_location_list T2
+                   ON (T1.TO_LOCATION_NAME = T2.LOCATION);
+    END IF;
+    
+ 
+
+   LANE_OUTPUT = SELECT DISTINCT t1.FROM_LOCATION_NAME AS FROM_LOCATION,
+                           t1.TO_LOCATION_NAME AS TO_LOCATION,
+                           t1.TRANSPORTATION_MODE_CODE AS MTR,
+                           t1.RESOURCE_TYPE,
+                           t1.CARRIER_ID AS CARRIER,
+                           t1.DISTANCE,
+                           t1.DURATION
+                    FROM :lane_info t1;  
+    
+    
+    SELECT  STRING_AGG(FROM_LOCATION ||','|| TO_LOCATION  ||','|| MTR  ||','|| RESOURCE_TYPE ||','|| CARRIER ||','|| DISTANCE ||','|| DURATION ||'~','')
+    INTO IV_LOCATION_BASED_COST FROM :LANE_OUTPUT;
+    
+    SELECT TRIM ('~' FROM IV_LOCATION_BASED_COST) inp into IV_LOCATION_BASED_COST FROM DUMMY;
+ 
+ 	
+    CALL "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_determination_for_facet_filter" (
+        :RULE_ID,
+        :IV_LOCATION_BASED_COST
+    );
+   
+END

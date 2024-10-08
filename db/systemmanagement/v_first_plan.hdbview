@@ -1,0 +1,11 @@
+schema = "SAP_TM_TRP";
+query = "SELECT TOP 1 ID
+           FROM (SELECT T3.ID, IFNULL(T3.LAST_MODIFIED_ON, T3.CREATE_ON) TI, T3.PLAN_MODEL_TYPE_ID
+                   FROM \"sap.tm.trp.db.pipeline::v_plan_model_ui\" AS T2
+                        INNER JOIN \"sap.tm.trp.db.pipeline::t_plan_model\" AS T3
+                        ON T2.ID = T3.ID
+                  WHERE T2.PLAN_MODEL_CATEGORY_PARENT_ID = 1) AS T1
+       ORDER BY PLAN_MODEL_TYPE_ID, TI DESC";
+       
+depends_on_view = ["sap.tm.trp.db.pipeline::v_plan_model_ui"];
+depends_on_table = ["sap.tm.trp.db.pipeline::t_plan_model"];

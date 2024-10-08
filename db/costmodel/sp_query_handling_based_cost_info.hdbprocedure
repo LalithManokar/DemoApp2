@@ -1,0 +1,68 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_query_handling_based_cost_info"(
+   IN COST_MODEL_ID BIGINT,
+   IN HANDLING_BASED_INFO "sap.tm.trp.db.costmodel::tt_query_handling_based_cost_info",
+   OUT COST_INFO_OUT "sap.tm.trp.db.costmodel::tt_query_handling_based_cost_info"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+     --Note: Handling based cost do not need to call TM to get the cost.
+     
+      HANDLING_BASED_DATASET_INFO_IN_DB = 
+            SELECT T2.COST_DATASET_ID, T2.LOCATION_NAME, T2.RESOURCE_TYPE,
+		    T2.HANDLING_TYPE,T2.FROM_MOT,
+		    T2.TO_MOT
+		    FROM "sap.tm.trp.db.costmodel::t_cost_model_dataset" T1
+		    --INNER JOIN "sap.tm.trp.db.costmodel::t_handling_based_cost" T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID)
+		    INNER JOIN "sap.tm.trp.db.costmodel::cv_cost_model_resource_type_explode"(PLACEHOLDER."$$IP_COST_DATASET_ID$$"=>0,PLACEHOLDER."$$IP_COST_MODEL_ID$$"=>:COST_MODEL_ID) T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID)   
+		    	
+		    WHERE T1.COST_MODEL_ID = :COST_MODEL_ID;
+		    
+	  VALID_TRANSPORTATION_MEANS_WITH_DATASET_ID = SELECT COST_DATASET_ID,TRANSPORTATION_MODE_CODE 
+	   FROM "sap.tm.trp.db.costmodel::cv_costmodel_dataset_supported_transportation_means"(PLACEHOLDER."$$IN_COST_MODEL_ID$$"=>:COST_MODEL_ID);
+	   
+      --Using the cost model transportaion filter to do the filter:
+      --As discussed with kevin, if cost model's mtr filter defined as *, then it will allow the mtr which = '' to be output (do not need to filter out the '' value)
+		 HANDLING_BASED_DATASET_INFO_IN_DB_2 = 
+		 SELECT T1.COST_DATASET_ID, T1.LOCATION_NAME, T1.RESOURCE_TYPE,
+		  T1.HANDLING_TYPE,T1.FROM_MOT, T1.TO_MOT
+		 FROM :HANDLING_BASED_DATASET_INFO_IN_DB T1
+		 INNER JOIN :VALID_TRANSPORTATION_MEANS_WITH_DATASET_ID T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID
+		 AND (T1.FROM_MOT = T2.TRANSPORTATION_MODE_CODE 
+		      OR T2.TRANSPORTATION_MODE_CODE = '*' 
+		      OR T1.FROM_MOT = '*' 
+		      OR T1.FROM_MOT = '' )
+		 )
+		 INNER JOIN :VALID_TRANSPORTATION_MEANS_WITH_DATASET_ID T3 ON (T1.COST_DATASET_ID = T3.COST_DATASET_ID
+		 AND (T1.TO_MOT = T3.TRANSPORTATION_MODE_CODE 
+		      OR T3.TRANSPORTATION_MODE_CODE = '*' 
+		      OR T1.TO_MOT = '*' 
+		      OR T1.TO_MOT = '')
+		 );
+		
+		 
+	--Note: As discussed with Kevin, the input param :HANDLING_BASED_INFO will not contain the * value for any column.	 
+    COST_INFO_OUT = 
+		SELECT T3.LOCATION_NAME, T3.RESOURCE_TYPE,
+		T3.HANDLING_TYPE,T3.FROM_MOT,
+		T3.TO_MOT
+		FROM :HANDLING_BASED_INFO T1
+		LEFT OUTER JOIN
+		(
+		    SELECT DISTINCT T2.LOCATION_NAME, T2.RESOURCE_TYPE,
+		    T2.HANDLING_TYPE,T2.FROM_MOT,
+		    T2.TO_MOT
+		    FROM :HANDLING_BASED_DATASET_INFO_IN_DB_2 T2
+		)T3 ON (
+		(T1.LOCATION_NAME = T3.LOCATION_NAME OR T3.LOCATION_NAME = '*')
+		AND (T1.RESOURCE_TYPE = T3.RESOURCE_TYPE OR T3.RESOURCE_TYPE = '*')
+		AND (T1.HANDLING_TYPE = T3.HANDLING_TYPE OR T3.HANDLING_TYPE = '*')
+		AND (T1.FROM_MOT = T3.FROM_MOT OR (T3.FROM_MOT = '*' AND T3.FROM_MOT <> '') )
+		AND (T1.TO_MOT = T3.TO_MOT OR (T3.TO_MOT = '*' AND T3.TO_MOT <>''))
+		)
+		WHERE T3.LOCATION_NAME IS NULL;
+
+   
+END;

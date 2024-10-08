@@ -1,0 +1,16 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_scenario_for_simulation_plan" (
+	IN SIMULATION_ID BIGINT,
+	OUT SCENARIOS "sap.tm.trp.db.planningcockpit::t_scenario"
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA 
+AS
+BEGIN
+
+    SCENARIOS = SELECT *
+	FROM "sap.tm.trp.db.planningcockpit::t_scenario" 
+	WHERE REL_SM_PLAN_ID = :SIMULATION_ID;
+
+END;

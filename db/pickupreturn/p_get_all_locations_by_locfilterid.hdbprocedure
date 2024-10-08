@@ -1,0 +1,163 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_get_all_locations_by_locfilterid" (
+	IN LOC_FILTER_ID BIGINT,
+	OUT LOCATIONS "sap.tm.trp.db.filter::tt_location_ids" 
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA 
+AS
+BEGIN
+
+DECLARE GEO_FLAG INT;
+ 	
+SELECT IFNULL(MAX(LOCATION_TYPE),-1) INTO GEO_FLAG 
+FROM "sap.tm.trp.db.filter::t_location_filter" WHERE ID = :LOC_FILTER_ID; 
+    
+IF :GEO_FLAG = 1 THEN
+--LOCATION
+  
+    LT_REGION_ITEM = SELECT T3.ROOT_ID, T3.zone_id AS LEAF_ZONE_ID FROM 
+					"sap.tm.trp.db.systemmanagement.location::t_region_item" T3
+					LEFT OUTER JOIN (SELECT ROOT_ID FROM "sap.tm.trp.db.systemmanagement.location::t_region_item" WHERE ROOT_ID <> ZONE_ID) T4 
+					ON T3.zone_id = T4.ROOT_ID
+					WHERE T4.ROOT_ID IS NULL;
+					
+    LT_FILTERED_LOCATION = SELECT distinct t3.id
+					FROM "sap.tm.trp.db.filter::t_location_filter_location" HT
+	          INNER JOIN "sap.tm.trp.db.systemmanagement.location::v_region_location_all" ZL
+	          ON HT.LOCATION_ID = ZL.LOCATION_ID
+	          INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_role_check_region_all" t3
+		      ON t3.ID = ZL.ROOT_ID
+  				WHERE HT.LOCATION_FILTER_ID  = :LOC_FILTER_ID ;
+  				
+    LT_LOCATION_ROOT_LEAF = SELECT DISTINCT LEAF_ZONE.LEAF_ZONE_ID FROM 
+   		      :LT_REGION_ITEM leaf_zone
+   		      where leaf_zone_id in (select id from :LT_FILTERED_LOCATION);
+   		      
+    LOCATIONS1 = SELECT DISTINCT R_ALL.LOCATION_ID
+	          FROM "sap.tm.trp.db.systemmanagement.location::v_region_location_all" R_ALL
+	          WHERE R_ALL.ROOT_ID IN (SELECT LEAF_ZONE_ID FROM :LT_LOCATION_ROOT_LEAF );
+	          
+	          
+	LOCATIONS2 = select HT.LOCATION_ID
+	          from "sap.tm.trp.db.filter::t_location_filter_location" HT 
+	   		  where HT.LOCATION_FILTER_ID  = :LOC_FILTER_ID ;
+
+    LOCATIONS = SELECT * FROM :LOCATIONS1 UNION SELECT * FROM :LOCATIONS2;
+
+ELSEIF :GEO_FLAG = 2 THEN
+--LOCATION GROUP
+
+   LOCATIONS1 = SELECT DISTINCT R_ALL.LOCATION_ID
+			   FROM "sap.tm.trp.db.filter::t_location_filter_location" HT			   
+			   INNER JOIN "sap.tm.trp.db.systemmanagement::t_location_group_item" LOC_GRP_ITEM 
+			   ON (LOC_GRP_ITEM.LOCATION_GROUP_ID=HT.LOCATION_GROUP_ID)
+			   INNER JOIN "sap.tm.trp.db.systemmanagement.location::v_region_location_all" ZL
+	           ON(LOC_GRP_ITEM.LOCATION_ID = ZL.LOCATION_ID)
+	           INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_role_check_region_ui" t3
+		       ON (t3.ID = ZL.ROOT_ID)
+		       INNER JOIN (
+		         SELECT T3.ROOT_ID, T3.CHILDREN_ID AS LEAF_ZONE_ID
+                 FROM(
+                       SELECT T1.ROOT_ID, T1.ZONE_ID AS CHILDREN_ID 
+                       FROM  "sap.tm.trp.db.systemmanagement.location::t_region_item" t1
+                 ) T3
+                 LEFT OUTER JOIN(
+                   SELECT ROOT_ID
+                   FROM "sap.tm.trp.db.systemmanagement.location::t_region_item" 
+                   WHERE ROOT_ID <> ZONE_ID
+                 )T4 
+               ON (T3.CHILDREN_ID = T4.ROOT_ID)
+               WHERE T4.ROOT_ID IS NULL
+		      ) LEAF_ZONE
+		      ON (LEAF_ZONE.LEAF_ZONE_ID = t3.ID)
+	          INNER JOIN "sap.tm.trp.db.systemmanagement.location::v_region_location_all" R_ALL 
+		      ON (R_ALL.ROOT_ID = LEAF_ZONE.LEAF_ZONE_ID)
+			  WHERE HT.LOCATION_FILTER_ID = :LOC_FILTER_ID ;
+			  
+			  
+			  LOCATIONS2 = select LOC_GRP_ITEM.LOCATION_ID
+			   from "sap.tm.trp.db.filter::t_location_filter_location" HT			   
+			   inner join "sap.tm.trp.db.systemmanagement::t_location_group_item" LOC_GRP_ITEM
+			   on LOC_GRP_ITEM.LOCATION_GROUP_ID=HT.LOCATION_GROUP_ID
+			   where HT.LOCATION_FILTER_ID = :LOC_FILTER_ID ;
+			   
+			   LOCATIONS = SELECT * FROM :LOCATIONS1 UNION SELECT * FROM :LOCATIONS2;
+
+ELSEIF :GEO_FLAG = 5 THEN
+-- REGION
+
+   LOCATIONS1 = SELECT DISTINCT R_ALL.LOCATION_ID
+		       FROM "sap.tm.trp.db.filter::t_location_filter_region" HT
+		       INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_role_check_region_ui" t3
+		       ON (t3.ID = HT.ZONE_ID)
+		       INNER JOIN (
+		         SELECT T3.ROOT_ID, T3.CHILDREN_ID AS LEAF_ZONE_ID
+                 FROM(
+                       SELECT T1.ROOT_ID, T1.ZONE_ID AS CHILDREN_ID 
+                       FROM  "sap.tm.trp.db.systemmanagement.location::t_region_item" t1
+                 ) T3
+                 LEFT OUTER JOIN(
+                   SELECT ROOT_ID
+                   FROM "sap.tm.trp.db.systemmanagement.location::t_region_item" 
+                   WHERE ROOT_ID <> ZONE_ID
+                 )T4 
+               ON (T3.CHILDREN_ID = T4.ROOT_ID)
+               WHERE T4.ROOT_ID IS NULL
+		      ) LEAF_ZONE
+		      ON (LEAF_ZONE.LEAF_ZONE_ID = t3.ID)
+	          INNER JOIN "sap.tm.trp.db.systemmanagement.location::v_region_location_all" R_ALL 
+		      ON (R_ALL.ROOT_ID = LEAF_ZONE.LEAF_ZONE_ID)
+		       WHERE HT.LOCATION_FILTER_ID = :LOC_FILTER_ID ;
+		       
+		       LOCATIONS2 = select R_ALL.LOCATION_ID
+		       from "sap.tm.trp.db.filter::t_location_filter_region" HT
+		       inner join "sap.tm.trp.db.systemmanagement.location::v_region_location_all" R_ALL on R_ALL.ROOT_ID = HT.ZonE_ID
+		       where HT.LOCATION_FILTER_ID = :LOC_FILTER_ID ;
+		       
+		       
+		       LOCATIONS = SELECT * FROM :LOCATIONS1 UNION SELECT * FROM :LOCATIONS2;
+
+ELSEIF :GEO_FLAG = 6 THEN
+-- REGION GROUP
+
+ 
+   LOCATIONS1 = SELECT DISTINCT R_ALL.LOCATION_ID
+			   FROM "sap.tm.trp.db.filter::t_location_filter_region" HT			  
+		       INNER JOIN "sap.tm.trp.db.systemmanagement::t_region_group_item" R_GRP_ITEM 
+		       ON (HT.REGION_GROUP_ID = R_GRP_ITEM.REGION_GROUP_ID)
+    	       INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_role_check_region_ui" t3
+		       ON (t3.ID = R_GRP_ITEM.ZONE_ID)
+		       INNER JOIN (
+		         SELECT T3.ROOT_ID, T3.CHILDREN_ID AS LEAF_ZONE_ID
+                 FROM(
+                       SELECT T1.ROOT_ID, T1.ZONE_ID AS CHILDREN_ID 
+                       FROM  "sap.tm.trp.db.systemmanagement.location::t_region_item" t1
+                 ) T3
+                 LEFT OUTER JOIN(
+                   SELECT ROOT_ID
+                   FROM "sap.tm.trp.db.systemmanagement.location::t_region_item" 
+                   WHERE ROOT_ID <> ZONE_ID
+                 )T4 
+               ON (T3.CHILDREN_ID = T4.ROOT_ID)
+               WHERE T4.ROOT_ID IS NULL
+		      ) LEAF_ZONE
+		      ON (LEAF_ZONE.LEAF_ZONE_ID = t3.ID)
+	          INNER JOIN "sap.tm.trp.db.systemmanagement.location::v_region_location_all" R_ALL 
+		      ON (R_ALL.ROOT_ID = LEAF_ZONE.LEAF_ZONE_ID)
+		       WHERE HT.LOCATION_FILTER_ID = :LOC_FILTER_ID ;
+		      
+		      
+             LOCATIONS2 = select R_ALL.LOCATION_ID
+			   from "sap.tm.trp.db.filter::t_location_filter_region" HT			  
+		       inner join "sap.tm.trp.db.systemmanagement::t_region_group_item" R_GRP_ITEM on HT.REGION_GROUP_ID = R_GRP_ITEM.REGION_GROUP_ID
+    	       inner join "sap.tm.trp.db.systemmanagement.location::v_region_location_all" R_ALL on  R_GRP_ITEM.ZONE_ID = R_ALL.ROOT_ID
+		       where HT.LOCATION_FILTER_ID = :LOC_FILTER_ID;
+		       
+		       
+		         LOCATIONS = SELECT * FROM :LOCATIONS1 UNION SELECT * FROM :LOCATIONS2;
+
+END IF;
+
+END;

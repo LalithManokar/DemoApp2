@@ -1,0 +1,53 @@
+procedure "SAP_TM_ROUTING"."sap.tm.trp.routing.db.common::p_get_text_batch" (
+    in text_id nvarchar(256),
+    in params "sap.tm.trp.routing.db.common::tt_message_placeholder_batch", -- Ordered by ID
+    in severity char,
+    out message "sap.tm.trp.routing.db.common::tt_message"
+)
+language sqlscript
+sql security invoker
+default schema "SAP_TM_ROUTING"
+reads sql data
+as begin
+    
+    declare package_name varchar(100) := 'sap.tm.trp.routing.db.common';
+    declare object_name varchar(100) := 'message';
+    declare object_suffix varchar(100) := 'hdbtextbundle';
+    declare text_content varchar(4000);
+    declare current_locale varchar(10);
+    DECLARE msg_param TABLE(PLACEHOLDER INTEGER, VALUE NVARCHAR(100));
+    -- Just top 20 entries will be returned to avoid block in extreme conditions
+    DECLARE CURSOR c_params FOR SELECT TOP 20 * FROM :params ORDER BY group_id, placeholder;
+    DECLARE last_group_id NVARCHAR(500);
+    
+    SELECT session_context('locale') into current_locale from dummy;
+    
+    msg_param = SELECT 0 AS placeholder, '' AS value FROM DUMMY WHERE 1 <> 1;
+    
+    FOR row AS c_params DO
+        IF row.group_id <> last_group_id AND last_group_id IS NOT NULL THEN
+            CALL "HANA_XS_BASE"."sap.hana.xs.i18n::GET_TEXT"
+            (:package_name, :object_name, :object_suffix, :text_id, :current_locale, 
+            :msg_param, :text_content);
+            message = select :severity as severity, :text_content as message from dummy
+            UNION ALL SELECT * FROM :message;
+            
+            msg_param = SELECT 0 AS placeholder, '' AS value FROM DUMMY WHERE 1 <> 1;
+        END IF;
+        
+        msg_param = SELECT row.placeholder AS placeholder, row.value AS value 
+        FROM DUMMY
+        UNION ALL SELECT * FROM :msg_param;
+        
+        last_group_id = row.group_id;
+        
+    END FOR;
+    
+    IF last_group_id IS NOT NULL THEN
+        CALL "HANA_XS_BASE"."sap.hana.xs.i18n::GET_TEXT"
+        (:package_name, :object_name, :object_suffix, :text_id, :current_locale, 
+        :msg_param, :text_content);
+        message = select :severity as severity, :text_content as message from dummy
+        UNION ALL SELECT * FROM :message;
+    END IF;
+END;

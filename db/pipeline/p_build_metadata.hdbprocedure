@@ -1,0 +1,141 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_build_metadata" ( 
+    IN PIPELINE_MODEL_ID BIGINT,
+    IN METADATA "sap.tm.trp.db.pipeline::tt_node_metadata" 
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+    BRKDOWN_STR VARCHAR(300);
+BEGIN
+
+DECLARE ROW_COUNT BIGINT;
+DECLARE CURSOR BRKDOWN_CUR FOR 
+    SELECT CHILD_META_TBL.NODE_NAME, CHILD_META_TBL.KEY, TO_VARCHAR(CHILD_META_TBL.VALUE) AS VALUE
+    FROM :METADATA AS PARENT_META_TBL
+    INNER JOIN :METADATA AS CHILD_META_TBL
+        ON PARENT_META_TBL.ID = CHILD_META_TBL.PARENT_ID
+    WHERE PARENT_META_TBL.KEY = 'breakdown';
+DECLARE CURSOR OUTGOING_EDGE_CUR FOR
+    SELECT NODE_NAME, TO_VARCHAR(VALUE) AS VALUE FROM :METADATA WHERE KEY='outgoingEdge';
+
+NODE_LIST_TBL = SELECT * FROM "sap.tm.trp.db.pipeline::t_pipeline_node" WHERE PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID;
+
+--breakdown
+FOR BRKDOWN_INFO AS BRKDOWN_CUR DO
+    BRKDOWN_STR := BRKDOWN_INFO.VALUE;
+    CALL "sap.tm.trp.db.dashboard::sp_splitter" (:BRKDOWN_STR, ',', BRKDOWN_LIST);
+
+    BRKDOWN_INFO_TBL = SELECT 
+        BRKDOWN_LIST_TBL.STRING AS PARENT_NODE_NAME, 
+        BRKDOWN_INFO.KEY AS OUTPUT_KEY, 
+        BRKDOWN_INFO.NODE_NAME AS NODE_NAME 
+    FROM :BRKDOWN_LIST AS BRKDOWN_LIST_TBL;
+
+    SELECT 
+        CHILD_NODE_TBL.ID AS NODE_ID, 
+        PARENT_NODE_TBL.ID AS PARENT_NODE_ID, 
+        BRKDOWN_INFO_TBL.OUTPUT_KEY 
+    FROM :BRKDOWN_INFO_TBL AS BRKDOWN_INFO_TBL
+    INNER JOIN :NODE_LIST_TBL AS PARENT_NODE_TBL
+        ON BRKDOWN_INFO_TBL.PARENT_NODE_NAME = PARENT_NODE_TBL.NAME
+    INNER JOIN :NODE_LIST_TBL AS CHILD_NODE_TBL
+        ON BRKDOWN_INFO_TBL.NODE_NAME = CHILD_NODE_TBL.NAME
+    INTO "sap.tm.trp.db.pipeline::t_pipeline_node_logical_hierarchy"(NODE_ID, PARENT_NODE_ID, OUTPUT_KEY);
+END FOR;
+
+--update visibility of nodes with breakdown
+UPDATE "sap.tm.trp.db.pipeline::t_pipeline_node" A
+SET RESULT_VISIBLE = 1
+FROM "sap.tm.trp.db.pipeline::t_pipeline_node" A 
+INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node_logical_hierarchy" AS B
+ON A.ID = B.NODE_ID AND A.PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID
+WHERE A.METADATA_NODE_ID is not null;
+
+--update visibility of nodes with output key: (supply demand stock) for SD Plan, (IDLE_RATE, STORAGE_COST, DWELL_TIME, IMPORT_EXPORT) for KPI Plan
+UPDATE "sap.tm.trp.db.pipeline::t_pipeline_node" A
+SET RESULT_VISIBLE = 1
+FROM "sap.tm.trp.db.pipeline::t_pipeline_node" A 
+    INNER JOIN :METADATA B ON A.NAME = B.NODE_NAME
+WHERE 
+    B.KEY = 'outputKey'    
+    --AND (B.VALUE = 'SUPPLY' OR B.VALUE = 'DEMAND' OR B.VALUE = 'STOCK'
+    --	OR B.VALUE = 'IDLE_RATE' OR B.VALUE = 'STORAGE_COST' OR B.VALUE = 'DWELL_TIME' OR B.VALUE = 'IMPORT_EXPORT')
+    AND A.PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID
+    AND A.METADATA_NODE_ID is not null;
+
+--node connection
+FOR OUTGOING_EDGE_INFO AS OUTGOING_EDGE_CUR DO
+    CALL "sap.tm.trp.db.dashboard::sp_splitter" (OUTGOING_EDGE_INFO.VALUE, ',', OUTGOING_EDGE_LIST);
+    OUTGOING_EDGE_TBL = SELECT OUTGOING_EDGE_INFO.NODE_NAME AS NODE_NAME, STRING AS SUBSEQUENT_NODE_NAME FROM :OUTGOING_EDGE_LIST;
+
+    SELECT NODE_TBL.ID AS NODE_ID, SUBSEQUENT_NODE_TBL.ID AS SUBSEQUENT_NODE_ID
+    FROM :OUTGOING_EDGE_TBL AS OUTGOING_EDGE_TBL
+    INNER JOIN :NODE_LIST_TBL AS NODE_TBL 
+        ON OUTGOING_EDGE_TBL.NODE_NAME = NODE_TBL.NAME
+    INNER JOIN :NODE_LIST_TBL AS SUBSEQUENT_NODE_TBL 
+        ON OUTGOING_EDGE_TBL.SUBSEQUENT_NODE_NAME = SUBSEQUENT_NODE_TBL.NAME
+    INTO "sap.tm.trp.db.pipeline::t_pipeline_node_connection"(NODE_ID, SUBSEQUENT_NODE_ID);
+END FOR;
+
+-- store other misc information for nodes
+/*    SELECT
+        C.ID,
+        A.KEY,
+        TO_VARCHAR(A.VALUE) AS VALUE
+    FROM :METADATA AS A
+    INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" AS C
+        ON A.NODE_NAME = C.NAME AND  (A.KEY = 'aggregationMethod' OR A.KEY = 'BiPolar' OR A.KEY = 'nodeType' OR A.KEY = 'navigationType')
+    WHERE C.PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID
+    INTO "sap.tm.trp.db.pipeline::t_pipeline_node_misc_info";
+*/
+SELECT
+        C.ID,
+        A.KEY,
+        TO_VARCHAR(A.VALUE) AS VALUE
+    FROM :METADATA AS A
+    INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" AS C
+        ON A.NODE_NAME = C.NAME 
+    WHERE C.PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID
+	AND A.KEY IN('aggregationMethod','BiPolar','nodeType','navigationType')
+    INTO "sap.tm.trp.db.pipeline::t_pipeline_node_misc_info";
+
+-- store information for pipeline model
+-- 1. Register the default node
+	-- get the nodes belongs to this pipeline model
+	NODES = SELECT DISTINCT ID, NAME, NODE_INDEX, METADATA_NODE_ID 
+	        FROM "sap.tm.trp.db.pipeline::t_pipeline_node" 
+	        WHERE PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID; 
+	
+	-- filter the metadata which has the defaultNode key
+	DEFAULT_NODE_NAME = SELECT A.KEY, TO_VARCHAR(A.VALUE) AS VALUE FROM :METADATA A
+		INNER JOIN :METADATA B ON A.NODE_NAME = B.NODE_NAME 
+		WHERE B.KEY = 'sap.afm.nodeType' AND TO_VARCHAR(B.VALUE) = 'ContainerNode' -- get the container node name
+		AND A.KEY = 'defaultNode'; -- get the default node annoation for container node
+	
+	SELECT count (*) into ROW_COUNT FROM :DEFAULT_NODE_NAME;
+	
+	IF (:ROW_COUNT > 0) THEN
+		-- insert the default node of meta data node
+		SELECT
+	        :PIPELINE_MODEL_ID,
+	        A.KEY,
+	        B.ID
+	    FROM :DEFAULT_NODE_NAME AS A
+	    INNER JOIN :NODES AS B ON TO_VARCHAR(A.VALUE) = B.NAME -- get the node id from the node name
+	    INTO "sap.tm.trp.db.pipeline::t_pipeline_misc_info";
+	ELSE
+		-- if the default node is not found in the annotation, then get the max node which has metadata_node_id
+		SELECT
+	        :PIPELINE_MODEL_ID,
+	       	'defaultNode',
+	       COALESCE(A.ID,-1)
+	    FROM (
+			SELECT TOP 1 ID
+	    	FROM :NODES 
+	    	WHERE METADATA_NODE_ID is not NULL
+	    	ORDER BY ID DESC
+	    ) AS A
+	    INTO "sap.tm.trp.db.pipeline::t_pipeline_misc_info";
+	END IF;
+END;

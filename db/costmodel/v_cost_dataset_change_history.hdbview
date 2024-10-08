@@ -1,0 +1,32 @@
+schema = "SAP_TM_TRP";
+
+query  = "  SELECT T1.COST_DATASET_ID,
+                   T1.ID,
+                   T1.ACTION_TIME,
+                   CASE WHEN (T1.USER_ID <> 0 AND T1.USER_ID IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+			            WHEN T1.USER_ID = 0 OR T1.USER_ID IS NULL THEN ''
+			            ELSE '***' END AS USERNAME,
+                   T5.DESC AS ACTION
+            FROM \"sap.tm.trp.db.costmodel::t_cost_dataset_history\" T1
+            INNER JOIN
+           (
+	            SELECT T2.CODE,IFNULL(A.DESC,T2.DESC) AS DESC
+	            FROM \"sap.tm.trp.db.costmodel::t_cost_action\" T2
+	            LEFT OUTER JOIN 
+	            ( SELECT T3.ACTION_CODE,T3.DESC
+	              FROM  \"sap.tm.trp.db.costmodel::t_cost_action_t\" T3 
+	              INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" T4 ON (T3.LANG_CODE = T4.SPRAS)
+	             )A ON (T2.CODE = A.ACTION_CODE)
+	            
+            )T5 ON (T1.ACTION_CODE = T5.CODE)
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T0 ON (T1.USER_ID = T0.ID)
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\" T9 ON (T0.USERNAME = T9.USERNAME)
+            CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE";
+                 
+depends_on_table = ["sap.tm.trp.db.costmodel::t_cost_dataset_history",
+                    "sap.tm.trp.db.costmodel::t_cost_action",
+                    "sap.tm.trp.db.costmodel::t_cost_action_t"];
+depends_on_view = ["sap.tm.trp.db.semantic.common::v_lang_code",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_unblock_users",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"]; 

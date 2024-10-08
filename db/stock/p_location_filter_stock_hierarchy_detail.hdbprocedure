@@ -1,0 +1,142 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.stock::p_location_filter_stock_hierarchy_detail" ( 
+	IN LOCATION_FILTER_ID VARCHAR(50),
+  	OUT RESULT_OUTPUT "sap.tm.trp.db.stock::tt_location_hierarchy",
+  	OUT RESULT_RELATION_OUTPUT "sap.tm.trp.db.stock::tt_location_hierarchy_relation") 
+	--output format
+	--"LEVEL" information is used for stock map view, used seperately
+	-- Other informatin is used for stock table view, hierarchy
+	/*"locations": [
+            {
+                "ID": "123",
+                "NAME": "Depot 1",
+                "TYPE": 1,
+                "HAS_OUTPUT_DATASET_FLAG": 1
+            },
+            {
+                "ID": "456",
+                "NAME": "Zone 1",
+                "TYPE": 3,
+                "HAS_OUTPUT_DATASET_FLAG": 0
+            }
+        ],
+        "locationRelationships": [
+            {
+                "PARENT_ID": "456",
+                "PARENT_TYPE": 3,
+                "CHILD_ID": "123",
+                "CHILD_TYPE": 1
+            }
+	*/
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA 
+	AS
+BEGIN 	 
+ 	DECLARE LOCATION_TYPE INTEGER;
+ 	DECLARE NUM_CHILD INTEGER;
+ 	DECLARE MIN_LEVEL INTEGER;
+ 	--HARDCODE: 1 means has output
+ 	DECLARE HAS_OUTPUT INTEGER;
+ 	HAS_OUTPUT := 1;
+ 	
+ 	SELECT LOCATION_TYPE INTO LOCATION_TYPE FROM  "sap.tm.trp.db.pipeline::cv_get_location_type_of_location_filter"(PLACEHOLDER."$$IN_VP_LOCATION_FILTER_ID$$" => :LOCATION_FILTER_ID);
+ 	--location type = 1: location
+ 	IF  :LOCATION_TYPE = 1 THEN
+ 			RESULT_LOCATION = 
+ 				SELECT A.LOCATION_ID, B.NAME, B.XPOS, B.YPOS,B.DESC
+ 				FROM "sap.tm.trp.db.filter::t_location_filter_location" A 
+ 				INNER JOIN "sap.tm.trp.db.semantic.location::v_location" B ON A.LOCATION_ID = B.ID
+				WHERE A.LOCATION_FILTER_ID = :LOCATION_FILTER_ID;
+			--LEVEL 100 is the first level 200 the second, etc
+			RESULT_OUTPUT = SELECT 100 AS "LEVEL", A.NAME AS "NAME", LOCATION_ID, 1 AS "LOCATION_TYPE", XPOS, YPOS, :HAS_OUTPUT AS "HAS_OUTPUT_FLAG",DESC
+			FROM :RESULT_LOCATION A ;
+ 			RESULT_RELATION_OUTPUT = SELECT NULL AS PARENT_ID, NULL AS PARENT_TYPE, NULL AS CHILD_ID, NULL AS CHILD_TYPE FROM DUMMY;
+ 	--location type = 2: location group
+ 	
+ 		ELSEIF :LOCATION_TYPE = 2 THEN	
+ 			RESULT_LOCATION_WITH_GROUP = SELECT A.LOCATION_GROUP_ID, B.LOCATION_ID, C.DESC AS "GROUPNAME", C.PRIME_LOC_ID, D.NAME AS "NAME", D.XPOS, D.YPOS
+ 							 FROM "sap.tm.trp.db.filter::t_location_filter_location" A 
+							LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_location_group_item" B ON A.LOCATION_GROUP_ID = B.LOCATION_GROUP_ID
+							LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_location_group" C ON A.LOCATION_GROUP_ID = C.ID
+							LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_location" D ON C.PRIME_LOC_ID = D.ID
+							WHERE A.LOCATION_FILTER_ID = :LOCATION_FILTER_ID;
+			
+			RESULT_OUTPUT = SELECT 100 AS "LEVEL", GROUPNAME AS "NAME", LOCATION_GROUP_ID AS "LOCATION_ID", 2 AS "LOCATION_TYPE", XPOS, YPOS, :HAS_OUTPUT AS HAS_OUTPUT_FLAG, GROUPNAME AS DESC
+ 							FROM 
+ 								(SELECT DISTINCT LOCATION_GROUP_ID, GROUPNAME, XPOS, YPOS FROM :RESULT_LOCATION_WITH_GROUP) A ;
+ 							
+ 			RESULT_RELATION_OUTPUT = SELECT NULL AS PARENT_ID, NULL AS PARENT_TYPE, NULL AS CHILD_ID, NULL AS CHILD_TYPE 
+ 									 FROM DUMMY;
+ 			
+	--location type = 5: region
+		ELSEIF :LOCATION_TYPE = 5 THEN	
+			RESULT_ZONE = SELECT B.ZONE_ID AS ZONEID FROM "sap.tm.trp.db.filter::t_location_filter_region" B 
+				WHERE B.LOCATION_FILTER_ID = :LOCATION_FILTER_ID;
+				
+			call "sap.tm.trp.db.stock::p_location_stock_hierarchy_from_zone_id"
+				(:RESULT_ZONE, 
+				RESULT_OUTPUT,
+				RESULT_RELATION_OUTPUT);
+				--the output contains the records that the parent_id = child Id , following sql is to fix that issue
+				RESULT_RELATION_OUTPUT = SELECT * FROM :RESULT_RELATION_OUTPUT WHERE PARENT_ID <> CHILD_ID;
+ 	--location type = 6: region group	
+ 		ELSE
+ 		/*	RESULT_ZONE_WITH_GROUP = 
+	 			SELECT 
+					T1.REGION_GROUP_ID
+					,T1.NAME
+					,CASE WHEN T1.PRIME_LOC_ID IS NULL OR T1.PRIME_LOC_ID = '' THEN T1.LOCATION_ID ELSE T1.PRIME_LOC_ID END AS LOCATION_ID
+					,T2.XPOS
+					,T2.YPOS,
+					T1.DESC
+				FROM
+				(
+				SELECT B.REGION_GROUP_ID, E.DESC AS NAME, E.PRIME_LOC_ID, MAX(F.LOCATION_ID) AS LOCATION_ID,E.DESC
+				FROM "sap.tm.trp.db.filter::t_location_filter_region" B 
+				LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_region_group_item" D ON B.REGION_GROUP_ID = D.REGION_GROUP_ID
+				LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_region_group" E ON E.ID = B.REGION_GROUP_ID
+				LEFT JOIN "sap.tm.trp.db.systemmanagement.location::v_region_location_all" F ON F.ROOT_ID = D.ZONE_ID
+				WHERE B.LOCATION_FILTER_ID = :LOCATION_FILTER_ID
+				GROUP BY B.REGION_GROUP_ID, E.DESC, E.PRIME_LOC_ID
+				) T1
+				LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_location" T2 ON T2.ID = CASE WHEN T1.PRIME_LOC_ID IS NULL OR T1.PRIME_LOC_ID = '' THEN T1.LOCATION_ID ELSE T1.PRIME_LOC_ID END
+				;*/
+				
+		RESULT_ZONE_WITH_GROUP =	
+			SELECT 
+				T1.REGION_GROUP_ID
+				,T1.NAME
+				,LOCATION_ID--,CASE WHEN T1.PRIME_LOC_ID IS NULL OR T1.PRIME_LOC_ID = '' THEN T1.LOCATION_ID ELSE T1.PRIME_LOC_ID END AS LOCATION_ID
+				,T2.XPOS
+				,T2.YPOS,
+				T1.DESC
+				FROM
+				(
+				SELECT B.REGION_GROUP_ID, E.DESC AS NAME, E.PRIME_LOC_ID,-- MAX(F.LOCATION_ID) AS LOCATION_ID,
+				E.DESC,
+				CASE WHEN E.PRIME_LOC_ID IS NULL OR E.PRIME_LOC_ID = '' THEN  MAX(F.LOCATION_ID) ELSE E.PRIME_LOC_ID END as LOCATION_ID
+				FROM "sap.tm.trp.db.filter::t_location_filter_region" B 
+				LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_region_group_item" D ON B.REGION_GROUP_ID = D.REGION_GROUP_ID
+				LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_region_group" E ON E.ID = B.REGION_GROUP_ID
+				LEFT JOIN "sap.tm.trp.db.systemmanagement.location::v_region_location_all" F ON F.ROOT_ID = D.ZONE_ID
+				WHERE B.LOCATION_FILTER_ID = :LOCATION_FILTER_ID
+				GROUP BY B.REGION_GROUP_ID, E.DESC, E.PRIME_LOC_ID
+				) T1
+				LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_location" T2 ON T2.ID = LOCATION_ID;
+			--	CASE WHEN T1.PRIME_LOC_ID IS NULL OR T1.PRIME_LOC_ID = '' THEN T1.LOCATION_ID ELSE T1.PRIME_LOC_ID END
+				
+			
+			
+			RESULT_OUTPUT = SELECT 100 AS LEVEL, NAME, LOCATION_ID, LOCATION_TYPE, XPOS, YPOS, HAS_OUTPUT_FLAG,DESC
+							FROM 
+							(
+								SELECT DISTINCT  NAME, REGION_GROUP_ID AS LOCATION_ID, 6 AS "LOCATION_TYPE", XPOS, YPOS, :HAS_OUTPUT AS HAS_OUTPUT_FLAG ,DESC
+								FROM :RESULT_ZONE_WITH_GROUP
+							)
+							;	
+			
+		
+ 									 
+ 	END IF;
+END;

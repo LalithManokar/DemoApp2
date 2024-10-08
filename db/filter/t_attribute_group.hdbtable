@@ -1,0 +1,16 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+	{name = "ID"; sqlType = BIGINT; nullable = false;},
+	{name = "CODE";sqlType = NVARCHAR; length = 20; nullable = true; unique = true;},
+	{name = "CATEGORY";sqlType = INTEGER; nullable = true; },
+	{name = "NAME"; sqlType = VARCHAR; length = 200; unique = true;},
+	{name = "DESC"; sqlType = VARCHAR; length = 500;},
+	{name = "VISIBILITY"; sqlType = CHAR; length = 1;},
+	{name = "CREATED_BY"; sqlType = VARCHAR; length = 22;},
+	{name = "CREATED_TIME"; sqlType = TIMESTAMP;},
+	{name = "MODIFIED_BY"; sqlType = VARCHAR; length = 22;},
+	{name = "MODIFIED_TIME"; sqlType = TIMESTAMP;},
+	{name = "RESOURCE_CATEGORY";sqlType = VARCHAR; length = 50;}
+];
+table.primaryKey.pkcolumns = ["ID"];

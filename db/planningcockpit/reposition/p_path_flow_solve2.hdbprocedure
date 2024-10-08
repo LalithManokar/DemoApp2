@@ -1,0 +1,103 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::p_path_flow_solve2"(
+IN v_opt_option VARCHAR(50),
+IN pt_node_tbl "sap.tm.trp.db.planningcockpit.reposition::tt_pathbased_node",
+IN pt_path "sap.tm.trp.db.planningcockpit.reposition::tt_pathbased_path",
+OUT pt_res_tbl "sap.tm.trp.db.planningcockpit.reposition::tt_pathbased_res"
+)
+LANGUAGE SQLSCRIPT 
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN  
+
+DECLARE num_node INT;
+DECLARE opt_option VARCHAR(50);
+
+opt_option := v_opt_option;
+
+SELECT MAX("NODE_ID") INTO num_node FROM :pt_node_tbl;
+
+pt_res_tbl = SELECT TOP 0 NULL AS "PATH_ID",NULL AS "FLOW" FROM dummy;
+
+t_path_aug = SELECT ROW_NUMBER() OVER() AS "KEY_ID",* FROM :pt_path;
+
+t_path_min = SELECT MIN("KEY_ID") AS "KEY_ID" 
+			 FROM :t_path_aug 
+			 GROUP BY "SOURCE_NODE_ID", 
+			 		  "SINK_NODE_ID";
+
+t_first_path = SELECT A."PATH_ID",
+					  A."SOURCE_NODE_ID",
+					  A."SINK_NODE_ID",
+					  A."LOWER",
+					  A."CAPACITY",
+					  A."COST"
+			   FROM :t_path_aug A
+			   INNER JOIN :t_path_min B ON A."KEY_ID"=B."KEY_ID";
+
+t_rem_path = SELECT * FROM :pt_path 
+			 WHERE "PATH_ID" NOT IN (SELECT "PATH_ID" FROM :t_first_path);
+
+t_virtual_node = SELECT "PATH_ID"+:num_node+1 AS "NODE_ID",
+						0 AS "SUPPLY_DEMAND",
+						* 
+				 FROM :t_rem_path;						
+
+t_node = SELECT * FROM :pt_node_tbl
+		 UNION ALL
+		 SELECT "NODE_ID",
+				"SUPPLY_DEMAND" 
+		 FROM :t_virtual_node;
+
+t_first_arc = SELECT "SOURCE_NODE_ID" AS "FROM_ID",
+					 "SINK_NODE_ID" AS "TO_ID",
+					 "LOWER",
+					 "CAPACITY",
+					 "COST"
+			  FROM :t_first_path;
+					 
+t_source_virtual_arc = SELECT "SOURCE_NODE_ID" AS "FROM_ID",
+							  "NODE_ID" AS "TO_ID",
+							  "LOWER",
+							  "CAPACITY",
+							  1 AS "COST"
+					   FROM :t_virtual_node;
+							  
+t_sink_virtual_arc = SELECT "NODE_ID" AS "FROM_ID",
+							"SINK_NODE_ID" AS "TO_ID",
+							"LOWER",
+							"CAPACITY",
+							"COST"-1 AS "COST"
+					  FROM :t_virtual_node;
+
+t_arc = SELECT * FROM :t_first_arc
+		UNION ALL
+		SELECT * FROM :t_source_virtual_arc
+		UNION ALL
+		SELECT * FROM :t_sink_virtual_arc;
+
+IF (:opt_option = 'EXTREMELY LARGE SCALE') THEN
+CALL "sap.tm.trp.db.planningcockpit.reposition::p_alternative_min_cost_flow_solve"(
+:t_node,
+:t_arc,
+t_flow);
+ELSE
+CALL "_SYS_AFL"."OFL_AREA_NETWORK_SIMPLEX_SOLVE_PROC"(:t_node, :t_arc, t_flow);
+
+END IF;
+
+t_first_path_res = SELECT A."PATH_ID",
+					  	  B."FLOW"
+				   FROM :t_first_path A
+				   INNER JOIN :t_flow B ON A."SOURCE_NODE_ID"=B."FROM_ID" AND A."SINK_NODE_ID"=B."TO_ID";
+
+t_rem_path_res = SELECT A."PATH_ID",
+						B."FLOW"
+				 FROM :t_virtual_node A
+				 INNER JOIN :t_flow B ON A."NODE_ID"=B."FROM_ID" AND A."SINK_NODE_ID"=B."TO_ID";				 
+				 
+pt_res_tbl = SELECT * FROM :t_first_path_res
+			 UNION ALL
+			 SELECT * FROM :t_rem_path_res;
+
+END;

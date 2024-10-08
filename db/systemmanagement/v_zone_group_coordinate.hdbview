@@ -1,0 +1,13 @@
+schema = "SAP_TM_TRP";
+query = "SELECT T1.ID AS GROUP_ID,
+                SUM(T3.XPOS) / COUNT(T3.XPOS) AS XPOS,
+                SUM(T3.YPOS) / COUNT(T3.YPOS) AS YPOS
+           FROM \"sap.tm.trp.db.systemmanagement::t_zone_group\" AS T1
+                INNER JOIN \"sap.tm.trp.db.systemmanagement::t_zone_group_item\" AS T2
+                ON T1.ID = T2.ZONE_GROUP_ID
+                INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_zone_ui\" AS T3
+                ON T2.ZONE_ID = T3.ID
+       GROUP BY T1.ID";
+          
+depends_on_view = ["sap.tm.trp.db.systemmanagement.location::v_zone_ui"];
+depends_on_table = ["sap.tm.trp.db.systemmanagement::t_zone_group", "sap.tm.trp.db.systemmanagement::t_zone_group_item"];

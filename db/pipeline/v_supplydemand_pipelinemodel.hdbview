@@ -1,0 +1,25 @@
+schema="SAP_TM_TRP";
+query="SELECT A.ID,
+              A.NAME,
+              A.LAYOUT_ID,
+              A.ENTRY_POINT_ID,
+              U1.USERNAME AS CREATE_BY,
+              A.CREATE_ON,
+              U2.USERNAME AS LAST_MODIFIED_BY,
+              A.LAST_MODIFIED_ON,
+              A.PIPELINE_MODEL_TYPE_ID,
+              A.DESC,
+              A.CODE,
+              A.RESOURCE_CATEGORY 
+       FROM \"sap.tm.trp.db.pipeline::v_pipeline_model\" A
+       INNER JOIN \"sap.tm.trp.db.pipeline::t_pipeline_model_type\" B
+       ON A.PIPELINE_MODEL_TYPE_ID = B.ID
+       INNER JOIN \"sap.tm.trp.db.systemmanagement.user::v_user\" U1
+       ON (U1.ID = A.CREATE_BY)
+       INNER JOIN \"sap.tm.trp.db.systemmanagement.user::v_user\" U2
+       ON (U2.ID = A.LAST_MODIFIED_BY)
+       WHERE B.PARENT_ID = 1"  ;
+   
+depends_on_view = ["sap.tm.trp.db.pipeline::v_pipeline_model",
+                   "sap.tm.trp.db.systemmanagement.user::v_user"];
+depends_on_table = ["sap.tm.trp.db.pipeline::t_pipeline_model_type"];

@@ -1,0 +1,10 @@
+schema="SAP_TM_TRP";
+query= "		select  T0.equipment_filter_id,
+				 		T0.equi_code,
+				 		T0.equipment_group_id,
+				 		T0.resource_category
+				 from \"sap.tm.trp.db.filter::t_equipment_filter_equipment\" T0
+				 join \"sap.tm.trp.db.filter::v_equipment_filter_id_auth\" T1 on T0.equipment_filter_id = T1.equipment_filter_id
+    	  ";
+depends_on_table = ["sap.tm.trp.db.filter::t_equipment_filter_equipment"];
+depends_on_view  = ["sap.tm.trp.db.filter::v_equipment_filter_id_auth"];

@@ -1,0 +1,116 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_get_supply_demand_result_rulegroup" (
+	IN PLAN_ID "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_sd_plan_rulegroup", 
+	IN PLAN_EXECUTION_ID "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_sd_plan_execution_id", 
+	IN TIMEZONE NVARCHAR(50),
+	IN LOCATION "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_location",
+	IN RESOURCE "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_resource",
+	OUT DATASET "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+ 	READS SQL DATA AS
+BEGIN
+
+	DECLARE LV_LOCATION_COUNT INTEGER;
+	
+	DECLARE PLAN_EXECUTION_COUNT INTEGER;
+ 	
+	DECLARE SCHEDULED_PLAN_ID BIGINT;
+	
+	DECLARE SD_PLAN_ID BIGINT;
+	
+	DECLARE RES_FILTER_ID BIGINT;
+
+	--Filter ID
+	DECLARE TIME_FILTER_ID BIGINT;
+	DECLARE ATTRIBUTE_FILTER_ID BIGINT;
+	
+	--pipeline model info
+	DECLARE PIPELINE_MODEL_ID BIGINT;
+	DECLARE PIPELINE_MODEL VARCHAR(200);
+	DECLARE INSTANT_ENABLED CHAR(1) DEFAULT '';
+	DECLARE PLAN_COUNT INTEGER;
+	DECLARE ATTRIBUTE_FILTER NVARCHAR(500);
+	DECLARE RESOURCE_CATEGORY VARCHAR(20);
+    
+    SELECT COUNT(*) INTO PLAN_COUNT FROM :PLAN_ID T1 WHERE T1.PLAN_ID IS NOT NULL AND T1.PLAN_ID <> -1 ;
+    
+    SELECT  COUNT(*) INTO PLAN_EXECUTION_COUNT FROM :PLAN_EXECUTION_ID T1
+    WHERE T1.PLAN_EXECUTION_ID IS NOT NULL AND T1.PLAN_EXECUTION_ID <> -1;
+    
+    SELECT TOP 1 PLAN_ID INTO SD_PLAN_ID FROM :PLAN_ID;
+    
+	IF PLAN_COUNT > 0 THEN
+		CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_scheduled_plan_id"(:SD_PLAN_ID, SCHEDULED_PLAN_ID);
+		CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_pipeline_model_by_plan"(:SCHEDULED_PLAN_ID, PIPELINE_MODEL_ID, PIPELINE_MODEL, INSTANT_ENABLED);
+	END IF;
+ 
+	IF PLAN_EXECUTION_COUNT >0 THEN -- -1 means null for PLAN_EXECUTION_ID
+		-- fetch specified exection data 
+		DATASET = SELECT * FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" WHERE PLAN_EXECUTION_ID 
+		IN (SELECT PLAN_EXECUTION_ID FROM :PLAN_EXECUTION_ID);
+		
+	ELSE
+		-- fetch instant data or last execution data 
+		IF INSTANT_ENABLED = 'X' THEN 
+		-- load data from instant executor
+		CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_sd_parameter_filterid_by_plan_rulegroup"(:PLAN_ID,LOCATION_FILTER_ID,RESOURCE_FILTER_ID,TIME_FILTER_ID,ATTRIBUTE_FILTER_ID);
+		CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_node_list_by_plan"(:PIPELINE_MODEL_ID, NODE_LIST);
+		CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_sd_parameter_location_by_plan_rulegroup"(:LOCATION_FILTER_ID, :LOCATION, LT_LOCATIONS);
+		CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_sd_parameter_resource_by_plan_rulegroup"(:RESOURCE_FILTER_ID, :RESOURCE, LT_RESOURCES);
+		
+        SELECT TOP 1 RESOURCE_FILTER_ID INTO RES_FILTER_ID from :RESOURCE_FILTER_ID;
+        
+		CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_time_period_by_plan"(:TIME_FILTER_ID, :TIMEZONE, LT_TIMES);
+		CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_attribute_filter"(:ATTRIBUTE_FILTER_ID, ATTRIBUTE_FILTER);
+		CALL "sap.tm.trp.db.supplydemand.instant::p_sd_parameter_resource_category"(:RES_FILTER_ID, RESOURCE_CATEGORY);
+		  
+		--3)dynamic call the pipline procedure to get the SD plan result
+		CALL "sap.tm.trp.db.supplydemand.instant::p_pipeline_procedure_wrapper"(:PIPELINE_MODEL, :RESOURCE_CATEGORY, :LT_LOCATIONS,:LT_RESOURCES,:LT_TIMES,:NODE_LIST,:ATTRIBUTE_FILTER, INSTANT_DATASET);
+		
+		-- convert string node name to node id
+		DATASET = SELECT 
+		NULL AS PLAN_EXECUTION_ID,
+		T2.ID AS NODE_ID, 
+		T1.GEO_ID AS LOCATION_ID, 
+		T1.GEO_NAME AS LOCATION_NAME, 
+		T1.GEO_FILTER_TYPE AS LOCATION_FILTER_TYPE, 
+		T1.EQUIP_TYPE AS EQUIP_TYPE_ID, 
+		T1.EQUIP_NAME AS EQUIP_TYPE_NAME, 
+		T1.EQUIP_FILTER_TYPE AS EQUIP_FILTER_TYPE, 
+		T1.OUTPUT_KEY, 
+		T1.OUTPUT_VALUE, 
+		T1.TIME_INTERVAL_ID, 
+		T1.START_TIME, 
+		T1.END_TIME, 
+		T1.SEQUENCE, 
+		T1.INTER_SECONDS AS TIME_INTERVAL,
+		T1.UNIT  
+		FROM :INSTANT_DATASET AS T1 
+		INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T2
+		ON T2.METADATA_NODE_ID = T1.NODE_ID AND PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID
+		WHERE TO_DECIMAL(T1.OUTPUT_VALUE) <> 0;
+		
+		ELSE
+		-- load data from output dataset table
+		  V_MAX_EXECUTION_ID = SELECT PLAN_MODEL_ID,MAX( T1.ID)  AS PLAN_EXECUTION_ID
+	      FROM "sap.tm.trp.db.pipeline::t_plan_execution" T1
+	      WHERE PLAN_MODEL_ID IN (SELECT PLAN_ID FROM :PLAN_ID)
+	      GROUP BY PLAN_MODEL_ID;
+	  
+	    ---Get default node by execution id for scheduled SD plan
+		DATASET = SELECT * FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" 
+		WHERE PLAN_EXECUTION_ID IN (SELECT PLAN_EXECUTION_ID FROM :V_MAX_EXECUTION_ID);
+		
+		END IF;
+	
+	END IF;
+	
+	-- replace with pass in location
+  	SELECT COUNT(*) INTO LV_LOCATION_COUNT FROM :LOCATION;
+  	IF :LV_LOCATION_COUNT <> 0 THEN
+		DATASET = SELECT T1.* FROM :DATASET T1 INNER JOIN :LOCATION T2 ON T1.LOCATION_ID = T2.LOCATION_ID;
+ 	END IF;
+
+END;

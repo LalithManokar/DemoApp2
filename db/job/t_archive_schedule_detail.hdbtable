@@ -1,0 +1,15 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT;},
+    {name = "RULE_ID"; sqlType = NVARCHAR; length = 100;},
+    {name = "START_TIME"; sqlType = TIMESTAMP;},
+    {name = "EXPIRY_TIME"; sqlType = TIMESTAMP;},
+    {name = "RECURRENCE_TYPE"; sqlType = VARCHAR; length = 50;},
+    {name = "RECURRENCE_INTERVAL"; sqlType = INTEGER;},
+    {name = "RECURRENCE_DAY"; sqlType = INTEGER;},
+    {name = "SCHEDULE_TYPE"; sqlType = VARCHAR; length = 500;},
+    {name = "TIMEZONES"; sqlType = VARCHAR; length = 40;}
+];
+
+table.primaryKey.pkcolumns = ["ID"];

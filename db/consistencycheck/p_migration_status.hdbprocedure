@@ -1,0 +1,12 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.consistencycheck::p_migration_status" (
+    OUT STATUS VARCHAR(1)
+)
+ LANGUAGE SQLSCRIPT
+ SQL SECURITY INVOKER
+ DEFAULT SCHEMA SAP_TM_TRP
+ AS
+BEGIN
+
+	CALL "sap.tm.trp.db.systemmanagement.customization::p_get_general_parameter"('MIGRATION',STATUS);
+
+END;

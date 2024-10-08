@@ -1,0 +1,23 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.dataprovisioning::sp_lease_contract_update_plan" (
+in LEASE_CONTRACT_ID bigint,
+in LOCATION_ID nvarchar(22),
+in RESOURCE_TYPE nvarchar(22),
+in SCENARIO_NAME nvarchar(100),
+in ACTIVITY_ID bigint,
+in ACTUAL_HIRE_QUANTITY integer,
+in ACTUAL_HIRE_TIME timestamp)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA "SAP_TM_TRP" AS
+BEGIN
+
+	update "sap.tm.trp.db.planningcockpit::t_used_lease_quota"
+	set actual_hire_quantity=:ACTUAL_HIRE_QUANTITY,
+		actual_hire_time=:ACTUAL_HIRE_TIME
+	where lease_contract_id=:LEASE_CONTRACT_ID
+	and location_id=:LOCATION_ID
+	and resource_type=:RESOURCE_TYPE
+	and scenario_name=:SCENARIO_NAME
+	and activity_id=:ACTIVITY_ID;
+
+END;

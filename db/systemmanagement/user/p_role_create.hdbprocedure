@@ -1,0 +1,20 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_role_create" (
+  IN ROLE_GROUP_ID INTEGER,
+  IN NAME NVARCHAR(50),
+  IN DESC NVARCHAR(50),
+  OUT ROLE_ID BIGINT) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+    DECLARE USER_ID BIGINT;
+    
+    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+    
+    SELECT "sap.tm.trp.db.systemmanagement.user::s_role".NEXTVAL INTO ROLE_ID FROM DUMMY;
+
+    INSERT INTO "sap.tm.trp.db.systemmanagement.user::t_role" (ID, ROLE_GROUP_ID, NAME, DESC, LAST_MODIFIED_BY, LAST_MODIFIED_AT, CREATE_BY, CREATE_AT, CODE)
+    VALUES(:ROLE_ID, :ROLE_GROUP_ID, :NAME, :DESC, :USER_ID, CURRENT_UTCTIMESTAMP, :USER_ID, CURRENT_UTCTIMESTAMP, UPPER(:NAME));
+    
+END;

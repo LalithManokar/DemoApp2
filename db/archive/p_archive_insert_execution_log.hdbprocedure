@@ -1,0 +1,24 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::p_archive_insert_execution_log" (
+IN EXECUTION_ID BIGINT,
+IN TABLE_ID BIGINT,
+IN EXECUTION_TYPE TINYINT,
+OUT EXECUTION_LOG_ID BIGINT
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+/***************************** 
+	Write your procedure logic 
+ *****************************/
+DECLARE IN_PROGRESS INTEGER;
+
+IN_PROGRESS:=3;
+
+SELECT "sap.tm.trp.db.archive::s_archive_execution_log".NEXTVAL INTO EXECUTION_LOG_ID FROM DUMMY;
+INSERT INTO "sap.tm.trp.db.archive::t_archive_execution_log" 
+(ID,EXECUTION_ID,TABLE_ID,EXECUTION_TYPE,STATUS,RECORD_COUNT,MESSAGE,START_TIME)
+VALUES(:EXECUTION_LOG_ID,:EXECUTION_ID,:TABLE_ID,:EXECUTION_TYPE,:IN_PROGRESS,0,'',CURRENT_UTCTIMESTAMP);
+ 
+END;

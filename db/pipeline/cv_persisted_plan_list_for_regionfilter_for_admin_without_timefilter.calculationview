@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_persisted_plan_list_for_regionfilter_for_admin_without_timefilter" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_anna_privilege_check"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="IN_VP_LOCATION_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="IN_VP_LOCATION_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_PERSISTED_PLAN_IDS" parameter="true">
+      <descriptions defaultDescription="IN_PERSISTED_PLAN_IDS"/>
+      <variableProperties datatype="VARCHAR" length="5000" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_VP_EQUIP_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="IN_VP_EQUIP_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_PLAN_TYPE_ID" parameter="true">
+      <descriptions defaultDescription="IN_PLAN_TYPE_ID"/>
+      <variableProperties datatype="INTEGER" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_RESOURCE_CATEGORY" parameter="true">
+      <descriptions defaultDescription="IN_RESOURCE_CATEGORY"/>
+      <variableProperties datatype="NVARCHAR" length="20" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="PLAN_MODEL_ID"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_VP_LOCATION_FILTER_ID</localVariable>
+      <localVariable>#IN_PERSISTED_PLAN_IDS</localVariable>
+      <localVariable>#IN_VP_EQUIP_FILTER_ID</localVariable>
+      <localVariable>#IN_PLAN_TYPE_ID</localVariable>
+      <localVariable>#IN_RESOURCE_CATEGORY</localVariable>
+      <definition> 
+  
+ BEGIN 
+ 
+ 
+	 DECLARE VAR_LOCATION_TYPE INTEGER;
+	 DECLARE LOCATION_FILTER INTEGER :=1;
+	 DECLARE LOCATION_GROUP_FILTER INTEGER :=2;
+	 DECLARE ZONE_FILTER INTEGER := 3;
+	 DECLARE ZONE_GROUP_FILTER INTEGER :=4;
+	 DECLARE REGION_FILTER INTEGER :=5 ;
+	 DECLARE REGION_GROUP_FILTER INTEGER :=6;
+	-- DECLARE PERSISTED_PLAN_MODEL_TYPE INTEGER:= 1;
+	-- DECLARE GLOBAL_VISIBILITY_FLAG INTEGER :=1;
+      
+   
+ --Get the persisted plan model id with the equip code set which is the supper set of the VP equip code set according to IN_VP_EQUIP_FILTER_ID:
+  PERSISTED_PLAN_IDS_OF_VP_EQUIP_FILTER = 
+  SELECT PLAN_MODEL_ID 
+  FROM &quot;sap.tm.trp.db.pipeline::cv_get_persisted_plan_list_with_larger_equip_code_set&quot;(placeholder.&quot;$$VP_EQUIP_FILTER_ID$$&quot;=>:IN_VP_EQUIP_FILTER_ID,
+                                                                                       placeholder.&quot;$$IN_PLAN_TYPE_ID$$&quot;=>:IN_PLAN_TYPE_ID,
+                                                                                       placeholder.&quot;$$IN_RESOURCE_CATEGORY$$&quot;=>:IN_RESOURCE_CATEGORY);
+  
+    PERSISTED_PLAN_IDS_AUTHORIZED = SELECT ID,FILTER_GROUP_ID
+         FROM  &quot;sap.tm.trp.db.pipeline::t_plan_model&quot; T1
+         INNER JOIN :PERSISTED_PLAN_IDS_OF_VP_EQUIP_FILTER T2 ON (T1.ID = T2.PLAN_MODEL_ID)
+         WHERE --T1.VISIBILITY_FLAG = :GLOBAL_VISIBILITY_FLAG
+         --AND  
+         T1.PLAN_MODEL_TYPE_ID = :IN_PLAN_TYPE_ID;
+
+ 
+ SQL_PERSISTED_PLAN_WITH_THE_TIME_FILTER = SELECT T1.ID AS PLAN_MODEL_ID,T3.LOCATION_TYPE,T3.ID AS LOCATION_FILTER_ID
+FROM :PERSISTED_PLAN_IDS_AUTHORIZED T1
+INNER JOIN &quot;sap.tm.trp.db.filter::t_filter_location_filter&quot; T2 ON (T2.FILTER_GROUP_ID = T1.FILTER_GROUP_ID)
+INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T3 ON (T2.LOCATION_FILTER_ID = T3.ID)
+INNER JOIN &quot;sap.tm.trp.db.filter::t_filter_group&quot; T4 ON (T1.FILTER_GROUP_ID = T4.ID)
+INNER JOIN &quot;sap.tm.trp.db.filter::t_time_filter&quot; T5 ON (T4.TIME_FILTER_ID = T5.ID)
+WHERE T5.OFFSET_FLAG = 1;
+ 
+ /*
+SQL_REGION_LIST_VP_FILTER =
+   --zones defined in the region filter of the VP: 
+   SELECT T1.ZONE_ID AS REGION_ID
+    FROM &quot;sap.tm.trp.db.filter::t_location_filter_region&quot; T1
+    WHERE T1.LOCATION_FILTER_ID = :IN_VP_LOCATION_FILTER_ID;
+   
+  
+     SQL_PERSISTED_PLAN_REGION_LIST = SELECT T1.PLAN_MODEL_ID,T2.ZONE_ID AS REGION_ID
+     FROM :SQL_PERSISTED_PLAN_WITH_THE_TIME_FILTER T1
+     INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter_region&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID)
+     WHERE T1.LOCATION_TYPE = :REGION_FILTER;
+    
+    SQL3_1 =  SELECT  T2.PLAN_MODEL_ID
+      FROM :SQL_REGION_LIST_VP_FILTER T1
+      INNER JOIN :SQL_PERSISTED_PLAN_REGION_LIST T2 ON (T1.REGION_ID = T2.REGION_ID);
+    */
+     --children zones belongs to the zones that is defined in region filter of the VP:
+    SQL_ZONE_LIST_VP_FILTER = SELECT T2.ZONE_ID
+    FROM &quot;sap.tm.trp.db.filter::t_location_filter_region&quot; T1
+    INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::t_region_item&quot; T2 ON (T1.ZONE_ID = T2.ROOT_ID)
+    WHERE T1.LOCATION_FILTER_ID = :IN_VP_LOCATION_FILTER_ID;
+
+    SQL_PERSISTED_PLAN_ZONE_LIST = SELECT T1.PLAN_MODEL_ID,T2.ZONE_ID
+     FROM :SQL_PERSISTED_PLAN_WITH_THE_TIME_FILTER T1
+     --INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter_zone&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID);
+     INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter_region&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID);
+     --WHERE T1.LOCATION_TYPE = :ZONE_FILTER;
+       
+   
+     SQL3_2 =  SELECT  T2.PLAN_MODEL_ID
+      FROM :SQL_ZONE_LIST_VP_FILTER T1
+     INNER JOIN :SQL_PERSISTED_PLAN_ZONE_LIST T2 ON (T1.ZONE_ID = T2.ZONE_ID);
+       
+     SQL_LOCATION_LIST_VP_FILTER = SELECT T2.LOCATION_ID
+    FROM &quot;sap.tm.trp.db.filter::t_location_filter_region&quot; T1
+    INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::v_region_location_all&quot; T2 ON (T1.ZONE_ID = T2.ROOT_ID)
+    WHERE T1.LOCATION_FILTER_ID = :IN_VP_LOCATION_FILTER_ID;
+      
+     SQL_PERSISTED_PLAN_LOCATION_LIST = SELECT T1.PLAN_MODEL_ID,T2.LOCATION_ID
+     FROM :SQL_PERSISTED_PLAN_WITH_THE_TIME_FILTER T1
+     INNER JOIN &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; T2 ON (T1.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID)
+     WHERE T1.LOCATION_TYPE = :LOCATION_FILTER;
+     
+      SQL3_3 =  SELECT  T2.PLAN_MODEL_ID
+      FROM :SQL_LOCATION_LIST_VP_FILTER T1
+      INNER JOIN :SQL_PERSISTED_PLAN_LOCATION_LIST T2 ON (T1.LOCATION_ID = T2.LOCATION_ID);
+     
+       SQL3 = SELECT DISTINCT PLAN_MODEL_ID FROM
+	         (SELECT PLAN_MODEL_ID FROM :SQL3_2
+	           UNION ALL SELECT PLAN_MODEL_ID FROM :SQL3_3
+	          );
+	    
+    
+     var_out = SELECT PLAN_MODEL_ID FROM :SQL3 ;
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="PLAN_MODEL_ID" order="1">
+        <descriptions defaultDescription="PLAN_MODEL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_MODEL_ID"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

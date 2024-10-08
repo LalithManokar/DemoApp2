@@ -1,0 +1,32 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::p_compute_interval_storage_cost" (
+IN t_compute_rule "sap.tm.trp.db.planningcockpit.reposition::tt_storage_cost_time",
+IN t_stock_input "sap.tm.trp.db.planningcockpit.reposition::tt_stock_input",
+OUT t_stock_output "sap.tm.trp.db.planningcockpit.reposition::tt_stock_output"
+)
+LANGUAGE SQLSCRIPT 
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN 
+
+t_interval_stock = SELECT "LOCATION",
+						  "CONTAINER_TYPE",
+						  "FROM_TIME",
+						  "TO_TIME",
+						  DAYS_BETWEEN(TO_DATE("FROM_TIME"),TO_DATE("TO_TIME")) AS "INTERVAL"
+				   FROM :t_stock_input;
+				   
+t_stock_output = SELECT A."LOCATION",
+						A."CONTAINER_TYPE",
+						A."FROM_TIME",
+						A."TO_TIME",
+						IFNULL(B."COST",0) as "COST"
+				 FROM :t_interval_stock A
+				 LEFT JOIN :t_compute_rule B 
+				 ON A."LOCATION"=B."LOCATION" 
+				 AND A."CONTAINER_TYPE"=B."CONTAINER_TYPE" 
+				 AND A."INTERVAL" >= IFNULL(B."THRESHOLD_FROM",0) 
+				 AND A."INTERVAL" < IFNULL(B."THRESHOLD_TO",1000000);
+
+
+END;

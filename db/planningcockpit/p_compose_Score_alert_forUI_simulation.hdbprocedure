@@ -1,0 +1,175 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_compose_Score_alert_forUI_simulation" (
+  IN EXECUTION_ID BIGINT,
+  IN SCENARIO_ID BIGINT,
+  IN NODE_ID BIGINT,
+  IN FILTER_TYPE INTEGER,
+  OUT OUTPUT_RECORDS INTEGER  
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+
+LOCATION_SQL = SELECT t1.SCENARIO_ID,
+			          t1.PLAN_EXECUTION_ID,
+			          t1.PLAN_MODEL_ID,
+			          t1.PLAN_MODEL_TYPE_ID,
+			          t1.PLAN_MODEL_CATEGORY_ID,
+			          t1.FILTER_TYPE,  
+			          t1.FILTER_GROUP_ID,
+			          t1.PIPELINE_MODEL_ID,
+			          t1.NODE_ID,
+			          t1.NODE_NAME,
+			          t1.NODE_VISIBLE,
+			          t1.DATA_OBJECT_FORMAT,
+			          t1.LOCATION_ID,
+			          t1.LOCATION_NAME,
+			          t1.EQUIP_TYPE_ID, 
+			          t1.EQUIP_TYPE_NAME,
+			          t1.TIME_INTERVAL_ID,
+			          t1.SEQUENCE,
+			          t1.START_TIME,
+			          t1.TIME_STEP,  
+			          t1.STOCK,
+			          t1.SUPPLY,
+			          t1.DEMAND,
+			          t1.BALANCE_SUPPLY_DEMAND,
+			          t1.BALANCE_STOCK_SUPPLY_DEMAND,
+			          t1.MIN_SAFETY_STOCK,
+			          t1.MAX_SAFETY_STOCK,
+			          t1.MESSAGE,
+			          t1.ALERT_REASON, 
+			          t1.ALERT_SCORE_NORMALIZING
+                 FROM "sap.tm.trp.db.planningcockpit::t_alert_output_alertScore_simulation" t1 
+                --WHERE T1.PLAN_EXECUTION_ID = TO_VARCHAR(:EXECUTION_ID)
+                WHERE T1.PLAN_EXECUTION_ID = :EXECUTION_ID
+                  AND T1.SCENARIO_ID = :SCENARIO_ID;
+           
+     LOC_OWN_TBL = 
+       SELECT DISTINCT T1.LOCATION_ID,T1.OWNER,T1.LOCATION_FILTER_TYPE
+       FROM "sap.tm.trp.db.alert::t_planModel_alert_forUI_timeInterval_withoutGis" T1
+       --WHERE T1.PLAN_EXECUTION_ID = TO_VARCHAR(:EXECUTION_ID) AND
+       WHERE T1.PLAN_EXECUTION_ID = :EXECUTION_ID AND
+             --T1.NODE_ID = TO_VARCHAR(:NODE_ID);
+             T1.NODE_ID = :NODE_ID;
+     
+PLAN_MODEL_ALERT_FOR_UI_TBL = SELECT SCENARIO_ID,  
+							         T01.PLAN_EXECUTION_ID,
+							         PLAN_MODEL_ID,
+							         PLAN_MODEL_TYPE_ID,
+							         PLAN_MODEL_CATEGORY_ID,
+							         FILTER_TYPE,  
+							         FILTER_GROUP_ID,
+							         PIPELINE_MODEL_ID,
+							         NODE_ID,
+							         NODE_NAME,
+							         NODE_VISIBLE,
+							         DATA_OBJECT_FORMAT,
+							         T01.LOCATION_ID,
+							         LOCATION_NAME,
+							         EQUIP_TYPE_ID, 
+							         EQUIP_TYPE_NAME,
+							         TIME_INTERVAL_ID,
+							         SEQUENCE,
+							         START_TIME,
+							         TIME_STEP,     
+							         STOCK,
+							         SUPPLY,
+							         DEMAND,
+							         BALANCE_SUPPLY_DEMAND,
+							         BALANCE_STOCK_SUPPLY_DEMAND,
+							         MIN_SAFETY_STOCK,
+							         MAX_SAFETY_STOCK,
+							         MESSAGE,
+							         ALERT_REASON, 
+							         T01.ALERT_SCORE_NORMALIZING AS ALERT_SCORE,
+							         T02.OWNER,
+							         T02.LOCATION_FILTER_TYPE
+                                FROM :LOCATION_SQL AS T01
+                                LEFT OUTER JOIN  :LOC_OWN_TBL AS T02
+                                ON (T01.LOCATION_ID = T02.LOCATION_ID);
+  
+  DELETE FROM "sap.tm.trp.db.planningcockpit::t_simulationModel_alert_forUI"
+  WHERE SCENARIO_ID = :SCENARIO_ID; --AND 
+       -- PLAN_EXECUTION_ID = :EXECUTION_ID;
+        
+  INSERT INTO "sap.tm.trp.db.planningcockpit::t_simulationModel_alert_forUI" 
+       (SCENARIO_ID,
+        PLAN_EXECUTION_ID, 
+        PLAN_MODEL_ID, 
+        PLAN_MODEL_TYPE_ID,  
+        PLAN_MODEL_CATEGORY_ID,
+        FILTER_TYPE,
+        FILTER_GROUP_ID, 
+        PIPELINE_MODEL_ID, 
+        NODE_ID,
+        NODE_NAME,
+        NODE_VISIBLE,
+        DATA_OBJECT_FORMAT, 
+        LOCATION_ID,
+        LOCATION_NAME,
+        EQUIP_TYPE_ID,
+        EQUIP_TYPE_NAME,
+        TIME_INTERVAL_ID,
+        SEQUENCE,     
+        START_TIME,
+        END_TIME,
+        TIME_STEP,
+        STOCK,
+        SUPPLY,
+        DEMAND,
+        BALANCE_SUPPLY_DEMAND,
+        BALANCE_STOCK_SUPPLY_DEMAND,
+        MIN_SAFETY_STOCK, 
+        MAX_SAFETY_STOCK,
+        MESSAGE,
+        ALERT_REASON, 
+        ALERT_SCORE,
+        OWNER,
+        LOCATION_FILTER_TYPE)
+     SELECT 
+        SCENARIO_ID,
+        PLAN_EXECUTION_ID, 
+        PLAN_MODEL_ID, 
+        PLAN_MODEL_TYPE_ID,  
+        PLAN_MODEL_CATEGORY_ID,
+        FILTER_TYPE,
+        FILTER_GROUP_ID, 
+        PIPELINE_MODEL_ID, 
+        NODE_ID,
+        NODE_NAME,
+        NODE_VISIBLE,
+        DATA_OBJECT_FORMAT, 
+        LOCATION_ID,
+        LOCATION_NAME,
+        EQUIP_TYPE_ID,
+        EQUIP_TYPE_NAME,
+        TIME_INTERVAL_ID,
+        SEQUENCE,     
+        START_TIME,
+        ADD_SECONDS(START_TIME,TIME_STEP),
+        TIME_STEP,
+        STOCK,
+        SUPPLY,
+        DEMAND,
+        BALANCE_SUPPLY_DEMAND,
+        BALANCE_STOCK_SUPPLY_DEMAND,
+        MIN_SAFETY_STOCK, 
+        MAX_SAFETY_STOCK,
+        MESSAGE,
+        ALERT_REASON, 
+        ALERT_SCORE,
+        OWNER,
+        LOCATION_FILTER_TYPE 
+     FROM :PLAN_MODEL_ALERT_FOR_UI_TBL T1
+     --WHERE T1.PLAN_EXECUTION_ID = TO_VARCHAR(:EXECUTION_ID);
+     WHERE T1.PLAN_EXECUTION_ID = :EXECUTION_ID;
+     
+     SELECT COUNT (*) INTO OUTPUT_RECORDS 
+     FROM "sap.tm.trp.db.planningcockpit::t_simulationModel_alert_forUI" t1
+     --WHERE t1.PLAN_EXECUTION_ID = TO_VARCHAR(:EXECUTION_ID)
+     WHERE t1.PLAN_EXECUTION_ID = :EXECUTION_ID
+		     AND T1.SCENARIO_ID = :SCENARIO_ID;
+           
+END;

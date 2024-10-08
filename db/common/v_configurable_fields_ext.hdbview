@@ -1,0 +1,49 @@
+schema = "SAP_TM_TRP";
+query  = "
+SELECT
+b.ID AS RESOURCE_CATEGORY_ID,
+b.CODE AS RESOURCE_CATEGORY,
+a.ID,
+a.PAGE_ID,
+a.NAME,
+a.DISPLAY_NAME,
+a.DATA_TYPE,
+a.SEARCHABLE,
+a.FILTERABLE,
+a.TYPE,
+a.CONFIGURABLE,
+a.CUSTOM,
+a.DEFAULT,
+a.DISPLAY_NAME as description
+FROM \"sap.tm.trp.db.common::t_delivered_fields\" AS a
+CROSS JOIN \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings\" AS b
+WHERE b.ENABLE_FLAG = 1
+
+UNION ALL
+
+SELECT
+T1.RESOURCE_CATEGORY_ID,
+T3.CODE AS RESOURCE_CATEGORY,
+T2.ID,
+T2.PAGE_ID,
+T2.NAME,
+T2.DISPLAY_NAME,
+T2.DATA_TYPE,
+T2.SEARCHABLE,
+T2.FILTERABLE,
+2 AS TYPE,
+1 AS CONFIGURABLE,
+0 AS CUSTOM,
+1 AS DEFAULTT,
+T2.DISPLAY_NAME as description
+FROM \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_extended_columns\" T1
+INNER JOIN \"sap.tm.trp.db.common::t_extended_fields\" T2
+ON (T1.EXTENDED_COLUMN_ID = T2.ID)
+INNER JOIN \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings\" AS T3
+ON T1.RESOURCE_CATEGORY_ID = T3.ID
+AND T3.ENABLE_FLAG = 1";
+
+depends_on_table = ["sap.tm.trp.db.common::t_delivered_fields",
+                    "sap.tm.trp.db.common::t_extended_fields",
+                    "sap.tm.trp.db.systemmanagement.customization::t_resource_category_extended_columns",
+                    "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings"];

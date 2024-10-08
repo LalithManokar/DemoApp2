@@ -1,0 +1,12 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "used for time filter procedure";
+table.temporary = true;
+table.columns = [
+  {name = "ID"; sqlType = BIGINT;},
+  {name = "SEQUENCE"; sqlType = INTEGER; },
+  {name = "TIME_INTERVAL_ID"; sqlType = BIGINT; },
+  {name = "START_TIME"; sqlType = TIMESTAMP; },
+  {name = "END_TIME"; sqlType = TIMESTAMP;  },
+  {name = "INTERVAL";sqlType = INTEGER; }
+];

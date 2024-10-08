@@ -1,0 +1,48 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_template_plan_filter_visible_check"(
+    IN ID BIGINT,
+    OUT ERR_NUM INTEGER,
+    OUT FLAG VARCHAR(5)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE NUM INTEGER;
+    ERR_NUM := 0;
+    FLAG := '';
+    
+    -- Location Filter
+    LOC_FILTER = SELECT C.*
+                   FROM "sap.tm.trp.db.pipeline::t_plan_model" AS A
+                        INNER JOIN "sap.tm.trp.db.filter::t_filter_location_filter" AS B
+                        ON A.FILTER_GROUP_ID = B.FILTER_GROUP_ID
+                        INNER JOIN "sap.tm.trp.db.filter::t_location_filter" AS C
+                        ON B.LOCATION_FILTER_ID = C.ID
+                  WHERE A.ID = :ID AND C.VISIBLE_FLAG = 'P';
+    
+    SELECT COUNT(*) INTO NUM
+    FROM :LOC_FILTER;
+    
+    ERR_NUM := :ERR_NUM + :NUM;
+    
+    IF :ERR_NUM = 1 THEN
+        SELECT 'L' INTO FLAG FROM DUMMY;
+    END IF;
+    
+    -- Equipment Filter
+    EQUI_FILTER = SELECT C.*
+                    FROM "sap.tm.trp.db.pipeline::t_plan_model" AS A
+                         INNER JOIN "sap.tm.trp.db.filter::t_filter_equipment_filter" AS B ON A.FILTER_GROUP_ID = B.FILTER_GROUP_ID
+                         INNER JOIN "sap.tm.trp.db.filter::t_equipment_filter" AS C ON B.EQUIPMENT_FILTER_ID = C.ID AND C.RESOURCE_CATEGORY = B.RESOURCE_CATEGORY
+                   WHERE A.ID = :ID AND C.VISIBLE_FLAG = 'P';
+    
+    SELECT COUNT(*) INTO NUM
+    FROM :EQUI_FILTER;
+    
+    ERR_NUM := :ERR_NUM + :NUM;
+    
+    IF :ERR_NUM = 2 THEN
+        SELECT :FLAG || 'E' INTO FLAG FROM DUMMY;
+    END IF;
+END;

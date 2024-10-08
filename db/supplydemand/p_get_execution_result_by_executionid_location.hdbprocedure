@@ -1,0 +1,90 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand::p_get_execution_result_by_executionid_location" (
+	IN PLAN_ID BIGINT,
+	IN TIMEZONE NVARCHAR(50),
+	IN PLAN_EXECUTION_ID BIGINT,
+	IN NODE_ID BIGINT,
+	IN LOCATION_ID_LIST "sap.tm.trp.db.supplydemand::tt_id_list",
+	OUT OUT_PUT "sap.tm.trp.db.supplydemand::tt_get_execution_result_by_executionid_location_output"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	--READS SQL DATA
+	AS
+BEGIN
+
+    LOCATION = SELECT NULL AS GEO_ID, ID AS LOCATION_ID, NULL AS GEO_FILTER_TYPE, NULL AS GEO_GROUP_ID, NULL AS GEO_NAME FROM :LOCATION_ID_LIST;
+	CALL "sap.tm.trp.db.supplydemand::p_get_supply_demand_result_by_plan_location"(:PLAN_ID, :PLAN_EXECUTION_ID, :TIMEZONE, :LOCATION, SD_RESULT);
+	
+	CALL "sap.tm.trp.db.supplydemand::p_get_sd_additional_alert"(:NODE_ID,:PLAN_ID, :PLAN_EXECUTION_ID,:LOCATION_ID_LIST,:SD_RESULT,DATASET);
+
+--Re-generate those 0 number records not saved in db		
+OUTPUT_WITH_ZERO = SELECT   LOCATION_ID AS GEO_ID,
+                LOCATION_NAME AS GEO_NAME,
+            	RESOURCE_TYPE AS RESOURCE_TYPE_CODE,
+                RESOURCE_NAME AS RESOURCE_TYPE_NAME,
+            	CASE  WHEN OUTPUT_KEY = 'DEMAND' 
+            	      THEN 'SUPPLY' 
+	            ELSE 'DEMAND' END  AS OUTPUT_KEY,
+	            0                  AS OUTPUT_VALUE,
+            	START_TIME,  
+            	END_TIME,
+            	SEQUENCE,
+            	ALERT_STATUS,
+            	OUT_NODE_ID,
+            	HAS_DRILLDOWN_FLAG,
+            	TIME_INTERVAL,
+            	OUT_NODE_NAME, 
+            	OUT_NODE_NAV_TYPE    
+        FROM    :DATASET
+        UNION ALL
+        SELECT  LOCATION_ID AS GEO_ID,
+                LOCATION_NAME AS GEO_NAME,
+            	RESOURCE_TYPE AS RESOURCE_TYPE_CODE,
+                RESOURCE_NAME AS RESOURCE_TYPE_NAME,
+            	OUTPUT_KEY,
+            	OUTPUT_VALUE,
+            	START_TIME,  
+            	END_TIME,
+            	SEQUENCE,
+            	ALERT_STATUS,
+            	OUT_NODE_ID,
+            	HAS_DRILLDOWN_FLAG,
+            	TIME_INTERVAL,
+            	OUT_NODE_NAME, 
+            	OUT_NODE_NAV_TYPE 
+        FROM    :DATASET;
+        
+--Summerize quantity those output key and sequence are same        
+OUT_PUT = SELECT    GEO_ID,
+                    GEO_NAME,
+                	RESOURCE_TYPE_CODE,
+                    RESOURCE_TYPE_NAME,
+                	OUTPUT_KEY,
+                	SUM(OUTPUT_VALUE) AS OUTPUT_VALUE,
+                	START_TIME,  
+                	END_TIME,
+                	SEQUENCE,
+                	ALERT_STATUS,
+                	OUT_NODE_ID,
+                	HAS_DRILLDOWN_FLAG,
+                	TIME_INTERVAL,
+                	OUT_NODE_NAME, 
+                	OUT_NODE_NAV_TYPE   
+          FROM      :OUTPUT_WITH_ZERO
+          GROUP BY  GEO_ID,
+                    GEO_NAME,
+                    RESOURCE_TYPE_CODE,
+                    RESOURCE_TYPE_NAME,
+                    OUTPUT_KEY,
+                    START_TIME,
+                    END_TIME,
+                    SEQUENCE,
+                    ALERT_STATUS,
+                    OUT_NODE_ID,
+                    HAS_DRILLDOWN_FLAG,
+                    TIME_INTERVAL,
+                    OUT_NODE_NAME,
+                    OUT_NODE_NAV_TYPE;
+        
+END;

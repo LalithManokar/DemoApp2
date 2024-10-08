@@ -1,0 +1,63 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_ruleset_group_facet_filter_get" (
+    IN FUZZYSEARCH_TEXT VARCHAR(500),
+    IN RULESET_TYPE_INPUT "sap.tm.trp.db.pickupreturn::tt_id_list",
+    IN JOB_PROCESS_ID_INPUT "sap.tm.trp.db.pickupreturn::tt_id_list",
+    IN RESOURCE_CATEGORY VARCHAR(50),
+    OUT RULESET_TYPE_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_id_str_list",
+    OUT JOB_PROCESS_ID_OUTPUT "sap.tm.trp.db.pickupreturn::tt_facet_filter_id_str_list"
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP"
+READS SQL DATA 
+AS
+    RULESET_TYPE_CNT INTEGER; 
+    JOB_PROCESS_ID_CNT INTEGER;
+
+BEGIN
+    RULESET_GROUP_DATA = SELECT * FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::v_ruleset_group"
+        WHERE RESOURCE_CATEGORY = :RESOURCE_CATEGORY AND
+        (
+            LOWER(NAME) LIKE '%'||:FUZZYSEARCH_TEXT||'%' 
+            OR LOWER(DESCRIPTION) LIKE '%'||:FUZZYSEARCH_TEXT||'%'
+            OR LOWER(RULESET_TYPE_DESC) LIKE '%'||:FUZZYSEARCH_TEXT||'%'
+            OR LOWER(JOB_PROCESS) LIKE '%'||:FUZZYSEARCH_TEXT||'%'
+        )
+    ;
+    
+    SELECT COUNT(*) INTO RULESET_TYPE_CNT FROM :RULESET_TYPE_INPUT;
+    SELECT COUNT(*) INTO JOB_PROCESS_ID_CNT FROM :JOB_PROCESS_ID_INPUT;
+
+
+    --In order to speed up the performance, fetch the table instead of the view as mush as possible
+
+    IF RULESET_TYPE_CNT = 0
+        THEN RULESET_TYPE_INPUT = SELECT DISTINCT RULESET_TYPE AS ID FROM :RULESET_GROUP_DATA;
+    END IF;
+    
+    IF JOB_PROCESS_ID_CNT = 0
+        THEN JOB_PROCESS_ID_INPUT = SELECT DISTINCT JOB_PROCESS_ID AS ID FROM :RULESET_GROUP_DATA;
+    END IF;
+    
+    --If the input list contains NULL, we need to fetch records including NULL!!!!
+
+    FILTERED_OUTPUT = SELECT MASTER_TBL.*
+    FROM :RULESET_GROUP_DATA AS MASTER_TBL
+    INNER JOIN :RULESET_TYPE_INPUT AS RULESET_TYPE_TBL
+        ON IFNULL(MASTER_TBL.RULESET_TYPE, 0) = IFNULL(RULESET_TYPE_TBL.ID, 0)
+    INNER JOIN :JOB_PROCESS_ID_INPUT AS JOB_PROCESS_ID_TBL
+        ON IFNULL(MASTER_TBL.JOB_PROCESS_ID, 0) = IFNULL(JOB_PROCESS_ID_TBL.ID, 0)
+    ;
+
+    -- Need to check if ruleset_type_desc is required here. in that case, order by KEY
+
+    RULESET_TYPE_OUTPUT = SELECT DISTINCT RULESET_TYPE AS KEY, RULESET_TYPE_DESC AS TEXT
+                            FROM :FILTERED_OUTPUT;
+
+    -- Need to check if ruleset_type_desc is required here. in that case, order by KEY
+
+    JOB_PROCESS_ID_OUTPUT = SELECT DISTINCT JOB_PROCESS_ID AS KEY, JOB_PROCESS AS TEXT
+                             FROM :FILTERED_OUTPUT;
+                             
+    
+END;

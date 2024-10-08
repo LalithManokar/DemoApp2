@@ -1,0 +1,40 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.consistencycheck::p_get_inactive_pickup_and_return_ruleset" (
+  OUT INACTIVE_PR_RULESETS TABLE (
+    ID BIGINT,
+    RULE_NAME VARCHAR(200)   
+   ),
+  OUT INACTIVE_PR_RULESETS_FOR_UPLOAD "sap.tm.trp.db.consistencycheck::tt_rulesets_download_migrate"
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+/***********************************************************
+	Getting inactive Pickup and Return Rulesets for uploading 
+ ***********************************************************/
+  INACTIVE_PR_RULESETS = 	    
+			SELECT ID, RULE_NAME				
+				FROM ( 
+				SELECT 
+				DISTINCT A.ID,
+                A.RULE_NAME,
+                A.SCHEDULE_TIME_TYPE,
+                A.END_DATETIME,	
+	            G.PLANNED_TIME AS NEXT_EXECUTION_TIME
+               FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" A
+               LEFT OUTER JOIN (SELECT MODEL_ID, PLANNED_TIME
+				 FROM "sap.tm.trp.db.job::t_job_schedule" A 
+				 INNER JOIN "_SYS_XS"."JOB_LOG" B 
+				 ON A.SCHEDULE_ID = B.ID
+				 WHERE A.SCHEDULE_TYPE = 'LOCATION_RULE' AND B.STATUS = 'SCHEDULED') G 
+                 ON A.ID = G.MODEL_ID 
+                )
+             WHERE SCHEDULE_TIME_TYPE = 1
+               AND NEXT_EXECUTION_TIME IS NULL AND  END_DATETIME >= CURRENT_TIMESTAMP;              
+      
+     RUELSET_ID = SELECT DISTINCT ID FROM :INACTIVE_PR_RULESETS;
+     
+     CALL "sap.tm.trp.db.consistencycheck::p_download_pickup_and_return_rulesets_by_id"(:RUELSET_ID, INACTIVE_PR_RULESETS_FOR_UPLOAD);         
+   
+END;

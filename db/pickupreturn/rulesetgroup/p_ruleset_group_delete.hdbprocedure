@@ -1,0 +1,36 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_ruleset_group_delete" (
+    IN ID    BIGINT,
+    OUT STATUS INTEGER,  --0 error  1 success
+    OUT MESSAGE VARCHAR(200),
+    OUT JOB_PROCESS_ID INTEGER
+   )
+	 LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+    DECLARE EXIST_COUNT INTEGER;
+
+    SELECT COUNT(*) INTO EXIST_COUNT
+    FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group"
+    WHERE ID = :ID;
+    
+    SELECT JOB_PROCESS INTO JOB_PROCESS_ID
+    FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group"
+    where ID = :ID;
+
+	IF   EXIST_COUNT = 0 THEN
+		STATUS := 0;
+		MESSAGE := 'MSG_ERROR_NODATA';
+	ELSE
+		DELETE FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group" WHERE ID = :ID;
+		DELETE FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_t" WHERE ID = :ID;
+		DELETE FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" WHERE RULE_GROUP_ID = :ID;
+		DELETE FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_group_schedule" WHERE GROUP_ID = :ID;
+  	STATUS :=1;
+  	MESSAGE :='MSG_SUCCESS_STATUS';
+  	
+	END IF;
+
+END;

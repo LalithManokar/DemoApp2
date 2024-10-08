@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.2" id="cv_virtualPlan_alerts_withInputParam" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_virtualPlan_alerts_withInputParam"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="IN_VIRTUAL_PLAN_ID" parameter="true">
+      <descriptions defaultDescription="IN_VIRTUAL_PLAN_ID"/>
+      <variableProperties datatype="BIGINT" defaultValue="-1" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="VIRTUAL_PLAN_MODEL_ID"/>
+        <viewAttribute datatype="BIGINT" id="PLAN_EXECUTION_ID"/>
+        <viewAttribute datatype="BIGINT" id="PLAN_MODEL_ID"/>
+        <viewAttribute datatype="INTEGER" id="PLAN_MODEL_TYPE_ID"/>
+        <viewAttribute datatype="INTEGER" id="PLAN_MODEL_CATEGORY_ID"/>
+        <viewAttribute datatype="INTEGER" id="FILTER_TYPE"/>
+        <viewAttribute datatype="BIGINT" id="FILTER_GROUP_ID"/>
+        <viewAttribute datatype="BIGINT" id="PIPELINE_MODEL_ID"/>
+        <viewAttribute datatype="BIGINT" id="NODE_ID"/>
+        <viewAttribute datatype="VARCHAR" id="NODE_NAME" length="32"/>
+        <viewAttribute datatype="SMALLINT" id="NODE_VISIBLE"/>
+        <viewAttribute datatype="VARCHAR" id="DATA_OBJECT_FORMAT" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_ID" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_NAME" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="EQUIP_TYPE_ID" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="EQUIP_TYPE_NAME" length="50"/>
+        <viewAttribute datatype="BIGINT" id="TIME_INTERVAL_ID"/>
+        <viewAttribute datatype="INTEGER" id="SEQUENCE"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_TIME"/>
+        <viewAttribute datatype="DECIMAL" id="TIME_STEP" length="34"/>
+        <viewAttribute datatype="DOUBLE" id="STOCK"/>
+        <viewAttribute datatype="DOUBLE" id="SUPPLY"/>
+        <viewAttribute datatype="DOUBLE" id="DEMAND"/>
+        <viewAttribute datatype="DOUBLE" id="BALANCE_SUPPLY_DEMAND"/>
+        <viewAttribute datatype="DOUBLE" id="BALANCE_STOCK_SUPPLY_DEMAND"/>
+        <viewAttribute datatype="DOUBLE" id="MIN_SAFETY_STOCK"/>
+        <viewAttribute datatype="DOUBLE" id="MAX_SAFETY_STOCK"/>
+        <viewAttribute datatype="VARCHAR" id="MESSAGE" length="8"/>
+        <viewAttribute datatype="VARCHAR" id="ALERT_REASON" length="500"/>
+        <viewAttribute datatype="DOUBLE" id="ALERT_SCORE"/>
+        <viewAttribute datatype="VARCHAR" id="OWNER" length="500"/>
+        <viewAttribute datatype="INTEGER" id="LOCATION_FILTER_TYPE"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_VIRTUAL_PLAN_ID</localVariable>
+      <definition> 
+  
+ BEGIN 
+ 
+ 
+ 	 var_out = select distinct T0.VIRTUAL_PLAN_MODEL_ID,
+ 	               T111.PLAN_EXECUTION_ID,
+	               T111.PLAN_MODEL_ID,
+	               T12.PLAN_MODEL_TYPE_ID,
+	               T12.PLAN_MODEL_CATEGORY_ID,     
+	               T12.FILTER_TYPE,
+	               T12.FILTER_GROUP_ID,
+		           T12.PIPELINE_MODEL_ID,
+	               T12.NODE_ID,
+	               T12.NODE_NAME,
+	               T12.NODE_VISIBLE,
+	               T12.DATA_OBJECT_FORMAT,
+	               T12.LOCATION_ID,
+	               T12.LOCATION_NAME,	               
+	               T12.EQUIP_TYPE_ID,
+	               T12.EQUIP_TYPE_NAME,
+	               T12.TIME_INTERVAL_ID,
+	               T12.SEQUENCE,
+	               T12.START_TIME,
+	               T12.TIME_STEP,
+	               T12.STOCK,
+	               T12.SUPPLY,
+	               T12.DEMAND,	               
+	               T12.BALANCE_SUPPLY_DEMAND,
+	               T12.BALANCE_STOCK_SUPPLY_DEMAND,
+	               T12.MIN_SAFETY_STOCK,
+	               T12.MAX_SAFETY_STOCK,
+	               T12.MESSAGE,	               	               
+	               T12.ALERT_REASON,
+	               T12.ALERT_SCORE,
+	               T12.OWNER,
+	               T12.LOCATION_FILTER_TYPE 
+from &quot;sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan&quot; T0
+inner join 
+  (     select distinct
+       T11.PLAN_MODEL_ID,
+       FIRST_VALUE(PLAN_EXECUTION_ID) over (PARTITION BY PLAN_MODEL_ID ORDER BY PLAN_EXECUTION_ID DESC) AS PLAN_EXECUTION_ID 
+       from         
+      (select distinct --T1.VIRTUAL_PLAN_MODEL_ID,
+	                       T1.PERSISTED_PLAN_MODEL_ID as PLAN_MODEL_ID,
+	                      T2.PLAN_EXECUTION_ID
+	         from &quot;sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan&quot; T1
+	       inner join &quot;sap.tm.trp.db.alert::t_planModel_alert_forUI_timeInterval_withoutGis&quot; T2
+	       on (T1.PERSISTED_PLAN_MODEL_ID  = T2.PLAN_MODEL_ID and 
+	                          T1.VIRTUAL_PLAN_MODEL_ID = :IN_VIRTUAL_PLAN_ID)
+	       order by --T1.VIRTUAL_PLAN_MODEL_ID,
+	                T1.PERSISTED_PLAN_MODEL_ID,
+	                T2.PLAN_EXECUTION_ID desc
+       ) as T11
+	 ) as T111
+	 on  (T0.PERSISTED_PLAN_MODEL_ID  = T111.PLAN_MODEL_ID and 
+	      T0.VIRTUAL_PLAN_MODEL_ID = :IN_VIRTUAL_PLAN_ID)
+inner join &quot;sap.tm.trp.db.alert::t_planModel_alert_forUI_timeInterval_withoutGis&quot; T12
+on T111.PLAN_EXECUTION_ID = T12.PLAN_EXECUTION_ID;
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <attributes>
+      <attribute id="VIRTUAL_PLAN_MODEL_ID" order="1">
+        <descriptions defaultDescription="VIRTUAL_PLAN_MODEL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="VIRTUAL_PLAN_MODEL_ID"/>
+      </attribute>
+      <attribute id="PLAN_EXECUTION_ID" order="2">
+        <descriptions defaultDescription="PLAN_EXECUTION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_EXECUTION_ID"/>
+      </attribute>
+      <attribute id="PLAN_MODEL_ID" order="3">
+        <descriptions defaultDescription="PLAN_MODEL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_MODEL_ID"/>
+      </attribute>
+      <attribute id="PLAN_MODEL_TYPE_ID" order="4">
+        <descriptions defaultDescription="PLAN_MODEL_TYPE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_MODEL_TYPE_ID"/>
+      </attribute>
+      <attribute id="PLAN_MODEL_CATEGORY_ID" order="5">
+        <descriptions defaultDescription="PLAN_MODEL_CATEGORY_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PLAN_MODEL_CATEGORY_ID"/>
+      </attribute>
+      <attribute id="FILTER_TYPE" order="6">
+        <descriptions defaultDescription="FILTER_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="FILTER_TYPE"/>
+      </attribute>
+      <attribute id="FILTER_GROUP_ID" order="7">
+        <descriptions defaultDescription="FILTER_GROUP_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="FILTER_GROUP_ID"/>
+      </attribute>
+      <attribute id="PIPELINE_MODEL_ID" order="8">
+        <descriptions defaultDescription="PIPELINE_MODEL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PIPELINE_MODEL_ID"/>
+      </attribute>
+      <attribute id="NODE_ID" order="9">
+        <descriptions defaultDescription="NODE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="NODE_ID"/>
+      </attribute>
+      <attribute id="NODE_NAME" order="10">
+        <descriptions defaultDescription="NODE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NODE_NAME"/>
+      </attribute>
+      <attribute id="NODE_VISIBLE" order="11">
+        <descriptions defaultDescription="NODE_VISIBLE"/>
+        <keyMapping columnObjectName="Script_View" columnName="NODE_VISIBLE"/>
+      </attribute>
+      <attribute id="DATA_OBJECT_FORMAT" order="12">
+        <descriptions defaultDescription="DATA_OBJECT_FORMAT"/>
+        <keyMapping columnObjectName="Script_View" columnName="DATA_OBJECT_FORMAT"/>
+      </attribute>
+      <attribute id="LOCATION_ID" order="13">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_ID"/>
+      </attribute>
+      <attribute id="LOCATION_NAME" order="14">
+        <descriptions defaultDescription="LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_NAME"/>
+      </attribute>
+      <attribute id="EQUIP_TYPE_ID" order="15">
+        <descriptions defaultDescription="EQUIP_TYPE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_TYPE_ID"/>
+      </attribute>
+      <attribute id="EQUIP_TYPE_NAME" order="16">
+        <descriptions defaultDescription="EQUIP_TYPE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_TYPE_NAME"/>
+      </attribute>
+      <attribute id="TIME_INTERVAL_ID" order="17">
+        <descriptions defaultDescription="TIME_INTERVAL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_INTERVAL_ID"/>
+      </attribute>
+      <attribute id="START_TIME" order="19">
+        <descriptions defaultDescription="START_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </attribute>
+      <attribute id="MESSAGE" order="28">
+        <descriptions defaultDescription="MESSAGE"/>
+        <keyMapping columnObjectName="Script_View" columnName="MESSAGE"/>
+      </attribute>
+      <attribute id="ALERT_REASON" order="29">
+        <descriptions defaultDescription="ALERT_REASON"/>
+        <keyMapping columnObjectName="Script_View" columnName="ALERT_REASON"/>
+      </attribute>
+      <attribute id="OWNER" order="31">
+        <descriptions defaultDescription="OWNER"/>
+        <keyMapping columnObjectName="Script_View" columnName="OWNER"/>
+      </attribute>
+      <attribute id="LOCATION_FILTER_TYPE" order="32">
+        <descriptions defaultDescription="LOCATION_FILTER_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_FILTER_TYPE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="SEQUENCE" order="18" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="SEQUENCE"/>
+        <measureMapping columnObjectName="Script_View" columnName="SEQUENCE"/>
+      </measure>
+      <measure id="TIME_STEP" order="20" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TIME_STEP"/>
+        <measureMapping columnObjectName="Script_View" columnName="TIME_STEP"/>
+      </measure>
+      <measure id="STOCK" order="21" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="STOCK"/>
+      </measure>
+      <measure id="SUPPLY" order="22" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="SUPPLY"/>
+        <measureMapping columnObjectName="Script_View" columnName="SUPPLY"/>
+      </measure>
+      <measure id="DEMAND" order="23" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DEMAND"/>
+        <measureMapping columnObjectName="Script_View" columnName="DEMAND"/>
+      </measure>
+      <measure id="BALANCE_SUPPLY_DEMAND" order="24" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="BALANCE_SUPPLY_DEMAND"/>
+        <measureMapping columnObjectName="Script_View" columnName="BALANCE_SUPPLY_DEMAND"/>
+      </measure>
+      <measure id="BALANCE_STOCK_SUPPLY_DEMAND" order="25" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="BALANCE_STOCK_SUPPLY_DEMAND"/>
+        <measureMapping columnObjectName="Script_View" columnName="BALANCE_STOCK_SUPPLY_DEMAND"/>
+      </measure>
+      <measure id="MIN_SAFETY_STOCK" order="26" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MIN_SAFETY_STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="MIN_SAFETY_STOCK"/>
+      </measure>
+      <measure id="MAX_SAFETY_STOCK" order="27" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MAX_SAFETY_STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="MAX_SAFETY_STOCK"/>
+      </measure>
+      <measure id="ALERT_SCORE" order="30" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ALERT_SCORE"/>
+        <measureMapping columnObjectName="Script_View" columnName="ALERT_SCORE"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

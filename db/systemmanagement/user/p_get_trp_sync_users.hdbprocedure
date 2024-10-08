@@ -1,0 +1,45 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_get_trp_sync_users" ( 
+    OUT USERS "sap.tm.trp.db.systemmanagement.user::tt_username"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+
+    DECLARE COUNT_PRI INTEGER;
+    
+    DECLARE CURSOR CANDIDATES FOR
+	    SELECT USER_NAME FROM SYS.USERS AS a
+	    LEFT JOIN "sap.tm.trp.db.systemmanagement.user::t_user" AS b
+	    ON a.USER_NAME = b.USERNAME
+	    WHERE b.ID IS NULL 
+	    AND a.USER_DEACTIVATED = 'FALSE';
+    
+    USERS = SELECT NULL AS USER_NAME FROM DUMMY;
+    
+    FOR CANDIDATE AS CANDIDATES DO
+        
+        SELECT COUNT(1) INTO COUNT_PRI 
+        FROM SYS.EFFECTIVE_APPLICATION_PRIVILEGES
+        WHERE USER_NAME = CANDIDATE.USER_NAME 
+        AND PRIVILEGE IN ('sap.tm.trp.service::RestrictedRead', 'sap.tm.trp.service::RestrictedWrite');
+        
+        IF :COUNT_PRI > 0 THEN
+           USERS = 
+               SELECT CANDIDATE.USER_NAME AS USER_NAME FROM DUMMY
+               UNION ALL
+               SELECT * FROM :USERS;
+        END IF;
+        
+    END FOR;
+    
+    USERS = SELECT T1.* 
+            FROM :USERS T1
+            INNER JOIN "sap.tm.trp.db.dataprotectionprivacy::t_user_consent" T2
+            ON (T1.USER_NAME = T2.USERNAME)
+            WHERE T1.USER_NAME IS NOT NULL
+            AND T2.ENABLED_FLAG = 1
+            AND (T2.VALID_FROM <= CURRENT_UTCTIMESTAMP AND T2.VALID_TO >= CURRENT_UTCTIMESTAMP);
+
+END;

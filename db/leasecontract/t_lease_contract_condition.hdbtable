@@ -1,0 +1,20 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "CONTRACT_ID"; sqlType = BIGINT; nullable = false;},
+	{name = "EQUIP_CODE"; sqlType = NVARCHAR; length = 22; nullable = true;},
+	{name = "EQUIPMENT_CODE_TYPE"; sqlType = TINYINT; nullable = true;  comment = "1 - Equipment, 2 - Equipment group";},
+	{name = "MIN_HOLD_PERIOD"; sqlType = INTEGER; nullable = true; comment = "Minimum period for which equipment needs to be kept in leasee's location";},
+	{name = "PERIOD_TYPE"; sqlType = NVARCHAR; length = 1; nullable = true; comment = "[D/M/Y] --> Date/Month/Year";},
+	{name = "MIN_HOLD_QUANTITY"; sqlType = INTEGER; nullable = true; },
+	{name = "MAX_HOLD_QUANTITY"; sqlType = INTEGER; nullable = true; },
+	{name = "MIN_RETURN_PERIOD"; sqlType = INTEGER; nullable = true; comment = "Minimum return period in which equipment needs to be returned";},
+	{name = "MIN_RETURN_QUANTITY"; sqlType = INTEGER; nullable = true; },
+	{name = "MAX_RETURN_QUANTITY"; sqlType = INTEGER; nullable = true; },
+	{name = "REMARK"; sqlType = NVARCHAR; length = 1000; nullable = true;},
+	{name = "ACTIVE"; sqlType = TINYINT; nullable = false; defaultValue = "1";},
+	{name = "CODE"; sqlType = NVARCHAR; length = 22; nullable = false;},
+	{name = "CONTRACT_CODE"; sqlType = NVARCHAR; length = 22; nullable = false;}
+];
+table.primaryKey.pkcolumns = ["ID"]; 

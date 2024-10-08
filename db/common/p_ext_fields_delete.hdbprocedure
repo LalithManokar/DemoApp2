@@ -1,0 +1,25 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.common::p_ext_fields_delete" (
+    IN EXT_FIELD_ID INTEGER
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+EXISTS INTEGER;
+USER_ID BIGINT;
+BEGIN
+	
+	DECLARE COL_NAME NVARCHAR(200);
+	DECLARE PAGE_ID INTEGER;
+	
+	SELECT NAME, IFNULL (PAGE_ID, 0) INTO COL_NAME, PAGE_ID 
+	FROM "sap.tm.trp.db.common::t_extended_fields"  WHERE ID = :EXT_FIELD_ID;
+	
+    DELETE FROM "sap.tm.trp.db.common::t_extended_fields"
+    WHERE ID = :EXT_FIELD_ID;
+    
+    --delete the column from attribute table
+    IF :PAGE_ID = 3 THEN
+    	CALL "sap.tm.trp.db.supplydemand.instant::p_basic_node_attribute_table_generator"('D', :COL_NAME, '');
+    END IF ;
+END;

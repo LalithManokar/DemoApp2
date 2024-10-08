@@ -1,0 +1,102 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_ext_geo_group_save_check"(
+    IN GROUP_ID BIGINT,
+    IN VISIBLE_FLAG VARCHAR(1),
+    IN PRIME_LOC_ID VARCHAR(22),
+    IN ITEMS "sap.tm.trp.db.pipeline::tt_equipment_type_id",
+    OUT MSG VARCHAR(100),
+    OUT CODE_LIST "sap.tm.trp.db.filter::tt_save_check_code_list"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+DECLARE CNT INT;
+DECLARE CODE VARCHAR(20);
+MSG := '';
+
+-- GET CODE
+SELECT IFNULL(MAX(CODE), '') INTO CODE FROM (
+	SELECT ID, CODE FROM "sap.tm.trp.db.systemmanagement::t_location_group"
+	UNION
+	SELECT ID, CODE FROM "sap.tm.trp.db.systemmanagement::t_region_group"
+)
+WHERE ID = :GROUP_ID;
+
+--(DOWNSIDE CHECK) CHECK ITEMS' VISIBILITY FLAG IF IT'S A GLOBAL FILTER FOR GROUP
+IF :VISIBLE_FLAG = 'G'
+THEN
+	T_USING_ITEMS =	SELECT T1.CODE
+					,T1.VISIBLE_FLAG
+					FROM "sap.tm.trp.db.systemmanagement::t_equipment_group" T1
+					INNER JOIN :ITEMS T2 ON T2.ID = T1.ID
+				    WHERE T1.VISIBLE_FLAG = 'P'
+	    ;
+	SELECT COUNT(*) INTO CNT FROM :T_USING_ITEMS; 
+    IF :CNT > 0
+    THEN
+        MSG := 'VISIBILITY_CHECK_FAILED_ITEM';
+        CODE_LIST = SELECT CODE FROM :T_USING_ITEMS;
+        RETURN;
+    END IF;
+END IF;
+
+--(UPSIDE CHECK) CHECK THE OBJECTS' VISIBILITY IN THE USED LIST
+IF :GROUP_ID IS NOT NULL AND :VISIBLE_FLAG = 'P'
+THEN
+	T_USED_LOCATION_GROUP_LIST =
+		SELECT CODE, VISIBILITY 
+        FROM "sap.tm.trp.db.whereusedlist::cv_get_used_list"(placeholder."$$IN_CODE$$"=>:CODE,placeholder."$$TYPE$$"=>'LOCATION_GROUP')
+    	;
+    T_USED_FILTER_LIST =
+        SELECT T1.CODE, T1.VISIBILITY
+        FROM "sap.tm.trp.db.whereusedlist::v_used_location_filter" T1
+        INNER JOIN :T_USED_LOCATION_GROUP_LIST T2 ON T2.CODE = T1.OBJECT_CODE
+        ;
+    T_USED_PLAN_LIST =
+        SELECT T1.CODE, T1.VISIBILITY
+        FROM "sap.tm.trp.db.whereusedlist::v_used_plan" T1
+        INNER JOIN :T_USED_FILTER_LIST T2 ON T2.CODE = T1.OBJECT_CODE
+        ;
+    T_USED_LIST =
+    	SELECT CODE, VISIBILITY
+    	FROM (
+	    	SELECT CODE, VISIBILITY FROM :T_USED_LOCATION_GROUP_LIST
+	        UNION
+	        SELECT CODE, VISIBILITY FROM :T_USED_FILTER_LIST
+	        UNION
+	        SELECT CODE, VISIBILITY FROM :T_USED_PLAN_LIST
+    	)
+        WHERE VISIBILITY = 'G'
+        ;
+        
+    SELECT COUNT(*) INTO CNT FROM :T_USED_LIST;
+    IF :CNT > 0
+    THEN
+        MSG := 'VISIBILITY_CHECK_FAILED_USED_LIST';
+        CODE_LIST = SELECT CODE FROM :T_USED_LIST;
+        RETURN;
+    END IF;
+END IF;
+
+-- CHECK WHETHER PRIMARY LOCATION CAN BE REMOVED OR NOT.
+IF (:PRIME_LOC_ID = '' OR :PRIME_LOC_ID IS NULL) AND :GROUP_ID IS NOT NULL
+THEN
+	T_USED_LIST =
+		SELECT T2.CODE, T2.VISIBILITY
+		FROM "sap.tm.trp.db.whereusedlist::v_used_location_group" T0
+		INNER JOIN "sap.tm.trp.db.whereusedlist::v_used_location_filter" T1 ON T1.OBJECT_CODE = T0.CODE
+		INNER JOIN "sap.tm.trp.db.whereusedlist::v_used_plan" T2 ON T2.OBJECT_CODE = T1.CODE
+		WHERE T0.CATEGORY = 'Location Filter' AND T1.CATEGORY = 'Plan Model' AND T2.CATEGORY = 'SIMULATION_PLAN'
+		AND T0.OBJECT_CODE = :CODE
+		;
+	SELECT COUNT(*) INTO CNT FROM :T_USED_LIST;
+    IF :CNT > 0
+    THEN
+        MSG := 'PRIMARY_LOCATION_CHECK_FAILED_USED_LIST';
+        CODE_LIST = SELECT CODE FROM :T_USED_LIST;
+        RETURN;
+    END IF;
+END IF;
+
+END;

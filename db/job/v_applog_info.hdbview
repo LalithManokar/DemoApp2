@@ -1,0 +1,46 @@
+schema = "SAP_TM_TRP"; 
+query = "select 
+              Header.\"LogHandle.ID\" as ID, 
+              Header.\"OriginatorSubObject.Description\" as Originator_SubObject, 
+              Header.\"ExternalID\" as External_ID, Header.\"Description\",
+              Header.\"SystemAdministrativeData.CreationUserName\" as Created_By, 
+              Header.\"SystemAdministrativeData.CreationDateTime\" as Created_On,
+              Item.Severity,
+              Item.message as Message, 
+              Item.ParamText as Message_Parameters
+              from \"sap.tm.trp.applog.db.view::AppLogHeader\" Header
+              inner join 
+              (
+                           select Item.\"_ID\" as Item, Item.\"_Header.ID\" as Header, 
+                           Item.\"Message.SeverityDescription\" as severity, 
+                           Item.\"Message.Text\" as message, Msg.ParamText
+                           FROM \"sap.tm.trp.applog.db.view::AppLogItem\" Item
+                           left join (
+                           select \"_Item\" as Item, \"_Header.ID\" as Header, 
+                           string_agg( concat(\"OrdinalNumberValue\" , concat( ' : ' ,
+                           case when \"ParameterType.Code\" = 0 then \"ParameterValue.String\" 
+                                when \"ParameterType.Code\" = 1 then \"ParameterValue.Amount.Content\"
+                                when \"ParameterType.Code\" = 2 then \"ParameterValue.Quantity.Content\"
+                                when \"ParameterType.Code\" = 3 then \"ParameterValue.Date\"
+                                when \"ParameterType.Code\" = 4 then \"ParameterValue.Time\"
+                                when \"ParameterType.Code\" = 5 then \"ParameterValue.DateTime\"
+                                when \"ParameterType.Code\" = 6 then \"ParameterValue.Indicator\"
+                                when \"ParameterType.Code\" = 7 then \"ParameterValue.Duration\"
+                                when \"ParameterType.Code\" = 8 then \"ParameterValue.Decimal\"
+                                when \"ParameterType.Code\" = 9 then \"ParameterValue.Float\"
+                                when \"ParameterType.Code\" = 10 then \"ParameterValue.Integer\"
+                                else null end)), ' || ' order by \"OrdinalNumberValue\" asc) as ParamText
+                          
+                             from \"sap.tm.trp.applog.db.view::AppLogItemMsgParam\"
+                             group by \"_Item\", \"_Header.ID\"
+                             ) msg
+                             on Item.\"_ID\" = msg.Item and Item.\"_Header.ID\" = msg.Header
+) Item
+on Header.\"LogHandle.ID\" = Item.Header
+where Header.\"OriginatorObject.Code\" = 'TRP' and Item.message is not null
+and Header.\"SystemAdministrativeData.CreationDateTime\" >= add_days(current_timestamp, -14)
+order by Header.\"LogHandle.ID\" desc , Header.\"SystemAdministrativeData.CreationDateTime\" desc,
+Item.Item asc
+";
+                
+depends_on_view = ["sap.tm.trp.applog.db.view::AppLogItemMsgParam","sap.tm.trp.applog.db.view::AppLogItem","sap.tm.trp.applog.db.view::AppLogHeader"];

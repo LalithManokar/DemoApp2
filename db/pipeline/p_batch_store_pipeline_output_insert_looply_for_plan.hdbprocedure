@@ -1,0 +1,138 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_batch_store_pipeline_output_insert_looply_for_plan" (
+IN PLAN_ID BIGINT,
+IN LOCATION_FILTER_TYPE INTEGER,
+IN PIPELINE_MODEL_ID BIGINT,
+IN CATEGORY_ID INTEGER,
+IN FILTER_GROUP_ID BIGINT,
+IN ALERT_RULE_GROUP_ID BIGINT,
+IN PLAN_MODEL_TYPE_ID INTEGER,
+IN USAGE VARCHAR(1),
+IN OUTPUT_TABLE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::tt_calc_model_common",
+IN EXEC_ID BIGINT,
+IN EXEC_TIMESTAMP TIMESTAMP)
+--OUT ALERT_NO INTEGER)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+    DECLARE ENTRY_ID BIGINT;
+    DECLARE NODE_ID BIGINT;
+    DECLARE USER_ID BIGINT;
+    DECLARE ALERT_NO INTEGER;
+    DECLARE BUBBLE_NO INTEGER;
+    DECLARE TIME_FILTER_DIRECTION INTEGER;
+    DECLARE METADATA_NODE_ID VARCHAR(20) DEFAULT 'SUPPLY_DEMAND';
+    DECLARE METADATA_NODE_ID_STOCK VARCHAR(20) DEFAULT 'STOCK';
+     
+    SELECT ENTRY_POINT_ID INTO ENTRY_ID FROM "sap.tm.trp.db.pipeline::t_pipeline_model" WHERE ID = :PIPELINE_MODEL_ID;
+    SELECT T2.DIRECTION_FLAG INTO TIME_FILTER_DIRECTION
+    FROM "sap.tm.trp.db.filter::t_filter_group" T1
+    INNER JOIN "sap.tm.trp.db.filter::t_time_filter" T2 ON (T1.TIME_FILTER_ID = T2.ID)
+    WHERE T1.ID = :FILTER_GROUP_ID;
+    
+    -- insert LOCATION_FILTER_TYPE 
+    INSERT INTO "sap.tm.trp.db.pipeline::t_execution_context"
+    SELECT :EXEC_ID AS EXECUTION_ID, 'LOCATION_FILTER_TYPE' AS KEY, :LOCATION_FILTER_TYPE AS VALUE FROM DUMMY
+    UNION ALL
+    SELECT :EXEC_ID AS EXECUTION_ID, 'PIPELINE_MODEL_ID' AS KEY, :PIPELINE_MODEL_ID AS VALUE FROM DUMMY    
+    UNION ALL
+    SELECT :EXEC_ID AS EXECUTION_ID, 'FILTER_GROUP_ID' AS KEY, :FILTER_GROUP_ID AS VALUE FROM DUMMY
+    UNION ALL
+    SELECT :EXEC_ID AS EXECUTION_ID, 'ALERT_RULE_GROUP_ID' AS KEY, :ALERT_RULE_GROUP_ID AS VALUE FROM DUMMY
+    UNION ALL
+    SELECT :EXEC_ID AS EXECUTION_ID, 'PLAN_MODEL_TYPE_ID' AS KEY, :PLAN_MODEL_TYPE_ID AS VALUE FROM DUMMY
+    UNION ALL
+    SELECT :EXEC_ID AS EXECUTION_ID, 'TIME_FILTER_DIRECTION' AS KEY, :TIME_FILTER_DIRECTION AS VALUE FROM DUMMY;
+    
+    
+    SELECT B.ID INTO USER_ID FROM
+    (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username") AS A  LEFT JOIN "sap.tm.trp.db.systemmanagement.user::t_user" AS B
+    ON A.USERNAME = B.USERNAME;
+    
+    INSERT INTO "sap.tm.trp.db.pipeline::t_plan_execution"
+    SELECT :EXEC_ID AS ID,  :USER_ID AS EXECUTE_BY, :EXEC_TIMESTAMP AS EXECUTE_ON, :PLAN_ID AS PLAN_MODEL_ID FROM DUMMY;
+    
+    -- delete the workaround temporary input parameter data which is required for data provider
+    --DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_datasrc_input_params" where conn_id = CURRENT_CONNECTION;
+    TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::t_timefilterinfo_for_pipeline_GlobalTemp";
+    TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::t_locationinfo_for_pipeline_GlobalTemp";
+    TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::t_equipinfo_for_pipeline_GlobalTemp";   
+    
+    IF :USAGE = 'X' THEN    --Intermediate node data should not be saved if the plan used for backend
+	    -- replace the metadata node id with the trp node id and then insert to the TRP table
+	    INSERT INTO "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"(PLAN_EXECUTION_ID,
+	    NODE_ID,
+	    LOCATION_ID,
+	    LOCATION_NAME,
+	    LOCATION_FILTER_TYPE,
+	    EQUIP_TYPE_ID,
+	    EQUIP_TYPE_NAME,
+	    EQUIP_FILTER_TYPE,
+	    OUTPUT_KEY,
+	    OUTPUT_VALUE,
+	    TIME_INTERVAL_ID,
+	    START_TIME,
+	    END_TIME,
+	    SEQUENCE,
+	    TIME_INTERVAL,
+	    UNIT)
+/*	    SELECT :EXEC_ID,T2.NODE_ID, T1.GEO_ID, T1.GEO_NAME, t1.GEO_FILTER_TYPE, T1.EQUIP_TYPE, T1.EQUIP_NAME, T1.EQUIP_FILTER_TYPE, 
+	    T1.OUTPUT_KEY, T1.OUTPUT_VALUE, T1.TIME_INTERVAL_ID, T1.START_TIME, T1.END_TIME, T1.SEQUENCE, T1.INTER_SECONDS, T1.UNIT  
+	    FROM :OUTPUT_TABLE AS T1 
+	    INNER JOIN (
+	    	SELECT ID AS NODE_ID, METADATA_NODE_ID FROM "sap.tm.trp.db.pipeline::t_pipeline_node" where PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID) AS T2
+	    ON T2.METADATA_NODE_ID = T1.NODE_ID AND
+	       (T2.METADATA_NODE_ID = :METADATA_NODE_ID OR T2.METADATA_NODE_ID = :METADATA_NODE_ID_STOCK)
+	    WHERE TO_DECIMAL(T1.OUTPUT_VALUE) <> 0;	*/
+	    
+	    SELECT :EXEC_ID,T2.NODE_ID, T1.GEO_ID, T1.GEO_NAME, t1.GEO_FILTER_TYPE, T1.EQUIP_TYPE, T1.EQUIP_NAME, T1.EQUIP_FILTER_TYPE, 
+                  T1.OUTPUT_KEY, T1.OUTPUT_VALUE, T1.TIME_INTERVAL_ID, T1.START_TIME, T1.END_TIME, T1.SEQUENCE, T1.INTER_SECONDS, T1.UNIT  
+                  FROM :OUTPUT_TABLE AS T1 
+                  INNER JOIN ( SELECT ID AS NODE_ID, METADATA_NODE_ID FROM "sap.tm.trp.db.pipeline::t_pipeline_node" 
+					where PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID
+					AND (METADATA_NODE_ID = :METADATA_NODE_ID OR METADATA_NODE_ID = :METADATA_NODE_ID_STOCK)) AS T2
+                  ON T2.METADATA_NODE_ID = T1.NODE_ID
+                  WHERE TO_DECIMAL(T1.OUTPUT_VALUE) > 0;
+                  
+    ELSE
+	    -- replace the metadata node id with the trp node id and then insert to the TRP table
+	    INSERT INTO "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"(PLAN_EXECUTION_ID,
+	    NODE_ID,
+	    LOCATION_ID,
+	    LOCATION_NAME,
+	    LOCATION_FILTER_TYPE,
+	    EQUIP_TYPE_ID,
+	    EQUIP_TYPE_NAME,
+	    EQUIP_FILTER_TYPE,
+	    OUTPUT_KEY,
+	    OUTPUT_VALUE,
+	    TIME_INTERVAL_ID,
+	    START_TIME,
+	    END_TIME,
+	    SEQUENCE,
+	    TIME_INTERVAL,
+	    UNIT)
+	    SELECT :EXEC_ID,T2.NODE_ID, T1.GEO_ID, T1.GEO_NAME, t1.GEO_FILTER_TYPE, T1.EQUIP_TYPE, T1.EQUIP_NAME, T1.EQUIP_FILTER_TYPE, 
+	    T1.OUTPUT_KEY, T1.OUTPUT_VALUE, T1.TIME_INTERVAL_ID, T1.START_TIME, T1.END_TIME, T1.SEQUENCE, T1.INTER_SECONDS, T1.UNIT  
+	    FROM :OUTPUT_TABLE AS T1 
+	    INNER JOIN (
+	    	SELECT ID AS NODE_ID, METADATA_NODE_ID FROM "sap.tm.trp.db.pipeline::t_pipeline_node" where PIPELINE_MODEL_ID = :PIPELINE_MODEL_ID) AS T2
+	    ON T2.METADATA_NODE_ID = T1.NODE_ID
+	    WHERE TO_DECIMAL(T1.OUTPUT_VALUE) <> 0;
+    END IF ;
+ 
+ --{Delete for performance improvement. The date is updated with the insert query     
+ /*   UPDATE "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" 
+      SET START_TIME = ADD_DAYS(START_TIME, -1 * :DATE_OFFSET),
+          END_TIME = ADD_DAYS(END_TIME, -1 * :DATE_OFFSET)
+    WHERE PLAN_EXECUTION_ID = :EXEC_ID;
+    */
+ --}
+          
+    -- generate alerts   
+    CALL "sap.tm.trp.db.hrf.ruleManage::p_rule_controller"(:EXEC_ID, ALERT_NO, BUBBLE_NO);
+
+    --After each plan execution, the plan status is set to 0(Valid)
+    UPDATE "sap.tm.trp.db.pipeline::t_plan_model" SET STATUS = 0 WHERE ID = :PLAN_ID;
+END;

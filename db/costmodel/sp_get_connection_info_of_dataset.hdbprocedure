@@ -1,0 +1,24 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_get_connection_info_of_dataset"(
+   IN COST_DATASET_IDS "sap.tm.trp.db.costmodel::tt_cost_dataset_id",
+   OUT DATASET_CONNECTION_INFO  "sap.tm.trp.db.costmodel::tt_cost_dataset_connection_info"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    READS SQL DATA 
+    AS
+BEGIN
+
+
+    DATASET_CONNECTION_INFO =
+    SELECT T2.ID, T2.CURRENCY_CODE,T2.CONNECTION_TYPE_CODE,
+    T2.DEFAULT_UOM_CODE,
+    PURCHASE_ORG_ID,T2.AGREEMENT_ID,
+    T2.PROFILE_ID,
+    0 AS PRIORITY
+	FROM :COST_DATASET_IDS T1
+	INNER JOIN "sap.tm.trp.db.costmodel::t_cost_dataset" T2 ON (T1.ID = T2.ID)
+	--INNER JOIN "sap.tm.trp.db.costmodel::t_cost_model_dataset" T3 ON (T2.ID = T3.COST_DATASET_ID)
+	WHERE T2.CONNECTION_TYPE_CODE <> 'NO_CONNECT';
+   
+END;

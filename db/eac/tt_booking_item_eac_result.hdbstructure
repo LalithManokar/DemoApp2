@@ -1,0 +1,15 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "Export data from TM Booking";
+table.columns = [
+	{name = "TU_ID"; sqlType = NVARCHAR; length = 32;},
+	{name = "TU_KEY";sqlType = VARCHAR; length = 32;},
+	{name = "EP_SRC_LOC_ID"; sqlType = VARCHAR; length=20;},
+    {name = "EP_DEST_LOC_ID"; sqlType = VARCHAR; length=20;},
+    {name = "RESOURCE_TYPE";sqlType = VARCHAR; length = 10;},   
+    {name = "AVAILABLE_QUAN";sqlType = INTEGER;},
+    {name = "CALC_PICKUP_DATE";sqlType = TIMESTAMP;},
+    {name = "SEVERITY"; sqlType = CHAR;}, 
+    {name = "MESSAGE_ID"; sqlType = VARCHAR; length = 100;},
+    {name = "MESSAGE"; sqlType = NVARCHAR; length = 255;}  
+];     

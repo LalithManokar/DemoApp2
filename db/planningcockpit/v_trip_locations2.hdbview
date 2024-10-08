@@ -1,0 +1,18 @@
+schema = "SAP_TM_TRP";
+query  = " 
+           SELECT 
+           TO_NVARCHAR(TRIP_ID) AS TRIP_ID,
+           SEQUENCE AS LOC_SEQ,
+           T2.ID AS LOCATION_ID,
+           T1.LOCATION AS LOCATION_NAME,
+           T1.ARRIVAL_TIME AS ARRIVAL_UTC,
+           T1.DEPARTURE_TIME AS DEPARTURE_UTC,
+           NULL AS VESSEL
+           FROM \"sap.tm.trp.routing.db.dataset::t_trip_sequence\" T1
+           INNER JOIN \"sap.tm.trp.db.semantic.location::v_all_location\" T2 ON (T1.LOCATION = T2.NAME)
+         ";
+         
+depends_on = ["sap.tm.trp.routing.db.dataset::t_trip_sequence",
+              "sap.tm.trp.db.semantic.location::v_all_location"
+             ];                          
+

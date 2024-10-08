@@ -1,0 +1,437 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_virtual_supply_demand_plan_validate"(
+    IN VIRTUAL_SUPPLY_DEMAND_PLAN "sap.tm.trp.db.massupload::tt_virtual_supply_demand_plan_upload",
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),
+    IN ERROR_LIMIT INTEGER,
+    OUT INVALID_ITEMS "sap.tm.trp.db.massupload::tt_massupload_invalid_item"
+)
+
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+
+AS
+BEGIN
+  
+    DECLARE I_COUNT INTEGER := 0 ;
+    
+    
+    --Get Source data
+    ITEMS = 
+                    SELECT 
+                    DISTINCT S.ID AS SDP_ID,
+                             UPPER(VSDP_NAME) AS VSDP_NAME,
+                             UPPER(TYPE_NAME) AS TYPE_NAME,
+                             UPPER(VISIBILITY) AS VISIBILITY,
+                             UPPER(LOCATION_FILTER_NAME) AS LOCATION_FILTER_NAME,
+                             L.ID AS LOC_ID,
+                             L.LOCATION_TYPE,
+                             UPPER(RESOURCE_FILTER_NAME) AS RESOURCE_FILTER_NAME,
+                             R.ID AS RES_ID,
+                             UPPER(SDP_NAME) AS SDP_NAME,
+                             R.FILTER_TYPE AS FILTER_TYPE, 
+                             S.TIME_FILTER_ID AS TIME_FILTER_ID,
+                            ROW_INDEX
+                    FROM :VIRTUAL_SUPPLY_DEMAND_PLAN AS A
+                    LEFT OUTER JOIN "sap.tm.trp.db.filter::t_location_filter" AS L
+                                    ON L.CODE = UPPER(A.LOCATION_FILTER_NAME)
+                    LEFT OUTER JOIN "sap.tm.trp.db.filter::t_equipment_filter" AS R
+                                    ON R.CODE = UPPER(A.RESOURCE_FILTER_NAME)
+                    LEFT OUTER JOIN
+                                    (
+                                        SELECT T1.ID, T1.CODE, T1.VISIBILITY_FLAG, T1.CREATE_BY, T2.RESOURCE_CATEGORY, T2.TIME_FILTER_ID
+                                        FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+                                        INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2
+                                        ON T1.FILTER_GROUP_ID = T2.ID AND T1.PLAN_MODEL_TYPE_ID = 1 
+                                        AND T2.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID
+                                    )   AS S
+                                    ON S.CODE = UPPER(A.SDP_NAME);
+
+    
+    --Mixed values check
+    VSDP_COUNT =    SELECT VSDP_NAME, COUNT(DISTINCT(LOCATION_FILTER_NAME)) AS CNT, 
+                    COUNT(DISTINCT(VISIBILITY)) AS CNT1,
+                    COUNT(DISTINCT(RESOURCE_FILTER_NAME)) AS CNT2,
+                    COUNT(DISTINCT(TIME_FILTER_ID)) AS CNT3
+                    FROM :ITEMS GROUP BY VSDP_NAME;
+
+    
+    --General Validations
+    INVALID_ITEMS = 
+                    SELECT A.ROW_INDEX,
+                           3 AS COL_INDEX,
+                           'PLAN_TYPE_INVALID' AS REASON_CODE -- Invalid Plan Type
+                    FROM :ITEMS AS A WHERE TYPE_NAME <> 'VIRTUAL SUPPLY AND DEMAND PLAN'
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                           4 AS COL_INDEX, 
+                           'VISIBILITY_MIX_NOT_ALLOWED' AS REASON_CODE -- Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VSDP_COUNT AS LC
+                    ON LC.VSDP_NAME = A.VSDP_NAME
+                    WHERE LC.CNT1 > 1
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                           5 AS COL_INDEX, 
+                           'LOCATION_FILTER_MIX_NOT_ALLOWED' AS REASON_CODE  --Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VSDP_COUNT AS LC
+                    ON LC.VSDP_NAME = A.VSDP_NAME
+                    WHERE LC.CNT > 1
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                           6 AS COL_INDEX, 
+                           'RESOURCE_FILTER_MIX_NOT_ALLOWED' AS REASON_CODE --Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VSDP_COUNT AS LC
+                    ON LC.VSDP_NAME = A.VSDP_NAME
+                    WHERE LC.CNT2 > 1;
+              
+    --Check Count less than equal to 'ERROR_LIMIT'
+    SELECT COUNT (*) INTO I_COUNT FROM :INVALID_ITEMS;
+    IF :I_COUNT >= :ERROR_LIMIT THEN
+        INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+        RETURN;
+    END IF;   
+
+    --Existence and Authorization check
+    INVALID_ITEMS = 
+                    SELECT * FROM :INVALID_ITEMS
+                    UNION
+                    SELECT A.ROW_INDEX,
+                        1 AS COL_INDEX,
+                        'VSD_PLAN_NO_AUTH' AS REASON_CODE
+                    FROM :ITEMS AS A
+                    INNER JOIN "sap.tm.trp.db.pipeline::cv_get_plan_list" AS P
+                    ON P.NAME = A.VSDP_NAME
+                    AND P.PLAN_TYPE_ID = '3'
+                    LEFT OUTER JOIN "sap.tm.trp.db.pipeline::cv_get_plan_list" AS B
+                    ON A.VSDP_NAME = B.NAME AND B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+                    AND B.PLAN_TYPE_ID = 3
+                    WHERE B.NAME IS NULL
+                    UNION
+                    SELECT A.ROW_INDEX,
+                        5 AS COL_INDEX,
+                        'LOCATION_FILTER_INVALID_NO_AUTH' AS REASON_CODE
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN "sap.tm.trp.db.filter::cv_role_check_location_filter" AS B
+                    ON A.LOCATION_FILTER_NAME = B.NAME and B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+                    WHERE B.NAME IS NULL OR A.LOCATION_FILTER_NAME = '' OR A.LOCATION_FILTER_NAME IS NULL
+                    UNION
+                    SELECT A.ROW_INDEX,
+                        6 AS COL_INDEX,
+                        'RESOURCE_FILTER_INVALID_NO_AUTH' AS REASON_CODE
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN "sap.tm.trp.db.filter::cv_equipment_filter" AS B
+                    ON A.RESOURCE_FILTER_NAME = B.NAME and B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+                    WHERE B.NAME IS NULL
+                    UNION
+                    SELECT A.ROW_INDEX,
+                        7 AS COL_INDEX,
+                        'SD_PLAN_INVALID_NO_AUTH' AS REASON_CODE
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN 
+                    (
+                    SELECT T1.* FROM "sap.tm.trp.db.pipeline::cv_get_plan_list" T1 
+                    INNER JOIN  "sap.tm.trp.db.pipeline::t_pipeline_model" T2 
+                    ON T1.CALCULATION_MODEL_ID = T2.ID AND ( INSTANT_ENABLED IS NULL OR INSTANT_ENABLED = '')
+                    ) AS B
+                    ON A.SDP_NAME = B.NAME AND B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+                    AND B.PLAN_TYPE_ID = 1 --AND LOCATION_FILTER_TYPE = 1
+                    LEFT JOIN  "sap.tm.trp.db.pipeline::t_pipeline_model" T2 
+                    ON B.CALCULATION_MODEL_ID = T2.ID AND INSTANT_ENABLED IS NULL
+                    WHERE B.NAME IS NULL OR A.SDP_NAME = '' OR A.SDP_NAME IS NULL ;
+
+    --Check Count less than equal to 'ERROR_LIMIT'
+    SELECT COUNT (*) INTO I_COUNT FROM :INVALID_ITEMS;
+    IF :I_COUNT >= :ERROR_LIMIT THEN
+        INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+        RETURN;
+    END IF;   
+    
+    ---Visibility check
+    ---Virtual Supply Demand Plan with global visibility cannot contain objects that have personal visibility
+    INVALID_ITEMS = 
+                    SELECT * FROM :INVALID_ITEMS
+                    UNION
+                    SELECT A.ROW_INDEX,
+                        5 AS COL_INDEX,
+                        'V_LOC_FILTER_WITH_PERSONAL_VISIBILITY' AS REASON_CODE
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN "sap.tm.trp.db.filter::t_location_filter" AS B 
+                    ON A.LOCATION_FILTER_NAME = B.CODE AND B.VISIBLE_FLAG = 'P'
+                    AND B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+                    WHERE A.VISIBILITY = 'GLOBAL' AND  B.CODE IS NOT NULL
+                    UNION
+                    SELECT A.ROW_INDEX,
+                        6 AS COL_INDEX,
+                        'V_RES_FILTER_WITH_PERSONAL_VISIBILITY' AS REASON_CODE
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN "sap.tm.trp.db.filter::t_equipment_filter" AS B
+                    ON A.RESOURCE_FILTER_NAME = B.CODE AND B.VISIBLE_FLAG = 'P'
+                    AND B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID 
+                    WHERE A.VISIBILITY = 'GLOBAL' AND B.CODE IS NOT NULL 
+                    AND A.RESOURCE_FILTER_NAME <>  '' 
+                    UNION
+                    SELECT A.ROW_INDEX,
+                        7 AS COL_INDEX,
+                        'V_SD_PLAN_WITH_PERSONAL_VISIBILITY' AS REASON_CODE
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN (
+                    SELECT T1.CODE, T1. VISIBILITY_FLAG, T2.RESOURCE_CATEGORY 
+                    FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+                    INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2
+                    ON T1.FILTER_GROUP_ID = T2.ID AND T1.PLAN_MODEL_TYPE_ID = 1 
+                    AND T2.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID
+                    )AS B
+                    ON B.CODE = A.SDP_NAME AND B.VISIBILITY_FLAG = 0
+                    WHERE A.VISIBILITY = 'GLOBAL' AND  B.CODE IS NOT NULL;
+       
+    --Check Count less than equal to 'ERROR_LIMIT'
+    SELECT COUNT (*) INTO I_COUNT FROM :INVALID_ITEMS;
+    IF :I_COUNT >= :ERROR_LIMIT THEN
+        INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+        RETURN;
+    END IF;
+    
+    IF I_COUNT <= 0 THEN
+    
+    --Get Supply Demand Plans for Location & Resource Filters
+    LOC_RES_FILTERS = 
+                    SELECT DISTINCT LOC_ID, LOCATION_TYPE, RES_ID, FILTER_TYPE
+                    FROM :ITEMS;
+    
+    
+    CALL "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_virtual_supply_demand_plan_check" (
+    :LOC_RES_FILTERS,
+    :RESOURCE_CATEGORY_ID,
+    SD_PLANS
+    );
+    
+    --Validate Supply and Demand Plan for Location & Resource Filter & Time Filters
+    INVALID_ITEMS =      
+                    SELECT * FROM :INVALID_ITEMS         
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                        7 AS COL_INDEX,
+                       'SD_PLAN_NOT_VALID_FOR_FILTERS' AS REASON_CODE
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :SD_PLANS AS SP
+                    ON SP.LOC_ID = A.LOC_ID
+                    AND SP.RES_ID = A.RES_ID
+                    AND SP.SDP_ID = A.SDP_ID 
+                    WHERE SP.SDP_ID IS NULL
+                    UNION     
+                    SELECT A.ROW_INDEX, 
+                        7 AS COL_INDEX,
+                       'SD_PLAN_DIFF_TIME_FILTER_NOT_ALLOWED' AS REASON_CODE
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VSDP_COUNT AS LC
+                    ON LC.VSDP_NAME = A.VSDP_NAME
+                    WHERE LC.CNT3 > 1;
+                    
+                    /*UNION
+                     SELECT A.ROW_INDEX, 
+                        7 AS COL_INDEX, 
+                        'MSG_ERROR_MUST_HAVE_BOTH_SD_DATA' AS REASON_CODE --SD Plan Must have both supply and demand data flag
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN "sap.tm.trp.db.pipeline::cv_get_plan_list"  AS B
+                    ON A.SDP_NAME = B.NAME AND B.PLAN_TYPE_ID = 1 
+                    AND B.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID  AND B.HAS_SUPPLY_DEMAND > 0
+                    WHERE B.NAME IS NULL AND A.SDP_NAME IS NOT NULL AND A.SDP_NAME <> '';*/
+    
+    END IF;
+    
+-->Add the logic to check the sub-plans of virtual plan should have same scheduling time/recurrence/usage/usage_code    
+    PERSISTED_PLAN_IDS = SELECT DISTINCT SDP_ID AS ID
+                            FROM :ITEMS;
+    
+    TMP_SQL  =   SELECT T1.ID, 
+    	       --T1.PLAN_TYPE_ID, 
+            	       T1.NAME,
+            	       T3.START_TIME,
+            	       T3.EXPIRY_TIME,
+            	       T3.RECURRENCE_TYPE,
+            	       T3.RECURRENCE_INTERVAL,
+            	       IFNULL(T3.RECURRENCE_DAY, 0)                      AS RECURRENCE_DAY,
+            	       -->New added for execution working hour CHECK
+            	       IFNULL(T3.EXECUTE_WORKING_HOUR, ' ')              AS EXECUTE_WORKING_HOUR,
+				       IFNULL(T3.START_WORKING_HOUR_TIME, T3.START_TIME) AS START_WORKING_HOUR_TIME,
+				       IFNULL(T3.END_WORKING_HOUR_TIME, T3.EXPIRY_TIME)  AS END_WORKING_HOUR_TIME,
+				       --<End
+            	       T1.USAGE,
+            	       T1.USAGE_CODE
+            	 --FROM "sap.tm.trp.db.pipeline::cv_plan_list_wrapper" T1
+            	 FROM "sap.tm.trp.db.pipeline::t_plan_model"  AS T1
+            	 INNER JOIN :PERSISTED_PLAN_IDS T2 ON (T1.ID = T2.ID) 
+            	 LEFT OUTER JOIN "sap.tm.trp.db.job::t_model_schedule_detail" T3 ON(T1.ID=T3.model_id) ;   
+								 
+								 
+    TMP_ITEM =  SELECT  A.SDP_ID,
+                        A.VSDP_NAME,
+                        A.SDP_NAME,
+                        B.START_TIME,
+                        B.EXPIRY_TIME,
+            	        B.RECURRENCE_TYPE,
+            	        B.RECURRENCE_INTERVAL,
+            	        B.RECURRENCE_DAY,
+            	        B.EXECUTE_WORKING_HOUR,
+            	        B.START_WORKING_HOUR_TIME,
+            	        B.END_WORKING_HOUR_TIME,
+            	        B.USAGE,
+            	        B.USAGE_CODE,
+                        A.ROW_INDEX
+                FROM :ITEMS AS A
+                LEFT JOIN :TMP_SQL AS B ON A.SDP_NAME = B.NAME;
+    
+    
+    --Mixed values check
+    VSDP_COUNT_NEW =    SELECT  VSDP_NAME, 
+                            COUNT(DISTINCT(TO_VARCHAR(START_TIME,'YYYY-MM-DD')))  AS CNT, 
+                            COUNT(DISTINCT(TO_VARCHAR(EXPIRY_TIME,'YYYY-MM-DD'))) AS CNT1,
+                            COUNT(DISTINCT(RECURRENCE_TYPE))                  AS CNT2,
+                            COUNT(DISTINCT(RECURRENCE_INTERVAL))              AS CNT3,
+                            COUNT(DISTINCT(USAGE))                            AS CNT4,
+                            COUNT(DISTINCT(USAGE_CODE))                       AS CNT5,
+                          -- COUNT(DISTINCT(EXECUTE_WORKING_HOUR))             AS CNT6,
+                          --  COUNT(DISTINCT(START_WORKING_HOUR_TIME))          AS CNT7,
+                           -- COUNT(DISTINCT(END_WORKING_HOUR_TIME))            AS CNT8,
+                            COUNT(DISTINCT(RECURRENCE_DAY))                   AS CNT9
+                    FROM :TMP_ITEM GROUP BY VSDP_NAME;
+                    
+    --SUB plans Validations
+    INVALID_ITEMS = 
+                    SELECT * FROM :INVALID_ITEMS    
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                           7 AS COL_INDEX, 
+                           'START_TIME_MIX_NOT_ALLOWED' AS REASON_CODE -- Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VSDP_COUNT_NEW AS LC
+                    ON LC.VSDP_NAME = A.VSDP_NAME
+                    WHERE LC.CNT > 1
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                           7 AS COL_INDEX, 
+                           'EXPIRY_TIME_MIX_NOT_ALLOWED' AS REASON_CODE  --Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VSDP_COUNT_NEW AS LC
+                    ON LC.VSDP_NAME = A.VSDP_NAME
+                    WHERE LC.CNT1 > 1
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                           7 AS COL_INDEX, 
+                           'RECURRENCE_TYPE_MIX_NOT_ALLOWED' AS REASON_CODE --Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VSDP_COUNT_NEW AS LC
+                    ON LC.VSDP_NAME = A.VSDP_NAME
+                    WHERE LC.CNT2 > 1
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                           7 AS COL_INDEX, 
+                           'RECURRENCE_INTERVAL_MIX_NOT_ALLOWED' AS REASON_CODE --Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VSDP_COUNT_NEW AS LC
+                    ON LC.VSDP_NAME = A.VSDP_NAME
+                    WHERE LC.CNT3 > 1
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                           7 AS COL_INDEX, 
+                           'USAGE_MIX_NOT_ALLOWED' AS REASON_CODE --Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VSDP_COUNT_NEW AS LC
+                    ON LC.VSDP_NAME = A.VSDP_NAME
+                    WHERE LC.CNT4 > 1
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                           7 AS COL_INDEX, 
+                           'USAGE_CODE_MIX_NOT_ALLOWED' AS REASON_CODE --Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VSDP_COUNT_NEW AS LC
+                    ON LC.VSDP_NAME = A.VSDP_NAME
+                    WHERE LC.CNT5 > 1
+                    /*
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                           7 AS COL_INDEX, 
+                           'WORKING_HOUR_MIX_NOT_ALLOWED' AS REASON_CODE --Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VSDP_COUNT_NEW AS LC
+                    ON LC.VSDP_NAME = A.VSDP_NAME
+                    WHERE LC.CNT6 > 1
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                           7 AS COL_INDEX, 
+                           'START_WORKING_HOUR_MIX_NOT_ALLOWED' AS REASON_CODE --Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VSDP_COUNT_NEW AS LC
+                    ON LC.VSDP_NAME = A.VSDP_NAME
+                    LEFT OUTER JOIN :TMP_ITEM AS T
+                    ON T.SDP_NAME = A.SDP_NAME
+                    WHERE T.EXECUTE_WORKING_HOUR <> ''
+                    AND LC.CNT7 > 1
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                           7 AS COL_INDEX, 
+                           'END_WORKING_HOUR_MIX_NOT_ALLOWED' AS REASON_CODE --Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VSDP_COUNT_NEW AS LC
+                    ON LC.VSDP_NAME = A.VSDP_NAME
+                    LEFT OUTER JOIN :TMP_ITEM AS T
+                    ON T.SDP_NAME = A.SDP_NAME
+                    WHERE T.EXECUTE_WORKING_HOUR <> ''
+                    AND LC.CNT8 > 1*/
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                           7 AS COL_INDEX, 
+                           'RECURRENCY_DAY_MIX_NOT_ALLOWED' AS REASON_CODE --Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VSDP_COUNT_NEW AS LC
+                    ON LC.VSDP_NAME = A.VSDP_NAME
+                    WHERE LC.CNT9 > 1;
+                    
+    SELECT COUNT (*) INTO I_COUNT FROM :INVALID_ITEMS;
+    IF :I_COUNT >= :ERROR_LIMIT THEN
+        INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+        RETURN;
+    END IF;
+    
+    -- This is the check that all persisted plan under each virtual plan should at least has one node intersaction.
+    INVALID_ITEMS = 
+                SELECT * FROM :INVALID_ITEMS    
+                UNION
+    			SELECT
+    				A.ROW_INDEX,
+    				7 AS COL_INDEX, 
+    				'MSG_NODE_NO_INTERSECTION_ERROR' AS REASON_CODE
+    			FROM :ITEMS AS A 
+    			LEFT JOIN
+				    (SELECT
+						 DISTINCT T6.VSDP_NAME
+					FROM (SELECT
+						 VSDP_NAME,
+						 COUNT(DISTINCT SDP_ID) AS TOTAL_PLAN_MODEL_ID_NUM 
+						FROM :ITEMS 
+						GROUP BY VSDP_NAME) T5 
+					INNER JOIN (SELECT
+						 T4.VSDP_NAME,
+						 T4.METADATA_NODE_ID,
+						 COUNT(DISTINCT T4.SDP_ID) AS NUM_BY_NODE_ID 
+						FROM (SELECT
+						 T1.VSDP_NAME,
+						 T1.SDP_ID,
+						 T3.METADATA_NODE_ID 
+							FROM :ITEMS T1 
+							INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T2 ON (T1.SDP_ID = T2.ID) 
+							INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T3 ON (T2.PIPELINE_MODEL_ID = T3.PIPELINE_MODEL_ID) 
+							WHERE T3.RESULT_VISIBLE = 1) T4 
+						GROUP BY T4.VSDP_NAME,
+						 T4.METADATA_NODE_ID) T6 ON T5.VSDP_NAME = T6.VSDP_NAME 
+					AND T5.TOTAL_PLAN_MODEL_ID_NUM = T6.NUM_BY_NODE_ID) AS B ON A.VSDP_NAME = B.VSDP_NAME
+				 WHERE B.VSDP_NAME IS NULL;
+--<End Adding
+                    
+    --Return Errors based on input limit
+    INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+
+END;
+

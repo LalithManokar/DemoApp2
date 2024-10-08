@@ -1,0 +1,19 @@
+1,Maximum Number of Multi-Stage Paths,MAX_PATH_NUM,Maximum Number of Multi-Stage Paths,PATH,1,Number,At least 1,1,,1,LE,
+2,Maximum Number of Transshipments,MAX_TRANSSHIP_NUM,Maximum Number of Transshipments,PATH,0,Number,0 or greater,2,,0,LE,
+3,Use Dynamic Maximum Transshipments,MAX_TRANSSHIP_SCALE,Use Dynamic Maximum Transshipments,PATH,0,Boolean,,0,,,,
+4,Use Single-Stage Path Only Once,BASIC_PATH_SINGLE_PASS,Use Single-Stage Path Only Once,PATH,0,Boolean,,1,,,,
+5,Use Transshipment Location Only Once,TRANSSHIP_SINGLE_PASS,Use Transshipment Location Only Once,PATH,0,Boolean,,1,,,,
+6,Allow Circular Single-Stage Paths,ALLOW_CIRCLE_IN_BASIC_PATH,Allow Circular Single-Stage Paths,PATH,0,Boolean,,1,,,,
+7,Criteria for Path Generation,TARGET,Criteria for Path Generation,PATH,1,MultiSelect,,COST,COST;DISTANCE;DURATION,,,
+8,Thread Number for Path Generation,THREAD_NUM,Thread Number for Path Generation,PATH,0,Number,At least 1,1,,1,LE,
+9,Allow Contiguous Lanes,ALLOW_CONTINUOUS_CONNECTION,Allow Contiguous Lanes,PATH,0,Boolean,,0,,,,
+10,Maximum Number of Routes,MAX_ROUTE_NUM,Maximum Number of Routes,ROUTE,1,Number,At least 1,1,,1,LE,
+11,Criteria for Route Generation,TARGET,Criteria for Route Generation,ROUTE,1,MultiSelect,,COST,COST;DISTANCE;DURATION,,,
+12,Thread Number for Route Generation,THREAD_NUM,Thread Number for Route Generation,ROUTE,0,Number,At least 1,1,,1,LE,
+13,Time Threshold for Indicating Roll-Over,VOYAGE_ROLLOVER_THRESHOLD,Time Threshold for Indicating Roll-Over,ROUTE,0,Number,0 or greater,0,,,,minutes
+14,Maximum Runtime,MAX_SOLVER_RUNTIME,Maximum Runtime,OPTIMIZATION,0,Number,At least 1,100,,1,LE,seconds
+15,Optimization Type,OPTIMIZER_TYPE,Optimization Type,OPTIMIZATION,0,FixedValues,,LARGE SCALE,LARGE SCALE;EXTREMELY LARGE SCALE,,,
+16,Time Limit for Path and Route Generation,TIMEOUT,Time Limit for Path and Route Generation,PATH_ROUTE,0,Number,At least 0,600,,0,LE,seconds
+17,Factor for Cost/Distance/Duration Threshold,TARGET_THRESHHOLD_SCALE ,Factor for Cost/Distance/Duration Threshold,PATH_ROUTE,0,Number,At least 0,10,,0,LE,
+19,Handling Capacity,HANDLING_CAPACITY,Handling Capacity,OPTIMIZATION,0,Boolean,,0,,,,
+20,Exclude in Handling Capacity,HANDLING_CAPACITY_EXCLUDE,Exclude in Handling Capacity,OPTIMIZATION,0,MultiSelect2,,,ON-OFF HIRE;MAINTENANCE AND REPAIR;OVERDUE ACTIVITIES,,,

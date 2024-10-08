@@ -1,0 +1,35 @@
+schema = "SAP_TM_TRP";
+
+query  = "SELECT T1.ID,
+                 T1.NAME AS CODE,
+                 T1.NAME,
+                 T3.DESC AS DESC,
+                 T1.PROCEDURE_NAME AS STORED_PROCEDURE_NAME,
+                 T1.SCHEMA_NAME,
+                 T7.ID AS TYPE_ID,
+                 T7.TYPE AS TYPE,
+                 T9.DESC AS TYPE_NAME,
+                 T4.USERNAME AS CREATED_BY,
+                 T1.CREATE_ON AS CREATED_ON,
+                 T5.USERNAME AS MODIFIED_BY,
+                 T1.LAST_MODIFIED_ON AS MODIFIED_ON,
+                 IFNULL(T1.LAST_MODIFIED_ON, T1.CREATE_ON) AS MODIFIED_TIME,
+                 T1.ACTIVATION_STATUS
+            FROM \"sap.tm.trp.db.pickupreturn::t_register_exclude_processed_tu\" AS T1
+                 LEFT OUTER JOIN \"sap.tm.trp.db.pickupreturn::t_register_exclude_processed_tu_t\" AS T3
+                 ON T1.ID = T3.ID AND T3.SPRAS = IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E')
+                 LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS T4
+                 ON T1.CREATE_BY = T4.ID 
+                 LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS T5
+                 ON T1.LAST_MODIFIED_BY = T5.ID
+                 LEFT OUTER JOIN \"sap.tm.trp.db.objectregistration::t_object_type\" AS T7
+                 ON T7.ID = 13
+                 LEFT OUTER JOIN \"sap.tm.trp.db.objectregistration::t_object_type_t\" AS T9
+                 ON T9.SPRAS = IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E') AND T7.ID = T9.ID "
+                 ;
+depends_on_table = ["sap.tm.trp.db.pickupreturn::t_register_exclude_processed_tu",
+					"sap.tm.trp.db.pickupreturn::t_register_exclude_processed_tu_t",
+                    "sap.tm.trp.db.objectregistration::t_object_type", 
+                    "sap.tm.trp.db.objectregistration::t_object_type_t"];
+                
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

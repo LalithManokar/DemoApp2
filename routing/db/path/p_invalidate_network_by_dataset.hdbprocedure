@@ -1,0 +1,66 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_invalidate_network_by_dataset" (
+    IN dataset_id BIGINT,
+    IN delta_change CHAR(1), -- X for true and false otherwise 
+    OUT return_code TINYINT,
+    OUT message "sap.tm.trp.routing.db.common::tt_message",
+    OUT log "sap.tm.trp.routing.db.common::tt_message"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING"
+   AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+    DECLARE GLOBAL_DATASET_ID BIGINT := 0; 
+    DECLARE REASON_DELTA_CHANGE VARCHAR(10) := 'D';
+    DECLARE REASON_SYSTEM_OBJECT VARCHAR(10) := 'S';
+    DECLARE invalidation_reason_code VARCHAR(10) := '';
+	DECLARE CURSOR c_network FOR SELECT DISTINCT id, invalidated, invalidation_reason_code
+	FROM "sap.tm.trp.routing.db.path::t_network_model"
+	WHERE dataset_id  = :dataset_id;
+	
+	return_code = 0;
+	
+	message = SELECT '' AS severity, '' AS message FROM DUMMY WHERE 1 <> 1;
+	log = SELECT '' AS severity, '' AS message FROM DUMMY WHERE 1 <> 1;
+	
+	IF :dataset_id = :GLOBAL_DATASET_ID THEN
+	    UPDATE "sap.tm.trp.routing.db.path::t_network_model"
+    	SET invalidated = 'X',
+    	invalidation_reason_code = :REASON_SYSTEM_OBJECT,
+    	changed_by = SESSION_CONTEXT('APPLICATIONUSER'),
+    	changed_on = CURRENT_UTCTIMESTAMP;    	
+    	--To-do: add message
+	ELSE
+	
+    	IF :delta_change = 'X' THEN
+    	    invalidation_reason_code = :REASON_DELTA_CHANGE;
+    	ELSE 
+    	    invalidation_reason_code = :REASON_SYSTEM_OBJECT;
+    	END IF;
+    	
+        FOR row AS c_network DO
+            -- Always overwrite delta change reason
+            IF row.invalidated <> 'X' OR row.invalidated IS NULL 
+            OR (row.invalidation_reason_code = :REASON_DELTA_CHANGE
+            AND :invalidation_reason_code <> :REASON_DELTA_CHANGE) THEN
+            	CALL "sap.tm.trp.routing.db.path::p_invalidate_network" 
+                (row.id, :invalidation_reason_code, :return_code, :message_tmp, :log_tmp);
+            
+                IF :return_code <> 0 THEN
+                    message = SELECT * FROM :message_tmp;
+                    log = SELECT * FROM :log_tmp;
+                    RETURN;
+                END IF;
+                
+                message = SELECT * FROM :message 
+                UNION ALL SELECT * FROM :message_tmp;
+                log = SELECT * FROM :log 
+                UNION ALL SELECT * FROM :log_tmp;
+            END IF;
+    	END FOR;
+	
+	END IF;
+END

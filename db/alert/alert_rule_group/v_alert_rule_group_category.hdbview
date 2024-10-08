@@ -1,0 +1,14 @@
+schema="SAP_TM_TRP";
+
+query = "
+	SELECT T1.ALERT_RULE_GROUP_CATEGORY_ID,
+		T1.CODE,
+		T1.CONTAINING_OBJECT_TYPE_ID,
+		T2.DESC AS ALERT_RULE_GROUP_CATEGORY_NAME,
+		T1.RESOURCE_CATEGORY 
+	from \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_category\" as T1 
+	LEFT JOIN \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_category_t\" as T2 
+	on T1.ALERT_RULE_GROUP_CATEGORY_ID = t2.ID AND T2.SPRAS = IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E')";
+
+depends_on_table=["sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_category",
+					"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_category_t"]; 

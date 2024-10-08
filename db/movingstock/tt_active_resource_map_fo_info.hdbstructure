@@ -1,0 +1,14 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "out structure for the active resource map stored procedure on freight order";
+table.columns = [
+  {name = "DOCUMENT"; sqlType = NVARCHAR;length=100;},
+  {name = "SCHEDULE_ID"; sqlType = NVARCHAR;length=40;},
+  {name = "VOYAGE"; sqlType = NVARCHAR;length=10;},
+  {name = "LAST_LOCATION"; sqlType = NVARCHAR;length=20;},
+  {name = "NEXT_PLANNED_LOCATION"; sqlType = NVARCHAR;length=20;},
+  {name = "DEPARTURE_TIME"; sqlType = TIMESTAMP;},  
+  {name = "LATITUDE"; sqlType = DOUBLE;},
+  {name = "LONGITUDE"; sqlType = DOUBLE;},
+  {name = "VESSEL_ID"; sqlType = NVARCHAR;length=40;}
+];

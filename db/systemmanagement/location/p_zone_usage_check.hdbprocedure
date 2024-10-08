@@ -1,0 +1,44 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.location::p_zone_usage_check"(
+    IN ID VARCHAR(32),
+    OUT ERR_NUM INTEGER
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+    DECLARE COUNT INTEGER;
+    ERR_NUM := 0;
+    
+    /*
+    SELECT COUNT(*) INTO COUNT FROM "sap.tm.trp.db.systemmanagement.user::t_role_zone"
+    WHERE ZONE_ID = :ID;
+    
+    ERR_NUM := :ERR_NUM + :COUNT;
+    */
+    
+    SELECT COUNT(*) INTO COUNT FROM "sap.tm.trp.db.systemmanagement.user::t_role_region"
+    WHERE ROOT_ID = :ID;
+    
+    ERR_NUM := :ERR_NUM + :COUNT;
+    
+    SELECT COUNT(*) INTO COUNT FROM "sap.tm.trp.db.systemmanagement::t_zone_group_item"
+    WHERE ZONE_ID = :ID;
+    
+    ERR_NUM := :ERR_NUM + :COUNT;
+    
+    SELECT COUNT(*) INTO COUNT FROM "sap.tm.trp.db.systemmanagement::t_region_group_item"
+    WHERE ZONE_ID = :ID;
+    
+    ERR_NUM := :ERR_NUM + :COUNT;
+    
+    SELECT COUNT(*) INTO COUNT FROM "sap.tm.trp.db.filter::t_location_filter_zone"
+    WHERE ZONE_ID = :ID;
+    
+    ERR_NUM := :ERR_NUM + :COUNT;
+    
+    SELECT COUNT(*) INTO COUNT FROM "sap.tm.trp.db.filter::t_location_filter_region"
+    WHERE ZONE_ID = :ID;
+    
+    ERR_NUM := :ERR_NUM + :COUNT;
+END;

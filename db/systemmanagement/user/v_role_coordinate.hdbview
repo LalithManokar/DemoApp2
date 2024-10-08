@@ -1,0 +1,16 @@
+schema="SAP_TM_TRP";
+
+query="SELECT ROLE_ID,
+              XPOS,
+              YPOS
+         FROM (
+                SELECT C.ROLE_ID AS ROLE_ID,
+                       DENSE_RANK() OVER (PARTITION BY C.ROLE_ID ORDER BY XPOS DESC, YPOS DESC) AS RANK,
+                       XPOS, YPOS
+                  FROM \"sap.tm.trp.db.systemmanagement.user::v_role_location_all\" AS C
+                       LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_location\" AS D
+                       ON C.LOCATION_ID = D.ID
+              ) AS E
+        WHERE E.RANK = 1";
+
+depends_on_view = ["sap.tm.trp.db.systemmanagement.user::v_role_location_all", "sap.tm.trp.db.semantic.location::v_location"];

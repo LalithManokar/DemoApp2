@@ -1,0 +1,71 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_ext_user_update" (
+  IN USER_ID BIGINT,
+  IN USERNAME VARCHAR(60),
+  IN TEMPERATURE_UNIT_CODE VARCHAR(3),
+  IN WEIGHT_UNIT_CODE VARCHAR(3),
+  IN DISTANCE_CODE VARCHAR(3),
+  IN VOLUMN_UNIT_CODE VARCHAR(3),
+  IN DATE_FORMAT_ID INTEGER,
+  IN TIME_FORMAT_ID INTEGER,
+  IN DECIMAL_NOTATION_ID INTEGER,
+  IN USER_TYPE_ID INTEGER,
+  --IN FIRST_NAME VARCHAR(60),
+  --IN MIDDLE_NAME VARCHAR(60),
+  --IN LAST_NAME VARCHAR(60)
+  IN USER_DATA_FLAG SMALLINT
+)
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+    DECLARE USERID BIGINT;
+    DECLARE LANG_CODE STRING;
+    
+    SELECT USER_ID INTO USERID FROM SYS.USERS WHERE USER_NAME = :USERNAME;
+    SELECT IFNULL (MAX(SPRAS),'E') INTO LANG_CODE 
+    FROM "sap.tm.trp.db.systemmanagement::v_lang_code";
+
+    UPSERT "sap.tm.trp.db.systemmanagement.user::t_user" (
+        ID,
+        USERNAME,
+        --FIRST_NAME,
+        --MIDDLE_NAME,
+        --LAST_NAME,
+        LAST_MODIFIED_DATE,
+        TEMPERATURE_UNIT_CODE,
+        WEIGHT_UNIT_CODE,
+        DISTANCE_CODE,
+        VOLUMN_UNIT_CODE,
+        DATE_FORMAT_ID,
+        TIME_FORMAT_ID,
+        DECIMAL_NOTATION_ID,
+        USER_TYPE_ID,
+        LANG_CODE
+        )
+    SELECT
+        IFNULL(:USER_ID, :USERID),
+        :USERNAME,
+        --:FIRST_NAME,
+        --:MIDDLE_NAME,
+        --:LAST_NAME,
+        CURRENT_UTCTIMESTAMP,
+        :TEMPERATURE_UNIT_CODE,
+        :WEIGHT_UNIT_CODE,
+        :DISTANCE_CODE,
+        :VOLUMN_UNIT_CODE,
+        :DATE_FORMAT_ID,
+        :TIME_FORMAT_ID,
+        :DECIMAL_NOTATION_ID,
+        :USER_TYPE_ID,
+        :LANG_CODE
+    FROM DUMMY;
+    
+    UPSERT "sap.tm.trp.db.dataprotectionprivacy::t_user_data_privilege"(
+           USERNAME,
+           USER_DATA_PRIVILEGE_FLAG)
+    SELECT :USERNAME,
+           :USER_DATA_FLAG
+    FROM DUMMY;
+    
+END;

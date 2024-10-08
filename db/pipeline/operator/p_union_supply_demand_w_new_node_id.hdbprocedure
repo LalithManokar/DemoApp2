@@ -1,0 +1,20 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline.operator::p_union_supply_demand_w_new_node_id" (
+IN demand "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+IN supply "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+OUT union_two "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets") 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+ 
+
+
+union_two = (select 'SUPPLY_DEMAND' AS NODE_ID, t1.GEO_ID, t1.GEO_NAME, t1.GEO_FILTER_TYPE, t1.EQUIP_TYPE, t1.EQUIP_NAME, t1.EQUIP_FILTER_TYPE, 
+	         t1.TIME_INTERVAL_ID, t1.SEQUENCE, t1.START_TIME, t1.END_TIME, t1.INTER_SECONDS, t1.OUTPUT_KEY, t1.OUTPUT_VALUE, t1.UNIT
+	         from :demand as t1 )
+	         union all
+		    (select 'SUPPLY_DEMAND' AS NODE_ID, t2.GEO_ID, t2.GEO_NAME, t2.GEO_FILTER_TYPE, t2.EQUIP_TYPE, t2.EQUIP_NAME, t2.EQUIP_FILTER_TYPE, 
+	         t2.TIME_INTERVAL_ID, t2.SEQUENCE, t2.START_TIME, t2.END_TIME, t2.INTER_SECONDS, t2.OUTPUT_KEY, t2.OUTPUT_VALUE, t2.UNIT
+	         from :supply as t2 );		 
+END;

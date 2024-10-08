@@ -1,0 +1,84 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_check_supply_demand_flag" (
+ IN IN_SD_PLAN_ID BIGINT, --- ID of scheduled/virtual SD plans
+ OUT STATUS INTEGER,  --0 error  1 success
+ OUT MESSAGE VARCHAR(200)
+ )
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+/*****************************
+	This procedure is used to check whether a SD plan has both supply and demand data
+ 1) if IN_SD_PLAN_ID is a scheduled SD plan, then we only need to check this plan
+ 2) if IN_SD_PLAN_ID is a virtual SD plan, then we need to check all scheduled SD plan contained in the virtual SD plan
+ *****************************/
+  DECLARE CAL_MODEL_ID INTEGER;
+  DECLARE PLAN_TYPE_ID INTEGER;
+  DECLARE SUPPLY_DEMAND_FLAG SMALLINT := 0;
+  DECLARE HAS_SUPPLY INTEGER := 0;
+  DECLARE HAS_DEMAND INTEGER := 0;
+  DECLARE NO_SUPPLY_OR_DEMAND INTEGER :=0;
+  DECLARE FLAG_COUNT INTEGER;
+
+  SD_PLAN = SELECT ID, PIPELINE_MODEL_ID , --Calcuation Model ID
+                    PLAN_MODEL_TYPE_ID --Plan type id
+            FROM "sap.tm.trp.db.pipeline::t_plan_model" WHERE ID = :IN_SD_PLAN_ID;
+
+  SELECT PLAN_MODEL_TYPE_ID INTO PLAN_TYPE_ID FROM :SD_PLAN;
+
+  IF :PLAN_TYPE_ID = 1 THEN --Scheduled SD plan
+    SELECT count(*) into FLAG_COUNT
+    FROM "sap.tm.trp.db.pipeline::v_pipeline_has_supply_demand"
+    WHERE PIPELINE_MODEL_ID = (SELECT PIPELINE_MODEL_ID FROM :SD_PLAN);
+
+    IF :FLAG_COUNT > 0 THEN
+    SELECT HAS_SUPPLY_DEMAND INTO SUPPLY_DEMAND_FLAG
+    FROM "sap.tm.trp.db.pipeline::v_pipeline_has_supply_demand"
+    WHERE PIPELINE_MODEL_ID = (SELECT PIPELINE_MODEL_ID FROM :SD_PLAN); 
+    END IF;
+
+  	IF SUPPLY_DEMAND_FLAG <= 0 THEN
+  	   STATUS := 0;
+       MESSAGE := 'MSG_ERROR_MUST_HAVE_BOTH_SD_DATA';
+    ELSE
+       STATUS := 1;
+    END IF;
+  ELSEIF :PLAN_TYPE_ID = 3 THEN --Virtual SD plan
+
+ ---Get scheduled Plan list and node value
+   NODE_VALUE_LIST =
+    SELECT T0.ID, T1.DEFAULT_NODE_ID, T2.VALUE
+    FROM (
+    	SELECT ID, PIPELINE_MODEL_ID FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+	    INNER JOIN ( SELECT VIRTUAL_PLAN_MODEL_ID, PERSISTED_PLAN_MODEL_ID
+	    FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan"
+	    WHERE VIRTUAL_PLAN_MODEL_ID = :IN_SD_PLAN_ID) AS T2
+	    ON T1.ID = T2.PERSISTED_PLAN_MODEL_ID
+    ) AS T0
+    LEFT OUTER JOIN "sap.tm.trp.db.pipeline::v_pipeline_default_node" T1
+    ON T0.PIPELINE_MODEL_ID = T1.PIPELINE_MODEL_ID
+    LEFT OUTER JOIN
+    (
+	 SELECT NODE_ID, VALUE FROM "sap.tm.trp.db.pipeline::t_pipeline_node_layout"
+	 WHERE KEY = 'outputKey'
+	 AND VALUE LIKE '%SUPPLY%' OR VALUE LIKE '%DEMAND%'
+   ) T2
+   ON T1.DEFAULT_NODE_ID = T2.NODE_ID;
+
+   SELECT COUNT(*) INTO HAS_SUPPLY FROM :NODE_VALUE_LIST WHERE VALUE LIKE '%SUPPLY%';
+   SELECT COUNT(*) INTO HAS_DEMAND FROM :NODE_VALUE_LIST WHERE VALUE LIKE '%DEMAND%';
+   SELECT COUNT(*) INTO NO_SUPPLY_OR_DEMAND FROM :NODE_VALUE_LIST WHERE VALUE IS NULL;
+
+   IF :NO_SUPPLY_OR_DEMAND > 0 THEN
+     STATUS := 0;
+     MESSAGE := 'MSG_ERROR_WITH_NONE_SD_PLAN';
+   ELSEIF ( :HAS_SUPPLY > 0 AND HAS_DEMAND > 0 ) THEN
+      STATUS := 1;
+   ELSE
+      STATUS := 0;
+      MESSAGE := 'MSG_ERROR_VSD_NO_SD_DATA';
+   END IF;
+  END IF;
+
+END;

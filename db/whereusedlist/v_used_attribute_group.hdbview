@@ -1,0 +1,27 @@
+schema = "SAP_TM_TRP";
+query  ="
+SELECT
+	T0.CODE AS OBJECT_CODE
+	,T1.ID AS USED_OBJECT_ID
+ 	,T1.NAME
+ 	,T1.CODE
+ 	,'Plan Model' AS CATEGORY
+ 	,T1.DESC AS DESC
+    ,MAP(T1.VISIBILITY_FLAG,1,'G',0,'P') AS VISIBILITY
+ 	,T2.USERNAME AS CREATED_BY
+ 	,T3.USERNAME AS MODIFIED_BY
+ 	,IFNULL(T1.LAST_MODIFIED_ON, T1.CREATE_ON) AS MODIFIED_TIME
+ 	,T4.RESOURCE_CATEGORY 
+FROM \"sap.tm.trp.db.filter::t_attribute_group\" T0
+INNER JOIN \"sap.tm.trp.db.pipeline::t_plan_model\" T1 ON T1.ATTRIBUTE_GROUP_ID = T0.ID
+LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T2 ON T2.ID = T1.CREATE_BY
+LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T3 ON T3.ID = T1.LAST_MODIFIED_BY
+INNER JOIN \"sap.tm.trp.db.filter::t_filter_group\" T4 ON T4.ID = T1.FILTER_GROUP_ID
+";
+
+depends_on_table = ["sap.tm.trp.db.filter::t_attribute_group",
+                    "sap.tm.trp.db.pipeline::t_plan_model",
+                    "sap.tm.trp.db.filter::t_filter_group"
+                    ];
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];
+                    

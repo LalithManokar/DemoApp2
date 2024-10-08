@@ -1,0 +1,27 @@
+schema = "SAP_TM_TRP";
+query = "
+	SELECT
+		 T1.ZONE_NAME
+		,T1.PRIME_LOC_ID
+		,T1.PRIME_LOC_NAME
+		,T1.CITY_CODE
+		,T1.CITY_NAME
+		,T1.STATE_CODE
+		,T1.STATE_NAME
+		,T1.COUNTRY_CODE
+		,T1.COUNTRY_NAME
+		,T1.CREATED_BY
+		,T1.CREATED_AT
+		,T1.LAST_MODIFIED_BY
+		,T1.LAST_MODIFIED_AT
+	FROM \"sap.tm.trp.db.systemmanagement.location::t_zone_primary_location\" T1
+	INNER JOIN \"sap.tm.trp.db.semantic.location::v_zone\" T0 ON (T1.ZONE_NAME = T0.NAME)
+	INNER JOIN \"sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype\"(PLACEHOLDER.\"$$IN_LOCATION_TYPE$$\"=>1) T2
+	ON (T1.PRIME_LOC_ID = T2.LOCATION_ID)
+	INNER JOIN \"sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype\"(PLACEHOLDER.\"$$IN_LOCATION_TYPE$$\"=>5) T3
+	ON (T0.ID = T3.LOCATION_ID)
+
+";
+                
+depends_on_table = ["sap.tm.trp.db.systemmanagement.location::t_zone_primary_location"]; 
+depends_on_view = ["sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype","sap.tm.trp.db.semantic.location::v_zone"];                 

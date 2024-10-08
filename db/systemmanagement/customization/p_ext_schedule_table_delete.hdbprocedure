@@ -1,0 +1,19 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.customization::p_ext_schedule_table_delete"(
+    OUT MESSAGE VARCHAR(500),
+    OUT VIEW_NAMES "sap.tm.trp.db.systemmanagement.customization::tt_view_name_with_schema"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+      DELETE FROM "sap.tm.trp.db.systemmanagement.customization::t_enhanced_schedule_tables";
+      VIEW_NAMES = SELECT T1.SCHEMA_NAME, T1.VIEW_NAME
+                   FROM VIEWS T1
+                   INNER JOIN "sap.tm.trp.db.systemmanagement.customization::t_enhanced_schedule_view_names_base" T2 
+                   ON T1.VIEW_NAME = T2.VIEW_NAME;
+                   
+      MESSAGE := 'MSG_SUCCESS_STATUS';
+    
+END;

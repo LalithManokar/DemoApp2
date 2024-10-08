@@ -1,0 +1,75 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_supply_demand_plan_upload" (
+    IN SUPPLY_DEMAND_PLAN "sap.tm.trp.db.massupload::tt_supply_demand_plan_upload",
+    IN CONNECTION_ID VARCHAR(100),
+    IN RESOURCE_CATEGORY_ID VARCHAR(20)
+)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA SAP_TM_TRP
+	--READS SQL DATA
+AS
+BEGIN
+ 	DECLARE USER_ID BIGINT;
+ 	DECLARE VAR_CURRENT_UTCTIMESTAMP TIMESTAMP := CURRENT_UTCTIMESTAMP;
+
+ 	CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+
+ 	-- Delete the records in temporary table in case there're already some uploaded data with same db connection.
+ 	DELETE FROM "sap.tm.trp.db.massupload::t_supply_demand_plan_temporary"
+    WHERE CONNECTION_ID = :CONNECTION_ID;
+
+	INSERT INTO "sap.tm.trp.db.massupload::t_supply_demand_plan_temporary"
+        (NAME,
+         DESCRIPTION,
+         TYPE_NAME,
+         LOCATION_FILTER_NAME,
+         RESOURCE_FILTER_NAME,
+         TIME_FILTER_NAME,
+         CALCULATION_MODEL_NAME,
+         ALERT_RULE_GROUP_NAME,
+         ATTRIBUTE_GROUP_NAME,
+         RECURRENCE_TYPE,
+         RECURRENCE_INTERVAL,
+         RECURRENCE_DAY,
+         START_TIME,
+         EXPIRY_TIME,
+         VISIBILITY_FLAG,
+         USER_ID,
+         ACTION_TIME,
+         CONNECTION_ID,
+         KEEP_EXECUTION_RUNS,
+         PLAN_USAGE,
+         DISABLE_INTERMEDIATE_NODE,
+         EXECUTE_IN_WORKING_HOUR,
+         START_WORKING_TIME,
+         END_WORKING_TIME,
+         TIMEZONES
+        )
+    SELECT
+        NAME,
+		DESCRIPTION,
+		TYPE_NAME,
+		LOCATION_FILTER_NAME,
+		RESOURCE_FILTER_NAME,
+		TIME_FILTER_NAME,
+		CALCULATION_MODEL_NAME,
+		ALERT_RULE_GROUP_NAME,
+		ATTRIBUTE_GROUP_NAME,
+		RECURRENCE_TYPE,
+		RECURRENCE_INTERVAL,
+		RECURRENCE_DAY,
+		START_TIME,
+		EXPIRY_TIME,
+		VISIBILITY_FLAG,
+       :USER_ID,
+       :VAR_CURRENT_UTCTIMESTAMP,
+       :CONNECTION_ID,
+       KEEP_EXECUTION_RUNS,
+       PLAN_USAGE,
+       DISABLE_INTERMEDIATE_NODE,
+       EXECUTE_IN_WORKING_HOUR,
+       START_WORKING_TIME,
+       END_WORKING_TIME,
+       TIMEZONES
+      FROM :SUPPLY_DEMAND_PLAN;
+END;

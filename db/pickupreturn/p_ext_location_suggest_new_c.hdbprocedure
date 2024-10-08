@@ -1,0 +1,855 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_location_suggest_new_c" ( 
+	IN RULE_ID  BIGINT, 
+    IN IV_TU_IDS CLOB,--"sap.tm.trp.db.pickupreturn::tt_tu_list",
+    IN IV_LOCATION_BASED_COST CLOB, --"sap.tm.trp.db.pickupreturn::tt_location_based_cost_info",
+    OUT result "sap.tm.trp.db.pickupreturn::tt_suggestion_data"
+   )
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+DECLARE DATE_OFFSET INTEGER :=0;
+  DECLARE COUNT_TU INTEGER;
+  DECLARE V_PRE_DATE TIMESTAMP;
+  DECLARE V_RESOURCE_TYPE VARCHAR(20);
+  DECLARE V_QUANTITY INTEGER;
+  DECLARE V_RES_TYPE_COUNT INTEGER;
+  DECLARE V_TIME_INTERVAL_COUNT INTEGER;
+  DECLARE RESOURCE_CATEGORY VARCHAR(20);
+  DECLARE V_OUT_RANGE_INTERVAL_COUNT INTEGER;
+  DECLARE V_MIN_INTERVAL_ID INT;
+  DECLARE V_TIME_ZONE_ID VARCHAR(20);
+
+  --rule info
+  DECLARE V_RULE_TYPE INTEGER;
+  DECLARE V_SD_PLAN_ID BIGINT;
+  DECLARE V_SD_LF_ID BIGINT;
+  DECLARE V_SD_EF_ID BIGINT;
+  DECLARE V_NETWORK_SETTING_GROUP_ID BIGINT;
+  DECLARE V_TIME_RANGE_ID BIGINT;
+  DECLARE V_EQUIP_FILTER_ID BIGINT;
+  DECLARE V_LOCATION_FILTER_ID BIGINT;
+  DECLARE V_OP_SETTING_TYPE INTEGER;
+  DECLARE V_OPTIMIZATION INTEGER;
+  DECLARE V_SCHEDULE_TIME_TYPE INTEGER;
+  DECLARE V_LDR_RULE_ID INTEGER;
+  DECLARE V_EXCLUSIVE_RULE_ID INTEGER;
+  DECLARE V_OPTIMIZATION_OPTION VARCHAR(50);
+  DECLARE V_FILTER_EXECUTION SMALLINT;
+
+  -- supply demand info
+  DECLARE V_EXECUTION_ID BIGINT;
+  DECLARE V_NODE_ID BIGINT;
+  DECLARE V_ALL_RESULTS VARCHAR(1);
+
+  --location determination rule para
+  DECLARE END_TIME TIMESTAMP;
+  DECLARE START_TIME TIMESTAMP;
+  DECLARE MANDATORY_COST_MODEL_ID INTEGER;
+  DECLARE MAX_TRANSPORT_COST DECIMAL;
+  DECLARE COUNT_RESULT INTEGER;
+  DECLARE LOC_FILTER_ID BIGINT;
+  DECLARE HANDLING_CAPA              INTEGER;
+  
+  DECLARE CROSS_GROUP CHAR(1);
+
+
+  SELECT IFNULL(MAX(DATE_OFFSET), 0) INTO DATE_OFFSET
+  FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+  WHERE USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+  SELECT ADD_DAYS(CURRENT_UTCTIMESTAMP, :DATE_OFFSET), ADD_DAYS(CURRENT_UTCTIMESTAMP, :DATE_OFFSET - 180)
+  INTO END_TIME, START_TIME FROM DUMMY;
+
+  --Begin of CLOB to Table Variable Changes - 07.06.2020
+  CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:IV_TU_IDS,',',lt_tu_ids_raw);
+  TU_IDS = SELECT string as TU_ID FROM :lt_tu_ids_raw;
+   
+  CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:IV_LOCATION_BASED_COST,'~',lt_loc_cost_raw);
+   
+  LOCATION_BASED_COST = select CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 1) as VARCHAR(200)) as FROM_LOCATION,
+                                CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 2) as VARCHAR(200)) as TO_LOCATION,
+                                CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 3) as NVARCHAR(20)) as MTR,
+                                CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 4) as NVARCHAR(20)) as RESOURCE_TYPE,
+                                CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 5) as NVARCHAR(20)) as CARRIER,
+                                CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 6) as DECIMAL(13,3)) as DISTANCE,
+                                CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 7) as INTEGER) as DURATION
+                            from :lt_loc_cost_raw;
+   
+  --End of CLOB to Table Variable Changes - 07.06.2020
+
+  --get the location rule info
+  SELECT IFNULL (MAX (RULE_TYPE),0)
+    		,IFNULL (MAX (SD_PLAN_ID),0)
+    		,IFNULL (MAX (TIME_RANGE),0)
+    		,IFNULL (MAX (EQUIP_FILTER_ID),0)
+    		,IFNULL (MAX (LOCATION_FILTER_ID),0)
+    		,IFNULL (MAX (NETWORK_SETTING_GROUP_ID),0)
+    		,IFNULL (MAX (OP_SETTING_TYPE),0)
+    		,IFNULL (MAX (OPTIMIZATION),0)
+    		,IFNULL (MAX (SCHEDULE_TIME_TYPE),0)
+    		,IFNULL (MAX (LOCATION_DETERMIN_ID),0)
+    		,IFNULL (MAX (EXCLUSIVE_RULE_ID),0)
+    		,IFNULL (MAX (FILTER_EXECUTION),0) 
+    		,IFNULL (MAX (RESOURCE_CATEGORY),'') INTO 
+    		  V_RULE_TYPE,
+              V_SD_PLAN_ID,
+              V_TIME_RANGE_ID,
+              V_EQUIP_FILTER_ID,
+              V_LOCATION_FILTER_ID,
+              V_NETWORK_SETTING_GROUP_ID,
+              V_OP_SETTING_TYPE,
+              V_OPTIMIZATION,
+              V_SCHEDULE_TIME_TYPE,
+              V_LDR_RULE_ID,
+              V_EXCLUSIVE_RULE_ID,
+              V_FILTER_EXECUTION,
+              RESOURCE_CATEGORY
+      FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+      WHERE ID=:RULE_ID;
+
+  -- Get TUs
+  CALL "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_get_staging_tu"(:RULE_ID, TU_ALL);
+
+  -- TODO: NULL vs '' ??
+  IF :V_RULE_TYPE=1 THEN
+    selected_tu_info = SELECT DISTINCT TRANSPORTATION_ID AS TU_ID,
+                     TU_TYPE_CODE AS TU_TYPE,
+                     RESOURCE_TYPE,
+                     QUANTITY,
+                     ITE_KEY,
+                     SHIPPER_ID,
+                     SHIPPER,
+                     CONSIGNEE_ID,
+                     CONSIGNEE,
+                     IFNULL(ORIGINAL_PICKUP_LOCATION_ID,POL) AS CUR_LOCATION_ID,
+                     IFNULL(ORIGINAL_PICKUP_DATE,NULL) AS CUR_DATE,
+                     IFNULL(PICKUP_LOCATION_ID,'') AS PRE_LOCATION_ID,
+                     IFNULL(PICKUP_DATE,NULL) AS PRE_DATE,
+                     CASE WHEN DESTINATION_LOCATION_ID  = '' THEN POL
+                          ELSE DESTINATION_LOCATION_ID END AS SHIPPER_LOCATION_ID,
+                     CASE WHEN DESTINATION_LOCATION  = '' THEN POL_NAME
+                          ELSE DESTINATION_LOCATION END AS SHIPPER_LOCATION,
+                     NULL AS CONSIGNEE_LOCATION_ID,
+                     NULL AS CONSIGNEE_LOCATION,
+                     CASE WHEN DESTINATION_LOCATION  = '' THEN POL_NAME ELSE DESTINATION_LOCATION END AS PAIR_GROUP_LOCATION,
+                     CUSTOMER_NAME,
+                     RELEVANT_PLANNING,
+                     POL,
+                     POL_NAME,
+                     POD,
+                     POD_NAME,
+                     BOOKING_DATE,
+                     EXECUTION_STATUS_CODE AS STATUS,
+                     LIFECYCLE_CODE AS LIFECYCLE_STATUS,
+                     FLAG,
+                     IFNULL(DESTINATION_LOCATION,POL_NAME) AS CUR_LOCATION_NAME
+                     FROM :TU_ALL T1
+                     INNER JOIN :TU_IDS T2 ON (T1.TRANSPORTATION_ID = T2.TU_ID);
+  ELSE
+    selected_tu_info = SELECT DISTINCT TRANSPORTATION_ID AS TU_ID,
+                     TU_TYPE_CODE AS TU_TYPE,
+                     RESOURCE_TYPE,
+                     QUANTITY,
+                     ITE_KEY,
+                     SHIPPER_ID,
+                     SHIPPER,
+                     CONSIGNEE_ID,
+                     CONSIGNEE,
+                     IFNULL (ORIGINAL_RETURN_LOCATION_ID,POD) AS CUR_LOCATION_ID,
+                     IFNULL (ORIGINAL_RETURN_DATE,NULL) AS CUR_DATE,
+                     IFNULL (RETURN_LOCATION_ID,'') AS PRE_LOCATION_ID,
+                     IFNULL (RETURN_DATE,NULL) AS PRE_DATE,
+                     NULL AS SHIPPER_LOCATION_ID,
+                     NULL AS SHIPPER_LOCATION,
+                     CASE WHEN SOURCE_LOCATION_ID = '' THEN POD
+                          ELSE SOURCE_LOCATION_ID END AS CONSIGNEE_LOCATION_ID,
+                     CASE WHEN SOURCE_LOCATION = '' THEN POD_NAME
+                          ELSE SOURCE_LOCATION END AS CONSIGNEE_LOCATION,
+                     CASE WHEN SOURCE_LOCATION  = '' THEN POD_NAME ELSE SOURCE_LOCATION END AS PAIR_GROUP_LOCATION,
+                     CUSTOMER_NAME,
+                     RELEVANT_PLANNING,
+                     POL,
+                     POL_NAME,
+                     POD,
+                     POD_NAME,
+                     BOOKING_DATE,
+                     EXECUTION_STATUS_CODE AS STATUS,
+                     LIFECYCLE_CODE AS LIFECYCLE_STATUS,
+                     FLAG,
+                     IFNULL (SOURCE_LOCATION,POD_NAME) AS CUR_LOCATION_NAME
+                     FROM :TU_ALL T1
+                     INNER JOIN :TU_IDS T2 ON (T1.TRANSPORTATION_ID = T2.TU_ID);
+  END IF;
+  ----------------------------------------------SUPPLY DEMAND DATA EXTRACTION---------------------------------------------
+  --prepare inputs to sd plan procedure
+  SELECT IFNULL (MAX (QUANTITY),0), IFNULL (MAX ( RESOURCE_TYPE),''),'X' INTO V_QUANTITY, V_RESOURCE_TYPE,V_ALL_RESULTS FROM :selected_tu_info;
+
+  -- sd results and orginal SD execution results  
+  CALL "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_get_plan_data_by_sd_planid"(:V_SD_PLAN_ID, :V_RESOURCE_TYPE,:V_ALL_RESULTS, V_SD_LF_ID, V_SD_EF_ID,V_EXECUTION_ID, V_NODE_ID, sd_res,SD_EXECUTIION_RESULT);
+  
+  ----------------------------------------------LOCATION PAIRED TU AND SUPPLY DEMAND RELATED RESULT SETS------------------- 
+  -- get location pair group from tu
+  LOCATION_PAIR_GROUP_ORIGIN = SELECT DISTINCT PAIR_GROUP_LOCATION AS LOCATION FROM :selected_tu_info;
+  -- get location pair group from sd plan data
+  LOCATION_PAIR_GROUP_ALL_LOCATIONS = SELECT DISTINCT LOCATION_NAME AS LOCATION FROM :sd_res;
+  --find paired tu's
+  CALL "sap.tm.trp.db.pickupreturn.settings::p_check_locations_for_location_pair_group"
+  (:LOCATION_PAIR_GROUP_ORIGIN,:LOCATION_PAIR_GROUP_ALL_LOCATIONS,LOCATION_PAIR_GROUP,CROSS_GROUP);
+  --filter sd plan data with location paired 
+  sd_res = SELECT T1.* FROM :sd_res T1 INNER JOIN :LOCATION_PAIR_GROUP T2 ON T1.LOCATION_NAME = T2.LOCATION;
+  --evalute sd plan related result set
+  loc_equip = SELECT DISTINCT EQUIP_TYPE_ID AS RESOURCE_TYPE, EQUIP_TYPE_NAME AS RESOURCE_TYPE_NAME,
+              LOCATION_ID, LOCATION_NAME FROM :sd_res;
+  LOCATIONS_OF_SD = SELECT DISTINCT LOCATION_ID, LOCATION_NAME, START_TIME, END_TIME FROM :sd_res;
+  
+  ----------------------------------------------AVERAGE STAY DAYS----------------------------------------------------------  
+  -- Get average stay days
+  CALL "sap.tm.trp.db.pickupreturn::p_get_average_stay_day"(
+               :loc_equip,
+               :START_TIME,
+               :END_TIME,
+               :RESOURCE_CATEGORY,
+               t_average_stay_days
+    );
+  
+  ----------------------------------------------RESOURCE TYPE AND TEU COUNT-------------------------------------------------
+  --Get cost model
+    SELECT IFNULL (MAX (MANDATORY_COST_MODEL_ID),0) INTO MANDATORY_COST_MODEL_ID
+        FROM "sap.tm.trp.db.planningcockpit::v_network_setting_group"
+        WHERE ID = :V_NETWORK_SETTING_GROUP_ID;
+    
+     RESOURCE_TYPES_CODE_TEU_COUNT=SELECT DISTINCT T1.RESOURCE_TYPE_CODE,T3.TEU_COUNT
+                     FROM "sap.tm.trp.db.semantic.resource::v_resource_type_with_category" T1
+                     INNER JOIN "sap.tm.trp.db.costmodel::v_cost_model" T2
+                     ON (T1.RESOURCE_CATEGORY = T2.RESOURCE_CATEGORY)
+                     INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_type" T3
+                     ON (T1.RESOURCE_TYPE_CODE = T3.RESOURCE_TYPE_CODE)-- and T1.EQUI_TYPE = T3.EQUI_TYPE)
+                     WHERE T2.ID = :MANDATORY_COST_MODEL_ID;
+   
+  ----------------------------------------------IMPACTED SUPPLY DEMAND AND STORAGE CONDITION---------------------------------
+  -- Get selected TU amount
+  SELECT COUNT(1) INTO COUNT_TU FROM :selected_tu_info;
+
+  -- single tu or the multiple selected tu have the same resource types
+  SELECT COUNT(DISTINCT RESOURCE_TYPE) INTO V_RES_TYPE_COUNT FROM :selected_tu_info;
+
+  -- multiple selected tu have the same time interval
+  SELECT COUNT(DISTINCT START_TIME, END_TIME) INTO V_TIME_INTERVAL_COUNT
+  FROM :selected_tu_info T1
+  CROSS JOIN (SELECT DISTINCT START_TIME, END_TIME FROM :sd_res) T2
+  WHERE T1.PRE_DATE >= T2.START_TIME AND T1.PRE_DATE < T2.END_TIME;
+
+  SELECT COUNT(PRE_DATE) INTO V_OUT_RANGE_INTERVAL_COUNT
+  FROM :selected_tu_info  T1
+  WHERE T1.PRE_DATE < (SELECT MIN(START_TIME) FROM :sd_res)
+  OR T1.PRE_DATE >= (SELECT MAX(END_TIME) FROM :sd_res);
+
+  -- If single tu or multiple tu have same resource type and time interval(no one out of time interval),
+  -- return the new/old sd and storage conditions
+  IF :COUNT_TU = 1 OR
+     (:COUNT_TU > 1 AND :V_RES_TYPE_COUNT = 1 AND :V_TIME_INTERVAL_COUNT = 1 AND :V_OUT_RANGE_INTERVAL_COUNT = 0 AND :CROSS_GROUP = '') THEN
+		
+	  SELECT IFNULL (MAX (PRE_DATE),'') INTO V_PRE_DATE FROM :selected_tu_info;
+      
+      -- only the modified tu effect the sd values
+      updated_tu = SELECT *
+                   FROM :TU_ALL
+                   WHERE RULE_TYPE = 1 AND RESOURCE_TYPE = :V_RESOURCE_TYPE
+                   AND ( PICKUP_DATE <> ORIGINAL_PICKUP_DATE OR
+                   (PICKUP_LOCATION_ID IS NOT NULL AND PICKUP_LOCATION_ID <> '' AND PICKUP_LOCATION_ID <> ORIGINAL_PICKUP_LOCATION_ID)
+                    OR (STREETTURN_TU_ID IS NOT NULL AND STREETTURN_TU_ID <> '') )
+                   UNION ALL
+                   SELECT *
+                   FROM :TU_ALL
+                   WHERE RULE_TYPE = 2 AND RESOURCE_TYPE = :V_RESOURCE_TYPE
+                   AND ( RETURN_DATE <> ORIGINAL_RETURN_DATE OR
+                   (RETURN_LOCATION_ID IS NOT NULL AND RETURN_LOCATION_ID <> '' AND RETURN_LOCATION_ID <> ORIGINAL_RETURN_LOCATION_ID )
+                   OR (STREETTURN_TU_ID IS NOT NULL AND STREETTURN_TU_ID <> '') );
+
+      paired_tu_ids = SELECT DISTINCT STREETTURN_TU_ID AS TU_ID FROM :updated_tu WHERE STREETTURN_TU_ID IS NOT NULL AND STREETTURN_TU_ID <> '';
+
+      CALL "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_get_streetturn_tu_info"(:RESOURCE_CATEGORY, :V_RULE_TYPE, :paired_tu_ids, paired_tu);
+
+      -- Get the old and new supply demand values
+      CALL "sap.tm.trp.db.pickupreturn::p_get_updated_supply_demand" (
+         :V_RULE_TYPE,
+         :V_SD_PLAN_ID,
+         :V_SD_LF_ID,
+         :V_SD_EF_ID,
+         :V_PRE_DATE,
+         :V_RESOURCE_TYPE,
+         :updated_tu,
+         :paired_tu,
+         :sd_res,
+         t_impacted_supply_demand
+      );
+      
+                --Get storage condition
+      CALL "sap.tm.trp.db.pickupreturn::p_get_storage_conditions" (
+           :V_RULE_TYPE,
+           :MANDATORY_COST_MODEL_ID,
+           :RESOURCE_CATEGORY,
+           :loc_equip,
+           :t_impacted_supply_demand,
+           :t_average_stay_days,
+           :RESOURCE_TYPES_CODE_TEU_COUNT,
+           t_storage_condition
+       );
+
+  ELSE
+       t_impacted_supply_demand = SELECT NULL AS LOCATION_ID, 
+       			 		                 NULL AS LOCATION_NAME, 
+       			 		                 NULL AS EQUIP_TYPE_ID, 
+       			 		                 NULL AS EQUIP_TYPE_NAME,
+       			 		                 NULL AS START_TIME,
+       			 		                 NULL AS END_TIME,
+       			 		                 NULL AS SUPPLY,
+       			 		                 NULL AS DEMAND,
+       			 		                 NULL AS BALANCE_SUPPLY_DEMAND,
+       			 		                 NULL AS BALANCE_STOCK_SUPPLY_DEMAND,
+       			 		                 NULL AS STOCK,
+       			 		                 NULL AS MIN_SAFETY_STOCK,
+       			 		                 NULL AS MAX_SAFETY_STOCK,
+       			 		                 NULL AS MAX_CAPACITY,
+       			 		                 NULL AS MIN_SAFETY_STOCK_HEADER,
+       			 		                 NULL AS MAX_SAFETY_STOCK_HEADER,
+       			 		                 NULL AS MAX_CAPACITY_HEADER,
+       			 		                 NULL AS STOCK_BALANCE_HEADER,
+       			 		                 NULL AS IMPACTED_SUPPLY,
+       			 		                 NULL AS IMPACTED_DEMAND 
+       			 		           FROM DUMMY WHERE 1 = 0;
+
+        t_storage_condition = SELECT NULL AS LOCATION, 
+                                     NULL AS RESOURCE_TYPE, 
+                                     NULL AS STORAGE_CONDITION 
+                              FROM DUMMY WHERE 1 = 0;
+  END IF;
+  
+  ----------------------------------------------STORAGE COST----------------------------------------------------------
+  -- Get storage cost
+  t_storage_cost_sd_stock = SELECT T1.LOCATION_NAME AS LOCATION,
+                                   T1.EQUIP_TYPE_ID AS RESOURCE_TYPE, 
+                                   T1.START_TIME, 
+                                   T1.END_TIME,
+                                   T1.SUPPLY + IFNULL(T2.IMPACTED_SUPPLY,0) AS SUPPLY,
+                                   T1.DEMAND - IFNULL(T2.IMPACTED_DEMAND,0) AS DEMAND,
+                                   T1.STOCK AS STOCK
+                            FROM :sd_res T1
+                            LEFT JOIN :t_impacted_supply_demand T2
+                            ON T1.LOCATION_NAME = T2.LOCATION_NAME 
+                            AND T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID 
+                            AND T1.START_TIME = T2.START_TIME 
+                            AND T1.END_TIME = T2.END_TIME;
+
+  t_storage_cost_sd_stock_with_quantity = SELECT LOCATION,
+	                                             RESOURCE_TYPE,
+	                                             START_TIME,
+	                                             END_TIME,
+	                                             CASE :V_RULE_TYPE WHEN 1 THEN 
+	                                             	   SUPPLY - :V_QUANTITY 
+	                                             	   ELSE 
+	                                             	   SUPPLY + :V_QUANTITY 
+	                                             END AS SUPPLY,
+	                                             DEMAND,
+	                                             STOCK
+	                                       FROM :t_storage_cost_sd_stock;
+
+  STORAGE_TIME = SELECT LOCATION, 
+                        RESOURCE_TYPE, 
+                        :V_PRE_DATE AS START_TIME, 
+                        ADD_SECONDS(:V_PRE_DATE, AVERAGE_STAY_DAYS*24*3600) AS END_TIME, 
+                        1 AS QUANTITY 
+                  FROM :t_average_stay_days;
+                  
+  CALL "sap.tm.trp.db.costmodel.storagecost::p_get_cost_for_pr_new" 
+        (:V_SD_PLAN_ID,
+         :RESOURCE_CATEGORY,
+         :MANDATORY_COST_MODEL_ID,
+         :RESOURCE_TYPES_CODE_TEU_COUNT,
+         :STORAGE_TIME,
+         :t_storage_cost_sd_stock_with_quantity,
+         t_storage_cost);
+
+  ---------------------------------------------TRANSPORTATION COST----------------------------------------------
+  LOCATION_BASED_COST_TMP = SELECT FROM_LOCATION,
+                                     TO_LOCATION,
+                                     MTR,
+                                     CARRIER,
+                                     RESOURCE_TYPE,
+                                     DISTANCE,
+                                     DURATION
+                             FROM :LOCATION_BASED_COST;
+  --Get transportation cost by cost model
+  CALL "sap.tm.trp.routing.db.cost::p_calculate_connection_transport_cost_new"(
+      :MANDATORY_COST_MODEL_ID,
+      :RESOURCE_TYPES_CODE_TEU_COUNT,
+      :LOCATION_BASED_COST_TMP,
+     CALCULATED_TRANSPORT_COST
+  );
+  
+  --Transportation cost
+  SELECT TO_DECIMAL(MAX(COST))*10 INTO MAX_TRANSPORT_COST FROM :CALCULATED_TRANSPORT_COST;
+
+  -- there are different cost for different MTR, get the min value as MTR is not considered
+  t_transportation_cost = SELECT T1.FROM_LOCATION, 
+  				                 T1.TO_LOCATION, 
+  				                 T1.RESOURCE_TYPE,
+  				                 MIN(IFNULL (T1.COST,:MAX_TRANSPORT_COST)) AS COST
+  				          FROM :CALCULATED_TRANSPORT_COST T1
+                          GROUP BY T1.FROM_LOCATION, T1.TO_LOCATION, T1.RESOURCE_TYPE ;
+  
+  ---------------------------------------------HANDLING COST----------------------------------------------
+  --Get handling cost by cost model
+  prepare_direction = SELECT DISTINCT CASE :V_RULE_TYPE WHEN 1 THEN FROM_LOCATION
+                                                WHEN 2 THEN TO_LOCATION END AS LOCATION,
+                                       CASE :V_RULE_TYPE WHEN 1 THEN ''
+                                                WHEN 2 THEN MTR END AS FROM_MTR,
+                                       CASE :V_RULE_TYPE WHEN 1 THEN MTR
+                                                WHEN 2 THEN '' END AS TO_MTR,
+                                       RESOURCE_TYPE
+                                FROM :LOCATION_BASED_COST;
+
+  CALL "sap.tm.trp.routing.db.cost::p_calculate_location_handling_cost_new"(
+      :MANDATORY_COST_MODEL_ID,
+      :RESOURCE_TYPES_CODE_TEU_COUNT,
+      :PREPARE_DIRECTION,
+      HANDLING_COST
+  );
+  
+  --Handing cost
+  t_handling_cost = SELECT LOCATION, RESOURCE_TYPE, AVG(COST) AS COST
+                    FROM :HANDLING_COST
+                    GROUP BY LOCATION,RESOURCE_TYPE;
+
+  
+  ---------------------------------------------HANDLING CAPACITY----------------------------------------------
+  --Patch8 new functionality to consider handling capacity
+  CALL "sap.tm.trp.db.planningcockpit::p_get_network_setting_handling_capacity_value" (
+      :V_NETWORK_SETTING_GROUP_ID,
+      :V_SD_PLAN_ID,
+      HANDLING_CAPA
+  );
+
+  -- If single tu or multiple tu have same resource type and time interval(no one out of time interval)
+  IF (HANDLING_CAPA = 1 AND :COUNT_TU = 1) OR
+    (HANDLING_CAPA = 1 AND :V_TIME_INTERVAL_COUNT = 1 AND V_OUT_RANGE_INTERVAL_COUNT = 0) THEN  --ONLY Days time interval consider the handling capacity
+
+    --Get the timezone id of the location filter of SD Plan
+	SELECT T3.TIMEZONE_ID INTO V_TIME_ZONE_ID
+		FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+		INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2 ON T2.ID = T1.FILTER_GROUP_ID
+		INNER JOIN "sap.tm.trp.db.filter::t_time_filter" T3 ON T2.TIME_FILTER_ID = T3.ID
+		WHERE T1.ID = :V_SD_PLAN_ID;
+
+    CALL "sap.tm.trp.db.pickupreturn::p_origin_sd_stock_cutoff_v2"
+    (
+        :SD_EXECUTIION_RESULT,
+        :V_EXECUTION_ID,
+        :V_SD_PLAN_ID,
+        :V_NODE_ID,
+        LT_PURE_SD,
+        LT_INITIAL_STOCK
+    );
+
+	SELECT MIN(TIME_INTERVAL_ID) INTO V_MIN_INTERVAL_ID FROM :LT_PURE_SD;
+
+    LT_PURE_SD =  SELECT T0.LOCATION_ID,
+    					 T0.LOCATION_NAME,
+					 	 T0.EQUIP_TYPE_ID,
+    					 T0.TIME_INTERVAL_ID,
+    					 T0.START_TIME,
+    					 T0.END_TIME,
+    					 IFNULL(T0.SUPPLY-T1.INIT_STOCK,SUPPLY) AS SUPPLY,
+    					 DEMAND
+    				FROM :LT_PURE_SD T0
+    				LEFT JOIN :LT_INITIAL_STOCK T1
+    				ON T0.LOCATION_ID = T1.LOCATION_ID
+                 	AND T0.EQUIP_TYPE_ID = T1.RESOURCE_TYPE
+                  AND T0.TIME_INTERVAL_ID =:V_MIN_INTERVAL_ID;
+
+    CALL "sap.tm.trp.db.pickupreturn::p_origin_sd_stock_cutoff_pure_transportation_v2"
+    (
+        :SD_EXECUTIION_RESULT,
+        :V_EXECUTION_ID,
+        :V_NETWORK_SETTING_GROUP_ID,
+        :LT_PURE_SD,
+        LT_PURE_SD
+    );
+
+    CALL "sap.tm.trp.db.planningcockpit::p_get_location_handling_capacity" (
+      :LT_PURE_SD,
+      :V_TIME_ZONE_ID,
+      :RESOURCE_CATEGORY,
+      T_HANDLING_CAPACITY
+    );
+  ELSE   --to do: check if works fine
+    T_HANDLING_CAPACITY = SELECT NULL AS LOCATION_ID,
+                                 NULL AS LOCATION_NAME,
+                                 NULL AS TIME_INTERVAL_ID,
+                                 NULL AS START_TIME,
+                                 NULL AS END_TIME,
+                                 NULL AS SUPPLY,
+                                 NULL AS DEMAND,
+                                 NULL AS HANDLING_CAPACITY
+                            FROM DUMMY;
+  END IF;
+
+  --------------------------------------------OPTIMIZATION TECHNIQUE PROCEDURE CALLS----------------------------------------
+  -- single TU selection and we have got its info
+  IF :COUNT_TU = 1 THEN
+
+    --Pickup
+    IF :V_RULE_TYPE = 1 THEN
+
+               --Using location determin rule
+     IF :V_OP_SETTING_TYPE = 1 THEN
+       CALL "sap.tm.trp.db.pickupreturn::p_ext_location_suggest_pickup_by_rule"(
+             :RULE_ID,
+             :V_LDR_RULE_ID,
+             :V_SD_PLAN_ID,
+             :V_EXECUTION_ID,
+             :V_NODE_ID,
+             :selected_tu_info,
+             :t_impacted_supply_demand,
+             :t_transportation_cost,
+             :t_handling_cost,
+             :t_storage_cost,
+             :T_HANDLING_CAPACITY,
+             opt_result
+       );
+
+     --optimization
+     ELSEIF :V_OP_SETTING_TYPE = 2  THEN
+       CALL "sap.tm.trp.db.pickupreturn::p_ext_location_suggest_pickup_by_optimizer"(
+            :V_OPTIMIZATION,
+            :HANDLING_CAPA,
+            :selected_tu_info,
+            :t_impacted_supply_demand,
+            :t_transportation_cost,
+            :t_handling_cost,
+            :t_storage_cost,
+            :T_HANDLING_CAPACITY,
+            opt_result
+        );
+
+     --Use both location determin rule and optimization
+     ELSEIF :V_OP_SETTING_TYPE = 3 THEN
+       CALL "sap.tm.trp.db.pickupreturn::p_ext_location_suggest_pickup_by_rule_and_optimizer"(
+             :RULE_ID,
+             :V_LDR_RULE_ID,
+             :V_SD_PLAN_ID,
+             :V_EXECUTION_ID,
+             :V_NODE_ID,
+             :V_OPTIMIZATION,
+             :HANDLING_CAPA,
+             :selected_tu_info,
+             :t_impacted_supply_demand,
+             :t_transportation_cost,
+             :t_handling_cost,
+             :t_storage_cost,
+             :T_HANDLING_CAPACITY,
+             opt_result
+       );
+
+     --Nothing for optimization, just the locations from seleted SD plan
+     ELSEIF :V_OP_SETTING_TYPE = 4 THEN
+       opt_result = SELECT DISTINCT T0.LOCATION_ID,
+                           T0.LOCATION_NAME,
+                           T0.EQUIP_TYPE_ID,
+                           T0.EQUIP_TYPE_NAME,
+                           CASE T1.TO_LOCATION WHEN T0.SHIPPER_LOCATION
+                             THEN IFNULL (TO_VARCHAR(TO_DECIMAL(T1.COST*T0.QUANTITY, 13, 2)),'0.00') || ' / '
+                             || IFNULL (TO_VARCHAR(TO_DECIMAL(T2.COST*T0.QUANTITY, 13, 2)),'0.00') || ' / ' || IFNULL (TO_VARCHAR(TO_DECIMAL(T3.COST*T0.QUANTITY, 13, 2)),'0.00')
+                             ELSE '0.00' || ' / ' || IFNULL (TO_VARCHAR(TO_DECIMAL(T2.COST*T0.QUANTITY, 13, 2)),'0.00') || ' / ' || IFNULL (TO_VARCHAR(TO_DECIMAL(T3.COST*T0.QUANTITY, 13, 2)),'0.00')
+                           END AS EXP_TRAN_COS,
+                           IFNULL (TO_VARCHAR(TO_DECIMAL((T1.COST+IFNULL(T2.COST,0)-IFNULL(T3.COST,0))*T0.QUANTITY, 13, 2)),'0.00') AS TOTAL_COST,
+                           T0.SUPPLY - T0.DEMAND AS CUR_BALANCING_SD_PLAN,
+                           T0.SUPPLY - T0.DEMAND + T0.IMPACTED_SUPPLY - T0.IMPACTED_DEMAND AS IMPACTED_SD_PLAN,
+                           IFNULL (TO_VARCHAR(T0.STOCK),'0')||' / '||IFNULL (TO_VARCHAR(T0.MAX_CAPACITY),'999999')   AS CUR_STOCK,
+                           T4.HANDLING_CAPACITY - T4.SUPPLY - T4.DEMAND AS REMAINING_HANDLING_CAPACITY,
+                           NULL AS RANK
+                    FROM (SELECT TA.*,TB.SHIPPER_LOCATION, TB.QUANTITY FROM :t_impacted_supply_demand TA CROSS JOIN :selected_tu_info TB) T0 -- only one resource type
+                    LEFT JOIN :t_transportation_cost  T1
+                    ON (T0.LOCATION_NAME=T1.FROM_LOCATION AND T0.SHIPPER_LOCATION = T1.TO_LOCATION
+                        AND T1.RESOURCE_TYPE = T0.EQUIP_TYPE_ID)
+                    LEFT JOIN :t_handling_cost T2 ON (T0.LOCATION_NAME = T2.LOCATION AND T0.EQUIP_TYPE_ID = T2.RESOURCE_TYPE)
+                    LEFT JOIN :t_storage_cost  T3 ON (T0.LOCATION_NAME = T3.LOCATION AND T0.EQUIP_TYPE_ID = T3.RESOURCE_TYPE)
+                    LEFT JOIN :t_handling_capacity   T4 ON (T0.LOCATION_ID = T4.LOCATION_ID AND T0.START_TIME = T4.START_TIME AND T0.END_TIME = T4.END_TIME) ;
+     END IF;
+
+     result_out =
+         SELECT DISTINCT T5.LOCATION_ID, T5.LOCATION_NAME, T5.EQUIP_TYPE_ID,T5.EQUIP_TYPE_NAME, TO_VARCHAR (T6.AVERAGE_STAY_DAYS) AS AVG_STAY_TIME,
+         T5.EXP_TRAN_COS, T5.TOTAL_COST, T5.CUR_BALANCING_SD_PLAN, T5.IMPACTED_SD_PLAN, T7.STORAGE_CONDITION, T5.CUR_STOCK, T5.REMAINING_HANDLING_CAPACITY, T5.RANK FROM
+         (
+             SELECT DISTINCT * FROM :opt_result
+             UNION
+             SELECT DISTINCT T0.LOCATION_ID,
+                   T0.LOCATION_NAME,
+                   T0.EQUIP_TYPE_ID,
+                   T0.EQUIP_TYPE_NAME,
+                   CASE T1.TO_LOCATION
+                       WHEN T0.SHIPPER_LOCATION THEN IFNULL (TO_VARCHAR(TO_DECIMAL(T1.COST*T0.QUANTITY, 13, 2)),'0.00') || ' / '
+                       || IFNULL (TO_VARCHAR(TO_DECIMAL(T2.COST*T0.QUANTITY, 13, 2)),'0.00') || ' / ' ||  IFNULL (TO_VARCHAR(TO_DECIMAL(T3.COST*T0.QUANTITY, 13, 2)),'0.00')
+                       ELSE '0.00' || ' / ' ||  IFNULL (TO_VARCHAR(TO_DECIMAL(T2.COST*T0.QUANTITY, 13, 2)),'0.00') || ' / ' ||  IFNULL (TO_VARCHAR(TO_DECIMAL(T3.COST*T0.QUANTITY, 13, 2)),'0.00')
+                   END AS EXP_TRAN_COS,
+                   IFNULL (TO_VARCHAR(TO_DECIMAL((T1.COST+IFNULL(T2.COST,0)-IFNULL(T3.COST,0))*T0.QUANTITY, 13, 2)),'0.00') AS TOTAL_COST,
+                   T0.SUPPLY - T0.DEMAND AS CUR_BALANCING_SD_PLAN,
+                   T0.SUPPLY - T0.DEMAND + T0.IMPACTED_SUPPLY - T0.IMPACTED_DEMAND AS IMPACTED_SD_PLAN,
+                   IFNULL (TO_VARCHAR(T0.STOCK),'0')||' / '||IFNULL (TO_VARCHAR(T0.MAX_CAPACITY),'999999') AS CUR_STOCK,
+                   T8.HANDLING_CAPACITY - T8.SUPPLY - T8.DEMAND AS REMAINING_HANDLING_CAPACITY,
+                   NULL AS RANK
+              FROM (SELECT TA.*,TB.SHIPPER_LOCATION, TB.QUANTITY FROM :t_impacted_supply_demand TA CROSS JOIN :selected_tu_info TB) T0 -- only one resource type
+              LEFT JOIN :t_transportation_cost  T1 ON (T0.LOCATION_NAME = T1.FROM_LOCATION AND T0.SHIPPER_LOCATION = T1.TO_LOCATION
+                                                       AND T1.RESOURCE_TYPE = T0.EQUIP_TYPE_ID)
+              LEFT JOIN :t_handling_cost        T2 ON (T0.LOCATION_NAME = T2.LOCATION AND T2.RESOURCE_TYPE = T0.EQUIP_TYPE_ID)
+              LEFT JOIN :t_storage_cost           T3 ON (T0.LOCATION_NAME = T3.LOCATION AND T0.EQUIP_TYPE_ID = T3.RESOURCE_TYPE)
+              LEFT JOIN :t_handling_capacity   T8 ON (T0.LOCATION_ID = T8.LOCATION_ID AND T0.START_TIME = T8.START_TIME AND T0.END_TIME = T8.END_TIME)
+              --LEFT JOIN :selected_tu_info AS T4 ON (T4.RESOURCE_TYPE = T0.EQUIP_TYPE_ID AND T1.TO_LOCATION = T4.SHIPPER_LOCATION)
+              WHERE T0.LOCATION_ID NOT IN (SELECT LOCATION_ID FROM :opt_result)
+         ) T5
+         LEFT OUTER JOIN :t_average_stay_days T6 ON (T5.LOCATION_NAME = T6.LOCATION)
+         LEFT OUTER JOIN :t_storage_condition T7 ON (T5.LOCATION_NAME = T7.LOCATION AND T5.EQUIP_TYPE_ID = T7.RESOURCE_TYPE);
+   -- Return
+   ELSE
+
+               --Using location determin rule
+     IF :V_OP_SETTING_TYPE = 1 THEN
+
+       CALL "sap.tm.trp.db.pickupreturn::p_ext_location_suggest_return_by_rule"(
+             :RULE_ID,
+             :V_LDR_RULE_ID,
+             :V_SD_PLAN_ID,
+             :V_EXECUTION_ID,
+             :V_NODE_ID,
+             :selected_tu_info,
+             :t_impacted_supply_demand,
+             :t_transportation_cost,
+             :t_handling_cost,
+             :t_storage_cost,
+             :T_HANDLING_CAPACITY,
+             opt_result
+       );
+
+     --optimization
+     ELSEIF :V_OP_SETTING_TYPE = 2  THEN
+
+       CALL "sap.tm.trp.db.pickupreturn::p_ext_location_suggest_return_by_optimizer"(
+            :V_OPTIMIZATION,
+            :HANDLING_CAPA,
+            :selected_tu_info,
+            :t_impacted_supply_demand,
+            :t_transportation_cost,
+            :t_handling_cost,
+            :t_storage_cost,
+            :T_HANDLING_CAPACITY,
+            opt_result
+        );
+
+     --Use both location determin rule and optimization
+     ELSEIF :V_OP_SETTING_TYPE = 3 THEN
+
+       CALL "sap.tm.trp.db.pickupreturn::p_ext_location_suggest_return_by_rule_and_optimizer"(
+             :RULE_ID,
+             :V_LDR_RULE_ID,
+             :V_SD_PLAN_ID,
+             :V_EXECUTION_ID,
+             :V_NODE_ID,
+             :V_OPTIMIZATION,
+             :HANDLING_CAPA,
+             :selected_tu_info,
+             :t_impacted_supply_demand,
+             :t_transportation_cost,
+             :t_handling_cost,
+             :t_storage_cost,
+             :T_HANDLING_CAPACITY,
+             opt_result
+       );
+     --Nothing for optimization, just the locations from seleted SD plan
+    ELSEIF :V_OP_SETTING_TYPE = 4 THEN
+       opt_result = SELECT DISTINCT T0.LOCATION_ID,
+                           T0.LOCATION_NAME,
+                           T0.EQUIP_TYPE_ID,
+                           T0.EQUIP_TYPE_NAME,
+                           CASE T1.FROM_LOCATION
+                             WHEN T0.CONSIGNEE_LOCATION
+                             THEN IFNULL (TO_VARCHAR(TO_DECIMAL(T1.COST*T0.QUANTITY, 13, 2)),'0.00') || ' / '
+                             || IFNULL (TO_VARCHAR(TO_DECIMAL(T2.COST*T0.QUANTITY, 13, 2)),'0.00') || ' / ' || IFNULL (TO_VARCHAR(TO_DECIMAL(T3.COST*T0.QUANTITY, 13, 2)),'0.00')
+                             ELSE '0.00' || ' / ' ||  IFNULL (TO_VARCHAR(TO_DECIMAL(T2.COST*T0.QUANTITY, 13, 2)),'0.00') || ' / ' || IFNULL (TO_VARCHAR(TO_DECIMAL(T3.COST*T0.QUANTITY, 13, 2)),'0.00')
+                           END AS EXP_TRAN_COS,
+                           IFNULL (TO_VARCHAR(TO_DECIMAL((T1.COST+IFNULL(T2.COST,0)+IFNULL(T3.COST,0))*T0.QUANTITY, 13, 2)),'0.00') AS TOTAL_COST,
+                           T0.SUPPLY - T0.DEMAND AS CUR_BALANCING_SD_PLAN,
+                           T0.SUPPLY - T0.DEMAND + T0.IMPACTED_SUPPLY - T0.IMPACTED_DEMAND AS IMPACTED_SD_PLAN,
+                           IFNULL (TO_VARCHAR(T0.STOCK),'0')||' / '||IFNULL (TO_VARCHAR(T0.MAX_CAPACITY),'999999') AS CUR_STOCK,
+                           T4.HANDLING_CAPACITY - T4.SUPPLY - T4.DEMAND AS REMAINING_HANDLING_CAPACITY,
+                           NULL AS RANK
+                   FROM (SELECT TA.*, TB.CONSIGNEE_LOCATION, TB.QUANTITY
+                         FROM :t_impacted_supply_demand TA CROSS JOIN :selected_tu_info TB) T0
+                   LEFT JOIN :t_transportation_cost T1
+                   ON (T0.LOCATION_NAME=T1.TO_LOCATION AND T0.CONSIGNEE_LOCATION = T1.FROM_LOCATION
+                       AND T1.RESOURCE_TYPE = T0.EQUIP_TYPE_ID)
+                   LEFT JOIN :t_handling_cost T2 ON (T0.LOCATION_NAME = T2.LOCATION AND T0.EQUIP_TYPE_ID = T2.RESOURCE_TYPE)
+                   LEFT JOIN :t_storage_cost  T3 ON (T0.LOCATION_NAME = T3.LOCATION AND T0.EQUIP_TYPE_ID = T3.RESOURCE_TYPE)
+                   LEFT JOIN :t_handling_capacity   T4 ON (T0.LOCATION_ID = T4.LOCATION_ID AND T0.START_TIME = T4.START_TIME AND T0.END_TIME = T4.END_TIME) ;
+     END IF;
+
+    result_out =
+       SELECT DISTINCT T5.LOCATION_ID, T5.LOCATION_NAME, T5.EQUIP_TYPE_ID,T5.EQUIP_TYPE_NAME, TO_VARCHAR (T6.AVERAGE_STAY_DAYS) AS AVG_STAY_TIME,
+       T5.EXP_TRAN_COS, T5.TOTAL_COST, T5.CUR_BALANCING_SD_PLAN, T5.IMPACTED_SD_PLAN, T7.STORAGE_CONDITION, T5.CUR_STOCK,T5.REMAINING_HANDLING_CAPACITY, T5.RANK FROM
+       (
+       SELECT DISTINCT * FROM :opt_result
+       UNION
+       SELECT DISTINCT T0.LOCATION_ID,
+                   T0.LOCATION_NAME,
+                   T0.EQUIP_TYPE_ID,
+                   T0.EQUIP_TYPE_NAME,
+                   CASE T1.FROM_LOCATION
+                       WHEN T0.CONSIGNEE_LOCATION THEN IFNULL (TO_VARCHAR(TO_DECIMAL(T1.COST*T0.QUANTITY, 13, 2)),'0.00') || ' / '
+                       || IFNULL (TO_VARCHAR(TO_DECIMAL(T2.COST*T0.QUANTITY, 13, 2)),'0.00') || ' / ' ||  IFNULL (TO_VARCHAR(TO_DECIMAL(T3.COST*T0.QUANTITY, 13, 2)),'0.00')
+                       ELSE '0.00' || ' / ' ||  IFNULL (TO_VARCHAR(TO_DECIMAL(T2.COST*T0.QUANTITY, 13, 2)),'0.00') || ' / ' ||  IFNULL (TO_VARCHAR(TO_DECIMAL(T3.COST*T0.QUANTITY, 13, 2)),'0.00')
+                   END AS EXP_TRAN_COS,
+                   IFNULL (TO_VARCHAR(TO_DECIMAL((T1.COST+IFNULL(T2.COST,0)+IFNULL(T3.COST,0))*T0.QUANTITY, 13, 2)),'0.00') AS TOTAL_COST,
+                   T0.SUPPLY - T0.DEMAND AS CUR_BALANCING_SD_PLAN,
+                   T0.SUPPLY - T0.DEMAND + T0.IMPACTED_SUPPLY - T0.IMPACTED_DEMAND AS IMPACTED_SD_PLAN,
+                   IFNULL (TO_VARCHAR(T0.STOCK),'0')||' / '||IFNULL (TO_VARCHAR(T0.MAX_CAPACITY),'999999') AS CUR_STOCK,
+                   T4.HANDLING_CAPACITY - T4.SUPPLY - T4.DEMAND AS REMAINING_HANDLING_CAPACITY,
+                   NULL AS RANK
+         FROM (SELECT TA.*, TB.CONSIGNEE_LOCATION, TB.QUANTITY FROM :t_impacted_supply_demand TA CROSS JOIN :selected_tu_info TB) T0
+         LEFT JOIN :t_transportation_cost  T1 ON (T0.LOCATION_NAME=T1.TO_LOCATION AND T0.CONSIGNEE_LOCATION = T1.FROM_LOCATION
+                                                  AND T1.RESOURCE_TYPE = T0.EQUIP_TYPE_ID)
+         LEFT JOIN :t_handling_cost        T2 ON (T0.LOCATION_NAME=T2.LOCATION AND T2.RESOURCE_TYPE = T0.EQUIP_TYPE_ID)
+         LEFT JOIN :t_storage_cost           T3 ON (T0.LOCATION_NAME = T3.LOCATION AND T0.EQUIP_TYPE_ID = T3.RESOURCE_TYPE)
+         LEFT JOIN :t_handling_capacity   T4 ON (T0.LOCATION_ID = T4.LOCATION_ID AND T0.START_TIME = T4.START_TIME AND T0.END_TIME = T4.END_TIME)
+         --LEFT JOIN :selected_tu_info T4 ON (T4.RESOURCE_TYPE = T0.EQUIP_TYPE_ID AND T1.FROM_LOCATION = T4.CONSIGNEE_LOCATION_ID)
+         WHERE T0.LOCATION_ID NOT IN (SELECT LOCATION_ID FROM :opt_result)
+         ) T5
+         LEFT OUTER JOIN :t_average_stay_days T6 ON (T5.LOCATION_NAME = T6.LOCATION)
+         LEFT OUTER JOIN :t_storage_condition T7 ON (T5.LOCATION_NAME = T7.LOCATION AND T5.EQUIP_TYPE_ID = T7.RESOURCE_TYPE);
+
+
+    END IF;
+
+    SELECT COUNT(*) INTO COUNT_RESULT FROM :result_out;
+     IF :COUNT_RESULT > 0 THEN
+       result = SELECT * FROM :result_out;
+
+     ELSE
+       result = SELECT DISTINCT T0.LOCATION_ID,
+                   T0.LOCATION_NAME,
+                   NULL AS EQUIP_TYPE_ID,
+                   NULL AS EQUIP_TYPE_NAME,
+                   TO_VARCHAR (T1.AVERAGE_STAY_DAYS) AS AVG_STAY_TIME,
+                   '0.00' || ' / ' || '0.00' || ' / ' || '0.00' AS EXP_TRAN_COS,
+                   '0.00' AS TOTAL_COST,
+                   NULL AS CUR_BALANCING_SD_PLAN,
+                   NULL AS IMPACTED_SD_PLAN,
+                   NULL AS STORAGE_CONDITION,
+                   '0/999999' AS CUR_STOCK,
+                   T2.HANDLING_CAPACITY - T2.SUPPLY - T2.DEMAND AS REMAINING_HANDLING_CAPACITY,
+                   NULL AS RANK
+         FROM (SELECT DISTINCT LOCATION_ID, LOCATION_NAME, START_TIME, END_TIME FROM :LOCATIONS_OF_SD) T0
+         LEFT JOIN :t_average_stay_days T1 ON (T0.LOCATION_NAME = T1.LOCATION)
+         LEFT JOIN :t_handling_capacity   T2 ON (T0.LOCATION_NAME = T2.LOCATION_NAME AND T0.START_TIME = T2.START_TIME AND T0.END_TIME = T2.END_TIME) ;
+     END IF ;
+
+  -- multiple TU selection, return all the locations in the sd plan and as much fields information as possible
+  -- the information has been put into different table variables depends on the conditions
+  ELSEIF :COUNT_TU > 1 THEN
+
+   loc_pair = SELECT T0.LOCATION_NAME, T1.SHIPPER_LOCATION, T1.CONSIGNEE_LOCATION, T1.RESOURCE_TYPE, T1.QUANTITY
+              FROM (SELECT DISTINCT LOCATION_ID, LOCATION_NAME FROM :sd_res) T0
+              CROSS JOIN :selected_tu_info T1;
+
+   -- Sum up the transportation cost and handling cost for all the selected tu
+   IF :V_RULE_TYPE = 1 THEN
+
+     total_trans_handling_cost =
+                SELECT T0.LOCATION_NAME, SUM(T1.COST * T0.QUANTITY) AS TRANS_COST,
+                SUM(IFNULL(T2.COST,0) * T0.QUANTITY) AS HANDLING_COST,
+                SUM(IFNULL(T3.COST,0) * T0.QUANTITY) AS STORAGE_COST
+                FROM :loc_pair T0
+                LEFT OUTER JOIN :t_transportation_cost T1 ON (T0.LOCATION_NAME = T1.FROM_LOCATION
+                 AND T0.SHIPPER_LOCATION = T1.TO_LOCATION AND T0.RESOURCE_TYPE = T1.RESOURCE_TYPE)
+                LEFT OUTER JOIN :t_handling_cost T2 ON (T0.LOCATION_NAME = T2.LOCATION AND T0.RESOURCE_TYPE = T2.RESOURCE_TYPE)
+                LEFT OUTER JOIN :t_storage_cost T3 ON (T0.LOCATION_NAME = T3.LOCATION AND T0.RESOURCE_TYPE = T3.RESOURCE_TYPE)
+                GROUP BY T0.LOCATION_NAME;
+
+   ELSE
+
+     total_trans_handling_cost =
+                SELECT T0.LOCATION_NAME, SUM(T1.COST * T0.QUANTITY) AS TRANS_COST,
+                SUM(IFNULL(T2.COST,0) * T0.QUANTITY) AS HANDLING_COST,
+                SUM(IFNULL(T3.COST,0) * T0.QUANTITY) AS STORAGE_COST
+                FROM :loc_pair T0
+                LEFT OUTER JOIN :t_transportation_cost T1 ON (T0.LOCATION_NAME = T1.TO_LOCATION
+                 AND T0.CONSIGNEE_LOCATION = T1.FROM_LOCATION AND T0.RESOURCE_TYPE = T1.RESOURCE_TYPE)
+                LEFT OUTER JOIN :t_handling_cost T2 ON (T0.LOCATION_NAME = T2.LOCATION AND T0.RESOURCE_TYPE = T2.RESOURCE_TYPE)
+                LEFT OUTER JOIN :t_storage_cost T3 ON (T0.LOCATION_NAME = T3.LOCATION AND T0.RESOURCE_TYPE = T3.RESOURCE_TYPE)
+                GROUP BY T0.LOCATION_NAME;
+   END IF;
+
+   IF :V_RES_TYPE_COUNT = 1 THEN
+     stock = SELECT LOCATION_ID, RESOURCE_TYPE, CURRENT_STOCK
+                      FROM "sap.tm.trp.db.pickupreturn::cv_current_stock"
+                                  (placeholder."$$IN_LOCATION_FILTER_ID$$"=> :V_SD_LF_ID,
+                                   placeholder."$$IN_RESOURCE_ID$$"=> :V_SD_EF_ID);
+      result = SELECT DISTINCT T0.LOCATION_ID,
+                   T0.LOCATION_NAME,
+                   :V_RESOURCE_TYPE AS EQUIP_TYPE_ID,
+                   :V_RESOURCE_TYPE AS EQUIP_TYPE_NAME,
+                   TO_VARCHAR (T1.AVERAGE_STAY_DAYS) AS AVG_STAY_TIME,
+                   IFNULL (TO_VARCHAR(TO_DECIMAL(T5.TRANS_COST, 13, 2)),'0.00') || ' / '
+                   || IFNULL (TO_VARCHAR(TO_DECIMAL(T5.HANDLING_COST, 13, 2)),'0.00') || ' / '
+                   || IFNULL (TO_VARCHAR(TO_DECIMAL(T5.STORAGE_COST, 13, 2)),'0.00') AS EXP_TRAN_COS,
+                   CASE :V_RULE_TYPE WHEN 1--when pickup else return
+                   THEN IFNULL (TO_VARCHAR(TO_DECIMAL((T5.TRANS_COST+T5.HANDLING_COST-T5.STORAGE_COST) * :V_QUANTITY, 13, 2)),'0.00')
+                   ELSE IFNULL (TO_VARCHAR(TO_DECIMAL((T5.TRANS_COST+T5.HANDLING_COST+T5.STORAGE_COST) * :V_QUANTITY, 13, 2)),'0.00')
+                   END AS TOTAL_COST,
+                   T3.SUPPLY - T3.DEMAND AS CUR_BALANCING_SD_PLAN,
+                   T3.SUPPLY - T3.DEMAND + T3.IMPACTED_SUPPLY - T3.IMPACTED_DEMAND AS IMPACTED_SD_PLAN,
+                   T4.STORAGE_CONDITION,
+                   IFNULL (TO_VARCHAR(T2.CURRENT_STOCK),'0')||' / '||IFNULL (TO_VARCHAR(T0.MAX_CAPACITY),'999999') AS CUR_STOCK,
+                   T6.HANDLING_CAPACITY - T6.SUPPLY - T6.DEMAND AS REMAINING_HANDLING_CAPACITY,
+                   NULL AS RANK
+         FROM (SELECT DISTINCT LOCATION_ID, LOCATION_NAME, MAX_CAPACITY, START_TIME, END_TIME FROM :sd_res WHERE EQUIP_TYPE_ID = :V_RESOURCE_TYPE ) T0
+         LEFT OUTER JOIN :t_average_stay_days T1 ON (T0.LOCATION_NAME = T1.LOCATION)
+         LEFT OUTER JOIN :stock T2 ON (T0.LOCATION_ID = T2.LOCATION_ID AND T2.RESOURCE_TYPE = :V_RESOURCE_TYPE )
+         LEFT OUTER JOIN :t_impacted_supply_demand T3 ON (T0.LOCATION_ID = T3.LOCATION_ID AND T3.EQUIP_TYPE_ID = :V_RESOURCE_TYPE)
+         LEFT OUTER JOIN :t_storage_condition T4 ON (T0.LOCATION_NAME = T4.LOCATION AND T4.RESOURCE_TYPE = :V_RESOURCE_TYPE)
+         LEFT JOIN :total_trans_handling_cost T5 ON (T0.LOCATION_NAME = T5.LOCATION_NAME )
+         LEFT JOIN (SELECT DISTINCT A.* FROM :t_handling_capacity A INNER JOIN :selected_tu_info B ON A.START_TIME <= B.PRE_DATE AND A.END_TIME >= B.PRE_DATE) T6 ON (T0.LOCATION_ID = T6.LOCATION_ID) ;
+
+    ELSE
+    result = SELECT DISTINCT T0.LOCATION_ID,
+                   T0.LOCATION_NAME,
+                   NULL AS EQUIP_TYPE_ID,
+                   NULL AS EQUIP_TYPE_NAME,
+                   TO_VARCHAR (T1.AVERAGE_STAY_DAYS) AS AVG_STAY_TIME,
+                   IFNULL (TO_VARCHAR(TO_DECIMAL(T2.TRANS_COST, 13, 2)),'0.00') || ' / '
+                   || IFNULL (TO_VARCHAR(TO_DECIMAL(T2.HANDLING_COST, 13, 2)),'0.00') || ' / '
+                   || IFNULL (TO_VARCHAR(TO_DECIMAL(T2.STORAGE_COST, 13, 2)),'0.00') AS EXP_TRAN_COS,
+                   CASE :V_RULE_TYPE WHEN 1--when pickup else return
+                   THEN IFNULL (TO_VARCHAR(TO_DECIMAL((T2.TRANS_COST+T2.HANDLING_COST-T2.STORAGE_COST) * :V_QUANTITY, 13, 2)),'0.00')
+                   ELSE IFNULL (TO_VARCHAR(TO_DECIMAL((T2.TRANS_COST+T2.HANDLING_COST+T2.STORAGE_COST) * :V_QUANTITY, 13, 2)),'0.00')
+                   END AS TOTAL_COST,
+                   NULL AS CUR_BALANCING_SD_PLAN,
+                   NULL AS IMPACTED_SD_PLAN,
+                   NULL AS STORAGE_CONDITION,
+                   '0/999999' AS CUR_STOCK,
+                   T3.HANDLING_CAPACITY - T3.SUPPLY - T3.DEMAND AS REMAINING_HANDLING_CAPACITY,
+                   NULL AS RANK
+         FROM (SELECT DISTINCT LOCATION_ID, LOCATION_NAME, START_TIME, END_TIME FROM :LOCATIONS_OF_SD) T0
+         LEFT JOIN :t_average_stay_days T1 ON (T0.LOCATION_NAME = T1.LOCATION)
+         LEFT JOIN :total_trans_handling_cost T2 ON (T0.LOCATION_NAME = T2.LOCATION_NAME )
+         LEFT JOIN (SELECT DISTINCT A.* FROM :t_handling_capacity A INNER JOIN :selected_tu_info B ON A.START_TIME <= B.PRE_DATE AND A.END_TIME >= B.PRE_DATE) T3 ON (T0.LOCATION_ID = T3.LOCATION_ID) ;
+
+    END IF;
+
+   -- no tu info is get, just return
+   ELSE
+     RETURN;
+
+   END IF;
+
+END;

@@ -1,0 +1,65 @@
+table.schemaName = "SAP_TM_TRP";
+table.temporary = true;
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "PR_RULE_ID"; sqlType = BIGINT; },
+    
+    {name = "TU_ID"; sqlType = NVARCHAR; length = 32;},
+    {name = "EQUIPMENT_ID";sqlType = VARCHAR; length = 32;},
+    {name = "EQUIP_TYPE_NAME"; sqlType = VARCHAR; length = 50;}, 
+    {name = "QUANTITY";sqlType = INTEGER;},
+    {name = "LOCATION_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "LOCATION_NAME"; sqlType = VARCHAR; length = 50;},
+    {name = "PLANNED_DATE";sqlType= TIMESTAMP;},
+    {name = "TU_TYPE"; sqlType = VARCHAR; length = 2;},
+    
+    {name = "ITE_KEY";sqlType = VARCHAR; length = 50;},
+    
+    {name = "SHIPPER_ID";sqlType = VARCHAR; length = 100;},
+    {name = "SHIPPER_NAME";sqlType = VARCHAR; length = 40;}, 
+    {name = "POL";sqlType = VARCHAR; length = 22;},
+    {name = "POL_NAME";sqlType = VARCHAR; length = 30;}, 
+    {name = "POD";sqlType = VARCHAR; length = 22;},
+    {name = "POD_NAME";sqlType = VARCHAR; length = 30;}, 
+    {name = "CONSIGNEE_ID";sqlType = VARCHAR; length = 100;},    
+    {name = "CONSIGNEE_NAME";sqlType = VARCHAR; length = 40;},   
+    {name = "CUSTOMER_NAME";sqlType = VARCHAR; length = 40;},  
+    {name = "PLANNING_RELEVANT"; sqlType = INTEGER;},   
+    
+    {name = "EXECUTION_STATUS";sqlType = VARCHAR; length = 20;}, 
+	{name = "LIFECYCLE_STATUS";sqlType = VARCHAR; length = 20;}, 
+	{name = "BOOKING_DATE";sqlType = DATE;},
+            
+    {name = "PLAN_EXECUTION_ID"; sqlType = BIGINT; },
+    {name = "PLAN_MODEL_ID"; sqlType = BIGINT; }, 
+    {name = "NODE_ID"; sqlType = BIGINT; },
+    {name = "DEPOT_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "DEPOT_NAME"; sqlType = VARCHAR; length = 50;},
+    
+    {name = "STOCK"; sqlType = DOUBLE;},
+    {name = "SUPPLY"; sqlType = DOUBLE;},
+    {name = "DEMAND"; sqlType = DOUBLE;},
+    
+    {name = "IMPACTED_SUPPLY"; sqlType = DOUBLE;},
+    {name = "IMPACTED_DEMAND"; sqlType = DOUBLE;},
+    
+    {name = "BALANCE_SUPPLY_DEMAND"; sqlType = DOUBLE;},
+    {name = "BALANCE_STOCK_SUPPLY_DEMAND"; sqlType = DOUBLE;},
+    {name = "MIN_SAFETY_STOCK"; sqlType = DOUBLE;},
+    {name = "MAX_SAFETY_STOCK"; sqlType = DOUBLE;},
+    {name = "MAX_CAPACITY"; sqlType = DOUBLE;},
+    
+    {name = "COST_MODEL_ID"; sqlType = BIGINT;},
+    {name = "TR_COST"; sqlType = DOUBLE;},
+    {name = "HANDLE_COST"; sqlType = DOUBLE;},
+    {name = "FREE_DAYS"; sqlType = INTEGER;},
+    {name = "STORAGE_COST"; sqlType = DOUBLE;},
+    {name = "FREE_AMOUNT"; sqlType = INTEGER;},
+    {name = "MIN_SAFETY_STOCK_HEADER"; sqlType = DOUBLE;},
+    {name = "MAX_SAFETY_STOCK_HEADER"; sqlType = DOUBLE;},
+    {name = "MAX_CAPACITY_HEADER"; sqlType = DOUBLE;},
+    {name = "STOCK_BALANCE_HEADER"; sqlType = DOUBLE;},
+    {name = "HANDLING_CAPACITY"; sqlType = BIGINT;},
+    {name = "SUPPLY_DEMAND"; sqlType = BIGINT;},
+    {name = "REMAINING_HANDLING_CAPACITY"; sqlType = BIGINT;}
+    ];

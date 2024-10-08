@@ -1,0 +1,27 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_update_plan_type" (
+	IN PLAN_MODEL_ID BIGINT,
+    IN PLAN_MODEL_TYPE INTEGER
+ ) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+    USER_ID BIGINT;
+BEGIN
+ 
+
+
+
+-- GET CURRENT USER_ID
+SELECT IFNULL(MAX(ID),-1) INTO USER_ID
+FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+ 
+ -- UPDATE PLAN DATA
+UPDATE "sap.tm.trp.db.pipeline::t_plan_model"
+SET LAST_MODIFIED_BY = :USER_ID,
+    LAST_MODIFIED_ON = CURRENT_UTCTIMESTAMP,
+    PLAN_MODEL_TYPE_ID = :PLAN_MODEL_TYPE
+WHERE ID = :PLAN_MODEL_ID;
+ 
+END;

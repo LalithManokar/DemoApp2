@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.2" id="cv_get_executions_for_user" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_anna_privilege_check"/>
+  <localVariables/>
+  <variableMappings/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="PLAN_EXECUTION_ID"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> 
+  
+ BEGIN 
+  DECLARE HAS_AUTHORIZATION_FLAG TINYINT; 
+ 
+     call &quot;sap.tm.trp.db.systemmanagement::p_check_location_full_authorization&quot; (
+		 	HAVE_AUTHORIZATION_FLAG => HAS_AUTHORIZATION_FLAG
+		 ); 
+		 
+  --IF :USERTYPE = :USER_TYPE_ADMIN THEN
+ IF :HAS_AUTHORIZATION_FLAG = 1 THEN
+     var_out = SELECT ID AS PLAN_EXECUTION_ID FROM &quot;sap.tm.trp.db.pipeline::t_plan_execution&quot; ;
+  ELSE
+     var_out = SELECT  T0.ID AS PLAN_EXECUTION_ID
+     FROM &quot;sap.tm.trp.db.pipeline::t_plan_execution&quot; T0
+     INNER JOIN &quot;sap.tm.trp.db.pipeline::t_plan_model&quot; T1 ON (T0.PLAN_MODEL_ID = T1.ID)
+     INNER JOIN &quot;sap.tm.trp.db.filter::t_filter_location_filter&quot; T2 ON (T2.FILTER_GROUP_ID = T1.FILTER_GROUP_ID)
+     INNER JOIN &quot;sap.tm.trp.db.systemmanagement::cv_getlocationfilters_of_user&quot; T4 ON (T2.LOCATION_FILTER_ID = T4.LOCATION_FILTER_ID );
+     
+  END IF;
+     
+ 
+
+
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <attributes/>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="PLAN_EXECUTION_ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="PLAN_EXECUTION_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="PLAN_EXECUTION_ID"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

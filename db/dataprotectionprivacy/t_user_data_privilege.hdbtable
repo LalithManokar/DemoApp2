@@ -1,0 +1,8 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+   {name = "USERNAME"; unique = true; sqlType = VARCHAR; length = 60; nullable = false;comment = "User ID";},
+   {name = "USER_DATA_PRIVILEGE_FLAG"; sqlType = SMALLINT; nullable = false;comment = "user data privilege flag:0, disable; 1, enable";}
+	
+];
+table.primaryKey.pkcolumns = ["USERNAME"]; 

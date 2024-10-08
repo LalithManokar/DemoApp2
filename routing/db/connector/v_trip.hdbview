@@ -1,0 +1,55 @@
+schema = "SAP_TM_ROUTING";
+query ="SELECT 
+    D.DB_KEY AS DEPARTURE_KEY,
+    R1.DB_KEY AS ROOT_KEY,
+    R2.RULE_ID AS RULE_NUMBER,
+    CASE WHEN D.VOYAGE = '' OR D.VOYAGE IS NULL THEN R1.SCHEDULE || '_' || IFNULL(R2.RULE_ID, 0) || 
+    TO_VARCHAR(TO_TIMESTAMP(d.departure_utc), 'YYYY-MM-DD-HH24:MI:SS') ELSE D.VOYAGE END 
+    AS DEPARTURE_NAME,
+    L2.LOCATION_NAME AS FROM_LOCATION,
+    L3.LOCATION_NAME AS TO_LOCATION,
+    TO_TIMESTAMP(D.DEPARTURE_UTC) AS DEPARTURE_TIME, 
+    TO_TIMESTAMP(L4.ARRIVAL_UTC) AS ARRIVAL_TIME
+    FROM \"sap.tm.trp.db.semantic.schedule::v_departure\" AS D
+    INNER JOIN \"sap.tm.trp.db.semantic.schedule::v_schedule\"AS R1
+    ON D.PARENT_KEY = R1.DB_KEY
+    LEFT OUTER JOIN \"sap.tm.trp.db.semantic.schedule::v_departure_rule\" as R2
+    ON D.DEP_RULE_REF = R2.DB_KEY
+    INNER JOIN (SELECT PARENT_KEY, MIN(LOC_SEQ) AS FIRST_SEQ, MAX(LOC_SEQ) AS LAST_SEQ
+    FROM \"sap.tm.trp.db.semantic.schedule::v_departure_location\"
+    GROUP BY PARENT_KEY) AS L1
+    ON D.DB_KEY = L1.PARENT_KEY
+    INNER JOIN \"sap.tm.trp.db.semantic.schedule::v_schedule_location\" AS L2
+    ON R1.DB_KEY = L2.PARENT_KEY
+    AND L1.FIRST_SEQ = L2.LOC_SEQ
+    INNER JOIN \"sap.tm.trp.db.semantic.schedule::v_schedule_location\" AS L3
+    ON R1.DB_KEY = L3.PARENT_KEY
+    AND L1.LAST_SEQ = L3.LOC_SEQ
+    INNER JOIN \"sap.tm.trp.db.semantic.schedule::v_departure_location\" AS L4
+    ON D.DB_KEY = L4.PARENT_KEY
+    AND L1.LAST_SEQ = L4.LOC_SEQ
+    UNION ALL
+    SELECT TO_NVARCHAR(T.DB_KEY) AS DEPARTURE_KEY, 
+    T.DB_KEY AS ROOT_KEY, 
+    0 AS RULE_NUMBER,
+    T.TOR_ID AS DEPARTURE_NAME,
+    L1.LOCATION_NAME AS FROM_LOCATION, L2.LOCATION_NAME AS TO_LOCATION,
+    TO_TIMESTAMP(L1.SEL_TIME) AS DEPARTURE_TIME, 
+    TO_TIMESTAMP(L2.SEL_TIME) AS ARRIVAL_TIME
+    FROM \"sap.tm.trp.db.semantic.order::v_freight_order\" AS T
+    INNER JOIN \"sap.tm.trp.db.semantic.order::v_freight_order_stop\" AS L1 
+    ON T.DB_KEY = L1.FREIGHT_ORDER_KEY
+    INNER JOIN \"sap.tm.trp.db.semantic.order::v_freight_order_stop\" AS L2 
+    ON T.DB_KEY = L2.FREIGHT_ORDER_KEY
+    WHERE L1.STOP_SEQ_POS = 'F' AND L2.STOP_SEQ_POS = 'L';
+";
+    
+depends_on_table = [
+"sap.tm.trp.db.semantic.schedule::v_schedule",
+"sap.tm.trp.db.semantic.schedule::v_departure",
+"sap.tm.trp.db.semantic.schedule::v_departure_rule",
+"sap.tm.trp.db.semantic.schedule::v_departure_location",
+"sap.tm.trp.db.semantic.schedule::v_schedule_location",
+"sap.tm.trp.db.semantic.order::v_freight_order",
+"sap.tm.trp.db.semantic.order::v_freight_order_stop"
+]; 

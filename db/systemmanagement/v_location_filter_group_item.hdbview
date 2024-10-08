@@ -1,0 +1,40 @@
+schema = "SAP_TM_TRP";
+query = "SELECT DISTINCT T1.GEO_ID AS GROUP_ID,
+                T3.ID AS LOCATION_ID,
+                T3.NAME AS LOCATION_NAME,
+                T1.USER_TYPE AS LOCATION_FILTER_TYPE
+           FROM \"sap.tm.trp.db.filter::v_location_filter_info_sdui\" as T1
+                LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement::t_location_group_item\" AS T2
+                ON T1.GEO_ID = T2.LOCATION_GROUP_ID
+                LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_location\" AS T3
+                ON T2.LOCATION_ID = T3.ID
+          WHERE T1.USER_TYPE = 2
+          UNION
+         SELECT DISTINCT T1.GEO_ID AS GROUP_ID,
+                T3.ID AS LOCATION_ID,
+                T3.NAME AS LOCATION_NAME,
+                T1.USER_TYPE AS LOCATION_FILTER_TYPE
+           FROM \"sap.tm.trp.db.filter::v_location_filter_info_sdui\" as T1
+                LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement::t_zone_group_item\" AS T2
+                ON T1.GEO_ID = T2.ZONE_GROUP_ID
+                LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_zone\" AS T3
+                ON T2.ZONE_ID = T3.ID
+          WHERE T1.USER_TYPE = 4
+          UNION
+         SELECT DISTINCT T1.GEO_ID AS GROUP_ID,
+                T3.ID AS LOCATION_ID,
+                T3.NAME AS LOCATION_NAME,
+                T1.USER_TYPE AS LOCATION_FILTER_TYPE
+           FROM \"sap.tm.trp.db.filter::v_location_filter_info_sdui\" as T1
+                LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement::t_region_group_item\" AS T2
+                ON T1.GEO_ID = T2.REGION_GROUP_ID
+                LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_zone\" AS T3
+                ON T2.ZONE_ID = T3.ID
+          WHERE T1.USER_TYPE = 6";
+                
+depends_on_table = ["sap.tm.trp.db.systemmanagement::t_zone_group_item",
+                    "sap.tm.trp.db.systemmanagement::t_location_group_item",
+                    "sap.tm.trp.db.systemmanagement::t_region_group_item"];
+depends_on_view  = ["sap.tm.trp.db.filter::v_location_filter_info_sdui",
+                    "sap.tm.trp.db.semantic.location::v_zone",
+                    "sap.tm.trp.db.semantic.location::v_location"];

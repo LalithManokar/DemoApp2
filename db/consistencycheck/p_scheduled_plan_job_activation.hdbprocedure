@@ -1,0 +1,32 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.consistencycheck::p_scheduled_plan_job_activation"(
+		OUT PLAN_OUTPUT "sap.tm.trp.db.consistencycheck::tt_inactive_scheduled_plans"
+	)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA
+AS
+BEGIN
+	PLAN_OUTPUT = SELECT T1.ID, 
+				T1.NAME, 
+				T1.NEXT_EXECUTION_TIME, 
+				T2.START_TIME, 
+				T2.EXPIRY_TIME, 
+				T2.RECURRENCE_TYPE, 
+				T2.RECURRENCE_INTERVAL, 
+				T2.RECURRENCE_DAY, 
+				T2.SCHEDULE_TYPE, 
+				T2.EXECUTE_WORKING_HOUR, 
+				T2.START_WORKING_HOUR_TIME, 
+				T2.END_WORKING_HOUR_TIME
+			FROM "sap.tm.trp.db.pipeline::cv_plan_list_wrapper" AS T1
+				INNER JOIN "sap.tm.trp.db.job::t_job_schedule" AS T3
+				ON t1.id = t3.model_id
+					AND t3.schedule_flag = 1
+				LEFT OUTER JOIN "sap.tm.trp.db.job::t_model_schedule_detail" AS T2
+				ON T2.model_id = T1.id
+			WHERE (PLAN_TYPE_ID = 1
+					OR PLAN_TYPE_ID = 4)
+				AND NEXT_EXECUTION_TIME IS NULL
+				AND T2.EXPIRY_TIME > CURRENT_UTCTIMESTAMP;
+END;

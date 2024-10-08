@@ -1,0 +1,21 @@
+schema = "SAP_TM_TRP";   
+query = "
+SELECT T0.USERNAME,CASE WHEN T5.HAVE_AUTHORIZATION_FLAG =1 THEN 1 WHEN T4.NUM >0 THEN 1 ELSE 0 END AS HAVE_AUTHORIZATION_FLAG
+FROM \"sap.tm.trp.db.systemmanagement.user::cv_get_username\" T0,
+(
+	SELECT COUNT(1) AS NUM
+	FROM \"sap.tm.trp.db.systemmanagement.user::cv_get_username\" T1
+	INNER JOIN \"sap.tm.trp.db.systemmanagement.user::t_user\" T2 ON T2.USERNAME = T1.USERNAME
+	INNER JOIN \"SYS\".\"EFFECTIVE_APPLICATION_PRIVILEGES\" T3 ON (T3.USER_NAME = T2.USERNAME)
+	WHERE T3.PRIVILEGE = 'sap.tm.trp.service::UnrestrictedRead' AND T3.IS_VALID='TRUE' AND T2.USER_TYPE_ID <>99
+)T4,
+(
+SELECT 1 AS HAVE_AUTHORIZATION_FLAG
+FROM  \"sap.tm.trp.db.systemmanagement.user::cv_get_username\" T1
+INNER JOIN \"sap.tm.trp.db.systemmanagement.user::t_user\" T2 ON T2.USERNAME = T1.USERNAME
+WHERE T2.USER_TYPE_ID = 99
+)T5
+";
+
+depends_on_view = ["sap.tm.trp.db.systemmanagement.user::cv_get_username"];
+depends_on_table = ["sap.tm.trp.db.systemmanagement.user::t_user"];

@@ -1,0 +1,20 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_network_valid_flag_by_simulation_scenario_id"(
+    IN SIM_PLAN_ID BIGINT,
+    IN SCENARIO_ID BIGINT,
+    OUT VALID_FLAG CHAR(1)    
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    READS SQL DATA
+    AS
+    NETWORK_CODE VARCHAR(50);
+BEGIN
+     CALL "sap.tm.trp.db.planningcockpit::p_get_networkcode_by_simulation_scenario_id"(:SIM_PLAN_ID,:SCENARIO_ID,NETWORK_CODE);
+     
+     SELECT IFNULL(MAX(INVALIDATED),'X') INTO VALID_FLAG
+     FROM "sap.tm.trp.routing.db.path::t_network_model" T1 
+     WHERE T1.CODE = :NETWORK_CODE; 
+     
+END;
+

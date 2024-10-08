@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_role_check_location_rule_optimized" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_role_check_"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="VARCHAR" id="RULE_NAME" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="DESCRIPTION" length="500"/>
+        <viewAttribute datatype="INTEGER" id="RULE_TYPE"/>
+        <viewAttribute datatype="BIGINT" id="SD_PLAN_ID"/>
+        <viewAttribute datatype="VARCHAR" id="SUPPLY_DEMAND_PLAN" length="200"/>
+        <viewAttribute datatype="DECIMAL" id="TIME_RANGE_INTERVAL" length="21" scale="11"/>
+        <viewAttribute datatype="INTEGER" id="TIME_RANGE_UNIT"/>
+        <viewAttribute datatype="BIGINT" id="NETWORK_SETTING_GROUP_ID"/>
+        <viewAttribute datatype="VARCHAR" id="NETWORK_SETTING_GROUP" length="500"/>
+        <viewAttribute datatype="VARCHAR" id="CURRENCY" length="10"/>
+        <viewAttribute datatype="BIGINT" id="LOCATION_DETERMIN_ID"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_DETERMINATION_RULE" length="500"/>
+        <viewAttribute datatype="INTEGER" id="SCHEDULE_TIME_TYPE"/>
+        <viewAttribute datatype="INTEGER" id="OP_SETTING_TYPE"/>
+        <viewAttribute datatype="INTEGER" id="OPTIMIZATION"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_CATEGORY" length="50"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition>/********* Begin Procedure Script ************/ 
+BEGIN
+
+     DECLARE USER_NAME VARCHAR(60);
+     DECLARE USERTYPE INTEGER;     
+
+     SELECT IFNULL (MAX (USERNAME),'') INTO USER_NAME 
+     FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+
+     SELECT IFNULL (MAX (USER_TYPE_ID),0) INTO USERTYPE FROM &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot;
+     WHERE USERNAME = :USER_NAME;
+     
+     IF :USERTYPE = 99 THEN
+
+     var_out = select DISTINCT ID,
+                      RULE_NAME,
+                      DESCRIPTION,
+                      RULE_TYPE,
+                      SD_PLAN_ID,
+                      SUPPLY_DEMAND_PLAN,
+                      TIME_RANGE_INTERVAL,
+                      TIME_RANGE_UNIT,
+                      NETWORK_SETTING_GROUP_ID,
+                      NETWORK_SETTING_GROUP,
+                      CURRENCY,
+                      LOCATION_DETERMIN_ID,
+                      LOCATION_DETERMINATION_RULE,
+                      SCHEDULE_TIME_TYPE,
+                      OP_SETTING_TYPE,
+                      OPTIMIZATION,
+					  RESOURCE_CATEGORY
+                 FROM &quot;sap.tm.trp.db.pickupreturn::v_location_rule_optimized&quot;;
+
+     ELSE
+                 var_out = SELECT DISTINCT T1.ID,
+			                      T1.RULE_NAME,
+			                      T1.DESCRIPTION,
+			                      T1.RULE_TYPE,
+			                      T1.SD_PLAN_ID,
+			                      T1.SUPPLY_DEMAND_PLAN,
+			                      T1.TIME_RANGE_INTERVAL,
+			                      T1.TIME_RANGE_UNIT,
+			                      T1.NETWORK_SETTING_GROUP_ID,
+			                      T1.NETWORK_SETTING_GROUP,
+			                      T1.CURRENCY,
+			                      T1.LOCATION_DETERMIN_ID,
+			                      T1.LOCATION_DETERMINATION_RULE,
+			                      T1.SCHEDULE_TIME_TYPE,
+			                      T1.OP_SETTING_TYPE,
+			                      T1.OPTIMIZATION,
+			                      T1.RESOURCE_CATEGORY
+                           FROM &quot;sap.tm.trp.db.pickupreturn::v_location_rule_optimized&quot; T1
+                           INNER JOIN &quot;sap.tm.trp.db.filter::cv_role_check_location_filter&quot; T3 
+                           ON (T3.ID = T1.LOCATION_FILTER_ID)
+                           INNER JOIN &quot;sap.tm.trp.db.pipeline::cv_get_plan_list&quot; AS T4
+                           ON T1.SD_PLAN_ID = T4.ID
+                           WHERE (T1.VISIBILITY = 'G' OR (T1.VISIBILITY = 'P' AND T1.CREATED_BY = :USER_NAME))
+                           AND (T1.RESOURCE_FILTER_ID IS NULL OR T1.RESOURCE_FILTER_ID = 0)
+                         
+                           UNION
+                           SELECT DISTINCT T1.ID,
+			                      T1.RULE_NAME,
+			                      T1.DESCRIPTION,
+			                      T1.RULE_TYPE,
+			                      T1.SD_PLAN_ID,
+			                      T1.SUPPLY_DEMAND_PLAN,
+			                      T1.TIME_RANGE_INTERVAL,
+			                      T1.TIME_RANGE_UNIT,
+			                      T1.NETWORK_SETTING_GROUP_ID,
+			                      T1.NETWORK_SETTING_GROUP,
+			                      T1.CURRENCY,
+			                      T1.LOCATION_DETERMIN_ID,
+			                      T1.LOCATION_DETERMINATION_RULE,
+			                      T1.SCHEDULE_TIME_TYPE,
+			                      T1.OP_SETTING_TYPE,
+			                      T1.OPTIMIZATION,
+			                      T1.RESOURCE_CATEGORY
+                           FROM &quot;sap.tm.trp.db.pickupreturn::v_location_rule_optimized&quot; T1
+                           INNER JOIN &quot;sap.tm.trp.db.filter::cv_role_check_location_filter&quot; T3 
+                           ON (T3.ID = T1.LOCATION_FILTER_ID)
+                           INNER JOIN &quot;sap.tm.trp.db.pipeline::cv_get_plan_list&quot; AS T4
+                           ON T1.SD_PLAN_ID = T4.ID
+                           INNER JOIN &quot;sap.tm.trp.db.filter::cv_equipment_filter&quot; T2 
+                           ON (T1.RESOURCE_FILTER_ID = T2.ID)
+                           WHERE (T1.VISIBILITY = 'G' OR (T1.VISIBILITY = 'P' AND T1.CREATED_BY = :USER_NAME))
+                           AND (T1.RESOURCE_FILTER_ID IS NOT NULL AND T1.RESOURCE_FILTER_ID &lt;> 0);
+      END IF;
+END  /********* End Procedure Script ************/
+
+
+
+
+
+
+
+</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="RULE_NAME" order="2">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="RULE_NAME"/>
+      </attribute>
+      <attribute id="DESCRIPTION" order="3">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="DESCRIPTION"/>
+      </attribute>
+      <attribute id="SUPPLY_DEMAND_PLAN" order="6">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="SUPPLY_DEMAND_PLAN"/>
+      </attribute>
+      <attribute id="NETWORK_SETTING_GROUP" order="10">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="NETWORK_SETTING_GROUP"/>
+      </attribute>
+      <attribute id="CURRENCY" order="11">
+        <descriptions defaultDescription="CURRENCY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CURRENCY"/>
+      </attribute>
+      <attribute id="LOCATION_DETERMINATION_RULE" order="13">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_DETERMINATION_RULE"/>
+      </attribute>
+      <attribute id="RESOURCE_CATEGORY" order="17">
+        <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_CATEGORY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions/>
+        <measureMapping columnObjectName="Script_View" columnName="ID"/>
+      </measure>
+      <measure id="RULE_TYPE" order="4" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="RULE_TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="RULE_TYPE"/>
+      </measure>
+      <measure id="SD_PLAN_ID" order="5" aggregationType="sum" measureType="simple">
+        <descriptions/>
+        <measureMapping columnObjectName="Script_View" columnName="SD_PLAN_ID"/>
+      </measure>
+      <measure id="TIME_RANGE_INTERVAL" order="7" aggregationType="sum" measureType="simple">
+        <descriptions/>
+        <measureMapping columnObjectName="Script_View" columnName="TIME_RANGE_INTERVAL"/>
+      </measure>
+      <measure id="TIME_RANGE_UNIT" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TIME_RANGE_UNIT"/>
+        <measureMapping columnObjectName="Script_View" columnName="TIME_RANGE_UNIT"/>
+      </measure>
+      <measure id="NETWORK_SETTING_GROUP_ID" order="9" aggregationType="sum" measureType="simple">
+        <descriptions/>
+        <measureMapping columnObjectName="Script_View" columnName="NETWORK_SETTING_GROUP_ID"/>
+      </measure>
+      <measure id="LOCATION_DETERMIN_ID" order="12" aggregationType="sum" measureType="simple">
+        <descriptions/>
+        <measureMapping columnObjectName="Script_View" columnName="LOCATION_DETERMIN_ID"/>
+      </measure>
+      <measure id="SCHEDULE_TIME_TYPE" order="14" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TIME_RANGE_UNIT"/>
+        <measureMapping columnObjectName="Script_View" columnName="SCHEDULE_TIME_TYPE"/>
+      </measure>
+      <measure id="OP_SETTING_TYPE" order="15" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="OP_SETTING_TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="OP_SETTING_TYPE"/>
+      </measure>
+      <measure id="OPTIMIZATION" order="16" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="OPTIMIZATION"/>
+        <measureMapping columnObjectName="Script_View" columnName="OPTIMIZATION"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

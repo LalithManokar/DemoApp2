@@ -1,0 +1,12 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_change_plan_type" ( 
+IN PLAN_MODEL_ID BIGINT) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+
+    UPDATE "sap.tm.trp.db.pipeline::t_plan_model"
+	SET PLAN_MODEL_TYPE_ID = 1
+	WHERE ID = :PLAN_MODEL_ID;
+END;

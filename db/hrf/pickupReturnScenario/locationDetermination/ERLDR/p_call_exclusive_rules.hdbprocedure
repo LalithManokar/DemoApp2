@@ -1,0 +1,30 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::p_call_exclusive_rules" ( 
+in IN_PICK_RETURN_TYPE  VARCHAR(2),
+in IN_ER_NAME VARCHAR(50),
+out OUT_ER "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::tt_trp_hrf_exclusive_output_base"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    DECLARE SCRIPT VARCHAR(5000);
+    DECLARE RULE_SP VARCHAR(200);
+
+  select ifnull(max(T1.SP),'') into RULE_SP
+  from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule" T1
+  where T1.NAME = :IN_ER_NAME;
+
+  truncate table "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_hrf_exclusive_rule_output";
+
+  SCRIPT := 'call '|| escape_single_quotes(:RULE_SP) ||'('''|| escape_single_quotes(:IN_PICK_RETURN_TYPE) || 
+  ''', "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_hrf_exclusive_rule_output",
+  "sap.tm.trp.db.hrf.ruleManage::t_hrf_actions_results") with overview'; 
+
+  select :SCRIPT from dummy;
+    execute immediate(:SCRIPT); 
+
+  OUT_ER = select distinct TU_ID
+    from "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_hrf_exclusive_rule_output";
+    
+END;

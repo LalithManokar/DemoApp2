@@ -1,0 +1,18 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT DISTINCT T2.ID AS ID,
+                 T2.RUN_ID,
+                 T2.RULE_ID AS RULE_ID,
+                 T1.RULE_NAME AS RULE_NAME,
+                 CASE
+                    WHEN ( T2.EXECUTION_START_TIME = '' OR T2.EXECUTION_START_TIME IS NULL) THEN NULL
+                    WHEN ( T1.TIMEZONES = '' OR T1.TIMEZONES IS NULL) THEN TO_VARCHAR(UTCTOLOCAL(T2.EXECUTION_START_TIME, 'UTC', 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	                ELSE TO_VARCHAR(UTCTOLOCAL(T2.EXECUTION_START_TIME, T1.TIMEZONES, 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	             END AS EXECUTION_DATE,
+	             T2.EXECUTION_STATUS AS EXECUTION_STATUS,
+                 T2.EXECUTION_STATUS || ': ' || T2.ERROR_MSG AS EXECUTION_STATUS_MSG,
+                 SECONDS_BETWEEN(T2.EXECUTION_START_TIME, T2.EXECUTION_END_TIME) AS EXECUTION_TIME
+            FROM \"sap.tm.trp.db.pickupreturn::t_location_assignment_rule\" AS T1
+                 INNER JOIN \"sap.tm.trp.db.pickupreturn::t_location_rule_running_log\" AS T2
+                 ON T1.ID = T2.RULE_ID";
+
+depends_on_table = ["sap.tm.trp.db.pickupreturn::t_location_assignment_rule", "sap.tm.trp.db.pickupreturn::t_location_rule_running_log"];

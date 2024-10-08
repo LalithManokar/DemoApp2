@@ -1,0 +1,17 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "out put for p_get_details_by_executionid_resource";
+table.columns = [
+  {name = "RESOURCE_TYPE_CODE"; sqlType = VARCHAR; length = 50;},
+  {name = "RESOURCE_TYPE_NAME"; sqlType = VARCHAR; length = 50;},
+  {name = "OUTPUT_VALUE"; sqlType = DOUBLE;},
+  {name = "START_TIME"; sqlType = TIMESTAMP;},
+  {name = "END_TIME"; sqlType = TIMESTAMP;},
+  {name = "SEQUENCE"; sqlType = INTEGER;},
+  {name = "TIME_INTERVAL"; sqlType = BIGINT;},
+  {name = "OUTPUT_KEY"; sqlType = VARCHAR; length = 200;},
+  {name = "DRILLDOWN_OUTPUT_KEY"; sqlType = VARCHAR; length = 32;}, 
+  {name = "DRILLDOWN_NODE_ID"; sqlType = BIGINT;},
+  {name = "ALERT_STATUS"; sqlType = INTEGER;},
+  {name = "DRILLDOWN_NODE_NAV_TYPE"; sqlType = VARCHAR; length = 32;}
+];

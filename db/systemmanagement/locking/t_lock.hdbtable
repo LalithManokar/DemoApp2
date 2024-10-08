@@ -1,0 +1,10 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "OBJECT_TYPE"; sqlType = VARCHAR; length = 50 ; nullable = false; comment = "TODO: define types";},
+    {name = "OBJECT_ID"; sqlType = NVARCHAR; length = 32; nullable = false; comment = "Unique within its object type";},
+    {name = "USER_ID"; sqlType = VARCHAR; length = 50; nullable = false; comment = "ID of owner for informational purpoase";},
+    {name = "TOKEN"; sqlType = VARCHAR; length = 200; nullable = false; comment = "Lock token by which ownership is determined. Use user_id for user-level locking.";},
+    {name = "TIMESTAMP"; sqlType = TIMESTAMP;  nullable = false; comment = "Time when lock was last obtained";}
+];
+table.primaryKey.pkcolumns = ["OBJECT_TYPE", "OBJECT_ID"];

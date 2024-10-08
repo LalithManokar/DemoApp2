@@ -1,0 +1,17 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_equi_group_in_filter_check"(
+    IN ID VARCHAR(22),
+    OUT ERR_NUM INTEGER
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    EQUI_GROUP_ID_LIST = SELECT DISTINCT T2.EQUIPMENT_GROUP_ID
+                           FROM "sap.tm.trp.db.filter::t_filter_equipment_filter" AS T1
+                                INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" AS T2
+                                ON T1.EQUIPMENT_FILTER_ID = T2.EQUIPMENT_FILTER_ID AND T2.RESOURCE_CATEGORY = T1.RESOURCE_CATEGORY
+                          WHERE T2.EQUIPMENT_GROUP_ID = :ID;
+    
+    SELECT COUNT(*) INTO ERR_NUM FROM :EQUI_GROUP_ID_LIST;
+END;

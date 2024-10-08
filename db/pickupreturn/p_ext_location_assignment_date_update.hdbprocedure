@@ -1,0 +1,178 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_location_assignment_date_update"(
+    IN RULE_ID BIGINT,
+    IN TU_ID VARCHAR(20),
+    IN ASSIGN_DATE TIMESTAMP,
+    OUT MESSAGE VARCHAR(50),
+    OUT START_DATE TIMESTAMP,
+    OUT END_DATE TIMESTAMP
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE TIME_COUNT INTEGER;
+    DECLARE COUNT_TU_DRAFT INTEGER;
+    DECLARE USER_NAME VARCHAR(60);
+    DECLARE TOTAL_COUNT INTEGER;
+
+    SELECT IFNULL (MAX (USERNAME),'') INTO USER_NAME
+    FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+
+    SELECT COUNT(*) INTO COUNT_TU_DRAFT
+    FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft"
+    WHERE RULE_ID = :RULE_ID
+    AND USER = :USER_NAME;
+
+    CALL "sap.tm.trp.db.pickupreturn::p_ext_get_staging_tu"(:RULE_ID, TU_INFO);
+
+    CALL "sap.tm.trp.db.pickupreturn::p_ext_pickup_time_range_get"(
+        :RULE_ID,
+        :TU_ID,
+        START_DATE,
+        END_DATE
+    );
+
+    IF :START_DATE > :END_DATE THEN
+      MESSAGE := 'MSG_ERROR_EXPIRED_PR';
+    ELSE
+      SELECT COUNT(*) INTO TIME_COUNT
+      FROM DUMMY
+      WHERE :ASSIGN_DATE > :START_DATE
+      AND :ASSIGN_DATE < :END_DATE;
+
+      IF :TIME_COUNT = 0 THEN
+        MESSAGE := 'MSG_ERROR_INVALID_PR_DATE';
+      ELSE
+        IF :COUNT_TU_DRAFT >0 THEN
+          UPDATE "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft"
+          SET PRE_DATE = :ASSIGN_DATE,
+              STREETTURN_TU_ID = ''  -- clear street turn id
+              
+              --FLAG = 2
+          WHERE RULE_ID = :RULE_ID 
+          AND TU_ID = :TU_ID
+          AND USER = :USER_NAME;
+
+          MESSAGE := 'SUCCESS';
+        ELSE
+          --insert data to draft table if there is no such data
+          INSERT INTO "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft"(
+                  RULE_ID,
+	                  USER,
+	                  TU_ID,
+	                  TU_TYPE_CODE,
+	                  EXECUTION_STATUS_CODE,
+	                  SHIPPER_ID,
+	                  CONSIGNEE_ID,
+	                  RESOURCE_TYPE,
+	                  QUANTITY,
+	                  ASSIGN_QUANTITY,
+	                  RESOURCE_NUMBER,
+	                  SOURCE_LOCATION_ID,
+	                  DESTINATION_LOCATION_ID,
+	                  POL,
+	                  POD,
+	                  DATE,
+	                  PRE_LOCATION_ID,
+	                  CUR_LOCATION_ID,
+	                  PRE_DATE,
+	                  CUR_DATE,
+	                  OP_SETTING_TYPE,
+	                  SCHEDULE_TIME_TYPE,
+	                  PLANNING_RELEVANT,
+	                  CUSTOMER_CODE,
+	                  ITE_KEY,
+	                  LIFECYCLE_CODE,
+	                  BOOKING_DATE,
+	                  ASSIGN_STATUS,
+	                  RULE_TYPE,
+	                  SAVE_TIME,
+	                  FLAG,
+	                  BOOKING_REFERENCE,
+		              MOT,
+			          MEANS_OF_TRANSPORTATION,
+		              CARRIER_POL,
+		              CARRIER_POD,
+			          VOYAGE_POL,
+			          VOYAGE_POD,
+			          SPECIAL_INSTRUCTION_CODE,
+			          SPECIAL_INSTRUCTION_NAME,
+			          LAST_LOCATION_ID,
+			          LAST_LOCATION_NAME,
+			          LEASE_AGREEMENT,
+			          LEASE_TYPE_CODE,
+			          LEASE_TYPE,
+			          ASSIGNED_RESOURCE,
+			          VESSEL_CUTOFF_TIME,
+			          VESSEL_ARRIVAL_DATE,
+			          VESSEL_POL,
+			          VESSEL_POD,
+			          STREETTURN_TU_ID,
+			          INVALID,
+			          PLAN_STATUS)
+	    SELECT DISTINCT T1.RULE_ID,
+	             :USER_NAME AS USER,
+	             T1.TRANSPORTATION_ID,
+	             T1.TU_TYPE_CODE,
+	             T1.EXECUTION_STATUS_CODE,
+	             T1.SHIPPER_ID,
+	             T1.CONSIGNEE_ID,
+	             T1.RESOURCE_TYPE,
+	             T1.QUANTITY,
+	             T1.ASSIGNED_CONTAINERS,
+	             T1.RESOURCE_NUMBER,
+	             T1.SOURCE_LOCATION_ID,
+	             T1.DESTINATION_LOCATION_ID,
+	             T1.POL,
+	             T1.POD,
+	             IFNULL(T1.VESSEL_CUTOFF_TIME,T1.VESSEL_ARRIVAL_DATE),
+	             CASE T1.RULE_TYPE WHEN 1 THEN T1.PICKUP_LOCATION_ID
+				 	ELSE T1.RETURN_LOCATION_ID END,
+				 CASE T1.RULE_TYPE WHEN 1 THEN T1.ORIGINAL_PICKUP_LOCATION_ID
+				 	ELSE T1.ORIGINAL_RETURN_LOCATION_ID END,
+	             CASE WHEN T1.TRANSPORTATION_ID = :TU_ID THEN :ASSIGN_DATE ELSE IFNULL(T1.PICKUP_DATE,T1.RETURN_DATE) END,
+	             CASE T1.RULE_TYPE WHEN 1 THEN T1.ORIGINAL_PICKUP_DATE
+				 	ELSE T1.ORIGINAL_RETURN_DATE END AS CUR_DATE,
+	             T2.OP_SETTING_TYPE,
+	             T2.SCHEDULE_TIME_TYPE,
+	             T1.RELEVANT_PLANNING,
+	             T1.CUSTOMER_CODE,
+	             T1.ITE_KEY,
+	             T1.LIFECYCLE_CODE,
+	             T1.BOOKING_DATE,
+	             0 AS ASSIGN_STATUS,
+	             T2.RULE_TYPE,
+	             CURRENT_UTCTIMESTAMP AS SAVE_TIME,
+	             2,
+	             T1.BOOKING_REFERENCE,
+		         T1.MOT,
+			     T1.MEANS_OF_TRANSPORTATION,
+		         T1.CARRIER_POL,
+		         T1.CARRIER_POD,
+			     T1.VOYAGE_POL,
+			     T1.VOYAGE_POD,
+			     T1.SPECIAL_INSTRUCTION_CODE,
+			     T1.SPECIAL_INSTRUCTION_NAME,
+			     T1.LAST_LOCATION_ID,
+			     T1.LAST_LOCATION_NAME,
+			     T1.LEASE_AGREEMENT,
+			     T1.LEASE_TYPE_CODE,
+			     T1.LEASE_TYPE,
+			     T1.ASSIGNED_RESOURCE,
+			     T1.VESSEL_CUTOFF_TIME,
+			     T1.VESSEL_ARRIVAL_DATE,
+			     T1.VESSEL_POL,
+			     T1.VESSEL_POD,
+			     T1.STREETTURN_TU_ID,
+			     T1.INVALID,
+			     T1.PLAN_STATUS
+	      FROM :TU_INFO T1
+	      LEFT JOIN "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" T2
+	      ON (T1.RULE_ID = T2.ID);
+
+        MESSAGE := 'SUCCESS';
+      END IF ;
+    END IF;
+  END IF ;
+END;

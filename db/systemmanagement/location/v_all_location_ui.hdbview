@@ -1,0 +1,29 @@
+schema = "SAP_TM_TRP";
+query = "SELECT DISTINCT
+                T1.ID,
+                T1.NAME,
+                T1.DESC,
+                T6.COUNTRY_CODE,
+                COUNTRY.NAME AS COUNTRY_NAME,
+                T6.STATE_CODE,
+                STATE.NAME AS STATE_NAME,
+                T6.CITY_CODE,
+                CITY.NAME AS CITY_NAME,
+                T1.XPOS,
+                T1.YPOS,
+                T6.POSTAL_CODE
+         FROM \"sap.tm.trp.db.semantic.location::v_all_location\" T1
+              LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_address\" AS T6 
+                ON T1.ADDRESS_ID = T6.ID      
+              LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_country\" AS COUNTRY 
+                ON T6.COUNTRY_CODE = COUNTRY.CODE
+              LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_state\" AS STATE
+                ON T6.COUNTRY_CODE = STATE.COUNTRY_CODE AND  T6.STATE_CODE = STATE.CODE 
+              LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_city\" AS CITY
+                ON T6.CITY_CODE = CITY.CODE AND T6.COUNTRY_CODE = CITY.COUNTRY_CODE ";
+
+depends_on_view = ["sap.tm.trp.db.semantic.location::v_all_location",
+                   "sap.tm.trp.db.semantic.location::v_address",
+                   "sap.tm.trp.db.semantic.location::v_country",
+                   "sap.tm.trp.db.semantic.location::v_state",
+                   "sap.tm.trp.db.semantic.location::v_city"];   

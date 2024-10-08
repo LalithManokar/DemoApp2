@@ -1,0 +1,27 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_read_network" ( 
+        IN network_id BIGINT,
+        --IN with_details CHAR(1),
+        OUT network "sap.tm.trp.routing.db.path::tt_network_model"
+		--OUT network_conf "sap.tm.trp.routing.db.common::tt_option"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING"
+   READS SQL DATA AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+    network = select id, code, dataset_id, invalidated, invalidation_reason_code,
+    setting_group_id, base_network_id, valid_from, valid_to, created_by, created_on, 
+    refreshed_by, refreshed_on, changed_by, changed_on
+    from "sap.tm.trp.routing.db.path::t_network_model"
+    where id = :network_id; 
+    /*
+    if with_details = 'X' then
+	-- Read network configuration from t_network_model_conf
+	    network_conf = SELECT name, value FROM "sap.tm.trp.routing.db.path::t_network_model_conf" WHERE network_model_id = :network_id;
+	
+	end if;
+	*/
+END

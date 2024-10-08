@@ -1,0 +1,14 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+  {name = "DOMNAME"; sqlType = NVARCHAR; length = 30; comment = "domain name";},
+  {name = "DDLANGUAGE"; sqlType = NVARCHAR; length = 1; comment = "LANGUAGE KEY";},
+  {name = "AS4LOCAL"; sqlType = NVARCHAR; length = 1; comment = "Activation of a Repository Object";},
+  {name = "VALPOS"; sqlType = NVARCHAR; length = 4; comment = "Domain value key";},
+  {name = "AS4VERS"; sqlType = NVARCHAR; length = 4; comment = "Version of the entry";},
+  {name = "DDTEXT"; sqlType = NVARCHAR; length = 60; comment = "Short Text for Fixed Values";},
+  {name = "DOMVAL_LD"; sqlType = NVARCHAR; length = 10; comment = "language specific values for domains: lower value";},
+  {name = "DOMVAL_HD"; sqlType = NVARCHAR; length = 10; comment = "language specific values for domains: upper limit";},
+  {name = "DOMVALUE_L"; sqlType = NVARCHAR; length = 10; comment = "single value for domains";}
+];
+table.primaryKey.pkcolumns = ["DOMNAME", "DDLANGUAGE", "AS4LOCAL", "VALPOS", "AS4VERS"]; 

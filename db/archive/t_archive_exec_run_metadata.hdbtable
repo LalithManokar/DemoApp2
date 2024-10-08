@@ -1,0 +1,8 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "TABLE_ID"; sqlType = BIGINT; nullable = false;},
+	{name = "RECORD_REF_COL"; sqlType = NVARCHAR; length = 500; nullable = true;},
+	{name = "PACKET_SIZE"; sqlType = BIGINT; nullable = true;}
+];
+table.primaryKey.pkcolumns = ["TABLE_ID"]; 

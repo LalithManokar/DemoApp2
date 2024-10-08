@@ -1,0 +1,45 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::p_sd_parameter_resource_by_plan" (
+	IN RESOURCE_FILTER_ID BIGINT,
+	IN RESOURCE "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_resource",
+	OUT ET_RESOURCE "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_resource"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+	DECLARE LV_RESOURCE_COUNT INTEGER;
+	DECLARE In_Filter_Group_ID INTEGER;
+	
+	select IFNULL(MAX(filter_group_id),0) INTO In_Filter_Group_ID
+				from "sap.tm.trp.db.filter::t_filter_equipment_filter"
+				where equipment_filter_id = :RESOURCE_FILTER_ID;
+				
+	lt_equipment_filter = select a.equipment_filter_id, a.filter_group_id, b.equi_code, b.equipment_group_id
+				from "sap.tm.trp.db.filter::t_filter_equipment_filter" a
+				inner join "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" b
+				on (a.EQUIPMENT_FILTER_ID = b.EQUIPMENT_FILTER_ID)
+				where a.FILTER_GROUP_ID = :In_Filter_Group_ID;
+
+     -- for equipment, we show the equip_name same as equip_code as no long description is needed
+     -- for equipment group, we show the equip_name as the equipment group name     
+     ET_RESOURCE = ( SELECT b.EQUI_CODE AS EQUIP_CODE, b.EQUI_CODE AS EQUIP_GROUP_ID, b.EQUI_CODE AS EQUIP_NAME, 1 AS EQUIP_FILTER_TYPE
+                 FROM :lt_equipment_filter b
+                 WHERE b.EQUI_CODE IS NOT NULL
+                 )
+               UNION ALL
+               ( 
+                 SELECT c.EQUI_CODE AS EQUIP_CODE, b.EQUIPMENT_GROUP_ID AS EQUIP_GROUP_ID, d.DESC AS EQUIP_NAME, 2 AS EQUIP_FILTER_TYPE
+                 FROM :lt_equipment_filter b  
+                 INNER JOIN "sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth" c ON (b.EQUIPMENT_GROUP_ID = c.EQUIPMENT_GROUP_ID) 
+                 INNER JOIN "sap.tm.trp.db.systemmanagement::t_equipment_group" d ON (c.EQUIPMENT_GROUP_ID = d.ID)
+                 WHERE  b.EQUIPMENT_GROUP_ID IS NOT NULL
+               );
+	
+  	SELECT COUNT(*) INTO LV_RESOURCE_COUNT FROM :RESOURCE;
+  	IF :LV_RESOURCE_COUNT <> 0 THEN
+	  	ET_RESOURCE = SELECT T1.* FROM :ET_RESOURCE T1
+	  	INNER JOIN :RESOURCE T2 ON T1.EQUIP_CODE = T2.EQUIP_CODE;
+ 	END IF;
+		
+END;

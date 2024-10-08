@@ -1,0 +1,8 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT *
+            FROM \"sap.tm.trp.db.pipeline::v_plan_model_ui\" 
+           WHERE PLAN_MODEL_CATEGORY_PARENT_ID = 1
+                 OR PLAN_MODEL_CATEGORY_ID = 1
+               ";
+depends_on_view = ["sap.tm.trp.db.pipeline::v_plan_model_ui"];
+               

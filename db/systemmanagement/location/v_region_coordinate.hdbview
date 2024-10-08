@@ -1,0 +1,15 @@
+schema = "SAP_TM_TRP";
+query = "SELECT T3.REGION_ID,
+                SUM(T3.XPOS) / COUNT(T3.LOCATION_ID) AS XPOS,
+                SUM(T3.YPOS) / COUNT(T3.LOCATION_ID) AS YPOS
+           FROM (SELECT DISTINCT REGION_LOCATION.ROOT_ID AS REGION_ID,
+                        LOCATION.ID AS LOCATION_ID,
+                        LOCATION.XPOS AS XPOS,
+                        LOCATION.YPOS AS YPOS
+                   FROM \"sap.tm.trp.db.systemmanagement.location::v_region_location_all\" AS REGION_LOCATION
+                        INNER JOIN \"sap.tm.trp.db.semantic.location::v_location\" AS LOCATION
+                        ON REGION_LOCATION.LOCATION_ID = LOCATION.ID
+                ) AS T3
+       GROUP BY T3.REGION_ID";
+
+depends_on_view = ["sap.tm.trp.db.systemmanagement.location::v_region_location_all", "sap.tm.trp.db.semantic.location::v_location"];       

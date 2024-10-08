@@ -1,0 +1,162 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massdelete::p_massdelete_sd_plans" (
+	IN SIMULATION_RUN VARCHAR(1) DEFAULT 'X',
+    OUT SD_PLAN_OUTPUT "sap.tm.trp.db.massdelete::tt_massdelete_sd_plans_output"
+   ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	--DEFAULT SCHEMA <default_schema_name>
+	--READS SQL DATA 
+	AS
+BEGIN
+
+	DECLARE LV_PIPELINE_OUTPUT_DATA_DELETE VARCHAR(1) := ''; -- FLAG VALUE : X FOR SIMULATION, '' TO DELETE DATA from t_pipeline_output_dataset
+    DECLARE LV_SD_PLAN_COUNT INTEGER := 0;
+    DECLARE LV_INPUT_COUNT INTEGER := 0;
+    DECLARE LV_USERNAME VARCHAR(100);
+    DECLARE LV_TIME_RUN TIMESTAMP ;
+    
+    SELECT LOCALTOUTC(CURRENT_TIMESTAMP) INTO LV_TIME_RUN FROM DUMMY;
+    
+    --GET THE CURRENT USER 
+    SELECT USERNAME INTO LV_USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+    
+    --get count of number of plans from input table, if zero, then return 
+    select count(*) into LV_INPUT_COUNT FROM "sap.tm.trp.db.massdelete::t_massdelete_sd_plans_input";
+    
+    IF (:LV_INPUT_COUNT = 0) THEN 
+       
+        RETURN;
+    END IF;
+    
+    --Get SD Plan details
+    SD_PLAN_LIST = SELECT DISTINCT B.ID, A.SD_PLAN_NAME AS NAME, B.FILTER_GROUP_ID, B.PLAN_MODEL_TYPE_ID, B.CODE
+                    FROM  "sap.tm.trp.db.massdelete::t_massdelete_sd_plans_input" A   --T_MASSDELETE_SD_PLANS HAS THE LIST OF PLANS FOR DELETE
+                    LEFT JOIN "sap.tm.trp.db.pipeline::t_plan_model" B  ON A.SD_PLAN_NAME = B.NAME;
+    
+    --Filter invalid plans/plans that dont exist                
+    SD_PLAN_OUTPUT_TEMP = SELECT NAME, 'Plan Does Not Exist' AS STATUS
+                     FROM :SD_PLAN_LIST WHERE ID IS NULL;
+    
+    --select count of valid plans                
+    SELECT COUNT(*) INTO LV_SD_PLAN_COUNT FROM :SD_PLAN_LIST WHERE ID IS NOT NULL;
+    
+    --Exit if no valid SD plans  
+    IF(:LV_SD_PLAN_COUNT = 0) THEN 
+      SD_PLAN_OUTPUT = SELECT A.NAME AS SD_PLAN_NAME,
+                            A.STATUS, 
+                            CASE WHEN :SIMULATION_RUN = 'X' THEN 'SIMULATION' 
+                                 WHEN :SIMULATION_RUN = '' THEN 'ACTUAL' END AS EXECUTION_MODE,
+                            :LV_USERNAME AS USERNAME,
+                            :LV_TIME_RUN AS TIMESTAMP, 
+                            NULL AS Pipeline_Output_Dataset,
+                            null AS Plan_Execution,
+                            null as Plan_Model,
+                            null as Location_Filter,
+                            null as Equipment_Filter,
+                            null as Filter_Group,
+                            null as Virtual_Persisted_Plan,
+                            null as Virtual_Tree_Location_Info,
+                            null as Virtual_Tree_Hierarchy,
+                            null as Virtual_Tree_Node_Name,
+                            null as Alert_Rule_Assigned_Plan_Model,
+                            null as Alert_Output_Time_Interval,
+                            null as Alert_Output_Alert_Score_Time_Interval,
+                            null as Alert_For_UI_Interval,
+                            null as Execution_Context,
+                            null as Rule_Dispatch_Node,
+                            null as HRF_SD_Output_Flag,
+                            null as SD_KPI_Bubble_Rule_Output,
+                            null as HRF_SD_Output_Normalized_Alert_Score ,
+                            null as HRF_SD_Output_For_UI FROM :SD_PLAN_OUTPUT_TEMP A; 
+                            
+        IF (:SIMULATION_RUN = '') THEN 
+            INSERT INTO "sap.tm.trp.db.massdelete::t_massdelete_sd_plans_log" SELECT * FROM :SD_PLAN_OUTPUT;
+        END IF;                    
+    
+        RETURN ;
+        
+    END IF;
+    
+    --Get the where used list of SD plans  
+    SD_PLAN_WHERE_USED_LIST = SELECT  DISTINCT A.*, B.OBJECT_CODE FROM :SD_PLAN_LIST A 
+                                LEFT JOIN "sap.tm.trp.db.whereusedlist::v_used_plan" B 
+                                ON A.CODE = B.OBJECT_CODE WHERE A.ID IS NOT NULL ;
+                                
+
+    --Get the set of plans whose schedule expired/not scheduled and vir plans(as no schedule) which are good to delete 
+    SD_PLAN_SCHEDULE_EXPIRED = SELECT A.* FROM
+                                :SD_PLAN_WHERE_USED_LIST A 
+                                LEFT JOIN "sap.tm.trp.db.job::t_model_schedule_detail" B ON
+                                A.ID = B.MODEL_ID WHERE (B.EXPIRY_TIME < :LV_TIME_RUN OR B.EXPIRY_TIME IS NULL) AND A.OBJECT_CODE IS NULL ;
+    
+    
+    --Filter SD plans currently in USE
+    SD_PLAN_OUTPUT_TEMP =SELECT * FROM :SD_PLAN_OUTPUT_TEMP 
+                        UNION ALL
+                        SELECT A.NAME, 'Plan Cannot Be Deleted. Dependency Exists' AS STATUS
+                        FROM :SD_PLAN_WHERE_USED_LIST A WHERE A.ID NOT IN ( SELECT ID FROM :SD_PLAN_SCHEDULE_EXPIRED);
+   
+    SD_PLAN_FOR_SIMULATION_DELETE = SELECT A.NAME, A.ID, A.FILTER_GROUP_ID FROM :SD_PLAN_SCHEDULE_EXPIRED A ;
+    
+    --Call the simulaion run to get the number of records deleted
+    CALL "sap.tm.trp.db.massdelete::p_massdelete_sd_simulate_plans"(:SD_PLAN_FOR_SIMULATION_DELETE, SD_PLAN_SIMULATION_DELETE_RES);
+        
+    SD_PLAN_OUTPUT_TEMP = SELECT * FROM :SD_PLAN_OUTPUT_TEMP
+                        UNION ALL
+                        SELECT A.NAME, 
+                        CASE WHEN :SIMULATION_RUN = 'X' THEN 'Plan Can Be Deleted'
+                                                ELSE 'Plan Deleted' END AS STATUS
+                        FROM :SD_PLAN_FOR_SIMULATION_DELETE A;
+                        
+    --if delete operation then,
+    IF (:SIMULATION_RUN = '') THEN 
+    
+        --Split the plans(Classical/ virtual) which can be deleted 
+        VIRTUAL_PLAN_LIST = SELECT A.ID, A.FILTER_GROUP_ID FROM :SD_PLAN_SCHEDULE_EXPIRED A
+                            WHERE A.PLAN_MODEL_TYPE_ID = 3 ;
+                        
+        CLASSIC_PLAN_LIST = SELECT A.NAME, A.ID, A.FILTER_GROUP_ID FROM :SD_PLAN_SCHEDULE_EXPIRED A
+                            WHERE A.PLAN_MODEL_TYPE_ID = 1 ;
+        
+        --Procedure to delete virtual plans 
+        call "sap.tm.trp.db.massdelete::p_massdelete_sd_virtual_plans"(:VIRTUAL_PLAN_LIST);
+
+        --Procedure to delete classic plans
+        call "sap.tm.trp.db.massdelete::p_massdelete_sd_classic_plans"(:CLASSIC_PLAN_LIST, :LV_PIPELINE_OUTPUT_DATA_DELETE);
+        
+    END IF;
+    
+    SD_PLAN_OUTPUT  = SELECT A.name as SD_PLAN_NAME,
+                                    A.STATUS,
+                                    CASE WHEN :SIMULATION_RUN = 'X' THEN 'SIMULATION' 
+                                         WHEN :SIMULATION_RUN = '' THEN 'ACTUAL' END AS EXECUTION_MODE,
+                                    :LV_USERNAME AS USERNAME,
+                                    :LV_TIME_RUN AS TIMESTAMP,
+                                    CASE WHEN (:SIMULATION_RUN ='' AND :LV_PIPELINE_OUTPUT_DATA_DELETE ='X') --WHEN delete operation and output_datseet to be retained, then 0 as records deleted for pipeline table
+                                         THEN 0 ELSE B.t_pipeline_output_dataset END AS Pipeline_Output_Dataset,
+                                    B.t_plan_execution AS Plan_Execution,
+                                    B.t_plan_model as Plan_Model,
+                                    B.t_filter_location_filter as Location_Filter,
+                                    B.t_filter_equipment_filter as Equipment_Filter,
+                                    B.t_filter_group as Filter_Group,
+                                    B.t_virtual_plan_persisted_plan as Virtual_Persisted_Plan,
+                                    B.t_virtual_tree_location_info as Virtual_Tree_Location_Info,
+                                    B.t_virtual_tree_hierarchy as Virtual_Tree_Hierarchy,
+                                    B.t_virtual_tree_node_name as Virtual_Tree_Node_Name,
+                                    B.t_alert_rule_group_assign_plan_model as Alert_Rule_Assigned_Plan_Model,
+                                    B.t_alert_DT_output_timeInterval as Alert_Output_Time_Interval,
+                                    B.t_alert_DT_output_alertScore_timeInterval as Alert_Output_Alert_Score_Time_Interval,
+                                    B.t_planModel_alert_forUI_timeInterval as Alert_For_UI_Interval,
+                                    B.t_execution_context as Execution_Context,
+                                    B.t_rule_dispatch_node_to_sp as Rule_Dispatch_Node,
+                                    B.t_trp_hrf_SD_output_DeltaFlag as HRF_SD_Output_Flag,
+                                    B.t_SD_KPI_cus_BubbleRule_output as SD_KPI_Bubble_Rule_Output,
+                                    B.t_trp_hrf_SD_output_normalizedAlertScore as HRF_SD_Output_Normalized_Alert_Score ,
+                                    B.t_trp_hrf_SD_output_forUI as HRF_SD_Output_For_UI FROM :SD_PLAN_OUTPUT_TEMP A 
+                           LEFT JOIN :SD_PLAN_SIMULATION_DELETE_RES B ON A.NAME = B.NAME;
+     
+     IF (:SIMULATION_RUN = '') THEN 
+        INSERT INTO "sap.tm.trp.db.massdelete::t_massdelete_sd_plans_log" SELECT * FROM :SD_PLAN_OUTPUT;
+    END IF; 
+   
+END;

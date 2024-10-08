@@ -1,0 +1,25 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_update_user_preference" (
+    IN USERNAME VARCHAR(100),
+    IN PREFERENCE_ITEMS "sap.tm.trp.db.systemmanagement.user::tt_user_preference"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+
+    DELETE FROM "sap.tm.trp.db.systemmanagement.user::t_user_preference"
+    WHERE USERNAME = :USERNAME 
+    AND DATA_ID IN (
+	    SELECT a.DATA_ID
+	    FROM "sap.tm.trp.db.systemmanagement.user::t_user_preference" AS a
+	    INNER JOIN :PREFERENCE_ITEMS AS b
+	    ON b.DATA_ID LIKE a.DATA_ID || '%'
+	    AND a.USERNAME = :USERNAME
+    );
+
+    INSERT INTO "sap.tm.trp.db.systemmanagement.user::t_user_preference"
+    SELECT :USERNAME, DATA_ID, VALUE, CURRENT_UTCTIMESTAMP
+    FROM :PREFERENCE_ITEMS;
+
+END;

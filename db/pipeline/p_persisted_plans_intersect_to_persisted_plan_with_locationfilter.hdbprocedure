@@ -1,0 +1,225 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_persisted_plans_intersect_to_persisted_plan_with_locationfilter" (
+    IN in_persisted_plan_id  BIGINT, 
+    IN in_persisted_plan_location_filter_id  BIGINT, 
+	IN in_persisted_plan_ids "sap.tm.trp.db.pipeline::tt_plan_model_location_filter", 
+	OUT persisted_planinfo_with_intersection_the_input_location_filter "sap.tm.trp.db.pipeline::tt_plan_model_info" 
+	) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+
+
+ DECLARE VAR_LOCATION_TYPE INTEGER;
+ DECLARE LOCATION_FILTER INTEGER :=1;
+ DECLARE LOCATION_GROUP_FILTER INTEGER :=2;
+ DECLARE ZONE_FILTER INTEGER := 3;
+ DECLARE ZONE_GROUP_FILTER INTEGER :=4;
+ DECLARE REGION_FILTER INTEGER :=5 ;
+ DECLARE REGION_GROUP_FILTER INTEGER :=6;
+
+
+
+ --Get the location type of the location filter
+LOCATION_TYPE_SQL = SELECT LOCATION_TYPE FROM  "sap.tm.trp.db.pipeline::cv_get_location_type_of_location_filter"(PLACEHOLDER."$$IN_VP_LOCATION_FILTER_ID$$" =>:in_persisted_plan_location_filter_id);
+ 
+ SELECT LOCATION_TYPE INTO VAR_LOCATION_TYPE FROM :LOCATION_TYPE_SQL;
+
+ IF VAR_LOCATION_TYPE = :LOCATION_FILTER THEN
+ 
+ 	--Get the location list of the input persisted plan
+	SQL_LOCATION_LIST_OF_THE_PP = SELECT T1.LOCATION_ID
+	FROM "sap.tm.trp.db.filter::t_location_filter_location" T1
+	WHERE T1.LOCATION_FILTER_ID = :in_persisted_plan_location_filter_id;
+	
+	--Get the PP list which with the same location type to check if there is any intersection 
+	--Note: Currently, according to the discuss with terry, we only need to check the intersection with the same location filter type. discuss date: 2014/10/17.
+	PPS_WITH_THE_SAME_LOCATION_TYPE = SELECT T1.PLAN_MODEL_ID,T1.LOCATION_FILTER_ID
+	                                     FROM :in_persisted_plan_ids T1
+	                                     INNER JOIN "sap.tm.trp.db.filter::t_location_filter" T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+	                                     WHERE T2.LOCATION_TYPE = :LOCATION_FILTER;
+	
+	--Get the location list of the persisted plan list 
+     SQL_LOCATION_LIST_OF_THE_PPS = SELECT T1.PLAN_MODEL_ID,T2.LOCATION_ID
+             FROM :PPS_WITH_THE_SAME_LOCATION_TYPE T1
+             INNER JOIN "sap.tm.trp.db.filter::t_location_filter_location" T2 ON (T1.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID);
+             
+     --Check if the input PP and the PPs has intersection:
+     SQL_PP_WITH_INTERSECTION = SELECT T10.PLAN_MODEL_ID
+     FROM
+     (
+	      SELECT T1.PLAN_MODEL_ID,CASE WHEN T2.LOCATION_ID IS NULL THEN 0 ELSE 1 END AS NUM
+	      FROM :SQL_LOCATION_LIST_OF_THE_PPS T1
+	      LEFT JOIN :SQL_LOCATION_LIST_OF_THE_PP T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+      )T10
+      GROUP BY T10.PLAN_MODEL_ID
+      HAVING SUM(NUM)>0;
+      
+	
+ ELSEIF VAR_LOCATION_TYPE = :LOCATION_GROUP_FILTER THEN
+	 --Get the location list of the input persisted plan
+		SQL_LOCATION_GROUP_LIST_OF_THE_PP = SELECT T1.LOCATION_GROUP_ID 
+		FROM "sap.tm.trp.db.filter::t_location_filter_location" T1
+		WHERE T1.LOCATION_FILTER_ID = :in_persisted_plan_location_filter_id;
+		
+		--Get the PP list which with the same location type to check if there is any intersection 
+		--Note: Currently, according to the discuss with terry, we only need to check the intersection with the same location filter type. discuss date: 2014/10/17.
+		PPS_WITH_THE_SAME_LOCATION_TYPE = SELECT T1.PLAN_MODEL_ID,T1.LOCATION_FILTER_ID
+		                                     FROM :in_persisted_plan_ids T1
+		                                     INNER JOIN "sap.tm.trp.db.filter::t_location_filter" T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+		                                     WHERE LOCATION_TYPE = :LOCATION_GROUP_FILTER;
+		
+		--Get the location list of the persisted plan list 
+	     SQL_LOCATION_GROUP_LIST_OF_THE_PPS = SELECT T1.PLAN_MODEL_ID,T2.LOCATION_GROUP_ID
+	             FROM :PPS_WITH_THE_SAME_LOCATION_TYPE T1
+	             INNER JOIN "sap.tm.trp.db.filter::t_location_filter_location" T2 ON (T1.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID);
+	             
+	     --Check if the input PP and the PPs has intersection:
+	     SQL_PP_WITH_INTERSECTION = SELECT T10.PLAN_MODEL_ID
+	     FROM
+	     (
+		      SELECT T1.PLAN_MODEL_ID,CASE WHEN T2.LOCATION_GROUP_ID IS NULL THEN 0 ELSE 1 END AS NUM
+		      FROM :SQL_LOCATION_GROUP_LIST_OF_THE_PPS T1
+		      LEFT JOIN :SQL_LOCATION_GROUP_LIST_OF_THE_PP T2 ON (T1.LOCATION_GROUP_ID = T2.LOCATION_GROUP_ID)
+	      )T10
+	      GROUP BY T10.PLAN_MODEL_ID
+	      HAVING SUM(NUM)>0;
+	      
+ ELSEIF VAR_LOCATION_TYPE = :ZONE_FILTER THEN
+ 
+	  --Get the location list of the input persisted plan
+			SQL_ZONE_LIST_OF_THE_PP = SELECT T1.ZONE_ID
+			FROM "sap.tm.trp.db.filter::t_location_filter_zone" T1
+			WHERE T1.LOCATION_FILTER_ID = :in_persisted_plan_location_filter_id;
+			
+			--Get the PP list which with the same location type to check if there is any intersection 
+			--Note: Currently, according to the discuss with terry, we only need to check the intersection with the same location filter type. discuss date: 2014/10/17.
+			PPS_WITH_THE_SAME_LOCATION_TYPE = SELECT T1.PLAN_MODEL_ID,T1.LOCATION_FILTER_ID
+			                                     FROM :in_persisted_plan_ids T1
+			                                     INNER JOIN "sap.tm.trp.db.filter::t_location_filter" T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+			                                     WHERE LOCATION_TYPE = :ZONE_FILTER;
+			
+			--Get the location list of the persisted plan list 
+		     SQL_ZONE_LIST_OF_THE_PPS = SELECT T1.PLAN_MODEL_ID,T2.ZONE_ID
+		             FROM :PPS_WITH_THE_SAME_LOCATION_TYPE T1
+		             INNER JOIN "sap.tm.trp.db.filter::t_location_filter_zone" T2 ON (T1.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID);
+		             
+		     --Check if the input PP and the PPs has intersection:
+		     SQL_PP_WITH_INTERSECTION = SELECT T10.PLAN_MODEL_ID
+		     FROM
+		     (
+			      SELECT T1.PLAN_MODEL_ID,CASE WHEN T2.ZONE_ID IS NULL THEN 0 ELSE 1 END AS NUM
+			      FROM :SQL_ZONE_LIST_OF_THE_PPS T1
+			      LEFT JOIN :SQL_ZONE_LIST_OF_THE_PP T2 ON (T1.ZONE_ID = T2.ZONE_ID)
+		      )T10
+		      GROUP BY T10.PLAN_MODEL_ID
+		      HAVING SUM(NUM)>0;
+		      
+ ELSEIF VAR_LOCATION_TYPE = :ZONE_GROUP_FILTER THEN
+ 
+	 --Get the location list of the input persisted plan
+				SQL_ZONE_GROUP_LIST_OF_THE_PP = SELECT T1.ZONE_GROUP_ID
+				FROM "sap.tm.trp.db.filter::t_location_filter_zone" T1
+				WHERE T1.LOCATION_FILTER_ID = :in_persisted_plan_location_filter_id;
+				
+				--Get the PP list which with the same location type to check if there is any intersection 
+				--Note: Currently, according to the discuss with terry, we only need to check the intersection with the same location filter type. discuss date: 2014/10/17.
+				PPS_WITH_THE_SAME_LOCATION_TYPE = SELECT T1.PLAN_MODEL_ID,T1.LOCATION_FILTER_ID
+				                                     FROM :in_persisted_plan_ids T1
+				                                     INNER JOIN "sap.tm.trp.db.filter::t_location_filter" T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+				                                     WHERE LOCATION_TYPE = :ZONE_GROUP_FILTER;
+				
+				--Get the location list of the persisted plan list 
+			     SQL_ZONE_GROUP_LIST_OF_THE_PPS = SELECT T1.PLAN_MODEL_ID,T2.ZONE_GROUP_ID
+			             FROM :PPS_WITH_THE_SAME_LOCATION_TYPE T1
+			             INNER JOIN "sap.tm.trp.db.filter::t_location_filter_zone" T2 ON (T1.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID);
+			             
+			     --Check if the input PP and the PPs has intersection:
+			     SQL_PP_WITH_INTERSECTION = SELECT T10.PLAN_MODEL_ID
+			     FROM
+			     (
+				      SELECT T1.PLAN_MODEL_ID,CASE WHEN T2.ZONE_GROUP_ID IS NULL THEN 0 ELSE 1 END AS NUM
+				      FROM :SQL_ZONE_GROUP_LIST_OF_THE_PPS T1
+				      LEFT JOIN :SQL_ZONE_GROUP_LIST_OF_THE_PP T2 ON (T1.ZONE_GROUP_ID = T2.ZONE_GROUP_ID)
+			      )T10
+			      GROUP BY T10.PLAN_MODEL_ID
+			      HAVING SUM(NUM)>0;
+			      
+ ELSEIF VAR_LOCATION_TYPE = :REGION_FILTER THEN
+ 
+
+ 
+	 --Get the location list of the input persisted plan
+					SQL_REGION_LIST_OF_THE_PP = SELECT T1.ZONE_ID
+					FROM "sap.tm.trp.db.filter::t_location_filter_region" T1
+					WHERE T1.LOCATION_FILTER_ID = :in_persisted_plan_location_filter_id;
+					
+					--Get the PP list which with the same location type to check if there is any intersection 
+					--Note: Currently, according to the discuss with terry, we only need to check the intersection with the same location filter type. discuss date: 2014/10/17.
+					PPS_WITH_THE_SAME_LOCATION_TYPE = SELECT T1.PLAN_MODEL_ID,T1.LOCATION_FILTER_ID
+					                                     FROM :in_persisted_plan_ids T1
+					                                     INNER JOIN "sap.tm.trp.db.filter::t_location_filter" T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+					                                     WHERE LOCATION_TYPE = :REGION_FILTER;
+					
+					--Get the location list of the persisted plan list 
+				     SQL_REGION_LIST_OF_THE_PPS = SELECT T1.PLAN_MODEL_ID,T2.ZONE_ID
+				             FROM :PPS_WITH_THE_SAME_LOCATION_TYPE T1
+				             INNER JOIN "sap.tm.trp.db.filter::t_location_filter_region" T2 ON (T1.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID);
+				             
+				     --Check if the input PP and the PPs has intersection:
+				     SQL_PP_WITH_INTERSECTION = SELECT T10.PLAN_MODEL_ID
+				     FROM
+				     (
+					      SELECT T1.PLAN_MODEL_ID,CASE WHEN T2.ZONE_ID IS NULL THEN 0 ELSE 1 END AS NUM
+					      FROM :SQL_REGION_LIST_OF_THE_PPS T1
+					      LEFT JOIN :SQL_REGION_LIST_OF_THE_PP T2 ON (T1.ZONE_ID = T2.ZONE_ID)
+				      )T10
+				      GROUP BY T10.PLAN_MODEL_ID
+				      HAVING SUM(NUM)>0;
+				      
+ ELSEIF VAR_LOCATION_TYPE = :REGION_GROUP_FILTER THEN
+ 
+	 --Get the location list of the input persisted plan
+						SQL_REGION_GROUP_LIST_OF_THE_PP = SELECT T1.REGION_GROUP_ID
+						FROM "sap.tm.trp.db.filter::t_location_filter_region" T1
+						WHERE T1.LOCATION_FILTER_ID = :in_persisted_plan_location_filter_id;
+						
+						
+						--Get the PP list which with the same location type to check if there is any intersection 
+						--Note: Currently, according to the discuss with terry, we only need to check the intersection with the same location filter type. discuss date: 2014/10/17.
+						PPS_WITH_THE_SAME_LOCATION_TYPE = SELECT T1.PLAN_MODEL_ID,T1.LOCATION_FILTER_ID
+						                                     FROM :in_persisted_plan_ids T1
+						                                     INNER JOIN "sap.tm.trp.db.filter::t_location_filter" T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+						                                     WHERE LOCATION_TYPE = :REGION_GROUP_FILTER;
+						
+						--Get the location list of the persisted plan list 
+					     SQL_REGION_GROUP_LIST_OF_THE_PPS = SELECT T1.PLAN_MODEL_ID,T2.REGION_GROUP_ID
+					             FROM :PPS_WITH_THE_SAME_LOCATION_TYPE T1
+					             INNER JOIN "sap.tm.trp.db.filter::t_location_filter_region" T2 ON (T1.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID);
+					          
+					             
+					     --Check if the input PP and the PPs has intersection:
+					     SQL_PP_WITH_INTERSECTION = SELECT T10.PLAN_MODEL_ID
+					     FROM
+					     (
+						      SELECT T1.PLAN_MODEL_ID,CASE WHEN T2.REGION_GROUP_ID IS NULL THEN 0 ELSE 1 END AS NUM
+						      FROM :SQL_REGION_GROUP_LIST_OF_THE_PPS T1
+						      LEFT JOIN :SQL_REGION_GROUP_LIST_OF_THE_PP T2 ON (T1.REGION_GROUP_ID = T2.REGION_GROUP_ID)
+					      )T10
+					      GROUP BY T10.PLAN_MODEL_ID
+					      HAVING SUM(NUM)>0;
+					      
+ ELSE
+     SQL_PP_WITH_INTERSECTION = SELECT NULL AS PLAN_MODEL_ID FROM DUMMY;
+ 
+ END IF;
+
+ 
+  persisted_planinfo_with_intersection_the_input_location_filter  = 
+  SELECT :in_persisted_plan_id as PLAN_MODEL_ID1,T3.NAME AS NAME1,T1.PLAN_MODEL_ID AS PLAN_MODEL_ID2,T2.NAME AS NAME2 
+  FROM :SQL_PP_WITH_INTERSECTION T1
+  INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T2 ON (T1.PLAN_MODEL_ID = T2.ID) 
+  INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T3 ON (T3.ID = :in_persisted_plan_id );
+ 
+END;

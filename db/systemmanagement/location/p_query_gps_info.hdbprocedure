@@ -1,0 +1,18 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.location::p_query_gps_info"(
+    IN LOCATION_PAIR "sap.tm.trp.db.systemmanagement.location::tt_gps_info_location_pair",
+    OUT GPS_INFO "sap.tm.trp.db.systemmanagement.location::t_gps_info"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+READS SQL DATA AS
+BEGIN
+
+    GPS_INFO = SELECT b.* 
+	    FROM :LOCATION_PAIR AS a
+	    INNER JOIN "sap.tm.trp.db.systemmanagement.location::t_gps_info" AS b
+	    ON a.FROM_LOC = b.FROM_LOC
+	    AND a.TO_LOC = b.TO_LOC
+	    AND a.MTR = b.MTR;
+
+END;

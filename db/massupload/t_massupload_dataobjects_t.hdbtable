@@ -1,0 +1,11 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE; 
+
+table.columns =
+ [
+    {name = "DATA_OBJ"; sqlType =VARCHAR; length = 50; nullable = false;},
+    {name = "SPRAS"; sqlType =VARCHAR; length = 10; nullable = false;},
+    {name = "DESC"; sqlType = VARCHAR; length = 500; }
+]; 
+
+table.primaryKey.pkcolumns = ["DATA_OBJ", "SPRAS"];  

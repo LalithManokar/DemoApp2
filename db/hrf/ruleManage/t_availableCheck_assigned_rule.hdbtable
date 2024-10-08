@@ -1,0 +1,11 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "AVAILABLE_STEP_ID"; sqlType = INTEGER; nullable = false;},
+    {name = "RULE_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "CREATE_BY"; sqlType = BIGINT;},
+    {name = "CREATE_ON"; sqlType = TIMESTAMP;},
+    {name = "LAST_MODIFIED_BY"; sqlType = BIGINT;},
+    {name = "LAST_MODIFIED_ON"; sqlType = TIMESTAMP;}
+    ];
+ table.primaryKey.pkcolumns = ["AVAILABLE_STEP_ID"];    

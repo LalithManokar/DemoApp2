@@ -1,0 +1,84 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_get_boundary_for_zone" (
+IN QUERY_TYPE INTEGER,
+IN LOCATION_IDS "sap.tm.trp.db.systemmanagement::tt_division_id",
+IN DIVISION_IDS "sap.tm.trp.db.systemmanagement::tt_division_admingis_codes",
+IN POSCODE_IDS "sap.tm.trp.db.systemmanagement::tt_division_postal_codes",
+IN ZONE_IDS "sap.tm.trp.db.systemmanagement::tt_zoneid",
+OUT BOUNDARY_GEO_TEXT "sap.tm.trp.db.systemmanagement::tt_geotext"
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+AS
+
+BEGIN
+
+   
+   --Get boundary by locations
+   IF :QUERY_TYPE = 1 THEN
+   
+   a = 
+		SELECT '' AS ID, T2.XPOS, T2.YPOS FROM
+		:LOCATION_IDS T1 
+		INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T2
+		ON T1.ID = T2.ID;	
+
+                         
+   -- Get boundary by admin divisions
+   ELSEIF  :QUERY_TYPE = 2 THEN
+   
+   a = 
+   	SELECT DISTINCT * FROM
+   	(
+	SELECT 
+	    '' AS ID,T2.XPOS, T2.YPOS
+	    FROM (SELECT * FROM :DIVISION_IDS WHERE COUNTRY_CODE <> '' AND STATE_CODE <> '') T1 
+	    INNER JOIN "sap.tm.trp.db.systemmanagement.location::v_location_ui" T2 
+	    ON T1.COUNTRY_CODE = T2.COUNTRY_CODE AND T1.STATE_CODE = T2.REGION_CODE
+	UNION ALL   
+	SELECT
+	    '' AS ID,T2.XPOS, T2.YPOS
+	    FROM (SELECT * FROM :DIVISION_IDS WHERE COUNTRY_CODE <> '' AND STATE_CODE = '') T1 
+	    INNER JOIN "sap.tm.trp.db.systemmanagement.location::v_location_ui" T2 
+	    ON T1.COUNTRY_CODE = T2.COUNTRY_CODE
+	  ) ; 
+   -- Get boundary by postal codes
+   ELSEIF  :QUERY_TYPE = 3 THEN
+
+   a = 
+   		SELECT DISTINCT
+   		'' AS ID, T2.XPOS,T2.YPOS
+   		FROM :POSCODE_IDS T1
+   		INNER JOIN "sap.tm.trp.db.systemmanagement.location::v_location_ui" T2 
+   		ON T1.COUNTRY_CODE = T2.COUNTRY_CODE AND T2.POSTAL_CODE BETWEEN T1.POSTAL_CODE_FROM  AND T1.POSTAL_CODE_TO; 
+   		
+   -- Get the entire boundary for zone/zones
+   ELSEIF  :QUERY_TYPE = 4 THEN
+	a = 
+		SELECT  T1.ZONEID AS ID, T2.XPOS, T2.YPOS FROM
+		:ZONE_IDS  T1
+		INNER JOIN "sap.tm.trp.db.systemmanagement.location::v_zone_location_for_boundary" T2 
+		ON T1.ZONEID = T2.ZONE_ID
+		ORDER BY T1.ZONEID;
+						
+  END IF;
+    BOUNDARY_GEO_TEXT= 
+    SELECT ID, 
+			CONCAT(
+				CONCAT(
+					'MultiPoint(',
+							 STRING_AGG('(' || XPOS || ' ' || YPOS || ')', ',')
+	          		)--concat2
+	          		,')'
+          	)--concat1
+          	 AS GEOTEXT, COUNT(*) AS NUM 
+          	 FROM 
+          	 (
+	          	 SELECT ID,XPOS,YPOS
+	          	 FROM :a 
+	          	 WHERE XPOS IS NOT NULL AND YPOS IS NOT NULL AND (ABS(XPOS) + ABS(YPOS)) >0
+          	 ) T1
+          	  GROUP BY ID;
+         
+
+  
+END;

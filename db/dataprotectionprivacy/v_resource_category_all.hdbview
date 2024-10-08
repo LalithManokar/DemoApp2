@@ -1,0 +1,21 @@
+schema = "SAP_TM_TRP";
+query = "SELECT T1.ID,
+                T1.CODE AS NAME,
+                T2.DESC,
+                U1.USERNAME AS CREATED_BY,
+                U2.USERNAME AS LAST_CHANGED_BY
+         FROM \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings\" AS T1 
+         LEFT OUTER JOIN (SELECT A.* FROM \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings_t\" AS A
+                          INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS B
+                             ON (A.SPRAS = B.SPRAS)) AS T2 
+         ON (T1.ID = T2.ID)
+         LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS U1
+                  ON (T1.CREATE_BY = U1.ID)
+         LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS U2
+                  ON (T1.LAST_MODIFIED_BY = U2.ID)";
+                
+depends_on_table = ["sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings",
+                    "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings_t"];
+
+depends_on_view = ["sap.tm.trp.db.semantic.common::v_lang_code",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];       

@@ -1,0 +1,9 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "PLAN_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "SCHEDULE_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "OPERATION"; sqlType = INTEGER;},
+    {name = "XSCRON"; sqlType = VARCHAR; length = 255; nullable = true;}
+    ];
+table.primaryKey.pkcolumns = ["PLAN_ID", "SCHEDULE_ID"];

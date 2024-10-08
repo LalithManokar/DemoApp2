@@ -1,0 +1,51 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_archive_remove_sub_tab"(
+        IN RULE_ID BIGINT, 
+        IN EXECUTION_ID BIGINT, 
+        IN CHILD_TAB_NAME NVARCHAR(500), 
+        IN ROOT_TEMP_TAB NVARCHAR(500),
+        OUT STATUS_CODE INTEGER,
+        OUT RECORD_COUNT BIGINT,
+        OUT MESSAGE NVARCHAR(5000)
+    )
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+
+    DECLARE SCHEMA_NAME NVARCHAR(20) DEFAULT 'SAP_TM_TRP';
+    DECLARE CHILD_WARM_TAB NVARCHAR(500);
+    DECLARE SQL_STT NVARCHAR(5000);
+    DECLARE COLUMN_STR NVARCHAR(1000);
+    DECLARE PARENT_REF_COL NVARCHAR(500);
+    DECLARE CHILD_REF_COL NVARCHAR(500);
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        STATUS_CODE := 2;
+        SELECT ::SQL_ERROR_MESSAGE INTO MESSAGE FROM DUMMY;
+    END; 
+
+    --initialize status code
+    STATUS_CODE := 0;
+    MESSAGE := 'Success';
+    CHILD_WARM_TAB := '';
+    SQL_STT := '';
+    COLUMN_STR := 0;
+    PARENT_REF_COL := '';
+    CHILD_REF_COL := '';
+    
+    SELECT PARENT_REF_COL, CHILD_REF_COL INTO PARENT_REF_COL, CHILD_REF_COL 
+    FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE TABLE_NAME = :CHILD_TAB_NAME;
+    
+    --remove data from child warm table
+    CHILD_WARM_TAB := :CHILD_TAB_NAME || '_warm'; --child warm table
+    SQL_STT :=
+   -- 'DELETE FROM "' || :SCHEMA_NAME || '"."' || :CHILD_WARM_TAB || '" ' || 'WHERE TRP_EXECUTION_ID = ' || :EXECUTION_ID;
+    'DELETE FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:CHILD_TAB_NAME) || '" ' || 'WHERE ' || escape_double_quotes(:CHILD_REF_COL) || ' IN (SELECT DISTINCT ' || escape_double_quotes(:PARENT_REF_COL) || ' FROM "'
+	|| :SCHEMA_NAME || '"."' || escape_double_quotes(:ROOT_TEMP_TAB) || '")';
+    EXECUTE IMMEDIATE :SQL_STT; --delete corresponding rows in warm table
+
+    RECORD_COUNT := ::ROWCOUNT;
+    
+END;    

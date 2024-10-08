@@ -1,0 +1,39 @@
+PROCEDURE "SAP_TM_ROUTING_TEST"."sap.tm.trp.routing.tests.db::path_generate_route_test" ( 
+    IN p1 "sap.tm.trp.routing.tests.db::tt_path_para1", 
+    IN p2 "sap.tm.trp.routing.tests.db::tt_path_para2", 
+    IN p3 "sap.tm.trp.routing.tests.db::tt_path_para3", 
+    IN p4 "sap.tm.trp.routing.tests.db::tt_path_para4", 
+    IN p5 "sap.tm.trp.routing.tests.db::tt_path_para5", 
+    OUT p6 "sap.tm.trp.routing.tests.db::tt_path_para6", 
+    OUT p7 "sap.tm.trp.routing.tests.db::tt_path_para7", 
+    OUT p8 "sap.tm.trp.routing.tests.db::tt_path_para8", 
+    OUT p9 "sap.tm.trp.routing.tests.db::tt_path_para9"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING_TEST"
+   AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+   INSERT INTO "sap.tm.trp.routing.tests.db::PATH_PARA1"
+   SELECT * FROM :p1;
+
+   INSERT INTO "sap.tm.trp.routing.tests.db::PATH_PARA2"
+   SELECT * FROM :p2;
+
+   INSERT INTO "sap.tm.trp.routing.tests.db::PATH_PARA3"
+   SELECT * FROM :p3;
+
+   INSERT INTO "sap.tm.trp.routing.tests.db::PATH_PARA4"
+   SELECT * FROM :p4;
+
+   INSERT INTO "sap.tm.trp.routing.tests.db::PATH_PARA5"
+   SELECT * FROM :p5;
+   
+   p6 = SELECT 7 AS PATHID, 'A' as START_LOC, 'B' as DESTINATION_LOC, 0 as TOTAL_DISTANCE, 1 as LOADING_COST, 2 as UNLOADING_COST, 3 as TOTAL_COST, 4 as LOADING_DURATION, 5 as UNLOADING_DURATION, 6 as TOTAL_DURATION from dummy where 1 != 1;
+   p7 = SELECT 1 as PATHID, 2 AS SEQUENCE, 'A' AS FROM_LOCATION, 'B' AS TO_LOCATION, 'C' AS MTR, 'D' AS CATEGORY, 0 AS DISTANCE, 3 AS TRANSPORT_DURATION, 4 AS TRANSSHIP_DURATION, 5 AS TRANSPORT_COST, 6 AS TRANSSHIP_COST, 'E' AS BASIC_PATH_NAME FROM DUMMY WHERE 1 != 1;
+   p8 = SELECT 'I' AS SEVERITY, 'CC' AS MESSAGE_ID, 'A' AS VAR0, 'B' AS VAR1, 'C' AS VAR2, 'D' AS VAR3 FROM DUMMY;
+   p9 = SELECT 0 AS RETURN_CODE FROM DUMMY;
+END

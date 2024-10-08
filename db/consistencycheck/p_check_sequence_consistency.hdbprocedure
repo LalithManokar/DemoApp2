@@ -1,0 +1,98 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.consistencycheck::p_check_sequence_consistency" (
+  IN TEST_RUN VARCHAR(1) default 'X',
+  out check_result "sap.tm.trp.db.consistencycheck::tt_hdbsequence_consistency_check_result"
+)
+ LANGUAGE SQLSCRIPT
+ SQL SECURITY INVOKER
+ DEFAULT SCHEMA SAP_TM_TRP
+ AS 
+BEGIN
+  
+  
+  declare SQL_FOR_SELECT       NVARCHAR(5000);
+  declare SQL_FOR_SEQ_SELECT   NVARCHAR(5000); 
+  declare SQL_FOR_ALTER        varchar(5000);
+  declare max_table_id         integer;
+  declare new_seq_id           integer;  
+  declare max_seq_id           integer;
+  declare v_msg                varchar(1000);
+
+  DECLARE i                    INTEGER      = 1;
+  DECLARE j                    INTEGER;
+  DECLARE v_tot_seq_count      INTEGER;
+  DECLARE v_seq_count          INTEGER;
+  DECLARE v_seq_name           VARCHAR(250); 
+  DECLARE v_tab_name           VARCHAR(250);
+  DECLARE v_col_name           VARCHAR(250);
+  DECLARE v_schema_name        NVARCHAR(256);
+  
+-- Get the configuration data  
+  t_config = select * from "sap.tm.trp.db.consistencycheck::t_hdbsequence_config";
+  
+-- Get the unique sequences from the list  
+  t_unique_seq = select distinct(sequence_name) as sequence_name from :t_config; 
+  select count(*) into v_tot_seq_count from :t_unique_seq; 
+  
+  CREATE LOCAL TEMPORARY TABLE #MAX_ID_TABLE_VALUES(
+	                max_id integer ); 
+	
+  CREATE LOCAL TEMPORARY TABLE #SEQ_ID_TABLE_VALUES(
+	                seq_id integer ); 
+                    
+-- Loop through all the different sequences                
+  FOR i IN 1..v_tot_seq_count DO
+  
+  --  Get the table name entries available for the sequences
+	  v_seq_name  = :t_unique_seq.sequence_name[:i];
+	  t_seq_details = SELECT * FROM :T_CONFIG
+	                   WHERE SEQUENCE_NAME = :v_seq_name;
+	  select count(*) into v_seq_count from :t_seq_details;
+	   
+--    Retrieve the maximum value in the column stored so far among all the table names used	                 
+      FOR j IN 1..v_seq_count DO  
+		  v_tab_name = :t_seq_details.table_name[:j];
+   		  v_col_name = :t_seq_details.column_name[:j];
+   		  v_schema_name = :t_seq_details.schema_name[:j];    
+   		         
+		  SQL_FOR_SELECT := 'INSERT INTO #MAX_ID_TABLE_VALUES (max_id) SELECT MAX(CAST('||:v_col_name||' AS INTEGER)) from "'||:v_schema_name||'"."'||:v_tab_name||'"';
+	      execute immediate (:sql_for_select);        
+      END FOR;                     
+      
+      SELECT COALESCE( MAX(max_id),0 ) into max_table_id  FROM #MAX_ID_TABLE_VALUES;
+      
+--    Retrieve the next available value of the sequence      
+      SQL_FOR_SEQ_SELECT := 'INSERT INTO #SEQ_ID_TABLE_VALUES (seq_id) SELECT "'||:v_schema_name||'"."'||:v_seq_name||'".nextval from dummy';      
+      execute immediate (:sql_for_seq_select);  
+      SELECT COALESCE (seq_id,0) into max_seq_id  FROM #SEQ_ID_TABLE_VALUES;      
+      
+--    If the table column max value is same(in safe side) or more than sequence next value
+--    assign the columen max value + 1(to be in safe side) to the sequence next value
+--    and alter the sequence       
+      if (:max_table_id >= :max_seq_id) then
+       if TEST_RUN <> 'X' THEN
+         new_seq_id := max_table_id + 1;
+         SQL_FOR_ALTER := 'ALTER SEQUENCE "'||:v_schema_name||'"."'||:v_seq_name||'" RESTART WITH '||:new_seq_id||'';    
+         execute immediate (:sql_for_alter);  
+         V_MSG = 'Sequence Nr has been reset successfully';  
+         max_seq_id:= :new_seq_id;
+       else
+         V_MSG = 'Sequence ID and Max ID Values are not in Sync. Sequence Nr has to be reset'; 
+       end if;
+      else
+          V_MSG = 'Sequence ID and Max ID Values are in Sync. No action needed';
+      end if;
+      
+      check_result = select * from :check_result union
+      select :v_seq_name as SEQUENCE_NAME, :v_tab_name as TABLE_NAME, :v_col_name as COLUMN_NAME,:max_table_id as CURRENT_TABLE_ID,:max_seq_id as CURRENT_SEQ_ID,:v_msg as MESSAGE
+                    from dummy;
+                    
+      delete from #MAX_ID_TABLE_VALUES;
+      delete from #SEQ_ID_TABLE_VALUES;                    
+
+  END FOR;
+  
+  drop table #MAX_ID_TABLE_VALUES;
+  drop table #SEQ_ID_TABLE_VALUES;
+
+END
+;

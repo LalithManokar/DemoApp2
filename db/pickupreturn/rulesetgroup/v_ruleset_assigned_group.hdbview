@@ -1,0 +1,13 @@
+schema="SAP_TM_TRP";
+query = "SELECT 
+			T1.*,
+			T2.NAME,
+			T2.JOB_PROCESS 
+		FROM \"sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item\" T1
+		INNER JOIN \"sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group\" T2 
+		ON T1.RULE_GROUP_ID = T2.ID";
+
+depends_on_table = [
+					"sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item",
+					"sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group"
+                    ];

@@ -1,0 +1,10 @@
+schema = "SAP_TM_TRP";
+            
+  query  = "  SELECT T1.ID,T1.FIRST_NAME AS NAME1, T1.LAST_NAME AS NAME2,T2.COUNTRY_CODE AS COUNTRY,T2.CITY_CODE AS CITY
+            FROM \"sap.tm.trp.db.semantic.common::v_partner\"T1
+            INNER JOIN \"sap.tm.trp.db.semantic.location::v_address\" T2  ON T1.ADDRESS_ID = T2.ID
+            --WHERE T2.PATNER_TYPE_CODE = 'CRM010'
+            ";
+                 
+
+depends_on_view = ["sap.tm.trp.db.semantic.common::v_partner","sap.tm.trp.db.semantic.location::v_address"]; 

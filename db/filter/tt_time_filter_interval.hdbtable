@@ -1,0 +1,13 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "used for time filter api";
+table.temporary = true;
+table.columns = [
+  {name = "ID"; sqlType = BIGINT;},
+  {name = "TIME_FILTER_ID"; sqlType = BIGINT; },
+  {name = "START_OFFSET"; sqlType = BIGINT; comment = "interval start, calculated by second"; },
+  {name = "END_OFFSET"; sqlType = BIGINT; comment = "interval end, calculated by second"; },
+  {name = "SEQUENCE"; sqlType = INTEGER; },
+  {name = "CODE";sqlType = NVARCHAR; length = 20; nullable = true;unique = true;},
+  {name = "TIME_FILTER_ITEM_ID";sqlType = BIGINT; }
+];

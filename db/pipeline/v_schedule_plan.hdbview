@@ -1,0 +1,11 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT A.ID, A.NAME, A.DESC, C.PARENT_ID AS PLAN_MODEL_CATEGORY_ID, A.PLAN_MODEL_TYPE_ID
+            FROM \"sap.tm.trp.db.pipeline::t_plan_model\" AS A
+                 INNER JOIN \"sap.tm.trp.db.pipeline::t_pipeline_model\" AS B
+                 ON A.PIPELINE_MODEL_ID = B.ID
+                 INNER JOIN \"sap.tm.trp.db.pipeline::t_pipeline_model_type\" AS C
+                 ON B.PIPELINE_MODEL_TYPE_ID = C.ID
+           WHERE PLAN_MODEL_TYPE_ID <> 3 ";
+
+
+depends_on_table = ["sap.tm.trp.db.pipeline::t_plan_model","sap.tm.trp.db.pipeline::t_pipeline_model","sap.tm.trp.db.pipeline::t_pipeline_model_type"];

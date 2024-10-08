@@ -1,0 +1,18 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE; // ROWSTORE is an alternative value
+
+
+table.columns =
+ [
+ 	{name = "ID"; sqlType = BIGINT; nullable = false; },
+ 	{name = "ADAPTER_ID"; sqlType = BIGINT; nullable = false; },
+ 	{name = "DICTIONARY_SCHEMA";  sqlType = VARCHAR;  length = 200; comment = "String Type"; },
+ 	{name = "DICTIONARY_NAME";  sqlType = VARCHAR;  length = 200; comment = "String Type"; },
+ 	{name = "VIRTUAL_TABLE_SCHEMA";  sqlType = VARCHAR;  length = 200; comment = "String Type"; },
+ 	{name = "VIRTUAL_TABLE_NAME";  sqlType = VARCHAR;  length = 200; comment = "String Type"; },
+ 	{name = "VIRTUAL_TABLE_PACKAGE";  sqlType = VARCHAR;  length = 200; comment = "String Type"; }
+ 	
+];
+
+
+table.primaryKey.pkcolumns = ["ID"];

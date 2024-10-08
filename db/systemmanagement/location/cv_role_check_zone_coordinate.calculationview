@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_role_check_zone_coordinate" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_role_check_zone_ui"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="ZONE_ID" length="22"/>
+        <viewAttribute datatype="DOUBLE" id="XPOS"/>
+        <viewAttribute datatype="DOUBLE" id="YPOS"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> 
+  
+ BEGIN 
+ 
+     DECLARE LOCATION_TYPE_ZONE INTEGER :=5;   
+    
+         var_out = SELECT DISTINCT T3.ZONE_ID AS ZONE_ID,
+                SUM(T3.XPOS) / COUNT(T3.LOCATION_ID) AS XPOS,
+                SUM(T3.YPOS) / COUNT(T3.LOCATION_ID) AS YPOS
+           FROM (SELECT DISTINCT ZONE.ID AS ZONE_ID,
+                        LOCATION.ID AS LOCATION_ID,
+                        LOCATION.XPOS AS XPOS,
+                        LOCATION.YPOS AS YPOS
+                        FROM &quot;sap.tm.trp.db.semantic.location::v_all_zone&quot; AS ZONE
+                        INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::v_region_location_all&quot; AS ZONE_LOCATION
+                        ON ZONE_LOCATION.ROOT_ID = ZONE.ID
+                        INNER JOIN &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(PLACEHOLDER.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_ZONE) T2
+                        ON (T2.LOCATION_ID = ZONE.ID)
+                        INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; AS LOCATION
+                        ON (ZONE_LOCATION.LOCATION_ID = LOCATION.ID AND LOCATION.XPOS IS NOT NULL AND LOCATION.XPOS IS NOT NULL)
+                        
+                   ) AS T3
+                   GROUP BY T3.ZONE_ID;
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ZONE_ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ZONE_ID"/>
+      </attribute>
+      <attribute id="XPOS" order="2">
+        <descriptions defaultDescription="NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="XPOS"/>
+      </attribute>
+      <attribute id="YPOS" order="3">
+        <descriptions defaultDescription="DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="YPOS"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

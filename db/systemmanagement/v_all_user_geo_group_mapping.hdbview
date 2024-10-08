@@ -1,0 +1,9 @@
+schema = "SAP_TM_TRP";
+query = "SELECT USER_ID,
+                GROUP_USER_ID,
+                GROUP_ID,
+                TYPE
+           FROM \"sap.tm.trp.db.systemmanagement::v_all_user_group_geo_count\"
+          WHERE FLAG = 0";
+          
+depends_on_view = ["sap.tm.trp.db.systemmanagement::v_all_user_group_geo_count"];          

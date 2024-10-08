@@ -1,0 +1,324 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_virtual_kpi_plan_validate"(
+    IN VIRTUAL_KPI_PLAN "sap.tm.trp.db.massupload::tt_virtual_kpi_plan_upload",
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),
+    IN ERROR_LIMIT INTEGER,
+    OUT INVALID_ITEMS "sap.tm.trp.db.massupload::tt_massupload_invalid_item"
+)
+ LANGUAGE SQLSCRIPT
+ SQL SECURITY INVOKER 
+ DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+    DECLARE I_COUNT INTEGER := 0;
+    DECLARE SKPI_PLAN_TYPE INTEGER := 4; --PLAN_MODEL_TYPE_ID of Scheduled KPI plan = 4
+    DECLARE VKPI_PLAN_TYPE INTEGER := 5; --PLAN_MODEL_TYPE_ID of Virtual KPI plan = 5
+    DECLARE V_GLOBAL VARCHAR(10) := 'GLOBAL';
+    DECLARE VISIBILITY_P VARCHAR(10) := 'P';
+    
+   
+     ---Get Scheduled KPI plan list
+   SKPI_PLAN_LIST =  SELECT T1.ID, T1.NAME, T1.VISIBILITY_FLAG, T2.TIME_FILTER_ID
+                     FROM  "sap.tm.trp.db.pipeline::t_plan_model" T1
+                     INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2
+                     ON T1.FILTER_GROUP_ID = T2.ID
+                      AND T1.PLAN_MODEL_TYPE_ID = :SKPI_PLAN_TYPE
+                      AND T2.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID ;
+                      
+    --Existence and Authorization check
+    ITEMS=  SELECT ROW_INDEX, UPPER(VKPIPLAN_NAME) AS VKPIPLAN_NAME,---Virtual KPI Plan name
+                UPPER(TYPE_NAME) AS TYPE_NAME,
+                UPPER(VISIBILITY) AS VISIBILITY,
+                UPPER(LOCATION_FILTER_NAME) AS LOCATION_FILTER_NAME,
+                UPPER(RESOURCE_FILTER_NAME) AS RESOURCE_FILTER_NAME,
+                UPPER(SKPIPLAN_NAME) AS SKPIPLAN_NAME,---Scheduled KPI Plan name
+                L.ID AS LOC_ID,L.LOCATION_TYPE,
+                R.ID AS RES_ID, R.FILTER_TYPE,
+                S.ID AS SKPIPLAN_ID, S.TIME_FILTER_ID
+            FROM :VIRTUAL_KPI_PLAN AS A
+            LEFT OUTER JOIN "sap.tm.trp.db.filter::t_location_filter" AS L
+                ON L.CODE = UPPER(A.LOCATION_FILTER_NAME)
+            LEFT OUTER JOIN "sap.tm.trp.db.filter::t_equipment_filter" AS R
+                ON R.CODE = UPPER(A.RESOURCE_FILTER_NAME)
+            LEFT OUTER JOIN :SKPI_PLAN_LIST AS S
+            ON S.NAME = UPPER(A.SKPIPLAN_NAME);
+    --Mixed values check
+    VKPIP_COUNT =  SELECT VKPIPLAN_NAME, COUNT(DISTINCT(LOCATION_FILTER_NAME)) AS CNT, 
+                    COUNT(DISTINCT(VISIBILITY)) AS CNT1,
+                    COUNT(DISTINCT(RESOURCE_FILTER_NAME)) AS CNT2,
+                    COUNT(DISTINCT(TIME_FILTER_ID)) AS CNT3
+                    FROM :ITEMS GROUP BY VKPIPLAN_NAME;
+                    
+    INVALID_ITEMS = 
+		         SELECT A.ROW_INDEX, 3 AS COL_INDEX, 'PLAN_TYPE_INVALID' AS REASON_CODE 
+		          FROM :ITEMS AS A WHERE TYPE_NAME <> 'VIRTUAL KPI PLAN'
+		        UNION
+		         SELECT A.ROW_INDEX, 4 AS COL_INDEX, 
+		            'VKPI_VISIBILITY_MIX_NOT_ALLOWED' AS REASON_CODE
+		            FROM :ITEMS AS A
+		            LEFT OUTER JOIN :VKPIP_COUNT AS LC
+		             ON LC.VKPIPLAN_NAME = A.VKPIPLAN_NAME WHERE LC.CNT1 > 1
+		        UNION
+		            SELECT A.ROW_INDEX, 5 AS COL_INDEX, 
+		            'VKPI_LOCATION_FILTER_MIX_NOT_ALLOWED' AS REASON_CODE  --Mixed values not allowed
+		            FROM :ITEMS AS A
+		            LEFT OUTER JOIN :VKPIP_COUNT AS LC
+		            ON LC.VKPIPLAN_NAME = A.VKPIPLAN_NAME WHERE LC.CNT > 1
+		        UNION
+		            SELECT A.ROW_INDEX, 6 AS COL_INDEX, 
+		            'VKPI_RESOURCE_FILTER_MIX_NOT_ALLOWED' AS REASON_CODE --Mixed values not allowed
+		            FROM :ITEMS AS A
+		            LEFT OUTER JOIN :VKPIP_COUNT AS LC
+		            ON LC.VKPIPLAN_NAME = A.VKPIPLAN_NAME WHERE LC.CNT2 > 1;
+		          
+   SELECT COUNT(1) INTO I_COUNT FROM :INVALID_ITEMS;  
+   IF :I_COUNT >= :ERROR_LIMIT THEN
+      INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+      RETURN;
+   END IF;
+    
+    
+    INVALID_ITEMS = 
+                    SELECT * FROM :INVALID_ITEMS
+                    UNION
+                    SELECT A.ROW_INDEX, 5 AS COL_INDEX,
+                        'LOCATION_FILTER_INVALID_NO_AUTH' AS REASON_CODE
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN "sap.tm.trp.db.filter::cv_role_check_location_filter" AS B
+                    ON A.LOCATION_FILTER_NAME = B.NAME and B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+                    WHERE B.NAME IS NULL OR A.LOCATION_FILTER_NAME = '' OR A.LOCATION_FILTER_NAME IS NULL
+                    UNION
+                    SELECT A.ROW_INDEX, 6 AS COL_INDEX,
+                        'RESOURCE_FILTER_INVALID_NO_AUTH' AS REASON_CODE
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN "sap.tm.trp.db.filter::cv_equipment_filter" AS B
+                    ON A.RESOURCE_FILTER_NAME = B.NAME and B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+                    WHERE B.NAME IS NULL
+                    UNION
+                    SELECT A.ROW_INDEX,7 AS COL_INDEX,
+                        'SKPI_PLAN_INVALID_NO_AUTH' AS REASON_CODE
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :SKPI_PLAN_LIST AS B
+                    ON A.SKPIPLAN_NAME = B.NAME
+                    WHERE B.NAME IS NULL OR A.SKPIPLAN_NAME = '' OR A.SKPIPLAN_NAME IS NULL;
+
+    --Check Count less than equal to 'ERROR_LIMIT'
+    SELECT COUNT (*) INTO I_COUNT FROM :INVALID_ITEMS;
+    IF :I_COUNT >= :ERROR_LIMIT THEN
+        INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+        RETURN;
+    END IF;   
+    
+   ---Visibility check
+   ---Virtual KPI Plan with global visibility cannot contain objects that have personal visibility
+   INVALID_ITEMS = 
+                SELECT * FROM :INVALID_ITEMS
+                UNION
+                SELECT A.ROW_INDEX, 5 AS COL_INDEX,
+                    'VKPIPLAN_LOCFILTER_PERVISI' AS REASON_CODE
+                FROM :ITEMS AS A
+                LEFT OUTER JOIN "sap.tm.trp.db.filter::t_location_filter" AS B 
+                ON A.LOCATION_FILTER_NAME = B.CODE AND B.VISIBLE_FLAG = :VISIBILITY_P
+                AND B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+                WHERE A.VISIBILITY = :V_GLOBAL AND B.CODE IS NOT NULL
+                UNION
+                SELECT A.ROW_INDEX, 6 AS COL_INDEX,
+                    'VKPIPLAN_RESFILTER_PERVISI' AS REASON_CODE
+                FROM :ITEMS AS A
+                LEFT OUTER JOIN "sap.tm.trp.db.filter::t_equipment_filter" AS B
+                ON A.RESOURCE_FILTER_NAME = B.CODE AND B.VISIBLE_FLAG = :VISIBILITY_P
+                AND B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID 
+                WHERE VISIBILITY = :V_GLOBAL AND B.CODE IS NOT NULL 
+                UNION
+                SELECT A.ROW_INDEX,7 AS COL_INDEX,
+                    'VKPIPLAN_SKPIPLAN_PERVISI' AS REASON_CODE
+                FROM :ITEMS AS A
+                LEFT OUTER JOIN (
+                    SELECT NAME FROM :SKPI_PLAN_LIST WHERE VISIBILITY_FLAG = 0
+                )AS B
+                ON B.NAME = A.SKPIPLAN_NAME 
+                WHERE VISIBILITY = :V_GLOBAL AND B.NAME IS NOT NULL;
+    
+    --Check Count less than equal to 'ERROR_LIMIT'
+    SELECT COUNT (*) INTO I_COUNT FROM :INVALID_ITEMS;
+    IF :I_COUNT >= :ERROR_LIMIT THEN
+        INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+        RETURN;
+    END IF;
+    
+   IF :I_COUNT <= 0 THEN
+        
+        LOC_RES_FILTERS = SELECT DISTINCT LOC_ID, LOCATION_TYPE, RES_ID, FILTER_TYPE
+                            FROM :ITEMS;
+         
+                 
+        CALL "sap.tm.trp.db.massupload::p_get_available_scheduled_plans"(
+            :SKPI_PLAN_TYPE,
+            :LOC_RES_FILTERS,
+            :RESOURCE_CATEGORY_ID,
+            SCHEDULED_PLANS
+        );
+    
+        ---Validate Schduled KPI plans for Location Filter, Resource Filter and Time Filters
+        INVALID_ITEMS =      
+                    SELECT * FROM :INVALID_ITEMS         
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                        7 AS COL_INDEX,
+                       'SKPI_PLAN_NOT_VALID_FOR_FILTERS' AS REASON_CODE
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :SCHEDULED_PLANS AS SP
+                    ON SP.LOC_ID = A.LOC_ID
+                    AND SP.RES_ID = A.RES_ID
+                    AND SP.SDP_ID = A.SKPIPLAN_ID 
+                    WHERE SP.SDP_ID IS NULL
+                    UNION     
+                    SELECT A.ROW_INDEX, 
+                        7 AS COL_INDEX,
+                       'SKPI_PLAN_DIFF_TIME_FILTER_NOT_ALLOWED' AS REASON_CODE
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VKPIP_COUNT AS LC
+                    ON LC.VKPIPLAN_NAME = A.VKPIPLAN_NAME
+                    WHERE LC.CNT3 > 1;
+    END IF;
+    
+    
+-->Add the logic to check the sub-plans of virtual plan should have same scheduling time/recurrence/usage/usage_code
+    PERSISTED_PLAN_IDS = SELECT DISTINCT SKPIPLAN_ID AS ID
+                            FROM :ITEMS;
+    
+    TMP_SQL  =   SELECT T1.ID, 
+    	       --T1.PLAN_TYPE_ID, 
+            	       T1.NAME,
+            	       T3.START_TIME,
+            	       T3.EXPIRY_TIME,
+            	       T3.RECURRENCE_TYPE,
+            	       T3.RECURRENCE_INTERVAL,
+--            	       T1.USAGE,
+            	       T1.USAGE_CODE
+            	 --FROM "sap.tm.trp.db.pipeline::cv_plan_list_wrapper" T1
+            	 FROM "sap.tm.trp.db.pipeline::t_plan_model"  AS T1
+            	 INNER JOIN :PERSISTED_PLAN_IDS T2 ON (T1.ID = T2.ID) 
+            	 LEFT OUTER JOIN "sap.tm.trp.db.job::t_model_schedule_detail" T3 ON(T1.ID=T3.model_id) ;   
+								 
+								 
+    TMP_ITEM =  SELECT  A.SKPIPLAN_ID,
+                        A.VKPIPLAN_NAME,
+                        A.SKPIPLAN_NAME,
+                        B.START_TIME,
+                        B.EXPIRY_TIME,
+            	        B.RECURRENCE_TYPE,
+            	        B.RECURRENCE_INTERVAL,
+--            	        B.USAGE,
+            	        B.USAGE_CODE,
+                        A.ROW_INDEX
+                FROM :ITEMS AS A
+                LEFT JOIN :TMP_SQL AS B ON A.SKPIPLAN_NAME = B.NAME;
+    
+    
+    --Mixed values check
+    VKPI_COUNT_NEW =    SELECT  VKPIPLAN_NAME, 
+                            COUNT(DISTINCT(TO_VARCHAR(START_TIME,'YYYY-MM-DD')))          AS CNT, 
+                            COUNT(DISTINCT(TO_VARCHAR(EXPIRY_TIME,'YYYY-MM-DD')))         AS CNT1,
+                            COUNT(DISTINCT(RECURRENCE_TYPE))     AS CNT2,
+                            COUNT(DISTINCT(RECURRENCE_INTERVAL)) AS CNT3,
+--                            COUNT(DISTINCT(USAGE))               AS CNT4,
+                            COUNT(DISTINCT(USAGE_CODE))          AS CNT5
+                    FROM :TMP_ITEM GROUP BY VKPIPLAN_NAME;
+                    
+    --SUB plans Validations
+    INVALID_ITEMS = 
+                    SELECT * FROM :INVALID_ITEMS    
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                           7 AS COL_INDEX, 
+                           'START_TIME_MIX_NOT_ALLOWED' AS REASON_CODE -- Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VKPI_COUNT_NEW AS LC
+                    ON LC.VKPIPLAN_NAME = A.VKPIPLAN_NAME
+                    WHERE LC.CNT > 1
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                           7 AS COL_INDEX, 
+                           'EXPIRY_TIME_MIX_NOT_ALLOWED' AS REASON_CODE  --Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VKPI_COUNT_NEW AS LC
+                    ON LC.VKPIPLAN_NAME = A.VKPIPLAN_NAME
+                    WHERE LC.CNT1 > 1
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                           7 AS COL_INDEX, 
+                           'RECURRENCE_TYPE_MIX_NOT_ALLOWED' AS REASON_CODE --Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VKPI_COUNT_NEW AS LC
+                    ON LC.VKPIPLAN_NAME = A.VKPIPLAN_NAME
+                    WHERE LC.CNT2 > 1
+                    UNION
+                    SELECT A.ROW_INDEX, 
+                           7 AS COL_INDEX, 
+                           'RECURRENCE_INTERVAL_MIX_NOT_ALLOWED' AS REASON_CODE --Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VKPI_COUNT_NEW AS LC
+                    ON LC.VKPIPLAN_NAME = A.VKPIPLAN_NAME
+                    WHERE LC.CNT3 > 1
+                    UNION
+/*                    SELECT A.ROW_INDEX, 
+                           7 AS COL_INDEX, 
+                           'USAGE_MIX_NOT_ALLOWED' AS REASON_CODE --Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VKPI_COUNT_NEW AS LC
+                    ON LC.VKPIPLAN_NAME = A.VKPIPLAN_NAME
+                    WHERE LC.CNT4 > 1
+                    UNION */
+                    SELECT A.ROW_INDEX, 
+                           7 AS COL_INDEX, 
+                           'USAGE_CODE_MIX_NOT_ALLOWED' AS REASON_CODE --Mixed values not allowed
+                    FROM :ITEMS AS A
+                    LEFT OUTER JOIN :VKPI_COUNT_NEW AS LC
+                    ON LC.VKPIPLAN_NAME = A.VKPIPLAN_NAME
+                    WHERE LC.CNT5 > 1;
+                    
+    SELECT COUNT (*) INTO I_COUNT FROM :INVALID_ITEMS;
+    IF :I_COUNT >= :ERROR_LIMIT THEN
+        INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+        RETURN;
+    END IF;
+    
+    NOT_NULL_ITEMS = SELECT * FROM :ITEMS WHERE SKPIPLAN_NAME IS NOT NULL AND SKPIPLAN_NAME <> '';
+    -- This is the check that all persisted plan under each virtual plan should at least has one node intersaction.
+    INVALID_ITEMS = 
+                SELECT * FROM :INVALID_ITEMS    
+                UNION
+                SELECT
+                    A.ROW_INDEX,
+                    7 AS COL_INDEX, 
+                    'MSG_SELECT_SAME_KPI_TYPE_PLANS' AS REASON_CODE
+                FROM :NOT_NULL_ITEMS AS A 
+                LEFT JOIN
+                (SELECT
+						 DISTINCT T6.VKPIPLAN_NAME
+					FROM (SELECT
+						 VKPIPLAN_NAME,
+						 COUNT(DISTINCT SKPIPLAN_ID) AS TOTAL_PLAN_MODEL_ID_NUM 
+						FROM :NOT_NULL_ITEMS 
+						GROUP BY VKPIPLAN_NAME) T5 
+					INNER JOIN (SELECT
+						 T4.VKPIPLAN_NAME,
+						 T4.METADATA_NODE_ID,
+						 COUNT(DISTINCT T4.SKPIPLAN_ID) AS NUM_BY_NODE_ID 
+						FROM (SELECT
+						 T1.VKPIPLAN_NAME,
+						 T1.SKPIPLAN_ID,
+						 T3.METADATA_NODE_ID 
+							FROM :NOT_NULL_ITEMS T1 
+							INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T2 ON (T1.SKPIPLAN_ID = T2.ID) 
+							INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T3 ON (T2.PIPELINE_MODEL_ID = T3.PIPELINE_MODEL_ID) 
+							WHERE T3.RESULT_VISIBLE = 1) T4 
+						GROUP BY T4.VKPIPLAN_NAME,
+						 T4.METADATA_NODE_ID) T6 ON T5.VKPIPLAN_NAME = T6.VKPIPLAN_NAME 
+					AND T5.TOTAL_PLAN_MODEL_ID_NUM = T6.NUM_BY_NODE_ID) AS B ON A.VKPIPLAN_NAME = B.VKPIPLAN_NAME
+				 WHERE B.VKPIPLAN_NAME IS NULL;
+--<End of adding
+    
+   INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX LIMIT :ERROR_LIMIT;
+
+END;

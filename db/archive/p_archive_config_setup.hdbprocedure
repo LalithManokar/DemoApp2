@@ -1,0 +1,322 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::p_archive_config_setup"(
+IN CONFIGURATION_TYPE NVARCHAR(100),
+IN P_RS_NAME NVARCHAR(100),    -- RS Name created in Hana DB 
+IN P_RS_DBNAME NVARCHAR(256),  -- database name of the remote DB
+IN P_RS_SCHEMA NVARCHAR(256), -- db schema of the remote DB in which the archive tables exist
+IN P_ARCH_TAB NVARCHAR(256) default 'ALL',
+OUT ET_MISSING_TABLES "sap.tm.trp.db.archive::tt_table_list_type",
+OUT P_SUCCESS INTEGER,
+OUT P_MESSAGE NVARCHAR(200))
+ 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP" AS
+v_rs_cnt tinyint;
+v_dictionary_schema varchar(256);
+v_dictionary_name varchar(256);
+v_virtual_table_schema varchar(256);
+v_virtual_table_package varchar(256);
+v_virtual_table_name varchar(500);
+v_sql_str varchar(1000);
+v_adapter_name varchar(256);
+v_ro_cnt int;
+v_dt_cnt int;
+v_tt_cnt tinyint;
+v_virtual_dd_table varchar(256);
+v_tt_name varchar(256);
+v_vt_cnt integer;
+TABLE_EXIST INTEGER;
+v_table_name varchar(256);
+v_parent_flag tinyint;
+v_date_column varchar(256);
+v_is_tm tinyint;
+V_RS_DBNAME NVARCHAR(100);
+TABLE_NAME_WARM nvarchar(250);
+SQL_CREATE NVARCHAR(2000);
+SQL_DROP NVARCHAR(2000);
+SCHEMA_NAME NVARCHAR(100);
+OBJECT_SCHEMA NVARCHAR(100);
+
+
+  CURSOR C1 FOR 
+  select dictionary_schema,
+      dictionary_name,
+      virtual_table_schema,
+      virtual_table_package,
+      virtual_table_name
+		from "sap.tm.trp.db.archive::t_data_archive_adapters_dictionary"
+		where adapter_id=(select id from "sap.tm.trp.db.archive::t_data_archive_adapters"
+		                           where lower(adapter_code) = lower(:v_adapter_name));       
+																			             
+  CURSOR C2 
+         FOR select c.table_name,case when c.id=c.parent_id then 1 else 0 end as parent_flag,p.date_column_name,c.is_tm 
+               From "sap.tm.trp.db.archive::t_archive_metadata" c,
+                    "sap.tm.trp.db.archive::t_archive_metadata" p
+               Where c.ultimate_parent_id = p.id ;
+  
+  CURSOR C3
+         FOR      
+  select distinct c.table_name,case when c.id=c.parent_id then 1 else 0 end as parent_flag,p.date_column_name,c.is_tm 
+               From "sap.tm.trp.db.archive::t_archive_metadata" c,
+                    "sap.tm.trp.db.archive::t_archive_metadata" p
+               Where c.ultimate_parent_id = p.id and
+                     p.table_code=:P_ARCH_TAB;
+
+BEGIN
+
+ 
+
+	-- Exception declarations for various user defined error conditions
+	
+	DECLARE RS_NOT_DEFINED_CONDITION CONDITION FOR SQL_ERROR_CODE 10001;
+	DECLARE DT_NOT_DEFINED_CONDITION CONDITION FOR SQL_ERROR_CODE 10002;
+    DECLARE RO_NOT_DEFINED_CONDITION CONDITION FOR SQL_ERROR_CODE 10003;
+    
+       
+    
+    DECLARE EXIT HANDLER FOR RS_NOT_DEFINED_CONDITION 
+    Begin 
+       P_SUCCESS := 0;
+       P_MESSAGE := 'MSG_ARCHIEVE_REMOTE_DATA_SOURCE_MISSING';
+    End;
+    
+    DECLARE EXIT HANDLER FOR DT_NOT_DEFINED_CONDITION 
+    Begin 
+       P_SUCCESS := 0;
+       P_MESSAGE := 'MSG_ARCHIEVE_DYNAMIC_TIERING_NOT_CONFIGURED';
+    End;
+    
+    DECLARE EXIT HANDLER FOR RO_NOT_DEFINED_CONDITION 
+    BEGIN
+       P_SUCCESS := 0;
+       P_MESSAGE := 'MSG_ARCHIEVE_MISSING_TRP_TABLES';
+    END;
+    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+    	P_SUCCESS := 0;
+       P_MESSAGE := 'MSG_ARCHIEVE_FAIL_VALIDATE_CONFIGURATION';
+       SELECT ::SQL_ERROR_MESSAGE FROM DUMMY;
+    END;   
+    
+
+  IF :CONFIGURATION_TYPE ='DT' THEN
+  	
+  	select count(1) into v_dt_cnt from SYS.m_services where upper(service_name) like 'ESSERVER%' and active_status = 'YES';
+    
+    if v_dt_cnt = 0 then 
+       SIGNAL DT_NOT_DEFINED_CONDITION ;   -- if not there, stops further validation checks and return the error.
+    end if;
+    
+    P_SUCCESS:=1;
+  	P_MESSAGE:='MSG_ARCHIEVE_DYNAMIC_TIERING_CONFIGURED_SUCCEED';
+  ELSE  
+
+	-- 1. Whether a remote connection is there by name mentioned in P_RS_NAME, which connects to the remote DB.
+
+ 	--select 1,lower(adapter_name) into v_rs_cnt,v_adapter_name from SYS.remote_sources where remote_source_name = :P_RS_NAME;
+ 	select count(1) into v_rs_cnt from SYS.remote_sources where remote_source_name = :P_RS_NAME;
+ 	
+
+	if v_rs_cnt = 0 then 
+       SIGNAL RS_NOT_DEFINED_CONDITION ;   -- if not there, stops further validation checks and return the error.
+    else
+    	select IFNULL(lower(adapter_name),'') into v_adapter_name from SYS.remote_sources where remote_source_name = :P_RS_NAME;
+    end if;    
+    
+    --    3b. Creating a global temporary table to get the missing arch tables list and send it to front end
+	
+		/*
+		select count(1) into v_tt_cnt 
+		from sys.tables 
+		where table_name = 'sap.tm.trp.db.archive::global_temp_arch_config_check' and UppeR(schema_name) = 'SAP_TM_TRP';
+
+        if v_tt_cnt = 0 then
+ 		   create global temporary table "sap.tm.trp.db.archive::global_temp_arch_config_check" ( Table_code varchar(300));
+ 		else
+ 			EXECUTE IMMEDIATE 'truncate table  "sap.tm.trp.db.archive::global_temp_arch_config_check"';       
+        end if;
+        
+        */
+        
+        EXECUTE IMMEDIATE 'TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.archive::global_temp_arch_config_check"';
+    
+    
+ -- Check & create virtual tables for the data dictionary tables of Remote DB's data dictionary information about tables/columns
+
+    Open C1;
+    Fetch C1 into  v_dictionary_schema,
+                   v_dictionary_name,
+                   v_virtual_table_schema,
+                   v_virtual_table_package,
+                   v_virtual_table_name;
+
+    if v_dictionary_schema is not null then 
+    
+	    while v_dictionary_schema is not null do
+	    
+	    --select :v_dictionary_schema as "v_dictionary_schema", :v_dictionary_name as "v_dictionary_name",:v_virtual_table_name as "v_virtual_table_name", 'error' as "TEXT" from dummy;
+	    
+	    --SELECT COUNT(1) AS COUNT FROM "SYS"."TABLES" WHERE SCHEMA_NAME='SAP_TM_TRP' AND TABLE_NAME=:v_virtual_table_name;	
+    		SELECT COUNT(1) INTO TABLE_EXIST FROM "SYS"."TABLES" WHERE SCHEMA_NAME='SAP_TM_TRP' AND TABLE_NAME=lower(:v_virtual_table_package||:P_RS_NAME||'_'||:v_virtual_table_name);
+			IF :TABLE_EXIST = 0 THEN
+				IF LENGTH(:P_RS_DBNAME)=0 OR :P_RS_DBNAME IS NULL THEN 
+					V_RS_DBNAME:='NULL';
+				ELSE 
+					V_RS_DBNAME:=:P_RS_DBNAME;
+				END IF;
+	          v_sql_str := 'CREATE VIRTUAL TABLE "'||lower(:v_virtual_table_package||escape_single_quotes(:P_RS_NAME)||'_'||:v_virtual_table_name)||'" AT '||escape_single_quotes(:P_RS_NAME)||'."'||escape_double_quotes(:V_RS_DBNAME)||'".'||v_dictionary_schema||'.'||v_dictionary_name;
+	         execute immediate v_sql_str;
+			END IF;
+	          
+		      Fetch C1 into  v_dictionary_schema,
+                   v_dictionary_name,
+                   v_virtual_table_schema,
+                   v_virtual_table_package,
+                   v_virtual_table_name;
+	
+	    End while;
+	    P_SUCCESS := 1;
+	    P_MESSAGE := 'MSG_ARCHIEVE_VIRTUAL_TABLE_FOR_DICT_TABLES_CREATED';
+   else
+       	P_SUCCESS := 1;
+	    P_MESSAGE := 'MSG_ARCHIEVE_VIRTUAL_TABLE_FOR_DICT_TABLE_CONFIGURED_SUCCEED';
+   End if;
+   
+   Close C1;
+   
+  
+  
+  -- 3. Check whether all needed warm tables are available in the remote DB/schema (DBA).
+
+--   3a. Prepare query string to know check needed archive tables presence in the remote db, based on type of the remote db
+
+v_tt_name := '"sap.tm.trp.db.archive::global_temp_arch_config_check"';
+   if v_adapter_name = 'iqodbc' then 
+
+
+       	select lower(virtual_table_schema)||'."'||
+               case when virtual_Table_package is null then '' else virtual_table_package end||
+               lower(:P_RS_NAME)||'_'||lower(virtual_table_name)||'"' into v_virtual_dd_table
+        From "sap.tm.trp.db.archive::t_data_archive_adapters_dictionary"
+        WHERE adapter_id = ( select id from "sap.tm.trp.db.archive::t_data_archive_adapters" where adapter_code = 'iqodbc' ) and
+              lower(virtual_table_name) like '%syscatalog';
+  
+       
+       
+	   v_sql_str := 'INSERT INTO '||:v_tt_name||
+	   				 ' SELECT lower(table_code) as table_code '||
+	                 ' from "sap.tm.trp.db.archive::t_archive_metadata" '||
+	                 ' WHERE lower(table_code) NOT IN ( SELECT distinct lower("tname" ) from '||
+	                 escape_single_quotes(:v_virtual_dd_table)||
+--	                 '|| escape_single_quotes(:P_RS_NAME)||'_SYSCATALOG'||
+	                 ' Where "creator" ='''||
+	                  escape_single_quotes(:P_RS_SCHEMA)||''')';
+	                  
+
+    elseif v_adapter_name = 'mssql' then
+
+       	select lower(virtual_table_schema)||'."'||
+               case when virtual_Table_package is null then '' else virtual_table_package end||
+               lower(:P_RS_NAME)||'_'||lower(virtual_table_name)||'"' into v_virtual_dd_table
+        From "sap.tm.trp.db.archive::t_data_archive_adapters_dictionary"
+        WHERE adapter_id = ( select id from "sap.tm.trp.db.archive::t_data_archive_adapters" where adapter_code = 'mssql')
+        and lower(virtual_table_name) like '%tables%';
+
+	
+	   v_sql_str := 'INSERT INTO '||:v_tt_name||
+	        	    ' SELECT lower(table_code) as table_code '||
+	                ' from "sap.tm.trp.db.archive::t_archive_metadata" '||
+	                ' WHERE lower(table_code) NOT IN ( SELECT distinct lower("TABLE_NAME" ) from '||
+	                escape_single_quotes(:v_virtual_dd_table)||
+	                --''|| escape_single_quotes(:P_RS_NAME)||'_TABLES'||
+	                 ' Where "TABLE_CATALOG" = '''||escape_single_quotes(:P_RS_DBNAME)||''' and '||
+ 	                         '"TABLE_SCHEMA" ='''||escape_single_quotes(:P_RS_SCHEMA)||''')';
+ 	                         
+ 	
+ 	elseif v_adapter_name = 'hanaodbc' then
+
+       	select lower(virtual_table_schema)||'."'||
+               case when virtual_Table_package is null then '' else virtual_table_package end||
+               lower(:P_RS_NAME)||'_'||lower(virtual_table_name)||'"' into v_virtual_dd_table
+        From "sap.tm.trp.db.archive::t_data_archive_adapters_dictionary"
+        WHERE adapter_id = ( select id from "sap.tm.trp.db.archive::t_data_archive_adapters" where adapter_code = 'hanaodbc')
+        and lower(virtual_table_name) like '%tables%';
+
+	
+	   v_sql_str := 'INSERT INTO '||:v_tt_name||
+	        	    ' SELECT lower(table_code) as table_code '||
+	                ' from "sap.tm.trp.db.archive::t_archive_metadata" '||
+	                ' WHERE lower(table_code) NOT IN ( SELECT distinct lower("TABLE_NAME" ) from '||
+	                escape_single_quotes(:v_virtual_dd_table)||
+	                --''|| escape_single_quotes(:P_RS_NAME)||'_TABLES'||
+	                 ' Where "SCHEMA_NAME" ='''||escape_single_quotes(:P_RS_SCHEMA)||''')';
+ 	
+     end if;
+
+
+
+
+--    3c. Populating the Global temporary table
+
+    -- execute immediate 'truncate table '||:v_tt_name;     
+     Execute Immediate :v_sql_str;
+
+     ET_MISSING_TABLES = select * from "sap.tm.trp.db.archive::global_temp_arch_config_check"; -- v_tt_name
+
+     --execute immediate 'truncate table '||v_tt_name;     
+
+     v_ro_cnt := 0;
+     
+     if P_ARCH_TAB = 'ALL' then 
+	     select count(*) into v_ro_cnt
+	     FROM :ET_MISSING_TABLES;
+	 else
+	     select count(*) into v_ro_cnt
+	     FROM :ET_MISSING_TABLES
+         WHERE table_code = P_ARCH_TAB; 
+     end if;     
+
+     if v_ro_cnt = 0 then 
+        P_SUCCESS := 1;
+        P_MESSAGE := 'MSG_ARCHIEVE_TRP_TABLE_CONFIGURED_IN_REMOTE';
+     else
+	   SIGNAL RO_NOT_DEFINED_CONDITION;
+     end if;    
+
+
+END IF;
+   
+   IF P_ARCH_TAB = 'ALL' THEN 
+			OPEN C2;
+            Fetch C2 into v_table_name,v_parent_flag,v_date_column,v_is_tm;
+           
+            While v_table_name is not null do            	
+            	
+            	CALL "sap.tm.trp.db.archive::p_archive_config_setup_create_tables"(v_table_name,v_parent_flag,v_date_column,v_is_tm,CONFIGURATION_TYPE,P_RS_NAME,P_RS_DBNAME,P_RS_SCHEMA);
+            	
+ 	            Fetch C2 into v_table_name,v_parent_flag,v_date_column,v_is_tm;
+            End while;
+            
+            Close C2;
+            
+     ELSE 
+     
+     	OPEN C3;
+            Fetch C3 into v_table_name,v_parent_flag,v_date_column,v_is_tm;
+           
+            While v_table_name is not null do            	
+            	
+            	CALL "sap.tm.trp.db.archive::p_archive_config_setup_create_tables"(v_table_name,v_parent_flag,v_date_column,v_is_tm,CONFIGURATION_TYPE,P_RS_NAME,P_RS_DBNAME,P_RS_SCHEMA);
+ 	            Fetch C3 into v_table_name,v_parent_flag,v_date_column,v_is_tm;
+            End while;
+            
+            Close C3;
+     	
+     END IF;
+    
+    P_SUCCESS:=1;
+  	P_MESSAGE:='MSG_ARCHIEVE_VALIDATION_SUCCEED';
+   
+
+END;

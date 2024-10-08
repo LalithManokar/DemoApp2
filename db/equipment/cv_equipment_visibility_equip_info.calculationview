@@ -1,0 +1,620 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_equipment_visibility_equip_info" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_equipment_visibility_equip_info"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="RESOURCE_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="EQUIPMENT_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="LOCATION_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="LOCATION_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="ATTRIBUTE_GROUP_ID" parameter="true">
+      <descriptions defaultDescription="ATTRIBUTE_GROUP_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="ATTRIBUTE_NODE_LIST" parameter="true">
+      <descriptions defaultDescription="ATTRIBUTE_NODE_LIST"/>
+      <variableProperties datatype="NVARCHAR" length="2000" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="LOCATION" parameter="true">
+      <descriptions defaultDescription="LOCATION"/>
+      <variableProperties datatype="VARCHAR" length="20" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="RESOURCE_TYPE" parameter="true">
+      <descriptions defaultDescription="RESOURCE_TYPE"/>
+      <variableProperties datatype="VARCHAR" length="10" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="LEASE_CONTRACT_REFERENCE" parameter="true">
+      <descriptions defaultDescription="LEASE_CONTRACT_REFERENCE"/>
+      <variableProperties datatype="VARCHAR" length="20" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="RES_ID" parameter="true">
+      <descriptions defaultDescription="RES_ID"/>
+      <variableProperties datatype="VARCHAR" defaultValue="''" length="40" mandatory="false">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_MOVEMENT_STATUS" parameter="true">
+      <descriptions defaultDescription="IN_MOVEMENT_STATUS"/>
+      <variableProperties datatype="VARCHAR" length="3" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_RESOURCE_CATEGORY" parameter="true">
+      <descriptions defaultDescription="IN_RESOURCE_CATEGORY"/>
+      <variableProperties datatype="VARCHAR" length="20" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_RESOURCE_STATUS" parameter="true">
+      <descriptions defaultDescription="IN_RESOURCE_STATUS"/>
+      <variableProperties datatype="VARCHAR" length="100" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_ID" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_NAME" length="40"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_TYPE_CODE" length="10"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_TYPE_DESC" length="40"/>
+        <viewAttribute datatype="DECIMAL" id="TARE_WEIGHT" length="13" scale="3"/>
+        <viewAttribute datatype="DECIMAL" id="MAX_GROSS_WEIGHT" length="13" scale="3"/>
+        <viewAttribute datatype="VARCHAR" id="MAX_GROSS_WEIGHT_UOM" length="3"/>
+        <viewAttribute datatype="DECIMAL" id="MAX_CARGO_WEIGHT" length="13" scale="3"/>
+        <viewAttribute datatype="DECIMAL" id="INSIDE_LENGTH" length="18" scale="4"/>
+        <viewAttribute datatype="DECIMAL" id="INSIDE_WIDTH" length="18" scale="4"/>
+        <viewAttribute datatype="DECIMAL" id="INSIDE_HEIGHT" length="18" scale="4"/>
+        <viewAttribute datatype="DECIMAL" id="DOOR_WIDTH" length="18" scale="4"/>
+        <viewAttribute datatype="DECIMAL" id="DOOR_HEIGHT" length="18" scale="4"/>
+        <viewAttribute datatype="DECIMAL" id="MAX_LENGTH" length="18" scale="4"/>
+        <viewAttribute datatype="DECIMAL" id="VOLUME" length="18" scale="4"/>
+        <viewAttribute datatype="INTEGER" id="TEU_COUNT"/>
+        <viewAttribute datatype="VARCHAR" id="AVAILABILITY" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_STATUS" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="OWNERSHIP" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="BLOCK_STATUS" length="30"/>
+        <viewAttribute datatype="VARCHAR" id="MOVEMENT_STATUS_CODE" length="3"/>
+        <viewAttribute datatype="VARCHAR" id="MOVEMENT_STATUS" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="LOADING_STATUS" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_CONDITION" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="FOOD_GRADE" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="LAST_CARGO" length="30"/>
+        <viewAttribute datatype="VARCHAR" id="CURRENT_RESPONSIBLE_TU" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="CURRENT_RESPONSIBLE_TU_TYPE" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="LAST_ASSIGNED_TOR" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="CURRENT_LOCATION_ID" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="CURRENT_LOCATION" length="40"/>
+        <viewAttribute datatype="VARCHAR" id="LAST_LOCATION" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="NEXT_STOP" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="FINAL_DESTINATION" length="22"/>
+        <viewAttribute datatype="INTEGER" id="IDLE_DAYS"/>
+        <viewAttribute datatype="VARCHAR" id="LEASING_ID" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="VENTILATED" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="TEMP_CONTROL" length="60"/>
+        <viewAttribute datatype="DECIMAL" id="TEMP_CTRL_MIN" length="7" scale="2"/>
+        <viewAttribute datatype="DECIMAL" id="TEMP_CTRL_MAX" length="7" scale="2"/>
+        <viewAttribute datatype="NVARCHAR" id="SHIPPER_OWNED" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="SPECIAL_INSTRUCTION" length="3"/>
+        <viewAttribute datatype="NVARCHAR" id="EXTNL_CLADDING" length="5"/>
+        <viewAttribute datatype="NVARCHAR" id="CNTRL_ATM" length="5"/>
+        <viewAttribute datatype="NVARCHAR" id="FLOWER_BULB_AGRMNT" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="USDA" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="COOLING_UNIT_MNFTR" length="40"/>
+        <viewAttribute datatype="NVARCHAR" id="COOLING_UNIT_MODEL" length="40"/>
+        <viewAttribute datatype="NVARCHAR" id="DESHUMIDIFY" length="1"/>
+        <viewAttribute datatype="NVARCHAR" id="DATACORDER" length="1"/>
+        <viewAttribute datatype="TIMESTAMP" id="OFF_HIRE_DT"/>
+        <viewAttribute datatype="TIMESTAMP" id="ON_HIRE_DT"/>
+        <viewAttribute datatype="NVARCHAR" id="VESSEL" length="35"/>
+        <viewAttribute datatype="NVARCHAR" id="NAME" length="40"/>
+        <viewAttribute datatype="DATE" id="BUILT_DATE"/>
+        <viewAttribute datatype="DECIMAL" id="MAX_WIDTH" length="13" scale="3"/>
+        <viewAttribute datatype="DECIMAL" id="MAX_HEIGHT" length="13" scale="3"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#RESOURCE_FILTER_ID</localVariable>
+      <localVariable>#LOCATION_FILTER_ID</localVariable>
+      <localVariable>#ATTRIBUTE_GROUP_ID</localVariable>
+      <localVariable>#ATTRIBUTE_NODE_LIST</localVariable>
+      <localVariable>#LOCATION</localVariable>
+      <localVariable>#RESOURCE_TYPE</localVariable>
+      <localVariable>#LEASE_CONTRACT_REFERENCE</localVariable>
+      <localVariable>#RES_ID</localVariable>
+      <localVariable>#IN_MOVEMENT_STATUS</localVariable>
+      <localVariable>#IN_RESOURCE_CATEGORY</localVariable>
+      <localVariable>#IN_RESOURCE_STATUS</localVariable>
+      <definition>
+ /********* Begin Procedure Script ************/ 
+ BEGIN 
+   IF NOT (:RES_ID = '' OR :RES_ID IS NULL) THEN
+     CALL &quot;sap.tm.trp.db.equipment::p_get_resource_info_by_resource_id_fuzzy&quot;(:RES_ID,:IN_RESOURCE_CATEGORY, TMP);
+      
+	var_out = SELECT 
+	    RESOURCE_ID
+        ,RESOURCE_NAME
+        ,RESOURCE_TYPE_CODE
+        ,RESOURCE_TYPE_DESC
+        ,TARE_WEIGHT
+        ,MAX_GROSS_WEIGHT
+        ,MAX_GROSS_WEIGHT_UOM
+        ,MAX_CARGO_WEIGHT
+        ,INSIDE_LENGTH
+        ,INSIDE_WIDTH
+        ,INSIDE_HEIGHT
+        ,DOOR_WIDTH
+        ,DOOR_HEIGHT
+        ,MAX_LENGTH
+        ,VOLUME
+        ,TEU_COUNT
+		,AVAILABILITY
+        ,RESOURCE_STATUS
+        ,OWNERSHIP
+        ,BLOCK_STATUS
+	    ,MOVEMENT_STATUS_CODE
+		,MOVEMENT_STATUS
+        ,LOADING_STATUS
+		,RESOURCE_CONDITION
+        ,FOOD_GRADE
+		,LAST_CARGO
+        ,CURRENT_RESPONSIBLE_TU
+        ,CURRENT_RESPONSIBLE_TU_TYPE
+		,LAST_ASSIGNED_TOR
+		,CURRENT_LOCATION_ID
+		,CURRENT_LOCATION
+        ,LAST_LOCATION
+        ,NEXT_STOP
+        ,FINAL_DESTINATION
+        ,IDLE_DAYS
+        ,LEASING_ID
+        ,VENTILATED
+        ,TEMP_CONTROL
+        ,TEMP_CTRL_MIN
+        ,TEMP_CTRL_MAX
+        ,SHIPPER_OWNED
+        ,SPECIAL_INSTRUCTION
+        ,EXTNL_CLADDING
+        ,CNTRL_ATM
+        ,FLOWER_BULB_AGRMNT
+        ,USDA
+        ,COOLING_UNIT_MNFTR
+        ,COOLING_UNIT_MODEL
+        ,DESHUMIDIFY
+        ,DATACORDER
+        ,OFF_HIRE_DT
+        ,ON_HIRE_DT
+		,VESSEL
+		,NAME
+		,BUILT_DATE 
+		,MAX_WIDTH
+		,MAX_HEIGHT
+   FROM :TMP T1
+   --INNER JOIN &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;
+				--(PLACEHOLDER.&quot;$$IN_LOCATION_TYPE$$&quot;=>1) ROLE_CHECK ON ROLE_CHECK.LOCATION_ID = T1.CURRENT_LOCATION_ID
+   ;
+   ELSE
+     DECLARE GEO_FLAG INT;
+     DECLARE EQUIP_FLAG INT;
+     DECLARE FILTER VARCHAR(5000);
+     DECLARE EXIST_FLAG INTEGER;
+
+     SELECT IFNULL(MAX(FILTER_TYPE),0) INTO EQUIP_FLAG 
+     FROM &quot;sap.tm.trp.db.filter::t_equipment_filter&quot; WHERE ID = :RESOURCE_FILTER_ID
+     ;
+       
+     SELECT IFNULL(MAX(LOCATION_TYPE),0) INTO GEO_FLAG
+     FROM &quot;sap.tm.trp.db.filter::t_location_filter&quot; WHERE ID = :LOCATION_FILTER_ID;
+       
+     IF ATTRIBUTE_GROUP_ID = -1 THEN
+        SELECT '' INTO FILTER FROM DUMMY;   
+     ELSE
+       CALL &quot;sap.tm.trp.db.dashboard::sp_splitter&quot;(:ATTRIBUTE_NODE_LIST,',',OUT_NODE_LIST);  
+       SELECT COUNT(*) INTO EXIST_FLAG FROM :OUT_NODE_LIST;
+       IF :ATTRIBUTE_NODE_LIST = '' OR :ATTRIBUTE_NODE_LIST IS NULL THEN
+         NODE_LIST = SELECT NODE_ID FROM &quot;sap.tm.trp.db.equipment::t_node_list&quot;;
+       ELSE
+         NODE_LIST = SELECT DISTINCT TO_INT(STRING) AS NODE_ID FROM :OUT_NODE_LIST;
+       END IF;
+              
+       CALL &quot;sap.tm.trp.db.filter::p_attribute_group_filter_generate_dynamic&quot;(:ATTRIBUTE_GROUP_ID,:NODE_LIST,FILTER); 
+              
+     END IF;
+     
+     IF :GEO_FLAG = 1 THEN
+-- DEPOT
+        IF :EQUIP_FLAG = 1 THEN
+          CALL &quot;sap.tm.trp.db.equipment::p_get_location_resource_info&quot;
+               (:RESOURCE_FILTER_ID,:LOCATION_FILTER_ID,:FILTER,:IN_MOVEMENT_STATUS,:IN_RESOURCE_CATEGORY,TMP);
+        ELSEIF :EQUIP_FLAG = 2 THEN
+          CALL &quot;sap.tm.trp.db.equipment::p_get_location_resource_group_info&quot;
+               (:RESOURCE_FILTER_ID,:LOCATION_FILTER_ID,:FILTER,:IN_MOVEMENT_STATUS,:IN_RESOURCE_CATEGORY,TMP);
+        END IF;
+     ELSEIF :GEO_FLAG = 2 THEN
+--DEPOT GROUP
+       IF :EQUIP_FLAG = 1 THEN
+         CALL &quot;sap.tm.trp.db.equipment::p_get_location_group_resource_info&quot;
+              (:RESOURCE_FILTER_ID,:LOCATION_FILTER_ID,:FILTER,:IN_MOVEMENT_STATUS,:IN_RESOURCE_CATEGORY,TMP);
+       ELSEIF :EQUIP_FLAG = 2 THEN
+         CALL &quot;sap.tm.trp.db.equipment::p_get_location_group_resource_group_info&quot;
+              (:RESOURCE_FILTER_ID,:LOCATION_FILTER_ID,:FILTER,:IN_MOVEMENT_STATUS,:IN_RESOURCE_CATEGORY,TMP);
+       END IF;    
+     ELSEIF :GEO_FLAG = 5 THEN
+-- REGION
+       IF :EQUIP_FLAG = 1 THEN
+         CALL &quot;sap.tm.trp.db.equipment::p_get_region_resource_info&quot;
+              (:RESOURCE_FILTER_ID,:LOCATION_FILTER_ID,:FILTER,:IN_MOVEMENT_STATUS,:IN_RESOURCE_CATEGORY,TMP);
+       ELSEIF :EQUIP_FLAG = 2 THEN
+         CALL &quot;sap.tm.trp.db.equipment::p_get_region_resource_group_info&quot;
+              (:RESOURCE_FILTER_ID,:LOCATION_FILTER_ID,:FILTER,:IN_MOVEMENT_STATUS,:IN_RESOURCE_CATEGORY,TMP);
+       END IF;
+     ELSEIF :GEO_FLAG = 6 THEN
+-- REGION GROUP
+       IF :EQUIP_FLAG = 1 THEN
+         CALL &quot;sap.tm.trp.db.equipment::p_get_region_group_resource_info&quot;
+              (:RESOURCE_FILTER_ID,:LOCATION_FILTER_ID,:FILTER,:IN_MOVEMENT_STATUS,:IN_RESOURCE_CATEGORY,TMP);
+       ELSEIF :EQUIP_FLAG = 2 THEN
+         CALL &quot;sap.tm.trp.db.equipment::p_get_region_group_resource_group_info&quot;
+              (:RESOURCE_FILTER_ID,:LOCATION_FILTER_ID,:FILTER,:IN_MOVEMENT_STATUS,:IN_RESOURCE_CATEGORY,TMP);
+       END IF;
+     END IF;
+
+     var_out =  
+    SELECT 
+	    RESOURCE_ID
+        ,RESOURCE_NAME
+        ,RESOURCE_TYPE_CODE
+        ,RESOURCE_TYPE_DESC
+        ,TARE_WEIGHT
+        ,MAX_GROSS_WEIGHT
+        ,MAX_GROSS_WEIGHT_UOM
+        ,MAX_CARGO_WEIGHT
+        ,INSIDE_LENGTH
+        ,INSIDE_WIDTH
+        ,INSIDE_HEIGHT
+        ,DOOR_WIDTH
+        ,DOOR_HEIGHT
+        ,MAX_LENGTH
+        ,VOLUME
+        ,TEU_COUNT
+		,AVAILABILITY
+        ,RESOURCE_STATUS
+        ,OWNERSHIP
+		,BLOCK_STATUS
+	    ,MOVEMENT_STATUS_CODE
+		,MOVEMENT_STATUS
+        ,LOADING_STATUS
+		,RESOURCE_CONDITION
+        ,FOOD_GRADE
+		,LAST_CARGO
+        ,CURRENT_RESPONSIBLE_TU
+        ,CURRENT_RESPONSIBLE_TU_TYPE
+		,LAST_ASSIGNED_TOR
+		,CURRENT_LOCATION_ID
+		,CURRENT_LOCATION
+        ,LAST_LOCATION
+        ,NEXT_STOP
+        ,FINAL_DESTINATION
+        ,IDLE_DAYS
+        ,LEASING_ID
+        ,VENTILATED
+        ,TEMP_CONTROL
+        ,TEMP_CTRL_MIN
+        ,TEMP_CTRL_MAX
+        ,SHIPPER_OWNED
+        ,SPECIAL_INSTRUCTION
+        ,EXTNL_CLADDING
+        ,CNTRL_ATM
+        ,FLOWER_BULB_AGRMNT
+        ,USDA
+        ,COOLING_UNIT_MNFTR
+        ,COOLING_UNIT_MODEL
+        ,DESHUMIDIFY
+        ,DATACORDER
+        ,OFF_HIRE_DT
+        ,ON_HIRE_DT
+		,VESSEL
+		,NAME
+		,BUILT_DATE 
+		,MAX_WIDTH
+		,MAX_HEIGHT
+   FROM :TMP T1
+   INNER JOIN &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;
+				(PLACEHOLDER.&quot;$$IN_LOCATION_TYPE$$&quot;=>1) ROLE_CHECK ON ROLE_CHECK.LOCATION_ID = T1.CURRENT_LOCATION_ID
+   WHERE (RESOURCE_TYPE_CODE = :RESOURCE_TYPE OR :RESOURCE_TYPE = '')
+   AND (LAST_LOCATION = :LOCATION OR :LOCATION = '')
+   AND (LEASING_ID = :LEASE_CONTRACT_REFERENCE OR :LEASE_CONTRACT_REFERENCE = '' )
+   AND (RESOURCE_STATUS = :IN_RESOURCE_STATUS OR :IN_RESOURCE_STATUS = '');
+
+   END IF; 
+
+ END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="RESOURCE_ID" order="1">
+        <descriptions defaultDescription="RESOURCE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_ID"/>
+      </attribute>
+      <attribute id="RESOURCE_NAME" order="2">
+        <descriptions defaultDescription="RESOURCE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_NAME"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE_CODE" order="3">
+        <descriptions defaultDescription="RESOURCE_TYPE_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE_CODE"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE_DESC" order="4">
+        <descriptions defaultDescription="RESOURCE_TYPE_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE_DESC"/>
+      </attribute>
+      <attribute id="TARE_WEIGHT" order="5">
+        <descriptions defaultDescription="TARE_WEIGHT"/>
+        <keyMapping columnObjectName="Script_View" columnName="TARE_WEIGHT"/>
+      </attribute>
+      <attribute id="MAX_GROSS_WEIGHT" order="6">
+        <descriptions defaultDescription="MAX_GROSS_WEIGHT"/>
+        <keyMapping columnObjectName="Script_View" columnName="MAX_GROSS_WEIGHT"/>
+      </attribute>
+      <attribute id="MAX_GROSS_WEIGHT_UOM" order="7">
+        <descriptions defaultDescription="MAX_GROSS_WEIGHT_UOM"/>
+        <keyMapping columnObjectName="Script_View" columnName="MAX_GROSS_WEIGHT_UOM"/>
+      </attribute>
+      <attribute id="AVAILABILITY" order="17">
+        <descriptions defaultDescription="AVAILABILITY"/>
+        <keyMapping columnObjectName="Script_View" columnName="AVAILABILITY"/>
+      </attribute>
+      <attribute id="RESOURCE_STATUS" order="18">
+        <descriptions defaultDescription="RESOURCE_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_STATUS"/>
+      </attribute>
+      <attribute id="OWNERSHIP" order="19">
+        <descriptions defaultDescription="OWNERSHIP"/>
+        <keyMapping columnObjectName="Script_View" columnName="OWNERSHIP"/>
+      </attribute>
+      <attribute id="BLOCK_STATUS" order="20">
+        <descriptions defaultDescription="BLOCK_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="BLOCK_STATUS"/>
+      </attribute>
+      <attribute id="MOVEMENT_STATUS_CODE" order="21">
+        <descriptions defaultDescription="MOVEMENT_STATUS_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="MOVEMENT_STATUS_CODE"/>
+      </attribute>
+      <attribute id="MOVEMENT_STATUS" order="22">
+        <descriptions defaultDescription="MOVEMENT_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="MOVEMENT_STATUS"/>
+      </attribute>
+      <attribute id="LOADING_STATUS" order="23">
+        <descriptions defaultDescription="LOADING_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOADING_STATUS"/>
+      </attribute>
+      <attribute id="RESOURCE_CONDITION" order="24">
+        <descriptions defaultDescription="RESOURCE_CONDITION"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_CONDITION"/>
+      </attribute>
+      <attribute id="FOOD_GRADE" order="25">
+        <descriptions defaultDescription="FOOD_GRADE"/>
+        <keyMapping columnObjectName="Script_View" columnName="FOOD_GRADE"/>
+      </attribute>
+      <attribute id="LAST_CARGO" order="26">
+        <descriptions defaultDescription="LAST_CARGO"/>
+        <keyMapping columnObjectName="Script_View" columnName="LAST_CARGO"/>
+      </attribute>
+      <attribute id="CURRENT_RESPONSIBLE_TU" order="27">
+        <descriptions defaultDescription="CURRENT_RESPONSIBLE_TU"/>
+        <keyMapping columnObjectName="Script_View" columnName="CURRENT_RESPONSIBLE_TU"/>
+      </attribute>
+      <attribute id="CURRENT_RESPONSIBLE_TU_TYPE" order="28">
+        <descriptions defaultDescription="CURRENT_RESPONSIBLE_TU_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="CURRENT_RESPONSIBLE_TU_TYPE"/>
+      </attribute>
+      <attribute id="LAST_ASSIGNED_TOR" order="29">
+        <descriptions defaultDescription="LAST_ASSIGNED_TOR"/>
+        <keyMapping columnObjectName="Script_View" columnName="LAST_ASSIGNED_TOR"/>
+      </attribute>
+      <attribute id="CURRENT_LOCATION_ID" order="30">
+        <descriptions defaultDescription="CURRENT_LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="CURRENT_LOCATION_ID"/>
+      </attribute>
+      <attribute id="CURRENT_LOCATION" order="31">
+        <descriptions defaultDescription="CURRENT_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="CURRENT_LOCATION"/>
+      </attribute>
+      <attribute id="LAST_LOCATION" order="32">
+        <descriptions defaultDescription="LAST_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="LAST_LOCATION"/>
+      </attribute>
+      <attribute id="NEXT_STOP" order="33">
+        <descriptions defaultDescription="NEXT_STOP"/>
+        <keyMapping columnObjectName="Script_View" columnName="NEXT_STOP"/>
+      </attribute>
+      <attribute id="FINAL_DESTINATION" order="34">
+        <descriptions defaultDescription="FINAL_DESTINATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="FINAL_DESTINATION"/>
+      </attribute>
+      <attribute id="LEASING_ID" order="36">
+        <descriptions defaultDescription="LEASING_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASING_ID"/>
+      </attribute>
+      <attribute id="VENTILATED" order="37">
+        <descriptions defaultDescription="VENTILATED"/>
+        <keyMapping columnObjectName="Script_View" columnName="VENTILATED"/>
+      </attribute>
+      <attribute id="TEMP_CONTROL" order="38">
+        <descriptions defaultDescription="TEMP_CONTROL"/>
+        <keyMapping columnObjectName="Script_View" columnName="TEMP_CONTROL"/>
+      </attribute>
+      <attribute id="SHIPPER_OWNED" order="41">
+        <descriptions defaultDescription="SHIPPER_OWNED"/>
+        <keyMapping columnObjectName="Script_View" columnName="SHIPPER_OWNED"/>
+      </attribute>
+      <attribute id="SPECIAL_INSTRUCTION" order="42">
+        <descriptions defaultDescription="SPECIAL_INSTRUCTION"/>
+        <keyMapping columnObjectName="Script_View" columnName="SPECIAL_INSTRUCTION"/>
+      </attribute>
+      <attribute id="EXTNL_CLADDING" order="43">
+        <descriptions defaultDescription="EXTNL_CLADDING"/>
+        <keyMapping columnObjectName="Script_View" columnName="EXTNL_CLADDING"/>
+      </attribute>
+      <attribute id="CNTRL_ATM" order="44">
+        <descriptions defaultDescription="CNTRL_ATM"/>
+        <keyMapping columnObjectName="Script_View" columnName="CNTRL_ATM"/>
+      </attribute>
+      <attribute id="FLOWER_BULB_AGRMNT" order="45">
+        <descriptions defaultDescription="FLOWER_BULB_AGRMNT"/>
+        <keyMapping columnObjectName="Script_View" columnName="FLOWER_BULB_AGRMNT"/>
+      </attribute>
+      <attribute id="USDA" order="46">
+        <descriptions defaultDescription="USDA"/>
+        <keyMapping columnObjectName="Script_View" columnName="USDA"/>
+      </attribute>
+      <attribute id="COOLING_UNIT_MNFTR" order="47">
+        <descriptions defaultDescription="COOLING_UNIT_MNFTR"/>
+        <keyMapping columnObjectName="Script_View" columnName="COOLING_UNIT_MNFTR"/>
+      </attribute>
+      <attribute id="COOLING_UNIT_MODEL" order="48">
+        <descriptions defaultDescription="COOLING_UNIT_MODEL"/>
+        <keyMapping columnObjectName="Script_View" columnName="COOLING_UNIT_MODEL"/>
+      </attribute>
+      <attribute id="DESHUMIDIFY" order="49">
+        <descriptions defaultDescription="DESHUMIDIFY"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESHUMIDIFY"/>
+      </attribute>
+      <attribute id="DATACORDER" order="50">
+        <descriptions defaultDescription="DATACORDER"/>
+        <keyMapping columnObjectName="Script_View" columnName="DATACORDER"/>
+      </attribute>
+      <attribute id="VESSEL" order="53">
+        <descriptions defaultDescription="VESSEL"/>
+        <keyMapping columnObjectName="Script_View" columnName="VESSEL"/>
+      </attribute>
+      <attribute id="NAME" order="54">
+        <descriptions defaultDescription="NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="BUILT_DATE" order="55">
+        <descriptions defaultDescription="BUILT_DATE"/>
+        <keyMapping columnObjectName="Script_View" columnName="BUILT_DATE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="MAX_CARGO_WEIGHT" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MAX_CARGO_WEIGHT"/>
+        <measureMapping columnObjectName="Script_View" columnName="MAX_CARGO_WEIGHT"/>
+      </measure>
+      <measure id="INSIDE_LENGTH" order="9" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="INSIDE_LENGTH"/>
+        <measureMapping columnObjectName="Script_View" columnName="INSIDE_LENGTH"/>
+      </measure>
+      <measure id="INSIDE_WIDTH" order="10" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="INSIDE_WIDTH"/>
+        <measureMapping columnObjectName="Script_View" columnName="INSIDE_WIDTH"/>
+      </measure>
+      <measure id="INSIDE_HEIGHT" order="11" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="INSIDE_HEIGHT"/>
+        <measureMapping columnObjectName="Script_View" columnName="INSIDE_HEIGHT"/>
+      </measure>
+      <measure id="DOOR_WIDTH" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DOOR_WIDTH"/>
+        <measureMapping columnObjectName="Script_View" columnName="DOOR_WIDTH"/>
+      </measure>
+      <measure id="DOOR_HEIGHT" order="13" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DOOR_HEIGHT"/>
+        <measureMapping columnObjectName="Script_View" columnName="DOOR_HEIGHT"/>
+      </measure>
+      <measure id="MAX_LENGTH" order="14" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MAX_LENGTH"/>
+        <measureMapping columnObjectName="Script_View" columnName="MAX_LENGTH"/>
+      </measure>
+      <measure id="VOLUME" order="15" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="VOLUME"/>
+        <measureMapping columnObjectName="Script_View" columnName="VOLUME"/>
+      </measure>
+      <measure id="TEU_COUNT" order="16" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TEU_COUNT"/>
+        <measureMapping columnObjectName="Script_View" columnName="TEU_COUNT"/>
+      </measure>
+      <measure id="IDLE_DAYS" order="35" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="IDLE_DAYS"/>
+        <measureMapping columnObjectName="Script_View" columnName="IDLE_DAYS"/>
+      </measure>
+      <measure id="TEMP_CTRL_MIN" order="39" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TEMP_CTRL_MIN"/>
+        <measureMapping columnObjectName="Script_View" columnName="TEMP_CTRL_MIN"/>
+      </measure>
+      <measure id="TEMP_CTRL_MAX" order="40" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TEMP_CTRL_MAX"/>
+        <measureMapping columnObjectName="Script_View" columnName="TEMP_CTRL_MAX"/>
+      </measure>
+      <measure id="OFF_HIRE_DT" order="51" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="OFF_HIRE_DT"/>
+        <measureMapping columnObjectName="Script_View" columnName="OFF_HIRE_DT"/>
+      </measure>
+      <measure id="ON_HIRE_DT" order="52" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="ON_HIRE_DT"/>
+        <measureMapping columnObjectName="Script_View" columnName="ON_HIRE_DT"/>
+      </measure>
+      <measure id="MAX_WIDTH" order="56" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MAX_WIDTH"/>
+        <measureMapping columnObjectName="Script_View" columnName="MAX_WIDTH"/>
+      </measure>
+      <measure id="MAX_HEIGHT" order="57" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MAX_HEIGHT"/>
+        <measureMapping columnObjectName="Script_View" columnName="MAX_HEIGHT"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

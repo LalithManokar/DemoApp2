@@ -1,0 +1,57 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert::p_get_maxExecutionID_nodeID_ofPlan" (
+IN PLAN_MODEL_ID BIGINT,
+IN EXECUTION_DAYS INTEGER default 30,
+--OUT PIPELINE_MODEL_ID VARCHAR(22),
+OUT EXECUTION_ID BIGINT,
+OUT NODE_ID BIGINT,
+OUT SUCCESS_FLAG INTEGER
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+DECLARE EXECUTED_FLAG INTEGER;
+DECLARE PIPELINE_MODEL_ID BIGINT;
+  
+  EXECUTED_FLAG := -1;
+  --1.Check whether current plan_model had been executed in recent EXECUTION_DAYS
+  SELECT count(*) into EXECUTED_FLAG
+  FROM "sap.tm.trp.db.pipeline::t_plan_execution" T1
+  WHERE T1.PLAN_MODEL_ID = :PLAN_MODEL_ID and 
+        DAYS_BETWEEN(TO_DATE(T1.EXECUTE_ON),TO_DATE(CURRENT_UTCTIMESTAMP)) < :EXECUTION_DAYS;
+    
+  --1.1.current plan_model had been executed in recent EXECUTION_DAYS    
+  IF (EXECUTED_FLAG > 0)
+  THEN
+     SUCCESS_FLAG := 0;
+     
+     tmpTBL=
+     SELECT top 1
+       T1.ID AS PLAN_MODEL_ID,
+       T2.EXECUTION_ID,
+       T1.PIPELINE_MODEL_ID
+     FROM "sap.tm.trp.db.pipeline::t_plan_model" AS T1
+     LEFT JOIN
+     ( SELECT DISTINCT 
+          PLAN_MODEL_ID, 
+          FIRST_VALUE(ID) over (PARTITION BY PLAN_MODEL_ID ORDER BY EXECUTE_ON DESC) AS EXECUTION_ID 
+	  FROM "sap.tm.trp.db.pipeline::t_plan_execution" 
+	  ) AS T2 ON T2.PLAN_MODEL_ID = T1.ID
+     WHERE T1.ID = :PLAN_MODEL_ID;
+
+     SELECT IFNULL(MAX(EXECUTION_ID),0),IFNULL(MAX(PIPELINE_MODEL_ID),0) into EXECUTION_ID,PIPELINE_MODEL_ID  from :tmpTBL;
+
+     select top 1 T2.ID into NODE_ID 
+	 from "sap.tm.trp.db.pipeline::t_pipeline_model" as T1 
+	 left outer join "sap.tm.trp.db.pipeline::t_pipeline_node" as T2 
+	 on (T1.ID = T2.PIPELINE_MODEL_ID and
+	    T1.ID = :PIPELINE_MODEL_ID)
+	 order by T2.NODE_INDEX desc;
+  --1.2.current plan_model had not been executed in recent EXECUTION_DAYS  
+   ELSE
+     SUCCESS_FLAG := -1;
+   END IF;
+
+
+END;

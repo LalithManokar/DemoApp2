@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_getlocations_of_user_of_locationtype" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_anna_privilege_check"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="IN_LOCATION_TYPE" parameter="true">
+      <descriptions defaultDescription="IN_LOCALTION_TYPE"/>
+      <variableProperties datatype="INTEGER" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_ID" length="22"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_LOCATION_TYPE</localVariable>
+      <definition> 
+  
+ BEGIN
+  
+  DECLARE VAR_USER_TYPE INTEGER; 
+  DECLARE VAR_USER_NAME VARCHAR(60);
+  DECLARE USER_TYPE_DEPOT_MANAGER INTEGER :=1;
+ -- DECLARE USER_TYPE_LOCAL_PLANNER INTEGER :=2;
+  DECLARE USER_TYPE_REGIONAL_PLANNER INTEGER :=3;
+  --DECLARE USER_TYPE_ADMIN INTEGER :=99;
+  DECLARE LOCATION_TYPE_LOCATION INTEGER :=1;
+  DECLARE LOCATION_TYPE_LOCATION_GROUP INTEGER :=2;
+  --DECLARE LOCATION_TYPE_ZONE INTEGER :=3;   
+  --DECLARE LOCATION_TYPE_ZONE_GROUP INTEGER :=4;  
+  DECLARE LOCATION_TYPE_REGION INTEGER :=5; 
+  DECLARE LOCATION_TYPE_REGION_GROUP INTEGER :=6; 
+  DECLARE VAR_USER_ID BIGINT;
+  DECLARE HAS_AUTHORIZATION_FLAG TINYINT; 
+  call &quot;sap.tm.trp.db.systemmanagement::p_check_location_full_authorization&quot; (
+		 	HAVE_AUTHORIZATION_FLAG => HAS_AUTHORIZATION_FLAG
+		 ); 
+ 
+   --Get user name
+    
+     SELECT IFNULL(MAX(USERNAME),'') into VAR_USER_NAME
+      FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+  
+      
+     SELECT IFNULL(MAX(USER_TYPE_ID),-1) INTO VAR_USER_TYPE
+     FROM &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot;
+     WHERE USERNAME = :VAR_USER_NAME;
+     
+     SELECT IFNULL(MAX(ID),-1) INTO VAR_USER_ID
+     FROM &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot;
+     WHERE USERNAME = :VAR_USER_NAME;
+   
+   
+   
+   IF :HAS_AUTHORIZATION_FLAG = 1 THEN
+	     IF (:IN_LOCATION_TYPE = :LOCATION_TYPE_LOCATION) THEN
+	     
+			     OUT_WHITELIST_LOCATION = SELECT  T1.ID AS LOCATION_ID
+			            FROM  &quot;sap.tm.trp.db.semantic.location::v_location&quot; T1;
+			            
+			  ELSEIF (:IN_LOCATION_TYPE = :LOCATION_TYPE_LOCATION_GROUP) THEN
+			  
+			      OUT_WHITELIST_LOCATION = SELECT T1.ID AS LOCATION_ID
+                    FROM &quot;sap.tm.trp.db.systemmanagement::t_location_group&quot; T1;
+			      
+			  /*ELSEIF (:IN_LOCATION_TYPE = :LOCATION_TYPE_ZONE) THEN
+			  
+			    OUT_WHITELIST_LOCATION = SELECT DISTINCT T1.ZONE_ID AS LOCATION_ID
+			      FROM &quot;sap.tm.trp.db.systemmanagement.location::t_region_item&quot; T1;
+			  
+			  ELSEIF (:IN_LOCATION_TYPE = :LOCATION_TYPE_ZONE_GROUP) THEN
+			  
+			     OUT_WHITELIST_LOCATION = SELECT T1.ID AS LOCATION_ID
+			      FROM &quot;sap.tm.trp.db.systemmanagement::t_zone_group&quot; T1;
+			   */   
+			  ELSEIF (:IN_LOCATION_TYPE = :LOCATION_TYPE_REGION) THEN
+			  
+			     OUT_WHITELIST_LOCATION = SELECT T1.ROOT_ID AS LOCATION_ID
+			      FROM &quot;sap.tm.trp.db.systemmanagement.location::t_region_item&quot; T1;
+			      
+			  ELSEIF (:IN_LOCATION_TYPE = :LOCATION_TYPE_REGION_GROUP) THEN
+			  
+			    OUT_WHITELIST_LOCATION = SELECT T1.ID AS LOCATION_ID
+			      FROM &quot;sap.tm.trp.db.systemmanagement::t_region_group&quot; T1;
+			      
+			  ELSE 
+			     OUT_WHITELIST_LOCATION = SELECT NULL AS LOCATION_ID FROM DUMMY WHERE 1=0;
+			  END IF;  
+     ELSEIF (:VAR_USER_TYPE = :USER_TYPE_DEPOT_MANAGER ) THEN
+     
+         LOCATIONS_OF_USER =SELECT  T3.LOCATION_ID
+		            FROM  &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot; T1
+		            INNER JOIN &quot;sap.tm.trp.db.systemmanagement.user::t_user_role&quot; T2 ON (T1.ID = T2.USER_ID)
+		            INNER JOIN &quot;sap.tm.trp.db.systemmanagement.user::t_role_location&quot; T3 ON (T3.ROLE_ID = T2.ROLE_ID)
+		            WHERE T1.USERNAME = :VAR_USER_NAME;
+	     IF (:IN_LOCATION_TYPE = :LOCATION_TYPE_LOCATION) THEN
+	     
+		     OUT_WHITELIST_LOCATION = SELECT LOCATION_ID FROM :LOCATIONS_OF_USER;
+		     
+		  ELSEIF (:IN_LOCATION_TYPE = :LOCATION_TYPE_LOCATION_GROUP) THEN
+		  
+			   OUT_WHITELIST_LOCATION = 
+			   SELECT T10.LOCATION_GROUP_ID AS LOCATION_ID
+			   FROM
+			   (
+				   SELECT T1.LOCATION_GROUP_ID ,CASE WHEN T2.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+			       FROM &quot;sap.tm.trp.db.systemmanagement::t_location_group_item&quot;   T1
+			       LEFT OUTER JOIN :LOCATIONS_OF_USER T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+		       )T10
+		       INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_location_group&quot; T11 ON (T10.LOCATION_GROUP_ID = T11.ID)
+		       WHERE T11.VISIBLE_FLAG = 'G' OR (T11.VISIBLE_FLAG = 'P' AND T11.USER_ID = :VAR_USER_ID)
+		       GROUP BY T10.LOCATION_GROUP_ID
+		       HAVING SUM(NUM) =0;
+		   
+	      ELSE 
+		  	OUT_WHITELIST_LOCATION = SELECT NULL AS LOCATION_ID FROM DUMMY WHERE 1=0;
+		  END IF;
+		  
+     ELSEIF (:VAR_USER_TYPE = :USER_TYPE_REGIONAL_PLANNER ) THEN
+     
+      			LOCATIONS_OF_USER = SELECT DISTINCT T5.LOCATION_ID
+		        FROM  &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot; T1
+		        INNER JOIN &quot;sap.tm.trp.db.systemmanagement.user::t_user_role&quot; T2 ON (T1.ID = T2.USER_ID)
+		        INNER JOIN &quot;sap.tm.trp.db.systemmanagement.user::t_role_region&quot; T3 ON (T3.ROLE_ID = T2.ROLE_ID)
+		        INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::t_region_item&quot; T4 ON (T3.ROOT_ID = T4.ROOT_ID)
+		        INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions&quot; T5 ON (T4.ZONE_ID = T5.ZONE_ID)
+		        WHERE T1.USERNAME = :VAR_USER_NAME;
+     	IF (:IN_LOCATION_TYPE = :LOCATION_TYPE_LOCATION) THEN
+     	
+		      OUT_WHITELIST_LOCATION = SELECT  LOCATION_ID FROM :LOCATIONS_OF_USER;
+		      
+		ELSEIF (:IN_LOCATION_TYPE = :LOCATION_TYPE_LOCATION_GROUP) THEN
+		  
+		      OUT_WHITELIST_LOCATION = 
+			   SELECT T10.LOCATION_GROUP_ID AS LOCATION_ID
+			   FROM 
+			   (
+				   SELECT T1.LOCATION_GROUP_ID ,CASE WHEN T2.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+			       FROM &quot;sap.tm.trp.db.systemmanagement::t_location_group_item&quot;   T1
+			       LEFT OUTER JOIN :LOCATIONS_OF_USER T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+		       )T10
+		       INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_location_group&quot; T11 ON (T10.LOCATION_GROUP_ID = T11.ID)
+		       WHERE T11.VISIBLE_FLAG = 'G' OR (T11.VISIBLE_FLAG = 'P' AND T11.USER_ID = :VAR_USER_ID)
+		       GROUP BY T10.LOCATION_GROUP_ID
+		       HAVING SUM(NUM) =0;
+		   
+		 /* ELSEIF (:IN_LOCATION_TYPE = :LOCATION_TYPE_ZONE) THEN
+		  
+		      OUT_WHITELIST_LOCATION = 
+		        SELECT T10.ZONE_ID AS LOCATION_ID
+		        FROM
+		        (
+		        SELECT T1.ZONE_ID ,CASE WHEN T2.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+		        FROM &quot;sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions&quot; T1
+		        LEFT OUTER JOIN :LOCATIONS_OF_USER T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+		        )T10
+		        GROUP BY T10.ZONE_ID
+		        HAVING SUM(NUM) =0;
+		        
+		        
+		  ELSEIF (:IN_LOCATION_TYPE = :LOCATION_TYPE_ZONE_GROUP) THEN
+		  
+			   OUT_WHITELIST_LOCATION = 
+				   SELECT T10.ZONE_GROUP_ID AS LOCATION_ID
+				   FROM
+				   (
+					   SELECT T1.ZONE_GROUP_ID ,CASE WHEN T3.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+				       FROM &quot;sap.tm.trp.db.systemmanagement::t_zone_group_item&quot;   T1
+				       INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions&quot; T2 ON (T1.ZONE_ID = T2.ZONE_ID)
+				       LEFT OUTER JOIN :LOCATIONS_OF_USER T3 ON (T2.LOCATION_ID = T3.LOCATION_ID)
+			       )T10
+			       INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_zone_group&quot; T11 ON (T10.ZONE_GROUP_ID = T11.ID)
+		           WHERE T11.VISIBLE_FLAG = 'G' OR (T11.VISIBLE_FLAG = 'P' AND T11.USER_ID = :VAR_USER_ID)
+			       GROUP BY T10.ZONE_GROUP_ID
+			       HAVING SUM(NUM) =0;
+			       */
+			   
+		  ELSEIF (:IN_LOCATION_TYPE = :LOCATION_TYPE_REGION) THEN
+		  
+			  /*OUT_WHITELIST_LOCATION = 
+			        SELECT T10.ZONE_ID AS LOCATION_ID
+			        FROM
+			        (
+				        SELECT T1.ZONE_ID ,CASE WHEN T3.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+				        FROM &quot;sap.tm.trp.db.systemmanagement.location::t_region_item&quot; T1
+				        INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions&quot; T2 ON (T1.ZONE_ID = T2.ZONE_ID)
+				        LEFT OUTER JOIN :LOCATIONS_OF_USER T3 ON (T2.LOCATION_ID = T3.LOCATION_ID)
+			        )T10
+			        GROUP BY T10.ZONE_ID
+			        HAVING SUM(NUM) =0
+			        UNION ALL 
+			        SELECT T3.ROOT_ID AS LOCATION_ID
+			        FROM  &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot; T1
+			        INNER JOIN &quot;sap.tm.trp.db.systemmanagement.user::t_user_role&quot; T2 ON (T1.ID = T2.USER_ID)
+			        INNER JOIN &quot;sap.tm.trp.db.systemmanagement.user::t_role_region&quot; T3 ON (T3.ROLE_ID = T2.ROLE_ID)
+			        LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions&quot; T4 ON (T3.ROOT_ID = T4.ZONE_ID)
+			        WHERE T1.USERNAME = :VAR_USER_NAME AND T4.ZONE_ID IS NULL;
+			        */
+			        OUT_WHITELIST_LOCATION = 
+			        SELECT T4.ZONE_ID AS LOCATION_ID
+			        FROM  &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot; T1
+			        INNER JOIN &quot;sap.tm.trp.db.systemmanagement.user::t_user_role&quot; T2 ON (T1.ID = T2.USER_ID)
+			        INNER JOIN &quot;sap.tm.trp.db.systemmanagement.user::t_role_region&quot; T3 ON (T3.ROLE_ID = T2.ROLE_ID)
+			        INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::t_region_item&quot; T4 ON (T3.ROOT_ID = T4.ROOT_ID) 
+			        WHERE T1.USERNAME = :VAR_USER_NAME ;
+			        
+		  ELSEIF (:IN_LOCATION_TYPE = :LOCATION_TYPE_REGION_GROUP) THEN
+		  
+		  /*REGION_WHITELIST_LOCATION = 
+			        SELECT T10.ZONE_ID AS LOCATION_ID
+			        FROM
+			        (
+				        SELECT T1.ZONE_ID ,CASE WHEN T3.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+				        FROM &quot;sap.tm.trp.db.systemmanagement.location::t_region_item&quot; T1
+				        INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions&quot; T2 ON (T1.ZONE_ID = T2.ZONE_ID)
+				        LEFT OUTER JOIN :LOCATIONS_OF_USER T3 ON (T2.LOCATION_ID = T3.LOCATION_ID)
+			        )T10
+			        GROUP BY T10.ZONE_ID
+			        HAVING SUM(NUM) =0
+			        UNION ALL 
+			        SELECT T3.ROOT_ID AS LOCATION_ID
+			        FROM  &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot; T1
+			        INNER JOIN &quot;sap.tm.trp.db.systemmanagement.user::t_user_role&quot; T2 ON (T1.ID = T2.USER_ID)
+			        INNER JOIN &quot;sap.tm.trp.db.systemmanagement.user::t_role_region&quot; T3 ON (T3.ROLE_ID = T2.ROLE_ID)
+			        LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions&quot; T4 ON (T3.ROOT_ID = T4.ZONE_ID)
+			        WHERE T1.USERNAME = :VAR_USER_NAME AND T4.ZONE_ID IS NULL;
+			        */
+			  WHITELIST_REGION =  SELECT T4.ZONE_ID AS LOCATION_ID
+			        FROM  &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot; T1
+			        INNER JOIN &quot;sap.tm.trp.db.systemmanagement.user::t_user_role&quot; T2 ON (T1.ID = T2.USER_ID)
+			        --Note:join t_region_item: the zone must be the zone that on the hiearchy in t_config:
+			        INNER JOIN &quot;sap.tm.trp.db.systemmanagement.user::t_role_region&quot; T3 ON (T3.ROLE_ID = T2.ROLE_ID)
+			        INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::t_region_item&quot; T4 ON (T3.ROOT_ID = T4.ROOT_ID) 
+			        WHERE T1.USERNAME = :VAR_USER_NAME ;
+			        
+			  OUT_WHITELIST_LOCATION = 
+			        SELECT T10.REGION_GROUP_ID AS LOCATION_ID
+			        FROM
+			        ( 
+						SELECT T1.REGION_GROUP_ID ,CASE WHEN T2.LOCATION_ID IS NULL THEN 1 ELSE 0 END AS NUM
+				        FROM &quot;sap.tm.trp.db.systemmanagement::t_region_group_item&quot; T1
+				        
+                        LEFT OUTER JOIN :WHITELIST_REGION T2 ON (T1.ZONE_ID = T2.LOCATION_ID)
+			        )T10
+			         INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_region_group&quot; T11 ON (T10.REGION_GROUP_ID = T11.ID)
+		           WHERE T11.VISIBLE_FLAG = 'G' OR (T11.VISIBLE_FLAG = 'P' AND T11.USER_ID = :VAR_USER_ID)
+			        GROUP BY T10.REGION_GROUP_ID
+			        --Note for HAVING SUM(NUM) =0 : all the zones of the region group must have auth, if there is 1 region in the region
+                   -- group do not have auth, should not have auth for the region group:
+			        HAVING SUM(NUM) =0;
+		  
+		  ELSE 
+		     OUT_WHITELIST_LOCATION = SELECT NULL AS LOCATION_ID FROM DUMMY WHERE 1=0;
+		  END IF;
+     
+     ELSE
+       OUT_WHITELIST_LOCATION = SELECT NULL AS LOCATION_ID FROM DUMMY WHERE 1=0;
+     END IF;
+
+     var_out = SELECT DISTINCT LOCATION_ID FROM :OUT_WHITELIST_LOCATION;
+    
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="LOCATION_ID" order="1">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_ID"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

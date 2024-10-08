@@ -1,0 +1,11 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.temporary = true; 
+table.columns = [ 
+    {name = "BOOKING_ID"; sqlType = NVARCHAR; length = 20; nullable = false;},  // Booking ID
+    {name = "LOCATION_ID"; sqlType = NVARCHAR; length = 22; nullable = false;}, // Booking pickup or return location ID
+    {name = "EQUIPMENT_ID"; sqlType = NVARCHAR; length = 10; nullable = false;},// Equipment type, container type
+    {name = "PLANNED_DATE"; sqlType = TIMESTAMP;},
+    {name = "QUANTITY"; sqlType = INTEGER;nullable = false;},   // Needed container quantity
+    {name = "STATUS"; sqlType = NVARCHAR; length = 2;nullable = false;} // ER or EP
+];

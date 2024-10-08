@@ -1,0 +1,61 @@
+procedure "SAP_TM_TRP"."sap.tm.trp.db.availabilitycheck::p_batch_check_availability" (
+    --IN check_request "sap.tm.trp.db.availabilitycheck::tt_check_request",
+    IN  in_check_request CLOB,
+    OUT check_result "sap.tm.trp.db.availabilitycheck::tt_check_result",
+    OUT result_mapping "sap.tm.trp.db.availabilitycheck::tt_result_mapping",
+    OUT message "sap.tm.trp.db.common::tt_message"
+    ) 
+    LANGUAGE SQLSCRIPT 
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+   declare t_output_clob CLOB;
+   
+    -- clob splitter logic 
+    CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:in_check_request,'~',check_request_temp);
+    
+    check_request  =   select   CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 1) as VARCHAR(10)) as ITEM_ID,
+                                CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 2) as VARCHAR(50)) as LOCATION_NO,
+                                CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 3) as NVARCHAR(50)) as EQUIP_TYPE,
+                                CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 4) as TIMESTAMP) as TIME,
+                                CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 5) as INTEGER) as QUANTITY,
+                                CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 6) as NVARCHAR(50)) as REQUEST_CHECK_TYPE
+                     from :check_request_temp;
+    
+    input_details = SELECT v.id as location_id, c.location_no, v.loctype, v.xpos, v.ypos, c.location_no AS LOCATION_NAME, 
+    CAST(v.loctype AS VARCHAR(10)) AS LOCATION_TYPE, c.equip_type AS EQUIP_TYPE, c.quantity, c.time AS REQUEST_TIME,
+    c.request_check_type
+    FROM  "sap.tm.trp.db.semantic.location::v_location" v
+    INNER JOIN :check_request c
+    ON v.name = c.location_no;
+    
+    location_info = SELECT location_no, loctype, xpos, ypos
+    FROM :input_details; 
+
+    t_input = SELECT LOCATION_ID,LOCATION_NAME,LOCATION_TYPE, EQUIP_TYPE, 
+    REQUEST_TIME, quantity, request_check_type
+    FROM :input_details;
+    
+    call "sap.tm.trp.db.hrf.availableCheck::p_call_avail_check_plan_rule"
+    (:t_input, t_output);
+    
+    result_mapping = SELECT c.item_id AS item_id, o.sd_plan AS sd_plan
+    FROM :t_output o
+    INNER JOIN :check_request c
+    ON o.location_name = c.location_no
+    AND o.equip_type = c.equip_type
+    AND o.quantity = c.quantity
+    AND o.request_time = c.time
+    AND o.request_check_type = c.request_check_type;
+    
+    SELECT STRING_AGG(LOCATION_NAME ||','|| LOCATION_TYPE  ||','|| EQUIP_TYPE  ||','|| REQUEST_TIME ||','|| QUANTITY ||','|| REQUEST_CHECK_TYPE ||','|| SD_PLAN ||'~','')
+    INTO t_output_clob FROM :t_output;
+
+    CALL "sap.tm.trp.db.availabilitycheck::p_batch_EAC_plans_final" (:t_output_clob,out_result,out_message);
+    --CALL "sap.tm.trp.db.availabilitycheck::p_batch_EAC_plans" (:t_output_clob,out_result,out_message);
+    
+    check_result = SELECT * FROM :out_result ORDER BY sd_plan;
+    message = SELECT * FROM :out_message;
+   
+END;

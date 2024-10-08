@@ -1,0 +1,24 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE; // ROWSTORE is an alternative value
+
+
+table.columns =
+ [
+    {name = "ID";  sqlType = BIGINT; nullable = false; },
+    {name = "PAGE_ID";  sqlType = INTEGER;  comment = "Page ID : BOOKING,RESOURCE"; },
+    {name = "NAME";  sqlType = NVARCHAR; length = 200; comment = "Column Name";},
+    {name = "MAPPED_NAME";  sqlType = NVARCHAR; length = 200; comment = "Column Name";},
+    {name = "DISPLAY_NAME";  sqlType = NVARCHAR; length = 200; comment = "Column Display Name";},
+    {name = "DESCRIPTION";  sqlType = NVARCHAR; length = 1024; comment = "Column Display Name";},
+    {name = "DATA_TYPE";  sqlType = NVARCHAR; length = 40;comment = "Column Data type";},
+    {name = "LENGTH";  sqlType = INTEGER;comment = "Column length";},
+    {name = "SCALE";  sqlType = INTEGER;comment = "Column SCALE";},
+    {name = "SEARCHABLE";  sqlType = TINYINT;comment = "Search is enabled : 1 or 0";},
+    {name = "FILTERABLE";  sqlType = TINYINT;comment = "Filter is enabled : 1 or 0";},
+    {name = "ADDED_BY";  sqlType = BIGINT;comment = "Added user name";},
+    {name = "ADDED_ON";  sqlType = TIMESTAMP ;comment = "added time";},
+    {name = "EDITED_BY";  sqlType = BIGINT;comment = "Added user name";},
+    {name = "EDITED_ON";  sqlType = TIMESTAMP ;comment = "added time";}
+];
+
+table.primaryKey.pkcolumns = ["ID"];  

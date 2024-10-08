@@ -1,0 +1,13 @@
+schema = "SAP_TM_TRP"; 
+
+query = " 
+ SELECT LOCATION_ID,LOCATION_TYPE,EQUIP_CODE,EQUIP_CODE_TYPE,
+ MIN_SAFETY,MAX_SAFETY,MAX_CAPACITY,LOCATION_HEAD_FLAG,T1.RESOURCE_CATEGORY
+ FROM \"sap.tm.trp.db.stock::t_stock_config\" T1
+
+";
+
+depends_on_table = ["sap.tm.trp.db.stock::t_stock_config"];
+
+
+     

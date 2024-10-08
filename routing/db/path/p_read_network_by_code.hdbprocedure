@@ -1,0 +1,30 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_read_network_by_code" ( 
+        IN network_code NVARCHAR(50),
+		--IN with_details CHAR(1), 
+        OUT network "sap.tm.trp.routing.db.path::tt_network_model"
+		--OUT network_conf "sap.tm.trp.routing.db.common::tt_option"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING"
+   READS SQL DATA AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+    DECLARE network_id BIGINT;
+    -- Ignore data not found exception
+    -- Client check whether result is empty or not
+	DECLARE EXIT HANDLER FOR SQL_ERROR_CODE 1299
+    BEGIN
+       
+    END;
+
+	SELECT id INTO network_id FROM "sap.tm.trp.routing.db.path::t_network_model" WHERE code = :network_code;
+	CALL "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_read_network"(
+	    :network_id,
+	    --:with_details,
+	    network
+	    --network_conf
+	);
+END

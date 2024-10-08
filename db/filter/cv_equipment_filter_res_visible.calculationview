@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_equipment_filter_res_visible" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_equipment_filter_res_visible"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="INTEGER" id="TYPE"/>
+        <viewAttribute datatype="VARCHAR" id="TYPE_DESC" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="VISIBILITY" length="3"/>
+        <viewAttribute datatype="VARCHAR" id="VISIBILITY_DESC" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_CATEGORY" length="20"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition>/********* Begin Procedure Script ************/ 
+BEGIN 
+   DECLARE LANGUAGE_CODE VARCHAR(1);
+   SELECT IFNULL(MAX(SPRAS),'E') INTO LANGUAGE_CODE FROM &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot;;
+
+   var_out = SELECT   A.FILTER_TYPE AS TYPE,
+                                  T6.DESC AS TYPE_DESC,
+                                  A.VISIBLE_FLAG AS VISIBILITY,
+                                                 T4.DESC AS VISIBILITY_DESC,
+                                  A.RESOURCE_CATEGORY
+                                  FROM &quot;sap.tm.trp.db.filter::t_equipment_filter&quot; AS A
+                                  INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_visibility_type&quot; T3 ON T3.CODE = A.VISIBLE_FLAG
+                                  LEFT OUTER JOIN &quot;sap.tm.trp.db.systemmanagement::t_visibility_type_t&quot; T4 ON T4.ID = T3.ID AND T4.SPRAS = :LANGUAGE_CODE
+                                  INNER JOIN &quot;sap.tm.trp.db.filter::t_resource_filter_type&quot; T5 on T5.ID = A.FILTER_TYPE
+                                  LEFT OUTER JOIN &quot;sap.tm.trp.db.filter::t_resource_filter_type_t&quot; T6 on T6.ID = T5.ID AND T6.SPRAS = :LANGUAGE_CODE;
+                                  
+
+END /********* End Procedure Script ************/
+</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="TYPE_DESC" order="2">
+        <descriptions defaultDescription="TYPE_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="TYPE_DESC"/>
+      </attribute>
+      <attribute id="VISIBILITY" order="3">
+        <descriptions defaultDescription="VISIBILITY"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY"/>
+      </attribute>
+      <attribute id="VISIBILITY_DESC" order="4">
+        <descriptions defaultDescription="VISIBILITY_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY_DESC"/>
+      </attribute>
+      <attribute id="RESOURCE_CATEGORY" order="5">
+        <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_CATEGORY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="TYPE" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="TYPE"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

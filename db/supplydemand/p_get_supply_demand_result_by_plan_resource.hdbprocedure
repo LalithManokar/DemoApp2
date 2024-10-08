@@ -1,0 +1,18 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand::p_get_supply_demand_result_by_plan_resource" (
+	IN SD_PLAN_ID BIGINT,
+	IN PLAN_EXECUTION_ID BIGINT,
+	IN TIMEZONE NVARCHAR(50),
+	IN RESOURCE "sap.tm.trp.db.supplydemand.instant::tt_sd_parameter_resource",
+	OUT DATASET "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+ 	READS SQL DATA AS 
+BEGIN
+
+	LOCATION = SELECT * FROM "sap.tm.trp.db.supplydemand.instant::t_cm_execution_parameter_location_temp";
+	
+	CALL "sap.tm.trp.db.supplydemand::p_get_supply_demand_result_by_plan_location_resource"(:SD_PLAN_ID,:PLAN_EXECUTION_ID,:TIMEZONE,:LOCATION,:RESOURCE,DATASET);
+
+END;

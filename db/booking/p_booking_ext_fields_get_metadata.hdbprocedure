@@ -1,0 +1,34 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.booking::p_booking_ext_fields_get_metadata" (
+OUT EXTENDED_COLUMNS "sap.tm.trp.db.common::tt_extended_field_columns",
+OUT TABLE_COLUMNS "sap.tm.trp.db.common::tt_extended_field_table_columns",
+OUT VIEW_COLUMNS "sap.tm.trp.db.common::tt_extended_field_view_columns",
+OUT EXTENDABLE_COLUMNS "sap.tm.trp.db.common::tt_extended_field_table_columns",
+OUT PK_COLUMNS "sap.tm.trp.db.common::tt_extended_field_pk_columns" ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+   
+   	/* Table Columns */
+    TABLE_COLUMNS = 
+    SELECT NULL AS COLUMN_NAME, NULL AS DATA_TYPE_NAME, NULL AS LENGTH,NULL AS SCALE, NULL AS POSITION, NULL AS COMMENTS FROM DUMMY;
+    
+	
+	/* Extended  Columns */
+	
+    EXTENDED_COLUMNS=  SELECT NULL AS NAME, NULL AS DISPLAY_NAME, NULL AS DESCRIPTION,NULL AS DATA_TYPE,NULL AS MAPPED_NAME FROM DUMMY;
+
+    
+    /* View Columns */
+    VIEW_COLUMNS = SELECT NULL AS COLUMN_NAME, NULL AS DATA_TYPE_NAME, NULL AS POSITION FROM DUMMY; 
+
+    
+    /* Extendable Columns */
+	EXTENDABLE_COLUMNS = SELECT NULL AS COLUMN_NAME, NULL AS DATA_TYPE_NAME, NULL AS LENGTH, NULL AS SCALE, NULL AS POSITION, NULL AS COMMENTS FROM DUMMY;
+
+    
+     /* Primary Key */
+    PK_COLUMNS = SELECT NULL AS MAPPED_NAME FROM DUMMY;
+   
+END;

@@ -1,0 +1,180 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_get_xpos_or_polygon_info_for_location"(
+    IN IN_LOCATION_IDS "sap.tm.trp.db.pipeline::tt_geo_id",
+    IN IN_LOCATION_FILTER_TYPE INTEGER,
+    IN IN_POLYGON CLOB,
+    OUT OUT_GEO_POLYGON_INFO "sap.tm.trp.db.pipeline::tt_geo_polygon_info",
+    OUT OUT_GIS_TYPE VARCHAR(15),
+    OUT OUT_LOCATIONS_XPOS_YPOS_INVALID  "sap.tm.trp.db.pipeline::tt_location_info_list" 
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+ 
+
+       
+	    DECLARE LOCATION_TYPE INTEGER := 1;
+	    DECLARE LOCATION_GROUP_TYPE INTEGER :=2 ;
+	    DECLARE REGION_TYPE INTEGER :=5 ;
+	    DECLARE REGION_GROUP_TYPE INTEGER :=6 ;
+	    DECLARE ID_COUNT INTEGER;
+	    DECLARE OUT_UUID VARCHAR(32) :=SYSUUID ; 
+	    DECLARE GIS_TYPE_POINT VARCHAR(10) := 'POINT';
+	    DECLARE GIS_TYPE_POLYGON VARCHAR(10) := 'POLYGON';
+	    OUT_GIS_TYPE := '';
+	 
+	 DELETE FROM "sap.tm.trp.db.systemmanagement::t_geo_type.t_polygon" WHERE UUID = :OUT_UUID;
+     INSERT INTO  "sap.tm.trp.db.systemmanagement::t_geo_type.t_polygon" VALUES(NEW ST_GEOMETRY(:IN_POLYGON),:OUT_UUID);
+     
+    IF :IN_LOCATION_FILTER_TYPE = :LOCATION_TYPE THEN 
+   --depot
+	      LOCATION_ID_WITH_XPOS_INFO = 
+	      SELECT T1.ID AS LOCATION_ID,T2.XPOS,T2.YPOS,NULL AS BOUNDARY,:GIS_TYPE_POINT AS POINT_TYPE 
+	      FROM :IN_LOCATION_IDS T1
+	      INNER JOIN  "sap.tm.trp.db.semantic.location::v_location" T2 ON (T1.ID = T2.ID)
+	      WHERE (T2.XPOS IS NOT NULL AND T2.YPOS IS NOT NULL) AND (ABS(T2.XPOS) + ABS(T2.YPOS) > 0);
+				  
+		OUT_GEO_POLYGON_INFO = SELECT T1.LOCATION_ID,T1.XPOS,T1.YPOS,
+				          T1.BOUNDARY,T1.POINT_TYPE 
+				           FROM :LOCATION_ID_WITH_XPOS_INFO T1, 
+		                 (SELECT GEOMETRY FROM  "sap.tm.trp.db.systemmanagement::t_geo_type.t_polygon" WHERE UUID = :OUT_UUID) T2 
+		                  WHERE  T2.GEOMETRY.ST_CONTAINS(NEW ST_POINT(T1.XPOS,T1.YPOS)) =1 ;
+		                  
+		 OUT_GIS_TYPE := :GIS_TYPE_POINT;
+		 
+		 OUT_LOCATIONS_XPOS_YPOS_INVALID = SELECT  T1.ID AS LOCATION_ID,T2.NAME AS LOCATION_NAME,T2.XPOS,T2.YPOS
+		 FROM :IN_LOCATION_IDS T1
+	     INNER JOIN  "sap.tm.trp.db.semantic.location::v_location" T2 ON (T1.ID = T2.ID)
+	     WHERE (T2.XPOS IS NULL OR T2.YPOS IS NULL) OR (ABS(T2.XPOS) + ABS(T2.YPOS) =0);
+		 
+	--location group:		     
+    ELSEIF  :IN_LOCATION_FILTER_TYPE = :LOCATION_GROUP_TYPE THEN 
+			--Get the central point of the location group as the xpos and ypos of the location group:
+	      LOCATION_ID_WITH_XPOS_INFO = 
+	      SELECT T1.ID AS LOCATION_ID,AVG(T3.XPOS) AS XPOS,AVG(T3.YPOS) AS YPOS,NULL AS BOUNDARY,:GIS_TYPE_POINT AS POINT_TYPE 
+	      FROM :IN_LOCATION_IDS T1
+	      INNER JOIN "sap.tm.trp.db.systemmanagement::t_location_group_item" T2 ON (T1.ID = T2.LOCATION_GROUP_ID)
+	      INNER JOIN  "sap.tm.trp.db.semantic.location::v_location" T3 ON (T2.LOCATION_ID = T3.ID)
+	      INNER JOIN "sap.tm.trp.db.systemmanagement::t_location_group" T4 ON (T2.LOCATION_GROUP_ID = T4.ID)
+	      WHERE (T3.XPOS IS NOT NULL AND T3.YPOS IS NOT NULL) AND (ABS(T3.XPOS) + ABS(T3.YPOS) > 0)
+	      GROUP BY T1.ID;
+	      
+	     	 
+		  OUT_GEO_POLYGON_INFO = SELECT T1.LOCATION_ID,T1.XPOS,T1.YPOS,
+				          T1.BOUNDARY,T1.POINT_TYPE 
+				           FROM :LOCATION_ID_WITH_XPOS_INFO T1, 
+		                 (SELECT GEOMETRY FROM  "sap.tm.trp.db.systemmanagement::t_geo_type.t_polygon" WHERE UUID = :OUT_UUID) T2 
+		                  WHERE  T2.GEOMETRY.ST_CONTAINS(NEW ST_POINT(T1.XPOS,T1.YPOS)) =1 ;
+		                  
+		  OUT_GIS_TYPE := :GIS_TYPE_POINT;
+		  
+		  OUT_LOCATIONS_XPOS_YPOS_INVALID = 
+		  SELECT T1.ID AS LOCATION_ID,T3.NAME AS LOCATION_NAME,T3.XPOS ,T3.YPOS
+	      FROM :IN_LOCATION_IDS T1
+	      INNER JOIN "sap.tm.trp.db.systemmanagement::t_location_group_item" T2 ON (T1.ID = T2.LOCATION_GROUP_ID)
+	      INNER JOIN  "sap.tm.trp.db.semantic.location::v_location" T3 ON (T2.LOCATION_ID = T3.ID)
+	      WHERE (T3.XPOS IS NULL OR T3.YPOS IS NULL) OR (ABS(T3.XPOS) + ABS(T3.YPOS) =0);
+		  
+	ELSEIF  :IN_LOCATION_FILTER_TYPE = :REGION_TYPE THEN
+	
+	    LOCATION_ID_WITH_XPOS_INFO = 
+	      SELECT T1.ID AS LOCATION_ID,T3.XPOS,T3.YPOS,NULL AS BOUNDARY,NULL AS POINT_TYPE
+	      FROM :IN_LOCATION_IDS T1
+	      INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T2 ON (T1.ID = T2.ZONE_ID)
+	      INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T3 ON (T2.LOCATION_ID = T3.ID);
+		
+		          	 
+		   BOUNDARY_GEO_TEXT= 
+		       SELECT T1.LOCATION_ID, 
+					CONCAT(CONCAT('MultiPoint(',SUBSTRING(STRING_AGG( ',(' || T1.XPOS || ' ' || T1.YPOS || ')')
+		          	,2, 22000000)),')') AS GEOTEXT
+		          	FROM (
+		          	      --SELECT A.LOCATION_ID,MAP(A.XPOS,NULL,-9999,0,-9999,A.XPOS) AS XPOS,MAP(A.YPOS,NULL,-9999,0,-9999,A.YPOS) AS YPOS
+		          	      SELECT A.LOCATION_ID,A.XPOS,A.YPOS
+		          	      FROM :LOCATION_ID_WITH_XPOS_INFO A
+		          	      WHERE (A.XPOS IS NOT NULL AND A.YPOS IS NOT NULL) AND (ABS(A.XPOS) + ABS(A.YPOS) > 0)
+		          	  ) T1
+		          	 GROUP BY T1.LOCATION_ID;
+		
+	     INSERT INTO "sap.tm.trp.db.systemmanagement::t_boundary_temp"(ID, GEOTEXT,  UUID)
+	     SELECT A.LOCATION_ID, A.GEOTEXT,:OUT_UUID AS UUID 
+	     FROM :BOUNDARY_GEO_TEXT AS A;
+		    
+		    
+		     
+		   
+		     
+		  OUT_GEO_POLYGON_INFO = 
+	      SELECT  T1.ID AS LOCATION_ID,NULL AS XPOS, NULL AS YPOS,
+	      NEW ST_MultiPoint(TO_VARCHAR(GEOTEXT) ).ST_CONVEXHULL().ST_ASTEXT() AS BOUNDARY, 
+	      :GIS_TYPE_POLYGON AS POINT_TYPE
+	      FROM "sap.tm.trp.db.systemmanagement::t_boundary_temp" T1  
+		   INNER JOIN "sap.tm.trp.db.systemmanagement::t_geo_type.t_polygon" T2 ON (T1.UUID = T2.UUID AND T1.UUID =  :OUT_UUID  )
+		   WHERE T2.GEOMETRY.ST_INTERSECTS(NEW ST_MultiPoint(TO_VARCHAR(T1.GEOTEXT) ) )= 1 ; 
+		   
+		     OUT_GIS_TYPE := :GIS_TYPE_POLYGON;
+		     
+		    --should give the UI the location list which xpos, ypos is not correct:	
+		OUT_LOCATIONS_XPOS_YPOS_INVALID = SELECT T2.ID AS LOCATION_ID,T2.NAME AS LOCATION_NAME,T2.XPOS,T2.YPOS
+		 FROM :LOCATION_ID_WITH_XPOS_INFO T1
+		 INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T2 ON (T1.LOCATION_ID = T2.ID)
+		 WHERE (T2.XPOS IS NULL OR T2.YPOS IS NULL ) OR (ABS(T2.XPOS) + ABS(T2.YPOS) = 0);
+		 
+		  DELETE FROM "sap.tm.trp.db.systemmanagement::t_boundary_temp" WHERE UUID = :OUT_UUID;
+		  	
+	ELSEIF  :IN_LOCATION_FILTER_TYPE = :REGION_GROUP_TYPE THEN
+	
+		  LOCATION_ID_WITH_XPOS_INFO = 
+	      SELECT T1.ID AS LOCATION_ID,T6.XPOS,T6.YPOS,NULL AS BOUNDARY,NULL AS POINT_TYPE
+	      FROM :IN_LOCATION_IDS T1
+	      INNER JOIN "sap.tm.trp.db.systemmanagement::t_region_group_item" T2 ON (T1.ID = T2.REGION_GROUP_ID)
+	      INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T4 ON (T2.ZONE_ID = T4.ZONE_ID)
+	      INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T6 ON (T4.LOCATION_ID = T6.ID);
+	   
+			 
+		 BOUNDARY_GEO_TEXT= 
+	      SELECT T1.LOCATION_ID, 
+			CONCAT(CONCAT('MultiPoint(',SUBSTRING(STRING_AGG(CASE WHEN T1.XPOS = 0 AND T1.YPOS =0 THEN ''
+	                 			ELSE ',(' || T1.XPOS || ' ' || T1.YPOS || ')' END)
+	      	,2, 22000000)),')') AS GEOTEXT
+	      	FROM  :LOCATION_ID_WITH_XPOS_INFO T1
+	      	WHERE  (T1.XPOS IS NOT NULL AND T1.YPOS IS NOT NULL) AND (ABS(T1.XPOS) + ABS(T1.YPOS) > 0)
+	      	GROUP BY T1.LOCATION_ID;
+	      	
+	      --Deal with MultiPoint() issue:
+        BOUNDARY_GEO_TEXT = SELECT LOCATION_ID,  CASE WHEN GEOTEXT = 'MultiPoint()' THEN 'MultiPoint((0 0))' ELSE GEOTEXT END AS GEOTEXT
+		FROM :BOUNDARY_GEO_TEXT;
+	
+      	
+	     INSERT INTO "sap.tm.trp.db.systemmanagement::t_boundary_temp"(ID, GEOTEXT,  UUID)
+	     SELECT A.LOCATION_ID, A.GEOTEXT,:OUT_UUID AS UUID 
+	     FROM :BOUNDARY_GEO_TEXT AS A;
+  
+        OUT_GEO_POLYGON_INFO = 
+	     SELECT  T1.ID AS LOCATION_ID,NULL AS XPOS, NULL AS YPOS,
+	     NEW ST_MultiPoint(TO_VARCHAR(GEOTEXT) ).ST_CONVEXHULL().ST_ASTEXT() AS BOUNDARY, 
+	     :GIS_TYPE_POLYGON AS POINT_TYPE
+	      FROM "sap.tm.trp.db.systemmanagement::t_boundary_temp" T1  
+		  INNER JOIN "sap.tm.trp.db.systemmanagement::t_geo_type.t_polygon" T2 
+		  ON (T1.UUID = T2.UUID AND T1.UUID =  :OUT_UUID  )
+		  WHERE T2.GEOMETRY.ST_INTERSECTS(NEW ST_MultiPoint(TO_VARCHAR(T1.GEOTEXT) ) )= 1 ;  
+		    
+		  DELETE FROM "sap.tm.trp.db.systemmanagement::t_boundary_temp" WHERE UUID = :OUT_UUID;
+		     
+		 OUT_GIS_TYPE := :GIS_TYPE_POLYGON;
+	      
+	      OUT_LOCATIONS_XPOS_YPOS_INVALID = SELECT T2.ID AS LOCATION_ID,T2.NAME AS LOCATION_NAME,T2.XPOS,T2.YPOS
+		 FROM :LOCATION_ID_WITH_XPOS_INFO T1
+		 INNER JOIN "sap.tm.trp.db.semantic.location::v_location" T2 ON (T1.LOCATION_ID = T2.ID)
+		 WHERE (T2.XPOS IS NULL OR T2.YPOS IS NULL ) OR (ABS(T2.XPOS) + ABS(T2.YPOS) = 0);
+		   
+	END IF;
+	
+
+			 
+  DELETE FROM "sap.tm.trp.db.systemmanagement::t_geo_type.t_polygon" WHERE UUID = :OUT_UUID;
+    
+   
+   
+END;

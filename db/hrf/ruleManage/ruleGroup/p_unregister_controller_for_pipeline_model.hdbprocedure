@@ -1,0 +1,32 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_unregister_controller_for_pipeline_model" ( 
+IN PIPELINE_MODEL_ID BIGINT,
+OUT SUCCESS_FLAG INTEGER 
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+DECLARE PIPELINE_MODEL_EXISTING INTEGER;
+DECLARE SUCESS_FLAG01 INTEGER;
+DECLARE SUCESS_FLAG02 INTEGER;
+
+    select COUNT(T1.ID) into PIPELINE_MODEL_EXISTING 
+    from "sap.tm.trp.db.pipeline::t_pipeline_model" T1
+    where T1.ID = :PIPELINE_MODEL_ID;
+    
+    IF ( :PIPELINE_MODEL_EXISTING > 0)
+    THEN
+        call "sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_unregister_pipeline_model_all_available_alertRuleGroup"(:PIPELINE_MODEL_ID,:SUCESS_FLAG01);
+        call "sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_unregister_pipeline_node_output_dataObject"(:PIPELINE_MODEL_ID,:SUCESS_FLAG02);
+        
+        IF ( :SUCESS_FLAG01 = 0 and :SUCESS_FLAG02 = 0 )
+        THEN
+            SUCCESS_FLAG := 0;
+        ELSE
+            SUCCESS_FLAG := :SUCESS_FLAG01 + :SUCESS_FLAG02;
+        END IF;
+    ELSE
+        SUCCESS_FLAG := 1;
+    END IF; 
+END;

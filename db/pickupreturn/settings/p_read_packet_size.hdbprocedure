@@ -1,0 +1,13 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.settings::p_read_packet_size" (
+	OUT SIZE BIGINT
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_TRP
+   --READS SQL DATA 
+   AS
+BEGIN
+
+    CALL "sap.tm.trp.db.systemmanagement.customization::p_get_general_parameter"('PICKUP_RETURN_PACKET_SIZE', SIZE);
+    
+END

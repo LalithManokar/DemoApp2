@@ -1,0 +1,20 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline.operator::p_aggr_stock_by_category" ( 
+IN STOCK "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets", 
+	OUT SUMMARY "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets") 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+ 
+
+
+SUMMARY = SELECT 'AGGR_STOCK' AS NODE_ID, t1.GEO_ID, t2.GEO_NAME, t2.GEO_FILTER_TYPE, t1.EQUIP_TYPE, t2.EQUIP_NAME, t2.EQUIP_FILTER_TYPE, 
+          t1.TIME_INTERVAL_ID, t2.SEQUENCE, t2.START_TIME, t2.END_TIME, t2.INTER_SECONDS, 'STOCK' AS OUTPUT_KEY, t1.OUTPUT_VALUE, t2.UNIT FROM 
+          (SELECT GEO_ID, EQUIP_TYPE, TIME_INTERVAL_ID, SUM(OUTPUT_VALUE) AS OUTPUT_VALUE
+           FROM :STOCK
+           GROUP BY GEO_ID, EQUIP_TYPE, TIME_INTERVAL_ID
+          ) t1
+          INNER JOIN :STOCK t2 ON (t1.GEO_ID = t2.GEO_ID AND t1.EQUIP_TYPE = t2.EQUIP_TYPE AND t1.TIME_INTERVAL_ID = t2.TIME_INTERVAL_ID);
+          
+END;

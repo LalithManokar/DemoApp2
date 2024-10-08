@@ -1,0 +1,44 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_get_executeid_by_planid" (
+	IN IN_PLAN_MODEL_ID BIGINT,
+	OUT EXECUTION_ID BIGINT
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA
+AS
+BEGIN
+
+	DECLARE ID_COUNT INTEGER;
+	    
+  	SELECT COUNT(1) INTO ID_COUNT 
+    FROM "sap.tm.trp.db.pipeline::t_plan_execution" T1
+    INNER JOIN 
+  (
+    SELECT PLAN_MODEL_ID,MAX(EXECUTE_ON) AS MAX_EXEC_TIME
+    FROM "sap.tm.trp.db.pipeline::t_plan_execution" A
+    GROUP BY PLAN_MODEL_ID
+  ) T2 ON (T1.PLAN_MODEL_ID = T2.PLAN_MODEL_ID  AND T1.EXECUTE_ON = T2.MAX_EXEC_TIME)
+   WHERE T1.PLAN_MODEL_ID = :IN_PLAN_MODEL_ID;
+	      
+	      
+  IF  :ID_COUNT !=0 THEN 
+
+   
+   SELECT IFNULL(T1.ID,0) INTO EXECUTION_ID
+   FROM "sap.tm.trp.db.pipeline::t_plan_execution" T1
+   INNER JOIN 
+  (
+    SELECT PLAN_MODEL_ID,MAX(EXECUTE_ON) AS MAX_EXEC_TIME
+    FROM "sap.tm.trp.db.pipeline::t_plan_execution" A
+    GROUP BY PLAN_MODEL_ID
+  ) T2 ON (T1.PLAN_MODEL_ID = T2.PLAN_MODEL_ID  AND T1.EXECUTE_ON = T2.MAX_EXEC_TIME)
+   WHERE T1.PLAN_MODEL_ID = :IN_PLAN_MODEL_ID;
+   
+   ELSE
+      EXECUTION_ID := 0;
+   END IF;
+	
+END;
+
+

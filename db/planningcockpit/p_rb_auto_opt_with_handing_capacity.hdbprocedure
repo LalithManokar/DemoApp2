@@ -1,0 +1,147 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_rb_auto_opt_with_handing_capacity" 
+	(
+	IN IV_SCENARIO_ID BIGINT,	
+	IN IV_NETWORK_SETTING_GROUP_ID BIGINT,
+	IN IV_GRP_ID BIGINT,
+	IN IT_ROUTE_DETAIL "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::tt_route_detail",
+	OUT ET_ROUTE_CAP "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_route_cap"
+	) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+	
+	DECLARE LV_EXECUTION_ID BIGINT;
+    DECLARE LV_NODE_ID BIGINT;
+    DECLARE LV_HANDLING_CAPA INTEGER;
+    DECLARE LV_SD_PLAN_ID BIGINT;
+    DECLARE LV_RES_CAT NVARCHAR(20);
+	DECLARE LV_TIME_ZONE_ID VARCHAR(20);
+	DECLARE LV_MIN_INTERVAL_ID INT;
+    
+    SELECT IFNULL(MAX(T2.EXCUTE_ID),-1),MAX(T2.SD_PLAN_ID),MAX(T2.RESOURCE_CATEGORY)
+    INTO LV_EXECUTION_ID, LV_SD_PLAN_ID, LV_RES_CAT
+    FROM "sap.tm.trp.db.planningcockpit::t_scenario" T1
+    INNER JOIN "sap.tm.trp.db.planningcockpit::t_simulation_plan" T2 ON (T2.ID = T1.REL_SM_PLAN_ID)
+    WHERE T1."ID" = :IV_SCENARIO_ID;
+    
+    CALL "sap.tm.trp.db.planningcockpit::p_get_network_setting_handling_capacity_value"(:IV_NETWORK_SETTING_GROUP_ID, :LV_SD_PLAN_ID, :LV_HANDLING_CAPA);
+  	IF :LV_HANDLING_CAPA = 1 THEN
+  	--GET EXECUTION_ID NODE_ID
+    SELECT MAX(ID)  INTO LV_EXECUTION_ID
+    FROM "sap.tm.trp.db.pipeline::t_plan_execution"
+    WHERE PLAN_MODEL_ID = :LV_SD_PLAN_ID;
+
+    CALL "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid"(:LV_EXECUTION_ID, :LV_NODE_ID);
+
+    --Get the timezone id of the location filter of SD Plan 
+	SELECT T3.TIMEZONE_ID INTO LV_TIME_ZONE_ID 
+		FROM "sap.tm.trp.db.pipeline::t_plan_model" T1 
+		INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2 ON T2.ID = T1.FILTER_GROUP_ID
+		INNER JOIN "sap.tm.trp.db.filter::t_time_filter" T3 ON T2.TIME_FILTER_ID = T3.ID
+		WHERE T1.ID = :LV_SD_PLAN_ID; 
+
+	--get pure supply and demand result			
+	CALL "sap.tm.trp.db.planningcockpit::p_origin_sd_stock_cutoff"
+	(
+		:LV_EXECUTION_ID,
+		:LV_SD_PLAN_ID,
+		:LV_NODE_ID,
+		LT_PURE_SD,
+		LT_INITIAL_STOCK
+	);	
+
+	SELECT MIN(TIME_INTERVAL_ID) INTO LV_MIN_INTERVAL_ID FROM :LT_PURE_SD;
+    
+    LT_PURE_SD =  SELECT T0.LOCATION_ID,
+    					 T0.LOCATION_NAME,
+					 	 T0.EQUIP_TYPE_ID,      
+    					 T0.TIME_INTERVAL_ID,
+    					 T0.START_TIME,
+    					 T0.END_TIME,
+    					 IFNULL(T0.SUPPLY-T1.INIT_STOCK,SUPPLY) AS SUPPLY,
+    					 DEMAND
+    				FROM :LT_PURE_SD T0
+    				LEFT JOIN :LT_INITIAL_STOCK T1 
+    				ON T0.LOCATION_ID = T1.LOCATION_ID
+                 	AND T0.EQUIP_TYPE_ID = T1.RESOURCE_TYPE
+                  AND T0.TIME_INTERVAL_ID =:LV_MIN_INTERVAL_ID; 
+
+	--check whether the overdue, on&off-hire, maintanence and repaire activity should be consider into SD plan.
+	call "sap.tm.trp.db.planningcockpit::p_origin_sd_stock_cutoff_pure_transportation"
+	(
+		:LV_EXECUTION_ID,
+		:IV_NETWORK_SETTING_GROUP_ID,
+		:LT_PURE_SD,
+		LT_PURE_SD
+	);
+	
+	--get the supply and demand with handling capacity for each location
+	CALL "sap.tm.trp.db.planningcockpit::p_get_location_handling_capacity"(:LT_PURE_SD, :LV_TIME_ZONE_ID, :LV_RES_CAT, LT_LOC_SD_W_CAPA);
+	
+	LT_LOC_SD_W_CAPA = SELECT LOCATION_ID,LOCATION_NAME,TIME_INTERVAL_ID,START_TIME,END_TIME,SUPPLY,DEMAND,
+							  HANDLING_CAPACITY - SUPPLY - DEMAND AS HANDLING_CAPACITY
+                   	   FROM :LT_LOC_SD_W_CAPA;
+	
+	--check for each operation activity fall in which timeinterval and the relvant remaining handling capacity
+	LT_ROUTE_W_CAP =
+		SELECT 
+			RD.ROUTE_ID,RD.LOCATION,HANDLING_TYPE, 
+			SD_DIS.TIME_INTERVAL_ID AS DIS_TIME_ID, SD_DIS.HANDLING_CAPACITY AS DIS_CAP,
+			SD_LOD.TIME_INTERVAL_ID AS LOD_TIME_ID, SD_LOD.HANDLING_CAPACITY AS LOD_CAP
+		FROM :IT_ROUTE_DETAIL AS RD
+		LEFT JOIN :LT_LOC_SD_W_CAPA AS SD_DIS
+			ON RD.LOCATION = SD_DIS.LOCATION_NAME AND (SD_DIS.START_TIME <=RD.ARRIVAL_TIME AND RD.ARRIVAL_TIME < SD_DIS.END_TIME) 
+		LEFT JOIN :LT_LOC_SD_W_CAPA AS SD_LOD
+			ON RD.LOCATION = SD_LOD.LOCATION_NAME AND (SD_LOD.START_TIME <=RD.DEPARTURE_TIME AND RD.DEPARTURE_TIME < SD_LOD.END_TIME);
+	
+	LT_BOTTLENECK = 
+		--for source location only the LOAD activity will be performed		
+		SELECT 
+			ROUTE_ID,
+			LOCATION,
+			LOD_TIME_ID AS TIME_INTERVAL_ID,
+			LOD_CAP AS HANDLING_CAPACITY
+		FROM :LT_ROUTE_W_CAP WHERE HANDLING_TYPE = 'LOD'	
+		--for destination location only the unload activity will be performed	
+		UNION
+		SELECT 
+			ROUTE_ID,
+			LOCATION,
+			DIS_TIME_ID AS TIME_INTERVAL_ID,
+			DIS_CAP AS HANDLING_CAPACITY
+		FROM :LT_ROUTE_W_CAP WHERE HANDLING_TYPE = 'ULD'
+		--for transhipment location both load and unlaod activity will be performed
+		--for load activity
+		UNION		
+		SELECT 
+			ROUTE_ID,
+			LOCATION,
+			LOD_TIME_ID AS TIME_INTERVAL_ID,
+			LOD_CAP AS HANDLING_CAPACITY
+		FROM :LT_ROUTE_W_CAP WHERE HANDLING_TYPE = 'TRN'
+		--for unload activity
+		UNION
+		SELECT 
+			ROUTE_ID,
+			LOCATION,
+			DIS_TIME_ID AS TIME_INTERVAL_ID,
+			DIS_CAP AS HANDLING_CAPACITY
+		FROM :LT_ROUTE_W_CAP WHERE HANDLING_TYPE = 'TRN';
+	
+	--get all of the pass by loaction with different activity time inverval.
+	LT_ROUTE_LOCATION_TIME = SELECT DISTINCT ROUTE_ID, LOCATION,TIME_INTERVAL_ID FROM :LT_BOTTLENECK;
+	
+	--get the remaining handling capacity for each time interval of each location.	
+	LT_GRP_CAP = SELECT RANK ( ) OVER (ORDER BY LOCATION,TIME_INTERVAL_ID) + :IV_GRP_ID AS GRP_ID, LOCATION, TIME_INTERVAL_ID, MIN (HANDLING_CAPACITY) AS HANDLING_CAPACITY FROM :LT_BOTTLENECK GROUP BY LOCATION, TIME_INTERVAL_ID;
+	
+	--the depot handling capacity it's applicable for all of the container types which flow in/out the depot.
+	ET_ROUTE_CAP = SELECT ROUTE_ID,T3.CONTAINER_TYPE AS CONTAINER_TYPE,T2.GRP_ID AS GROUP_ID,T2.HANDLING_CAPACITY AS CAPACITY,'HC' AS TYPE FROM :LT_ROUTE_LOCATION_TIME AS T1
+						    JOIN :LT_GRP_CAP AS T2
+						    ON T1.LOCATION = T2.LOCATION AND T1.TIME_INTERVAL_ID = T2.TIME_INTERVAL_ID
+					        CROSS JOIN (SELECT DISTINCT EQUIP_TYPE_ID AS CONTAINER_TYPE FROM :LT_PURE_SD) T3;
+	
+  END IF;
+END;
+

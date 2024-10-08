@@ -1,0 +1,441 @@
+procedure "SAP_TM_TRP"."sap.tm.trp.db.availabilitycheck::p_batch_EAC_plans" (
+    --IN SD_PLANS "sap.tm.trp.db.availabilitycheck::tt_cursor_used",
+    IN SD_PLANS_CLOB CLOB,
+    OUT check_result "sap.tm.trp.db.availabilitycheck::tt_check_result",
+    OUT message "sap.tm.trp.db.common::tt_message"
+    )
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+
+    -- Validate input
+    DECLARE v_count INTEGER;
+    DECLARE v_plan_model_code VARCHAR(30);
+    DECLARE v_plan_model_type_id INTEGER;
+    DECLARE v_plan_model_id BIGINT;
+    DECLARE v_execution_id INTEGER;
+    DECLARE v_node_id INTEGER;
+    DECLARE v_node_name VARCHAR(30);
+
+    DECLARE MIN_SAFETY_KEY VARCHAR(20) := 'MIN_SAFETY_STOCK';
+    DECLARE MAX_SAFETY_KEY VARCHAR(20) := 'MAX_SAFETY_STOCK';
+    DECLARE MAX_CAPACITY_KEY VARCHAR(20) := 'MAX_CAPACITY';
+    --DECLARE MIN_SAFETY_DEFAULT INTEGER;
+    --DECLARE MAX_SAFETY_DEFAULT INTEGER;
+    --DECLARE MAX_CAPACITY_DEFAULT INTEGER;
+    DECLARE COUNT_SD INTEGER;
+    DECLARE PLAN_MODEL_TYPE_SCHEDULED integer := 1;
+    DECLARE PLAN_MODEL_TYPE_VIRTUAL integer := 3;
+    DECLARE NODE_NAME_STOCK VARCHAR(20) := 'PROVISIONAL_STOCK';
+    DECLARE NODE_OUTPUT_KEY_STOCK VARCHAR(20) := 'STOCK';
+    DECLARE NODE_OUTPUT_KEY_SUPPLY VARCHAR(20) := 'SUPPLY';
+    DECLARE NODE_OUTPUT_KEY_DEMAND VARCHAR(20) := 'DEMAND';
+    DECLARE BASIC_SD_PLAN_ID BIGINT;
+    DECLARE V_INSTANT_ENABLED CHAR(1) :='';
+    DECLARE V_LOCATION_ID VARCHAR(22) := '';
+
+    DECLARE DRILL_DOWN_FLAG_0 INTEGER := 0;
+    DECLARE DRILL_DOWN_FLAG_1 INTEGER := 1;
+    DECLARE EXECUTION_ID INTEGER := 0;
+    
+    --clob splitter logic 
+    CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:sd_plans_clob,'~',sd_plan_temp);
+   
+    SD_PLANS_1  = SELECT  CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 1) as VARCHAR(50)) as LOCATION_NAME,
+                        CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 2) as VARCHAR(10)) as LOCATION_TYPE,
+                        CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 3) as NVARCHAR(50)) as EQUIP_TYP,
+                        CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 4) as TIMESTAMP) as REQUEST_TIME,
+                        CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 5) as INTEGER) as QUANTITY,
+                        CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 6) as NVARCHAR(50)) as REQUEST_CHECK_TYPE,
+                        CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 7) as NVARCHAR(50)) as SD_PLAN
+                from :sd_plan_temp;
+    SD_PLANS = select * from :SD_PLANS_1 where SD_PLAN is not null; 
+    
+    BEGIN
+                
+    DECLARE CURSOR c_sd_plan FOR
+      SELECT DISTINCT SD_PLAN FROM :SD_PLANS;
+
+    message = SELECT 'I' AS severity, '' AS message_id,
+        '' AS message, '' AS var0, '' AS var1, '' AS var2, '' AS var3,
+        '' AS var4 FROM dummy WHERE 1 <> 1;
+
+    check_result = SELECT
+        '' AS sd_plan,
+        '' AS location_no,
+        '' AS equip_type,
+        null AS start_time,
+        null AS end_time,
+        0  AS supply,
+        0 AS demand,
+        0 AS level
+        FROM dummy WHERE 1 <> 1;
+
+    SELECT count(SD_PLAN) into COUNT_SD FROM :SD_PLANS;
+    if COUNT_SD = 0 then
+         message = SELECT 'E' AS severity, 'MSG_NO_AVAIL_CHECK_PLAN_MODEL' AS message_id,
+        'No Supply and Demand plan available' AS message, '' AS var0, '' AS var1, '' AS var2, '' AS var3,
+        '' AS var4 FROM dummy;
+        return;
+    end if;
+
+    FOR row AS c_sd_plan DO
+
+    SELECT row.sd_plan into v_plan_model_code FROM dummy;
+
+    IF v_plan_model_code IS NULL THEN
+        message = SELECT 'E' AS severity, 'MSG_NO_AVAIL_CHECK_PLAN_MODEL' AS message_id,
+        'No Supply and Demand plan available' AS message, '' AS var0, '' AS var1, '' AS var2, '' AS var3,
+        '' AS var4 FROM dummy;
+        continue;
+    END IF;
+
+    SELECT count(*) into v_count
+    FROM "sap.tm.trp.db.pipeline::t_plan_model"
+    WHERE code = v_plan_model_code;
+
+    IF :v_count = 0 THEN
+        message = SELECT 'E' AS severity, 'MSG_PLAN_MODEL_CODE_NOT_FOUND' AS message_id,
+        'Supply and Demand Plan not found' AS message, :v_plan_model_code AS var0, '' AS var1, '' AS var2, '' AS var3,
+        '' AS var4 FROM dummy;
+        continue;
+    END IF;
+
+    SELECT id, plan_model_type_id into v_plan_model_id, v_plan_model_type_id
+    FROM "sap.tm.trp.db.pipeline::t_plan_model"
+    WHERE code = v_plan_model_code;
+
+    IF :v_plan_model_type_id = :PLAN_MODEL_TYPE_VIRTUAL THEN --check if it's instant VSD
+
+     SELECT TOP 1 PERSISTED_PLAN_MODEL_ID INTO BASIC_SD_PLAN_ID
+     FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan"
+     WHERE VIRTUAL_PLAN_MODEL_ID = :v_plan_model_id;
+
+     SELECT IFNULL (T2.INSTANT_ENABLED,'') INTO V_INSTANT_ENABLED
+       FROM "sap.tm.trp.db.pipeline::t_plan_model" AS T1
+       INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_model" AS T2 ON T1.PIPELINE_MODEL_ID = T2.ID
+       WHERE T1."ID" = :BASIC_SD_PLAN_ID;
+
+    END IF;
+
+        IF :v_plan_model_type_id = :PLAN_MODEL_TYPE_SCHEDULED OR (v_plan_model_type_id = :PLAN_MODEL_TYPE_VIRTUAL AND V_INSTANT_ENABLED = 'X') THEN---Scheduled SD plan OR instant VSD
+         --This condition has to be modified for both Scheduled and Instant VSD
+
+          IF v_plan_model_type_id = :PLAN_MODEL_TYPE_SCHEDULED THEN
+            BASIC_SD_PLAN_ID =  :v_plan_model_id;
+          END IF ;
+
+        -- Retrieve supply demAND data FROM plan model executiON by plann model ID
+        SELECT max(e.id) into v_execution_id
+        FROM "sap.tm.trp.db.pipeline::t_plan_execution" AS e
+        INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" AS m
+        ON e.plan_model_id = m.id
+        WHERE m.code = :v_plan_model_code;
+
+        IF :v_execution_id = 0 THEN
+            message = SELECT 'E' AS severity, 'MSG_NO_PLAN_MODEL_EXECUTION' AS message_id,
+            'No Executions exist for the Supply and Demand Plan' AS message, :v_plan_model_code AS var0, '' AS var1, '' AS var2, '' AS var3,
+            '' AS var4 FROM dummy;
+            continue;
+        END IF;
+
+         CALL "sap.tm.trp.db.pipeline::p_get_default_node_by_planid"(:v_plan_model_id,NULL,V_NODE_ID);
+
+        IF :v_node_id = 0 THEN
+            message = SELECT 'E' AS severity, 'MSG_NO_DEFALT_PLAN_MODEL_NODE' AS message_id,
+            'No default node exists for the Supply and Demand Plan' AS message, :v_plan_model_code AS var0, '' AS var1, '' AS var2, '' AS var3,
+            '' AS var4 FROM dummy;
+            continue;
+        END IF;
+
+        -- Prepare the stock, supply AND demand
+        -- make changes in this
+
+        CALL "sap.tm.trp.db.supplydemand::p_get_supply_demand_result_by_plan"(:v_plan_model_id,NULL,'', SD_EXECUTIION_RESULT);
+
+        /*SQL2 =           SELECT
+                              PLAN_EXECUTION_ID,
+                              NODE_ID,
+                              LOCATION_ID,
+                              LOCATION_NAME,
+                              LOCATION_FILTER_TYPE,
+                              EQUIP_TYPE_ID,
+                              EQUIP_TYPE_NAME,
+                              EQUIP_FILTER_TYPE,
+                              CASE  WHEN OUTPUT_KEY = 'DEMAND'
+                                	      THEN 'SUPPLY'
+                    	            ELSE 'DEMAND'
+                    	      END  AS OUTPUT_KEY,
+                              0 AS OUTPUT_VALUE,
+                              TIME_INTERVAL_ID,
+                              UNIT,
+                              START_TIME,
+                              END_TIME,
+                              TIME_INTERVAL,
+                              SEQUENCE
+                        FROM :SD_EXECUTIION_RESULT WHERE NODE_ID = :V_NODE_ID
+                        UNION ALL
+                        SELECT PLAN_EXECUTION_ID,
+                              NODE_ID,
+                              LOCATION_ID,
+                              LOCATION_NAME,
+                              LOCATION_FILTER_TYPE,
+                              EQUIP_TYPE_ID,
+                              EQUIP_TYPE_NAME,
+                              EQUIP_FILTER_TYPE,
+                              OUTPUT_KEY,
+                              OUTPUT_VALUE,
+                              TIME_INTERVAL_ID,
+                              UNIT,
+                              START_TIME,
+                              END_TIME,
+                              TIME_INTERVAL,
+                              SEQUENCE
+                        FROM :SD_EXECUTIION_RESULT WHERE NODE_ID = :V_NODE_ID;
+
+       init_plan_data = SELECT PLAN_EXECUTION_ID,
+                              NODE_ID,
+                              LOCATION_ID,
+                              LOCATION_NAME,
+                              LOCATION_FILTER_TYPE,
+                              EQUIP_TYPE_ID,
+                              EQUIP_TYPE_NAME,
+                              EQUIP_FILTER_TYPE,
+                              OUTPUT_KEY,
+                              SUM(OUTPUT_VALUE) AS OUTPUT_VALUE,
+                              TIME_INTERVAL_ID,
+                              UNIT,
+                              START_TIME,
+                              END_TIME,
+                              TIME_INTERVAL,
+                              SEQUENCE
+                        FROM :SQL2
+                        GROUP BY
+                              PLAN_EXECUTION_ID,
+                              NODE_ID,
+                              LOCATION_ID,
+                              LOCATION_NAME,
+                              LOCATION_FILTER_TYPE,
+                              EQUIP_TYPE_ID,
+                              EQUIP_TYPE_NAME,
+                              EQUIP_FILTER_TYPE,
+                              OUTPUT_KEY,
+                              TIME_INTERVAL_ID,
+                              UNIT,
+                              START_TIME,
+                              END_TIME,
+                              TIME_INTERVAL,
+                              SEQUENCE;
+
+       convert_plan_data = SELECT
+                                 T1.PLAN_EXECUTION_ID,
+                                 T1.NODE_ID,
+                                 T1.LOCATION_ID,
+                                 T1.LOCATION_NAME,
+                                 T1.LOCATION_FILTER_TYPE,
+                                 T1.EQUIP_TYPE_ID,
+                                 T1.EQUIP_TYPE_NAME,
+                                 T1.EQUIP_FILTER_TYPE,
+                                 T1.OUTPUT_VALUE AS SUPPLY,
+                                 T2.OUTPUT_VALUE AS DEMAND,
+                                 T1.TIME_INTERVAL_ID,
+                                 T1.UNIT,
+                                 T1.START_TIME,
+                                 T1.END_TIME,
+                                 T1.TIME_INTERVAL,
+                                 T1.SEQUENCE
+                          FROM (SELECT * FROM :init_plan_data
+                                WHERE OUTPUT_KEY = 'SUPPLY'
+                                ) T1
+                          INNER JOIN
+                               (SELECT * FROM :init_plan_data
+                                WHERE OUTPUT_KEY = 'DEMAND'
+                                ) T2
+                          ON ( T1.NODE_ID = T2.NODE_ID
+                              AND T1.LOCATION_ID = T2.LOCATION_ID
+                              AND T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID
+                              AND T1.TIME_INTERVAL_ID = T2.TIME_INTERVAL_ID);
+
+
+        check_result_tmp = SELECT
+        row.sd_plan AS sd_plan,
+        t1.location_name AS location_no,
+        TO_VARCHAR(t1.equip_type_id) AS equip_type,
+        t1.start_time,
+        t1.end_time,
+        t1.supply,
+        t1.demand,
+        0 AS level
+        FROM :convert_plan_data t1
+        INNER JOIN "sap.tm.trp.db.semantic.location::v_location" AS t3
+        ON t1.location_name = t3.name
+        WHERE t1.node_id = :v_node_id;*/
+        
+        SQL_FILTERED = SELECT * FROM :SD_EXECUTIION_RESULT t1 
+                   		INNER JOIN 
+                   	    "sap.tm.trp.db.semantic.location::v_location" AS t3
+                        ON t1.location_name = t3.name
+                        where (T1.OUTPUT_KEY ='SUPPLY' OR T1.OUTPUT_KEY = 'DEMAND') AND T1.NODE_ID = :v_node_id;
+
+ 
+    	SQL2 =  SELECT 
+            	PLAN_EXECUTION_ID,
+            	NODE_ID,
+            	LOCATION_ID,
+            	LOCATION_NAME,
+            	LOCATION_FILTER_TYPE,
+            	EQUIP_TYPE_ID,
+            	EQUIP_TYPE_NAME,
+                EQUIP_FILTER_TYPE,
+                CASE  WHEN OUTPUT_KEY = 'DEMAND'
+                    THEN OUTPUT_VALUE  
+                    ELSE 0 END AS DEMAND,
+                CASE WHEN OUTPUT_KEY = 'SUPPLY'
+                    THEN OUTPUT_VALUE 
+                    ELSE 0 END AS SUPPLY,    
+                TIME_INTERVAL_ID,
+                UNIT,
+                START_TIME,
+                END_TIME,
+                TIME_INTERVAL,
+                SEQUENCE
+            FROM :SQL_FILTERED;
+
+
+    convert_plan_data = SELECT PLAN_EXECUTION_ID,
+                              NODE_ID,
+                              LOCATION_ID,
+                              LOCATION_NAME,
+                              LOCATION_FILTER_TYPE,
+                              EQUIP_TYPE_ID,
+                              EQUIP_TYPE_NAME,
+                              EQUIP_FILTER_TYPE,
+                              SUM(SUPPLY) AS SUPPLY,
+                              SUM(DEMAND) AS DEMAND,
+                              TIME_INTERVAL_ID,
+                              UNIT,
+                              START_TIME,
+                              END_TIME,
+                              TIME_INTERVAL,
+                              SEQUENCE
+                        FROM :SQL2
+                        GROUP BY
+                              PLAN_EXECUTION_ID,
+                              NODE_ID,
+                              LOCATION_ID,
+                              LOCATION_NAME,
+                              LOCATION_FILTER_TYPE,
+                              EQUIP_TYPE_ID,
+                              EQUIP_TYPE_NAME,
+                              EQUIP_FILTER_TYPE,
+                              TIME_INTERVAL_ID,
+                              UNIT,
+                              START_TIME,
+                              END_TIME,
+                              TIME_INTERVAL,
+                              SEQUENCE;
+                              
+
+    check_result_tmp = SELECT
+        row.sd_plan AS sd_plan,
+        t1.location_name AS location_no,
+        TO_VARCHAR(t1.equip_type_id) AS equip_type,
+        t1.start_time,
+        t1.end_time,
+        t1.supply,
+        t1.demand,
+        0 AS level
+        FROM :convert_plan_data t1;
+
+
+    ELSEIF :v_plan_model_type_id = :PLAN_MODEL_TYPE_VIRTUAL THEN
+        -- No change in this
+        -- get the default stock threshold
+       /* SELECT IFNULL(MAX(T1.DEFAULT_VALUE),0) INTO MIN_SAFETY_DEFAULT
+        FROM "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+        WHERE T1.DEFAULT_KEY = :MIN_SAFETY_KEY;
+
+        SELECT IFNULL(MAX(T1.DEFAULT_VALUE),999999) INTO MAX_SAFETY_DEFAULT
+        FROM "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+        WHERE T1.DEFAULT_KEY = :MAX_SAFETY_KEY;
+
+        SELECT IFNULL(MAX(T1.DEFAULT_VALUE),999999) into MAX_CAPACITY_DEFAULT
+        FROM "sap.tm.trp.db.hrf.ruleManage::t_global_default_minMaxSafetyCapacity" T1
+        WHERE T1.DEFAULT_KEY = :MAX_CAPACITY_KEY;
+		*/
+		
+        call "sap.tm.trp.db.pipeline::p_get_default_node_for_virtual_plan"(:v_plan_model_id, v_node_name);
+        IF :v_node_name IS NULL OR :v_node_name = '' THEN
+            message = SELECT 'E' AS severity, 'MSG_NO_DEFALT_PLAN_MODEL_NODE' AS message_id,
+            '' AS message, :v_plan_model_code AS var0, '' AS var1, '' AS var2, '' AS var3,
+            '' AS var4 FROM dummy;
+            continue;
+        END IF;
+
+        location_list = SELECT :V_LOCATION_ID AS id FROM dummy WHERE 1 <> 1;
+        --call "sap.tm.trp.db.pipeline::p_get_aggregate_execution_result_for_virtual_plan"
+        call "sap.tm.trp.db.availabilitycheck::p_get_aggregate_execution_result_for_virtual_plan_eac"
+        (
+            :v_plan_model_id, :execution_id, :location_list , :v_node_name,  t_sd_result, t_no_data_plan
+        );
+
+        -- Stock node name might change
+        -- Check carefully
+        /* call "sap.tm.trp.db.pipeline::p_get_aggregate_execution_result_for_virtual_plan"
+        (
+            :v_plan_model_id, 0, :location_list , :NODE_NAME_STOCK,  t_stock_result, t_no_data_plan
+        );*/
+
+        check_result_tmp = SELECT
+        row.sd_plan AS sd_plan,
+        t1.location_name AS location_no,
+        t1.equip_type,
+        t1.start_time,
+        t1.end_time,
+        t1.output_value AS supply,
+        t2.output_value AS demand,
+        0 AS LEVEL
+        FROM (SELECT location_name, equip_type_id AS equip_type, start_time, end_time, sequence, output_value
+            FROM :t_sd_result
+            WHERE output_key = :NODE_OUTPUT_KEY_SUPPLY AND has_drilldown_flag IN (:DRILL_DOWN_FLAG_0, :DRILL_DOWN_FLAG_1)
+        ) AS t1
+        INNER JOIN (SELECT location_name, equip_type_id AS equip_type, sequence, output_value
+            FROM :t_sd_result
+            WHERE output_key = :NODE_OUTPUT_KEY_DEMAND AND has_drilldown_flag IN (:DRILL_DOWN_FLAG_0, :DRILL_DOWN_FLAG_1)
+        ) AS t2
+        ON t1.location_name = t2.location_name
+        AND t1.equip_type = t2.equip_type
+        AND t1.sequence = t2.sequence;
+        /* LEFT JOIN (SELECT location_name, equip_type_id AS equip_type, sequence, output_value
+            FROM :t_stock_result
+            WHERE output_key = :NODE_OUTPUT_KEY_STOCK AND has_drilldown_flag IN (:DRILL_DOWN_FLAG_0, :DRILL_DOWN_FLAG_1)
+        ) AS t3
+        ON (t1.location_name = t3.location_name
+        AND t1.equip_type = t3.equip_type
+        AND t1.sequence = t3.sequence)
+        LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_location" AS t4
+        ON t1.location_name = t4.name
+        LEFT OUTER JOIN
+        (SELECT LOCATION_ID,EQUIP_CODE,MIN_SAFETY, MAX_SAFETY, MAX_CAPACITY
+        FROM "sap.tm.trp.db.stock::v_stock_config_for_container"
+        )t5 ON (T1.LOCATION_NAME = T5.LOCATION_ID AND T1.EQUIP_TYPE = T5.EQUIP_CODE);
+        */
+
+    ELSE
+        message = SELECT 'E' AS severity, 'MSG_PLAN_TYPE_NOT_SUPPORTED' AS message_id,
+        'The Supply and Demand Plan type is not supported' AS message, :v_plan_model_code AS var0,  TO_VARCHAR(v_plan_model_type_id) AS var1,
+        '' AS var2, '' AS var3, '' AS var4 FROM dummy;
+        continue;
+    END IF;
+
+    check_result = SELECT * FROM :check_result_tmp
+    UNION ALL
+    SELECT * FROM :check_result;
+
+    END FOR;
+
+END;
+
+END;

@@ -1,0 +1,41 @@
+schema="SAP_TM_TRP";
+query = "SELECT DISTINCT A.ID,
+            A.DESC AS NAME,
+            A.SP,
+            T3.DESC AS DESCRIPTION,
+            SUBSTR_BEFORE(REPLACE(SP, '\"', ''), '.') AS SCHEMA_NAME,
+            SUBSTR_AFTER(REPLACE(SP, '\"', ''), '.') AS STORED_PROCEDURE_NAME,
+            CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                  WHEN (A.CREATED_BY <> 0 AND A.CREATED_BY IS NOT NULL) AND E.USERNAME IS NOT NULL THEN E.USERNAME
+			      WHEN A.CREATED_BY = 0 OR A.CREATED_BY IS NULL THEN ''
+			      ELSE '***' END AS CREATED_BY,
+            A.CREATED_AT AS CREATED_ON,
+            CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                  WHEN (A.LAST_MODIFIED_BY <> 0 AND A.LAST_MODIFIED_BY IS NOT NULL) AND F.USERNAME IS NOT NULL THEN F.USERNAME
+			      WHEN A.LAST_MODIFIED_BY = 0 OR A.LAST_MODIFIED_BY IS NULL THEN ''
+			      ELSE '***' END AS MODIFIED_BY,
+            A.LAST_MODIFIED_AT AS MODIFIED_ON
+        FROM \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group\" A
+       LEFT OUTER JOIN 
+       (SELECT T1.ID,T1.DESC
+        FROM \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group_t\" T1
+        INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE_T
+        ON T1.SPRAS = LANGUAGE_T.SPRAS) T3
+       ON A.ID = T3.ID
+        LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS USER1 ON (A.CREATED_BY = USER1.ID)
+        LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS USER2 ON (A.LAST_MODIFIED_BY = USER2.ID)
+        LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\" E ON USER1.USERNAME = E.USERNAME
+        LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\" F ON USER2.USERNAME = F.USERNAME    
+        CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE
+        ";
+
+depends_on_table = [
+					"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group",
+					"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group_t"
+                    ];
+depends_on_view = [
+					"sap.tm.trp.db.semantic.common::v_lang_code",
+					"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join",
+					"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users",
+                    "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege"
+                    ];      

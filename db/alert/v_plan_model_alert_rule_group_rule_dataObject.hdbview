@@ -1,0 +1,28 @@
+//To define the HDB view file use the following syntax: 
+schema = "SAP_TM_TRP";
+query = "
+          SELECT T1.PLAN_MODEL_ID,
+                 T1.ALERT_RULE_GROUP_ID,
+                 T2.NAME as ALERT_RULE_GROUP_NAME,
+                 T4.ALERT_RULE_ID,
+                 T4.NAME as ALERT_RULE_NAME,
+                 T4.SP,
+                 T6.ALERT_RULE_PARAM_VALUE,
+                 T5.ALERT_RULE_TYPE_ID,
+                 T5.ALERT_RULE_TYPE_DESC,
+                 T5.DATA_OBJECT_ID,
+                 T5.DATA_OBJECT_FORMAT
+          FROM \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_assign_plan_model\" T1
+          INNER JOIN \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group\" T2
+          ON (T1.ALERT_RULE_GROUP_ID = T2.ALERT_RULE_GROUP_ID) 
+          INNER JOIN \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_items\" T3
+          ON (T1.ALERT_RULE_GROUP_ID = T3.ALERT_RULE_GROUP_ID)
+          INNER JOIN  \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule\" T4
+          ON (T3.ALERT_RULE_ID = T4.ALERT_RULE_ID)
+          INNER JOIN  \"sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_map_node_metaData\" T5
+          ON (T4.ALERT_RULE_TYPE_ID = T5.ALERT_RULE_TYPE_ID)
+          INNER JOIN  \"sap.tm.trp.db.alert.alert_rule_group::t_DT_params\" T6
+          ON (T4.ALERT_RULE_ID = T6.ALERT_RULE_ID)
+          ORDER BY T1.PLAN_MODEL_ID
+";
+depends_on_table = ["sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_assign_plan_model","sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group","sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_items","sap.tm.trp.db.alert.alert_rule_group::t_alert_rule","sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_map_node_metaData","sap.tm.trp.db.alert.alert_rule_group::t_DT_params"];

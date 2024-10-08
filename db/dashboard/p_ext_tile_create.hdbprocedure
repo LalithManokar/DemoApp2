@@ -1,0 +1,17 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.dashboard::p_ext_tile_create" (
+    IN TYPE VARCHAR(32),
+    IN ITEM_LIST "sap.tm.trp.db.dashboard::tt_tile_item",
+    IN RESOURCE_CATEGORY NVARCHAR(50),
+    OUT TILE_ID BIGINT
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+    CALL "sap.tm.trp.db.dashboard::p_tile_create"(:TYPE, :RESOURCE_CATEGORY, TILE_ID);
+    CALL "sap.tm.trp.db.dashboard::p_tile_item_create"(:TILE_ID, :ITEM_LIST);
+
+    CALL "sap.tm.trp.db.dashboard::p_ext_tile_get"(:RESOURCE_CATEGORY, TILES, TILE_ITEMS);
+    CALL "sap.tm.trp.db.dashboard::p_ext_tile_update_sequence"(:TILES);
+END

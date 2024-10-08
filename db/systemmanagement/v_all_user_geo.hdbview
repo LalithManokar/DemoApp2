@@ -1,0 +1,24 @@
+schema = "SAP_TM_TRP";
+query  = "-- List All Geo Information Belonged to All Users
+          SELECT U.USER_TYPE_ID,
+                 ROLE.USER_ID,
+                 ROLE_LOC.LOCATION_ID AS GEO_ID
+            FROM \"sap.tm.trp.db.systemmanagement.user::t_user_role\" AS ROLE
+                 INNER JOIN \"sap.tm.trp.db.systemmanagement.user::t_role_location\" AS ROLE_LOC
+                 ON ROLE.ROLE_ID = ROLE_LOC.ROLE_ID
+                 INNER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS U
+                 ON U.ID = ROLE.USER_ID
+           UNION ALL
+          SELECT U.USER_TYPE_ID,
+                 ROLE.USER_ID,
+                 ROLE_LOC.ROOT_ID AS GEO_ID
+            FROM \"sap.tm.trp.db.systemmanagement.user::t_user_role\" AS ROLE
+                 INNER JOIN \"sap.tm.trp.db.systemmanagement.user::t_role_region\" AS ROLE_LOC
+                 ON ROLE.ROLE_ID = ROLE_LOC.ROLE_ID
+                 INNER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS U
+                 ON U.ID = ROLE.USER_ID";
+                 
+depends_on_table = ["sap.tm.trp.db.systemmanagement.user::t_user_role", 
+                    "sap.tm.trp.db.systemmanagement.user::t_role_location",  
+                    "sap.tm.trp.db.systemmanagement.user::t_role_region"];
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];               

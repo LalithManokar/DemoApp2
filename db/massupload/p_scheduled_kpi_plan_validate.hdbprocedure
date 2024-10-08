@@ -1,0 +1,322 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_scheduled_kpi_plan_validate" (
+    IN KNOWN_INVALID_ITEMS "sap.tm.trp.db.massupload::tt_massupload_invalid_item",
+    IN SCHEDULED_KPI_PLAN "sap.tm.trp.db.massupload::tt_scheduled_kpi_plan_upload",
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),
+    IN ERROR_LIMIT INTEGER,
+    OUT INVALID_ITEMS "sap.tm.trp.db.massupload::tt_massupload_invalid_item"
+)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+
+ DECLARE I_COUNT INTEGER := 0;
+ DECLARE MIGRATION_STATUS VARCHAR(1);
+ DECLARE SCHEDULE_TYPE VARCHAR(4) := 'PLAN';
+
+ CALL "SAP_TM_TRP"."sap.tm.trp.db.consistencycheck::p_migration_status"(MIGRATION_STATUS);
+
+ ITEMS =
+      SELECT UPPER(NAME) AS NAME, UPPER(TYPE_NAME) AS TYPE_NAME,
+             UPPER(LOCATION_FILTER_NAME) AS LOCATION_FILTER_NAME,
+             UPPER(RESOURCE_FILTER_NAME) AS RESOURCE_FILTER_NAME,
+             UPPER(TIME_FILTER_NAME) AS TIME_FILTER_NAME,
+             UPPER(CALCULATION_MODEL_NAME) AS CALCULATION_MODEL_NAME,
+             UPPER(ATTRIBUTE_GROUP_NAME) AS ATTRIBUTE_GROUP_NAME,
+             UPPER(ALERT_RULE_GROUP_NAME) AS ALERT_RULE_GROUP_NAME,
+             PLAN_USAGE,
+	         RECURRENCE_TYPE,
+			 RECURRENCE_INTERVAL,
+			 RECURRENCE_DAY,
+			 START_TIME,
+			 EXPIRY_TIME,
+             VISIBILITY_FLAG,
+             ROW_INDEX,
+             TIMEZONES
+        FROM :SCHEDULED_KPI_PLAN;
+
+
+  --Existence check
+  INVALID_ITEMS =
+         SELECT A.ROW_INDEX, 1 AS COL_INDEX , 'UPLOAD_DUPLICATE_NAME' AS REASON_CODE
+          FROM :ITEMS AS A
+           INNER JOIN :ITEMS AS B
+            ON ( A.NAME = B.NAME AND A.ROW_INDEX <> B.ROW_INDEX ) --duplidate name check in csv
+          UNION
+          SELECT A.ROW_INDEX,
+               3 AS COL_INDEX,
+               'PLAN_TYPE_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A WHERE TYPE_NAME <> 'SCHEDULED KPI PLAN'
+         UNION
+          SELECT A.ROW_INDEX,
+               5 AS COL_INDEX,
+               'LOCATION_FILTER_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A
+               LEFT OUTER JOIN "sap.tm.trp.db.filter::t_location_filter" AS B
+               ON A.LOCATION_FILTER_NAME = B.DESC and B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+          WHERE B.DESC IS NULL
+         UNION
+          SELECT A.ROW_INDEX,
+               6 AS COL_INDEX,
+               'RESOURCE_FILTER_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A
+               LEFT OUTER JOIN "sap.tm.trp.db.filter::t_equipment_filter" AS B
+               ON A.RESOURCE_FILTER_NAME = B.DESC and B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+            WHERE B.DESC IS NULL
+         UNION
+            SELECT A.ROW_INDEX,
+               7 AS COL_INDEX,
+               'KPI_PLAN_TIME_FILTER_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A
+               LEFT OUTER JOIN "sap.tm.trp.db.filter::t_time_filter" AS B
+               ON B.DIRECTION_FLAG = 1 AND A.TIME_FILTER_NAME = B.NAME ---Check past time filter
+         WHERE B.NAME IS NULL
+         UNION
+          SELECT A.ROW_INDEX,
+               16 AS COL_INDEX,
+               'PLAN_USAGE_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A
+               LEFT OUTER JOIN "sap.tm.trp.db.pipeline::t_plan_usage_t" AS B
+               ON A.PLAN_USAGE = B.DESC
+               LEFT OUTER  JOIN "sap.tm.trp.db.pipeline::t_plan_usage" AS C
+               ON B.USAGE_CODE = C.USAGE_CODE AND C.PLAN_MODEL_TYPE_ID = 4
+         WHERE C.USAGE_CODE IS NULL
+
+        UNION
+          SELECT A.ROW_INDEX,
+               17 AS COL_INDEX,
+               'TIMEZONES_INVALID' AS REASON_CODE
+          FROM :ITEMS AS A
+               LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement.user::v_time_zone" AS B
+               ON A.TIMEZONES = B.CODE
+          WHERE B.CODE IS NULL
+
+         UNION
+           SELECT ROW_INDEX,
+                  COL_INDEX,
+                  REASON_CODE
+            FROM :KNOWN_INVALID_ITEMS;
+
+
+   SELECT COUNT(1) INTO I_COUNT FROM :INVALID_ITEMS;
+   IF :I_COUNT >= :ERROR_LIMIT THEN
+      INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+      RETURN;
+   END IF;
+
+     --Other checks
+ --If a scheduled KPI plan is assigned to one or multiple virtual plan, then below fields can not change
+--Location filter, Resource filter,Time Filter, Calculation Model, Plan Usage,
+--Recurrence, RECURRENCE_INTERVAL,RECURRENCE_DAY
+--Get scheduled plan assigned to virtual plan list
+   PLAN_ASSIGNED_VIRTUAL_PLAN = SELECT DISTINCT(PERSISTED_PLAN_MODEL_ID) AS PERSISTED_PLAN_MODEL_ID
+                                FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan";
+
+   DIFF_SCHEDULE_DETAILS =
+     SELECT A.ROW_INDEX,
+       --CASE WHEN TO_VARCHAR(A.START_TIME,'YYYY-MM-DD') <> TO_VARCHAR(T2.START_TIME,'YYYY-MM-DD') THEN 1 ELSE 0 END AS DIFF_START_DATE,
+       --CASE WHEN TO_VARCHAR(A.EXPIRY_TIME,'YYYY-MM-DD') <> TO_VARCHAR(T2.EXPIRY_TIME,'YYYY-MM-DD') THEN 1 ELSE 0 END AS DIFF_END_DATE,
+       CASE WHEN T2.TIMEZONES <> A.TIMEZONES THEN 1 ELSE 0 END AS DIFF_TIMEZONE,
+       CASE WHEN T2.RECURRENCE_TYPE <> A.RECURRENCE_TYPE THEN 1 ELSE 0 END AS DIFF_RECURRENCE_TYPE,
+       CASE WHEN T2.RECURRENCE_INTERVAL <> A.RECURRENCE_INTERVAL THEN 1 ELSE 0 END AS DIFF_RECURRENCE_INTERVAL,
+       CASE WHEN --(T2.RECURRENCE_DAY IS NOT NULL  AND A.RECURRENCE_DAY IS NULL) OR
+                 (T2.RECURRENCE_DAY IS NULL AND A.RECURRENCE_DAY IS NOT NULL) OR
+                 (T2.RECURRENCE_DAY IS NOT NULL AND A.RECURRENCE_DAY IS NOT NULL AND T2.RECURRENCE_DAY <> A.RECURRENCE_DAY)
+      THEN 1 ELSE 0 END AS DIFF_RECURRENCE_DAY
+     FROM :ITEMS A
+     INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T1 ON (A.NAME = T1.NAME)
+     INNER JOIN :PLAN_ASSIGNED_VIRTUAL_PLAN T3 ON T1.ID = T3.PERSISTED_PLAN_MODEL_ID
+     INNER JOIN "sap.tm.trp.db.job::t_model_schedule_detail" T2 ON(T1.ID = T2.MODEL_ID AND T2.SCHEDULE_TYPE = :SCHEDULE_TYPE);
+
+  INVALID_ITEMS =
+       SELECT * FROM :INVALID_ITEMS
+       /* UNION
+          SELECT A.ROW_INDEX,
+               1 AS COL_INDEX,
+               'SD_KPI_PLAN_EDIT_MSG' AS REASON_CODE
+          FROM :ITEMS AS A
+               INNER JOIN "SAP_TM_TRP"."sap.tm.trp.db.pipeline::t_plan_model" AS B
+               ON A.NAME = B.NAME
+         WHERE B.ASSIGNED_TO_VIRTUAL = 'X' --Check if the plan being uploaded was previouslly assigned to any virtual plans.
+         AND :MIGRATION_STATUS = ''*/
+        UNION
+          SELECT
+               A.ROW_INDEX,
+               7 AS COL_INDEX,
+               'MSG_TIME_FILTER_CHANGE_ERROR' AS REASON_CODE
+          FROM :ITEMS AS A
+               INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" AS T1 ON (A.NAME = T1.NAME)
+               INNER JOIN :PLAN_ASSIGNED_VIRTUAL_PLAN AS T2 ON (T1.ID = T2.PERSISTED_PLAN_MODEL_ID)
+               INNER JOIN "sap.tm.trp.db.filter::t_filter_group" AS T3 ON (T1.FILTER_GROUP_ID = T3.ID)
+               INNER JOIN "sap.tm.trp.db.filter::t_time_filter" AS T4 ON A.TIME_FILTER_NAME = T4.NAME
+         WHERE T3.TIME_FILTER_ID <> T4.ID
+        UNION
+          SELECT A.ROW_INDEX,
+                 5 AS COL_INDEX,
+                 'ASSIGNED_TO_VPLAN_CANT_CHANGE_LOCATION_FILTER' AS REASON_CODE
+          FROM :ITEMS AS A
+          INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" AS T1 ON (A.NAME = T1.NAME)
+          INNER JOIN :PLAN_ASSIGNED_VIRTUAL_PLAN AS T2 ON (T1.ID = T2.PERSISTED_PLAN_MODEL_ID)
+          INNER JOIN "sap.tm.trp.db.filter::t_filter_location_filter" T3 ON (T3.FILTER_GROUP_ID = T1.FILTER_GROUP_ID)
+          INNER JOIN  "sap.tm.trp.db.filter::t_location_filter" T4 ON (T4.ID = T3.LOCATION_FILTER_ID)
+          WHERE T4.DESC <> A.LOCATION_FILTER_NAME
+         UNION
+          SELECT A.ROW_INDEX,
+                 6 AS COL_INDEX,
+                 'ASSIGNED_TO_VPLAN_CANT_CHANGE_RESOURCE_FILTER' AS REASON_CODE
+          FROM :ITEMS AS A
+          INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" AS T1 ON (A.NAME = T1.NAME)
+          INNER JOIN :PLAN_ASSIGNED_VIRTUAL_PLAN AS T2 ON (T1.ID = T2.PERSISTED_PLAN_MODEL_ID)
+          INNER JOIN  "sap.tm.trp.db.filter::t_filter_equipment_filter" T3 ON (T3.FILTER_GROUP_ID = T1.FILTER_GROUP_ID)
+          INNER JOIN "sap.tm.trp.db.filter::t_equipment_filter" T4  ON (T4.ID = T3.EQUIPMENT_FILTER_ID)
+          WHERE T4.DESC <> A.RESOURCE_FILTER_NAME
+         UNION
+           SELECT A.ROW_INDEX,
+                  8 AS COL_INDEX,
+                  'ASSIGNED_TO_VPLAN_CANT_CHANGE_CALCULATION_MODEL' AS REASON_CODE
+          FROM :ITEMS AS A
+          INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" AS T1 ON (A.NAME = T1.NAME)
+          INNER JOIN :PLAN_ASSIGNED_VIRTUAL_PLAN AS T2 ON (T1.ID = T2.PERSISTED_PLAN_MODEL_ID)
+          INNER JOIN "sap.tm.trp.db.pipeline::v_calculation_model" T3 ON (T3.ID = T1.PIPELINE_MODEL_ID)
+          WHERE T3.NAME <> A.CALCULATION_MODEL_NAME
+         UNION
+          SELECT A.ROW_INDEX,
+                16 AS COL_INDEX,
+                'ASSIGNED_TO_VPLAN_CANT_CHANGE_PLAN_USAGE' AS REASON_CODE
+          FROM :ITEMS AS A
+          INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" AS T1 ON (A.NAME = T1.NAME)
+          INNER JOIN :PLAN_ASSIGNED_VIRTUAL_PLAN AS T2 ON (T1.ID = T2.PERSISTED_PLAN_MODEL_ID)
+          INNER JOIN "sap.tm.trp.db.pipeline::t_plan_usage_t"  T3 ON (T1.USAGE_CODE = T3.USAGE_CODE)
+		  INNER JOIN "sap.tm.trp.db.semantic.common::v_lang_code" T4 ON (T3.SPRAS = T4.SPRAS)
+		  WHERE T3.DESC <> A.PLAN_USAGE
+		 /*UNION
+		  SELECT A.ROW_INDEX,
+		         14 AS COL_INDEX,
+		         'ASSIGNED_TO_VPLAN_CANT_CHANGE_START_SCHEDUL_DATE' AS REASON_CODE
+		  FROM :ITEMS AS A
+		  INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" AS T1 ON (A.NAME = T1.NAME)
+		  INNER JOIN :DIFF_SCHEDULE_DETAILS AS B ON (A.ROW_INDEX = B.ROW_INDEX AND B.DIFF_START_DATE = 1)
+		 UNION
+		  SELECT A.ROW_INDEX,
+		         15 AS COL_INDEX,
+		         'ASSIGNED_TO_VPLAN_CANT_CHANGE_END_SCHEDUL_DATE' AS REASON_CODE
+		  FROM :ITEMS AS A
+		  INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" AS T1 ON (A.NAME = T1.NAME)
+		  INNER JOIN :DIFF_SCHEDULE_DETAILS AS B ON (A.ROW_INDEX = B.ROW_INDEX AND B.DIFF_START_DATE = 1)*/
+		  UNION
+		  SELECT A.ROW_INDEX,
+		         17 AS COL_INDEX,
+		         'ASSIGNED_TO_VPLAN_CANT_CHANGE_TIMEZONE' AS REASON_CODE
+		  FROM :ITEMS AS A
+		  INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" AS T1 ON (A.NAME = T1.NAME)
+		  INNER JOIN :DIFF_SCHEDULE_DETAILS AS B ON (A.ROW_INDEX = B.ROW_INDEX AND B.DIFF_TIMEZONE = 1)
+		 UNION
+		   SELECT A.ROW_INDEX,
+		         11 AS COL_INDEX,
+		         'ASSIGNED_TO_VPLAN_CANT_CHANGE_RECURRENCE' AS REASON_CODE
+		  FROM :ITEMS AS A
+		  INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" AS T1 ON (A.NAME = T1.NAME)
+		  INNER JOIN :DIFF_SCHEDULE_DETAILS AS B ON (A.ROW_INDEX = B.ROW_INDEX AND B.DIFF_RECURRENCE_TYPE = 1)
+		 UNION
+		   SELECT A.ROW_INDEX,
+		         12 AS COL_INDEX,
+		         'ASSIGNED_TO_VPLAN_CANT_CHANGE_RECURRENCE_INTERVAL' AS REASON_CODE
+		  FROM :ITEMS AS A
+		  INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" AS T1 ON (A.NAME = T1.NAME)
+		  INNER JOIN :DIFF_SCHEDULE_DETAILS AS B ON (A.ROW_INDEX = B.ROW_INDEX AND B.DIFF_RECURRENCE_INTERVAL = 1)
+		  UNION
+		   SELECT A.ROW_INDEX,
+		         13 AS COL_INDEX,
+		         'ASSIGNED_TO_VPLAN_CANT_CHANGE_RECURRENCE_DAY' AS REASON_CODE
+		  FROM :ITEMS AS A
+		  INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" AS T1 ON (A.NAME = T1.NAME)
+		  INNER JOIN :DIFF_SCHEDULE_DETAILS AS B ON (A.ROW_INDEX = B.ROW_INDEX AND B.DIFF_RECURRENCE_DAY = 1)
+       UNION
+        SELECT A.ROW_INDEX,
+               8 AS COL_INDEX,
+               'CALCULATION_MODEL_INVALID_NO_AUTH' AS REASON_CODE
+          FROM :ITEMS AS A
+               LEFT OUTER JOIN "sap.tm.trp.db.pipeline::v_calculation_model" AS B
+               ON A.CALCULATION_MODEL_NAME = B.NAME AND B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+                 AND B.TYPE = 2 --- calulcation model type should be 2 (KPI Calculation)
+         WHERE B.NAME IS NULL
+        UNION
+          SELECT A.ROW_INDEX,
+                9 AS COL_INDEX,
+               'ALERT_RULE_GROUP_INVALID_NO_AUTH' AS REASON_CODE
+          FROM :ITEMS AS A
+               LEFT OUTER JOIN "sap.tm.trp.db.alert.alert_rule_group::cv_alert_rule_group" AS B
+               ON A.ALERT_RULE_GROUP_NAME = B.NAME AND B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+                  AND CATEGORY_ID = 2 ---Alter rule groups type should be 2 (KPI Alert)
+          WHERE B.NAME IS NULL
+         UNION
+          SELECT A.ROW_INDEX,
+               10 AS COL_INDEX,
+               'ATTRIBUTE_GROUP_INVALID_NO_AUTH' AS REASON_CODE
+          FROM :ITEMS AS A
+               LEFT OUTER JOIN "sap.tm.trp.db.filter::v_attribute_group" AS B
+               ON A.ATTRIBUTE_GROUP_NAME = B.NAME and B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+         WHERE B.NAME IS NULL AND A.ATTRIBUTE_GROUP_NAME <> '';
+
+   SELECT COUNT(1) INTO I_COUNT FROM :INVALID_ITEMS;
+   IF :I_COUNT >= :ERROR_LIMIT THEN
+      INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+      RETURN;
+   END IF;
+
+ ---Visibility check(Global-VISIBILITY_FLAG = 1,Personal- VISIBILITY_FLAG = 0)
+ ---Scheduled KPI Plan with global visibility cannot contain objects that have personal visibility
+
+  VISIBLITY_GLOBAL_ITEMS =
+           SELECT  NAME,TYPE_NAME,LOCATION_FILTER_NAME,RESOURCE_FILTER_NAME,TIME_FILTER_NAME,
+                   CALCULATION_MODEL_NAME,ATTRIBUTE_GROUP_NAME,ALERT_RULE_GROUP_NAME,
+                   VISIBILITY_FLAG,ROW_INDEX
+             FROM :ITEMS WHERE VISIBILITY_FLAG = 1;--get all data with global visibility
+
+   INVALID_ITEMS =
+       SELECT * FROM :INVALID_ITEMS
+       UNION
+         SELECT A.ROW_INDEX, 5 AS COL_INDEX,
+                'KPIPLAN_LOCFILTER_PERVISI' AS REASON_CODE
+         FROM :VISIBLITY_GLOBAL_ITEMS AS A
+          LEFT OUTER JOIN "sap.tm.trp.db.filter::t_location_filter" AS B
+           ON A.LOCATION_FILTER_NAME = B.DESC AND B.VISIBLE_FLAG = 'P'
+               AND B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+         WHERE B.DESC IS NOT NULL
+       UNION
+         SELECT A.ROW_INDEX, 6 AS COL_INDEX,
+                'KPIPLAN_RESFILTER_PERVISI' AS REASON_CODE
+          FROM :VISIBLITY_GLOBAL_ITEMS AS A
+           LEFT OUTER JOIN "sap.tm.trp.db.filter::t_equipment_filter" AS B
+           ON A.RESOURCE_FILTER_NAME = B.DESC AND B.VISIBLE_FLAG = 'P'
+               AND B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+           WHERE B.DESC IS NOT NULL
+       UNION
+          SELECT A.ROW_INDEX, 7 AS COL_INDEX,
+               'KPIPLAN_TIMEFILTER_PERVISI' AS REASON_CODE
+          FROM :VISIBLITY_GLOBAL_ITEMS AS A
+            LEFT OUTER JOIN "sap.tm.trp.db.filter::t_time_filter" AS B
+               ON A.TIME_FILTER_NAME = B.NAME AND B.DIRECTION_FLAG = 1  --past time filter
+                 AND VISIBILITY = 'P'
+         WHERE B.NAME IS NOT NULL
+       UNION
+        SELECT A.ROW_INDEX, 9 AS COL_INDEX,
+               'KPIPLAN_ALERRULEGRP_PERVISI' AS REASON_CODE
+         FROM :VISIBLITY_GLOBAL_ITEMS AS A
+          LEFT OUTER JOIN  "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group" AS B
+           ON A.ALERT_RULE_GROUP_NAME = B.NAME AND ALLOWED_USAGE = 'P'
+             AND ALERT_RULE_GROUP_CATEGORY_ID = 2 AND B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+          WHERE B.NAME IS NOT NULL
+       UNION
+         SELECT A.ROW_INDEX, 10 AS COL_INDEX,
+               'KPIPLAN_ATTRIGRP_PERVISI' AS REASON_CODE
+           FROM :VISIBLITY_GLOBAL_ITEMS AS A
+            LEFT OUTER JOIN  "sap.tm.trp.db.filter::t_attribute_group" AS B
+             ON B.NAME = A.ATTRIBUTE_GROUP_NAME AND B.VISIBILITY='P'
+              AND B.RESOURCE_CATEGORY=:RESOURCE_CATEGORY_ID
+           WHERE B.NAME IS NOT NULL;
+
+   --Return Errors based on input limit
+    INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS ORDER BY ROW_INDEX, COL_INDEX limit :ERROR_LIMIT;
+END;

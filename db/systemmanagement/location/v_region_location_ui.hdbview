@@ -1,0 +1,25 @@
+schema = "SAP_TM_TRP";
+query = 
+	"SELECT
+		T1.ROOT_ID
+		,T1.LOCATION_ID
+		,T2.NAME
+		,T2.DESC
+		,T2.COUNTRY_CODE
+		,T2.COUNTRY_NAME
+		,T2.REGION_CODE AS STATE_CODE
+		,T2.STATE_NAME
+		,T2.CITY_ID
+		,T2.CITY_NAME
+		,T2.XPOS
+		,T2.YPOS
+		,T2.POSTAL_CODE
+		,T2.RANK
+	FROM \"sap.tm.trp.db.systemmanagement.location::v_region_location_all\" T1
+	INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_location_ui\" T2 ON T2.ID = T1.LOCATION_ID
+          "; 
+         
+          
+depends_on_view = ["sap.tm.trp.db.systemmanagement.location::v_region_location_all","sap.tm.trp.db.systemmanagement.location::v_location_ui"];
+  
+          

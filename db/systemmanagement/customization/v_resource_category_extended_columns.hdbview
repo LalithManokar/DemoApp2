@@ -1,0 +1,23 @@
+schema = "SAP_TM_TRP";
+query = "SELECT T1.RESOURCE_CATEGORY_ID,
+                T2.ID AS COLUMN_ID,
+	            T2.PAGE_ID,
+	            T2.PAGE_DESC,
+	            T2.NAME AS COLUMN_NAME,
+	            T2.MAPPED_NAME,
+	            T2.DISPLAY_NAME,
+	            T2.DATA_TYPE,
+	            T2.SEARCHABLE,
+	            T2.FILTERABLE,
+	            T2.TYPE,
+	            T2.DESCRIPTION,
+	            T2.ADDED_BY,
+	            T2.ADDED_ON,
+	            T2.EDITED_BY,
+	            T2.EDITED_ON
+         FROM \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_extended_columns\" T1
+         INNER JOIN \"sap.tm.trp.db.common::v_ext_fields\" T2
+         ON (T1.EXTENDED_COLUMN_ID = T2.ID)";
+
+depends_on_table = ["sap.tm.trp.db.systemmanagement.customization::t_resource_category_extended_columns"];
+depends_on_view = ["sap.tm.trp.db.common::v_ext_fields"];

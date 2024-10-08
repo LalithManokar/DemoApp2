@@ -1,0 +1,119 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand::p_cal_tracking_supply_demand"
+(
+  IN EXECUTION_ID BIGINT,
+  OUT trk_sd_drill_down "sap.tm.trp.db.supplydemand::tt_tracking_sd_loc_equip",
+  OUT trk_sd_by_loc "sap.tm.trp.db.supplydemand::tt_tracking_sd_loc",
+  OUT trk_sd_by_equip "sap.tm.trp.db.supplydemand::tt_tracking_sd_equip",
+  OUT MESSAGE VARCHAR(500)
+)
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA "SAP_TM_TRP"
+READS SQL DATA
+AS
+BEGIN
+     DECLARE DFT_NODE_ID BIGINT;
+     DECLARE CAL_STATUS INTEGER;
+     DECLARE UNIT VARCHAR(3);
+     DECLARE WINDOW_START TIMESTAMP;
+     DECLARE WINDOW_END TIMESTAMP;     
+     DECLARE CUR_TIME TIMESTAMP;
+     DECLARE RESOURCE_CATEGORY VARCHAR(20);
+
+     SELECT ADD_DAYS(CURRENT_UTCTIMESTAMP,IFNULL(MAX(DATE_OFFSET), 0)) INTO CUR_TIME
+     FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+     WHERE USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+     
+     -- Get container piece unit
+     SELECT IFNULL (MAX (UNIT_CODE),'') INTO UNIT
+     FROM "sap.tm.trp.db.systemmanagement::v_unit"
+     WHERE UNIT_TYPE = 'CONTAINER_PC';
+     
+     -- Get default node
+     CALL  "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid"(:EXECUTION_ID, DFT_NODE_ID);
+
+     -- Get all the needed information:location, equip type, time interval...
+     CALL "sap.tm.trp.db.pipeline::p_get_loc_equip_time_by_execution_id"(:EXECUTION_ID, :DFT_NODE_ID,
+                                            locations, intervals, shift_intervals, equips,CAL_STATUS);
+     
+     --(TODO) It's weird to store RESOURCE_CATEGORY in many tables, only in resource filter table should be engough 
+     SELECT IFNULL(MAX(T2.RESOURCE_CATEGORY),'CN') INTO RESOURCE_CATEGORY
+     FROM "sap.tm.trp.db.pipeline::t_execution_context" T1
+     INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2 ON (T1.VALUE = T2.ID)
+     WHERE T1.EXECUTION_ID = :EXECUTION_ID AND T1.KEY = 'FILTER_GROUP_ID';
+         
+     -- If the filered information are not calculated correctly, then return
+     IF :CAL_STATUS <> 1 THEN
+        MESSAGE := 'MSG_ERROR';
+        RETURN;
+     END IF;
+
+
+     -- we append the sd values as 0 when there is no data from event table (for all selected locations/selected types)
+     car_out =  SELECT DISTINCT a.GEO_GROUP_ID, a.GEO_NAME,  b.EQUIP_GROUP_ID, b.EQUIP_NAME,
+                 c.TIME_INTERVAL_ID, c.SEQUENCE, c.START_TIMESTAMP AS START_TIME, c.END_TIMESTAMP AS END_TIME
+                 FROM :locations a , :equips b, :shift_intervals c;
+
+     SELECT MIN(START_TIMESTAMP), MAX(END_TIMESTAMP) INTO WINDOW_START,WINDOW_END FROM :shift_intervals; 
+
+     -- there is no possibility that the window_start is larger than cur_time
+     -- as window_start is the plan execution time and we already have the execution id when we cal tracking sd
+     -- the cur_time is always larger than window_start
+     IF :CUR_TIME >= :WINDOW_START AND :CUR_TIME <= :WINDOW_END THEN
+        WINDOW_END := :CUR_TIME;
+     END IF;
+
+     -- get the gate in/out data from the tracking_history table
+     trk_interval =
+             SELECT t6.*, t7.TIME_INTERVAL_ID FROM
+             (
+               SELECT t4.EQUIP_CODE AS EQUIP_TYPE, t4.EQUIP_GROUP_ID, t5.GEO_GROUP_ID, t5.LOCATION_ID,
+               T1.RESOURCE_ID AS EQUIP_ID, t1.EVENT_TIME, t1.EVENT_CODE
+               FROM "sap.tm.trp.db.semantic.event::v_gateinout_tracking_history" t1
+               INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t6 
+               ON (t1.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :RESOURCE_CATEGORY)              
+               INNER JOIN :equips t4 ON (t1.RESOURCE_TYPE = t4.EQUIP_CODE )
+               INNER JOIN :locations t5 ON (t1.LOCATION_ID = t5.LOCATION_ID)
+               WHERE t1.EVENT_TIME BETWEEN :WINDOW_START AND :WINDOW_END
+             ) t6
+             CROSS JOIN :shift_intervals t7
+             WHERE t6.EVENT_TIME >= t7.START_TIMESTAMP AND t6.EVENT_TIME < t7.END_TIMESTAMP;        
+
+      supply = SELECT GEO_GROUP_ID, EQUIP_GROUP_ID, TIME_INTERVAL_ID, COUNT(1) AS SUPPLY
+               FROM :trk_interval WHERE EVENT_CODE = 'GTI'
+               GROUP BY GEO_GROUP_ID, EQUIP_GROUP_ID, TIME_INTERVAL_ID;
+
+      demand = SELECT GEO_GROUP_ID, EQUIP_GROUP_ID, TIME_INTERVAL_ID, COUNT(1) AS DEMAND
+               FROM :trk_interval WHERE EVENT_CODE = 'GTO'
+               GROUP BY GEO_GROUP_ID, EQUIP_GROUP_ID, TIME_INTERVAL_ID;
+
+
+
+      trk_sd_drill_down  =
+               (
+                 SELECT a.GEO_GROUP_ID AS GEO_ID, a.GEO_NAME,  a.EQUIP_GROUP_ID AS RESOURCE_TYPE_CODE, a.EQUIP_NAME AS RESOURCE_TYPE_NAME, a.START_TIME,
+                 a.END_TIME, a.SEQUENCE, a.TIME_INTERVAL_ID, 'SUPPLY' AS OUTPUT_KEY,  IFNULL(b.SUPPLY,0) AS OUTPUT_VALUE, :UNIT AS UNIT
+                 FROM :car_out a
+                 LEFT OUTER JOIN :supply b
+                 ON (a.GEO_GROUP_ID = b.GEO_GROUP_ID AND a.EQUIP_GROUP_ID = b.EQUIP_GROUP_ID AND a.TIME_INTERVAL_ID = b.TIME_INTERVAL_ID)
+               )
+               UNION
+               (
+                 SELECT a.GEO_GROUP_ID AS GEO_ID, a.GEO_NAME,  a.EQUIP_GROUP_ID AS RESOURCE_TYPE_CODE, a.EQUIP_NAME AS RESOURCE_TYPE_NAME, a.START_TIME, a.END_TIME,
+                 a.SEQUENCE, a.TIME_INTERVAL_ID, 'DEMAND' AS OUTPUT_KEY,  IFNULL(b.DEMAND,0) AS OUTPUT_VALUE, :UNIT AS UNIT
+                 FROM :car_out a
+                 LEFT OUTER JOIN :demand b
+                 ON (a.GEO_GROUP_ID = b.GEO_GROUP_ID AND a.EQUIP_GROUP_ID = b.EQUIP_GROUP_ID AND a.TIME_INTERVAL_ID = b.TIME_INTERVAL_ID)
+               );
+
+        trk_sd_by_loc =
+              SELECT GEO_ID, GEO_NAME, START_TIME, END_TIME, SEQUENCE, TIME_INTERVAL_ID, OUTPUT_KEY, SUM(OUTPUT_VALUE) AS OUTPUT_VALUE, UNIT
+              FROM :trk_sd_drill_down
+              GROUP BY GEO_ID, GEO_NAME, START_TIME, END_TIME, SEQUENCE, TIME_INTERVAL_ID, OUTPUT_KEY, UNIT;
+
+        trk_sd_by_equip =
+              SELECT RESOURCE_TYPE_CODE, RESOURCE_TYPE_NAME, START_TIME, END_TIME, SEQUENCE, TIME_INTERVAL_ID, OUTPUT_KEY, SUM(OUTPUT_VALUE) AS OUTPUT_VALUE, UNIT
+              FROM :trk_sd_drill_down
+              GROUP BY RESOURCE_TYPE_CODE, RESOURCE_TYPE_NAME, START_TIME, END_TIME, SEQUENCE, TIME_INTERVAL_ID, OUTPUT_KEY, UNIT;
+
+END;

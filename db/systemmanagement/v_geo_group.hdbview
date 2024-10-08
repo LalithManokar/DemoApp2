@@ -1,0 +1,30 @@
+schema = "SAP_TM_TRP";
+query = "-- List All Geo Groups and Group Items
+         SELECT USER_ID,
+                ID AS GROUP_ID,
+                DESC AS DESC,
+                1 AS TYPE,
+                B.LOCATION_ID AS GEO_ID
+           FROM \"sap.tm.trp.db.systemmanagement::t_location_group\" AS A
+                INNER JOIN \"sap.tm.trp.db.systemmanagement::t_location_group_item\" AS B
+                ON A.ID = B.LOCATION_GROUP_ID
+          UNION
+         SELECT USER_ID,
+                ID AS GROUP_ID,
+                DESC AS DESC,
+                2 AS TYPE,
+                B.ZONE_ID AS GEO_ID
+           FROM \"sap.tm.trp.db.systemmanagement::t_zone_group\" AS A
+                INNER JOIN \"sap.tm.trp.db.systemmanagement::t_zone_group_item\" AS B
+                ON A.ID = B.ZONE_GROUP_ID
+          UNION
+         SELECT USER_ID,
+                ID AS GROUP_ID,
+                DESC AS DESC,
+                3 AS TYPE,
+                B.ZONE_ID AS GEO_ID
+           FROM \"sap.tm.trp.db.systemmanagement::t_region_group\" AS A
+                INNER JOIN \"sap.tm.trp.db.systemmanagement::t_region_group_item\" AS B
+                ON A.ID = B.REGION_GROUP_ID";
+                
+depends_on_table = ["sap.tm.trp.db.systemmanagement::t_location_group", "sap.tm.trp.db.systemmanagement::t_location_group_item", "sap.tm.trp.db.systemmanagement::t_zone_group", "sap.tm.trp.db.systemmanagement::t_zone_group_item", "sap.tm.trp.db.systemmanagement::t_region_group", "sap.tm.trp.db.systemmanagement::t_region_group_item"];                

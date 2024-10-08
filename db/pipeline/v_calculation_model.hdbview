@@ -1,0 +1,58 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT DISTINCT
+			A.ID,
+			A.CODE,
+			A.NAME,
+			A.DESC,
+			A.INSTANT_ENABLED,		
+			CASE IFNULL(B.PARENT_ID, B.ID) WHEN 1 THEN 1
+			WHEN 2 THEN 2
+			WHEN 8 THEN 1
+			WHEN 9 THEN 2
+			ELSE 0
+			END AS TYPE,
+			CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+			     WHEN A.CREATE_BY <> 0 AND A.CREATE_BY IS NOT NULL AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+		         WHEN A.CREATE_BY = 0 OR A.CREATE_BY IS NULL THEN ''
+		         ELSE '***' END AS CREATED_BY,
+			A.CREATE_ON AS CREATED_TIME,
+			CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+			     WHEN A.LAST_MODIFIED_BY <> 0 AND A.LAST_MODIFIED_BY IS NOT NULL AND T10.USERNAME IS NOT NULL THEN T10.USERNAME
+		         WHEN A.LAST_MODIFIED_BY = 0 OR A.LAST_MODIFIED_BY IS NULL THEN ''
+		         ELSE '***' END AS MODIFIED_BY,
+			A.LAST_MODIFIED_ON AS MODIFIED_TIME,
+			C.RESOURCE_CATEGORY,
+			CASE WHEN SUM(IFNULL(E.NODE_ID,0)) = 0 THEN 0 ELSE 1 END AS HAS_DRILLDOWN_FLAG
+			FROM \"sap.tm.trp.db.pipeline::t_pipeline_model\" AS A
+			INNER JOIN \"sap.tm.trp.db.pipeline::t_pipeline_model_type\" AS B
+			ON (A.PIPELINE_MODEL_TYPE_ID = B.ID)
+			LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS USER_CREATE
+			ON (A.CREATE_BY = USER_CREATE.ID)
+			LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS USER_CHANGE
+			ON (A.LAST_MODIFIED_BY = USER_CHANGE.ID)
+			INNER JOIN (SELECT A.CODE AS RESOURCE_CATEGORY,
+				B.OBJECT_ID,
+				B.OBJECT_TYPE
+				FROM \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings\" A
+				INNER JOIN \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_object_registration\" B
+				ON (A.ID = B.RESOURCE_CATEGORY_ID)) AS C
+			ON (A.ID = C.OBJECT_ID AND C.OBJECT_TYPE = 3)
+			LEFT JOIN \"sap.tm.trp.db.pipeline::t_pipeline_node\" D
+			ON A.ID = D.PIPELINE_MODEL_ID
+			LEFT JOIN \"sap.tm.trp.db.pipeline::t_pipeline_node_logical_hierarchy\" E
+			ON D.ID = E.NODE_ID
+			LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T9  ON USER_CREATE.USERNAME = T9.USERNAME
+            LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\"  T10  ON USER_CHANGE.USERNAME = T10.USERNAME
+            CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE
+			GROUP BY A.ID,A.CODE,A.NAME,A.DESC,A.INSTANT_ENABLED,B.PARENT_ID,B.ID,PRIVILEGE.USER_DATA_PRIVILEGE_FLAG,A.CREATE_BY,T9.USERNAME,
+			         A.CREATE_ON,A.LAST_MODIFIED_BY,T10.USERNAME,A.LAST_MODIFIED_ON,C.RESOURCE_CATEGORY;";
+
+depends_on_table = ["sap.tm.trp.db.pipeline::t_pipeline_model",
+                    "sap.tm.trp.db.pipeline::t_pipeline_model_type",
+                    "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings",
+                    "sap.tm.trp.db.systemmanagement.customization::t_resource_category_object_registration",
+                    "sap.tm.trp.db.pipeline::t_pipeline_node",
+                    "sap.tm.trp.db.pipeline::t_pipeline_node_logical_hierarchy"];
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_unblock_users",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege",
+                   "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];                 

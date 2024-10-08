@@ -1,0 +1,37 @@
+schema="SAP_TM_TRP";
+query="SELECT 
+		a.RUN_ID,
+		a.RULE_ID,
+		a.TU_ID,
+		a.USER,
+		a.EXECUTION_STATUS_CODE,
+		a.SHIPPER_ID,
+		a.CONSIGNEE_ID,
+		a.RESOURCE_TYPE,
+		a.QUANTITY,
+		a.SOURCE_LOCATION_ID,
+		a.DESTINATION_LOCATION_ID,
+		a.STREETTURN_TU_ID,
+		a.POL,
+		a.POD,
+		a.DATE,
+		a.PRE_LOCATION_ID,
+		a.CUR_LOCATION_ID,		
+		a.PRE_DATE,
+		a.CUR_DATE,
+		a.FLAG,
+		a.OP_SETTING_TYPE,
+		a.EXECUTION_TIME,
+		a.SCHEDULE_TIME_TYPE,
+		a.EXECUTION_BY,
+		a.AYSNC_TM_UPD,
+		b.STATUS
+		FROM \"sap.tm.trp.db.pickupreturn::t_location_rule_assign_result\" a
+		LEFT JOIN \"sap.tm.trp.db.semantic.order::v_log_update\" b
+		on a.RUN_ID = b.RUN_ID and a.RULE_ID = b.RULE_ID and a.TU_ID = b.TU_ID and a.USER = b.CREATED_BY
+		WHERE AYSNC_TM_UPD = '1' AND B.STATUS IS NULL -- The TUs sent to TM for update is still in progress";
+
+depends_on_table=[    
+    "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result"];
+depends_on_view=[    
+    "sap.tm.trp.db.semantic.order::v_log_update"];      

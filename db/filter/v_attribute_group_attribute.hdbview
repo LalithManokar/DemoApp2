@@ -1,0 +1,26 @@
+//To define the HDB view file use the following syntax: 
+
+schema="SAP_TM_TRP";
+query="
+	SELECT 
+		T1.ID
+		,T1.CODE
+		,CASE WHEN T1.CATEGORY_ID = 9 THEN T5.DISPLAY_NAME ELSE T1.NAME END AS NAME
+		,T1.DESC
+		,T1.CATEGORY_ID
+		,T2.NAME AS CATEGORY_NAME
+		,T1.VALUE_TYPE
+		,CASE WHEN T1.CATEGORY_ID = 9 THEN T5.RESOURCE_CATEGORY ELSE TRC.NAME END AS RESOURCE_CATEGORY
+	FROM \"sap.tm.trp.db.filter::t_attribute_group_attribute\" T1
+	INNER JOIN \"sap.tm.trp.db.systemmanagement.customization::v_resource_category\" TRC ON T1.RESOURCE_CATEGORY = TRC.RESOURCE_CATEGORY_TYPE
+	LEFT JOIN \"sap.tm.trp.db.filter::t_attribute_group_attribute_category\" T2 ON T2.ID = T1.CATEGORY_ID
+	LEFT JOIN 
+	  (
+	     SELECT T3.MAPPED_NAME, T3.DISPLAY_NAME, T4.NAME AS RESOURCE_CATEGORY, T4.RESOURCE_CATEGORY_TYPE
+	     FROM \"sap.tm.trp.db.systemmanagement.customization::v_resource_category_extended_columns\" T3
+	     INNER JOIN \"sap.tm.trp.db.systemmanagement.customization::v_resource_category\" T4 ON T3.RESOURCE_CATEGORY_ID = T4.ID
+	  ) T5 on T5.MAPPED_NAME = T1.CODE AND T1.RESOURCE_CATEGORY = T5.RESOURCE_CATEGORY_TYPE AND TRC.NAME = T5.RESOURCE_CATEGORY
+	WHERE CASE WHEN T1.CATEGORY_ID = 9 THEN T5.DISPLAY_NAME ELSE T1.NAME END IS NOT NULL
+";
+depends_on_table = ["sap.tm.trp.db.filter::t_attribute_group_attribute","sap.tm.trp.db.filter::t_attribute_group_attribute_category"];
+depends_on_view=["sap.tm.trp.db.systemmanagement.customization::v_resource_category_extended_columns","sap.tm.trp.db.systemmanagement.customization::v_resource_category"];

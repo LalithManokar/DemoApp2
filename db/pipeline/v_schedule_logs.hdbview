@@ -1,0 +1,24 @@
+schema = "SAP_TM_TRP";
+query  ="
+        SELECT
+            exe.PLAN_MODEL_ID,
+            exe.ID,
+            TO_VARCHAR(UTCTOLOCAL(EXECUTION_TIME, IFNULL(TIMEZONES,IFNULL(TIMEZONE_ID,'UTC')), 'platform'),'YYYY-MM-DD HH24:MI:SS') AS EXECUTION_TIME,
+            EXECUTION_STATUS
+        FROM \"sap.tm.trp.db.pipeline::t_execution_log\" AS exe
+            INNER JOIN  \"sap.tm.trp.db.pipeline::t_plan_execution\" AS t_plan
+                ON exe.EXECUTION_ID = t_plan.ID AND exe.PLAN_MODEL_ID = t_plan.PLAN_MODEL_ID
+            LEFT JOIN \"sap.tm.trp.db.job::t_model_schedule_detail\" AS details
+                ON  exe.PLAN_MODEL_ID = details.MODEL_ID
+            LEFT JOIN \"sap.tm.trp.db.pipeline::t_plan_model\" P on P.ID = t_plan.PLAN_MODEL_ID
+            LEFT JOIN \"sap.tm.trp.db.filter::t_filter_group\" FB on P.FILTER_GROUP_ID = FB.ID
+            LEFT JOIN \"sap.tm.trp.db.filter::t_time_filter\" TF on FB.TIME_FILTER_ID = TF.ID
+        ";
+depends_on_table = [
+"sap.tm.trp.db.pipeline::t_execution_log",
+"sap.tm.trp.db.job::t_model_schedule_detail",
+"sap.tm.trp.db.pipeline::t_plan_execution",
+"sap.tm.trp.db.pipeline::t_plan_model",
+"sap.tm.trp.db.filter::t_filter_group",
+"sap.tm.trp.db.filter::t_time_filter"
+];

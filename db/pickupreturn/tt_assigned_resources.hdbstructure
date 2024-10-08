@@ -1,0 +1,22 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "a list of Pickup TU info";
+table.columns = [
+    {name = "RESOURCE_ID"; sqlType = NVARCHAR; length = 22;},
+    {name = "RESOURCE_NAME"; sqlType = NVARCHAR; length = 20;},
+    {name = "RESOURCE_TYPE"; sqlType = NVARCHAR; length = 10;},
+    {name = "RESOURCE_TYPE_DESC"; sqlType = NVARCHAR; length = 60;},
+    {name = "LAST_LOCATION";sqlType = VARCHAR; length = 22;},
+    {name = "RESOURCE_STATUS";sqlType = VARCHAR; length = 40;},
+	{name = "MOVEMENT_STATUS";sqlType = VARCHAR; length = 3;},
+	{name = "MOVEMENT_STATUS_DESCRIPTION";sqlType = VARCHAR; length = 60;},
+    {name = "OWNERSHIP";sqlType = VARCHAR; length = 50;},
+    {name = "LEASING_ID";sqlType = VARCHAR; length = 40;},
+    {name = "MAX_GROSS_WEIGHT";sqlType = DECIMAL; length = 13;scale = 3;},
+    {name = "FOOD_GRADE";sqlType = VARCHAR; length = 60;},
+    {name = "BUILT_DATE";sqlType = DATE;},
+	{name = "RESOURCE_CONDITION";sqlType = VARCHAR; length = 5;},
+    {name = "ON_HIRE_DATE";sqlType = TIMESTAMP;},
+	{name = "SPECIAL_INSTRUCTION_CODE";sqlType = VARCHAR; length = 3;},
+	{name = "SPECIAL_INSTRUCTION_NAME";sqlType = VARCHAR; length = 60;}
+    ];   

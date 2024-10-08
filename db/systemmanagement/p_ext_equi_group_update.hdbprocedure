@@ -1,0 +1,61 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_ext_equi_group_update"(
+    IN ID VARCHAR(22),
+    IN NAME VARCHAR(50),
+    IN DESC VARCHAR(500),
+    IN VISIBLE_FLAG VARCHAR(2),
+    IN ITEMS "sap.tm.trp.db.pipeline::tt_equipment_type_id",
+    IN RESOURCE_CATEGORY_ID VARCHAR(20)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE CURRENT_USER_ID BIGINT;
+    DECLARE CURR_TIME TIMESTAMP;
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE CODE VARCHAR(20);
+ -- DECLARE RESOURCE_CATEGORY_CONTAINER VARCHAR(50) := 'CN'; -- 'RESOURCE_CATEGORY EQ CN' INDICATES THAT YOU'RE USING CONTAINER
+	declare has_auth  tinyint;
+
+	select COUNT (1) into has_auth from "sap.tm.trp.db.systemmanagement::v_equipment_group_id_auth"
+	where equipment_group_id = :ID; -- authorization check
+
+	if :has_auth > 0 then
+
+ -- SELECT CURRENT_TIMESTAMP INTO CURR_TIME FROM DUMMY;
+    SELECT CURRENT_UTCTIMESTAMP INTO CURR_TIME FROM DUMMY;
+
+    SELECT IFNULL(MAX(ID),-100) INTO CURRENT_USER_ID FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+
+    SELECT IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E') INTO SPRAS FROM DUMMY;
+ -- SELECT SPRAS INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+
+    UPDATE "sap.tm.trp.db.systemmanagement::t_equipment_group"
+    SET DESC = :NAME,
+        VISIBLE_FLAG = :VISIBLE_FLAG,
+        LAST_MODIFIED_BY = :CURRENT_USER_ID,
+        LAST_MODIFIED_AT = :CURR_TIME
+    WHERE ID = :ID;
+
+    UPDATE "sap.tm.trp.db.systemmanagement::t_equipment_group_t"
+    SET DESC = :DESC,
+        SPRAS = :SPRAS
+    WHERE ID = :ID;
+
+    DELETE FROM "sap.tm.trp.db.systemmanagement::t_equipment_group_item"
+    WHERE EQUIPMENT_GROUP_ID = :ID;
+
+    INSERT INTO "sap.tm.trp.db.systemmanagement::t_equipment_group_item"(EQUIPMENT_GROUP_ID, EQUI_CODE, RESOURCE_CATEGORY)
+    SELECT :ID, ID, :RESOURCE_CATEGORY_ID FROM :ITEMS;
+
+    SELECT IFNULL(MAX(CODE), '') INTO CODE FROM "sap.tm.trp.db.systemmanagement::t_equipment_group"
+    WHERE ID = :ID;
+
+    CALL "sap.tm.trp.db.systemmanagement::p_set_resource_group_need_check"(:CODE, 'RESOURCE_GROUP');
+
+    end if;
+
+END;

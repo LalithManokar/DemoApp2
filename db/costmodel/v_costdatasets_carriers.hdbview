@@ -1,0 +1,11 @@
+schema = "SAP_TM_TRP";
+
+ query  = "  SELECT T0.COST_DATASET_ID,T0.CARRIER_ID AS ID,T1.NAME1, T1.NAME2
+            FROM \"sap.tm.trp.db.costmodel::t_cost_dataset_carrier\" T0
+             INNER JOIN \"sap.tm.trp.db.costmodel::v_carrier\" T1 ON (T0.CARRIER_ID = T1.ID)
+           ";
+                   
+           
+                 
+depends_on_table = ["sap.tm.trp.db.costmodel::t_cost_dataset_carrier"]; 
+depends_on_view = ["sap.tm.trp.db.costmodel::v_carrier"]; 

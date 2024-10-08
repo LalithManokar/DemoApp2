@@ -1,0 +1,9 @@
+role sap.tm.trp.applog.roles::Administrator
+extends role sap.bc.applog.roles::Administrator
+{
+	sql object sap.tm.trp.applog.db.procedure::DeleteAppLogs: EXECUTE;
+	
+	sql object sap.tm.trp.applog.db::AppLogHeader: DELETE;
+	sql object sap.tm.trp.applog.db::AppLogItem: DELETE;
+	sql object sap.tm.trp.applog.db::AppLogItemMsgParam: DELETE;
+}

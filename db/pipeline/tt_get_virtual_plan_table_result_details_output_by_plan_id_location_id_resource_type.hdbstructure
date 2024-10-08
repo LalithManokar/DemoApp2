@@ -1,0 +1,18 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "out put for p_get_virtual_plan_table_result_details";
+table.columns = [
+  {name = "GEO_ID"; sqlType = VARCHAR; length = 32;},
+  {name = "GEO_NAME"; sqlType = VARCHAR; length = 50;},
+  {name = "RESOURCE_TYPE_CODE"; sqlType = VARCHAR; length = 50;},
+  {name = "RESOURCE_TYPE_NAME"; sqlType = VARCHAR; length = 50;},
+  {name = "OUTPUT_KEY"; sqlType = VARCHAR; length = 200;},
+  {name = "DRILLDOWN_OUTPUT_KEY"; sqlType = VARCHAR; length = 32;},
+  {name = "SEQUENCE"; sqlType = INTEGER;},
+  {name = "START_TIME"; sqlType = TIMESTAMP;},
+  {name = "END_TIME"; sqlType = TIMESTAMP;},
+  {name = "TIME_INTERVAL"; sqlType = BIGINT;},
+  {name = "DRILLDOWN_NODE_ID"; sqlType = BIGINT; nullable = false;},
+  {name = "OUTPUT_VALUE"; sqlType = DOUBLE;},
+  {name = "ALERT_STATUS"; sqlType = INTEGER;}
+];

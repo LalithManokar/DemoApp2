@@ -1,0 +1,17 @@
+PROCEDURE "SAP_TM_ROUTING_TEST"."sap.tm.trp.routing.tests.db::p_get_storage_cost_info_stub" (
+    IN cost_model_id BIGINT,
+    OUT cost_info TABLE(priority INTEGER, location_name NVARCHAR(50), unit_cost DECIMAL(13, 3), wild_star_count INTEGER)
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING_TEST
+   READS SQL DATA AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+   cost_info = 
+   SELECT priority, location_name, unit_cost, wild_star_count
+   FROM "sap.tm.trp.routing.tests.db::t_storage_cost_test"
+   WHERE cost_model_id = :cost_model_id;
+END

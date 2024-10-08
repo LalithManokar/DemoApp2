@@ -1,0 +1,109 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_alert_calculation_with_activities" ( 
+  IN SIMULATION_PLAN_ID BIGINT,
+  IN SCENARIO_ID BIGINT,
+  OUT MESSAGE VARCHAR(200),
+  OUT MODIFIED_BY VARCHAR(60)
+) LANGUAGE SQLSCRIPT
+  SQL SECURITY INVOKER 
+  DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+	DECLARE OUTPUT_ALERT_RECORDS INTEGER;
+	DECLARE EXECUTED_FLAG INTEGER;
+	DECLARE TMP_EXECUTION_ID BIGINT;
+	DECLARE TMP_NODE_ID BIGINT;
+	DECLARE V_TIMESTAMP_START  DATETIME  := CURRENT_UTCTIMESTAMP;
+	DECLARE V_LOCK_SESSION_ID  VARCHAR(200);  
+	DECLARE V_LOCK_USER_ID  VARCHAR(60);  
+	DECLARE V_LOCK_LAST_MODIFYED_ON  TIMESTAMP; 
+	DECLARE V_PLAN_STATUS INTEGER;
+	DECLARE V_SIMULATION_ID  BIGINT; 
+	DECLARE V_SCENARIO_ID  BIGINT; 
+	DECLARE V_FRESG_FLAG  INT; 
+	DECLARE V_PLAN_MODEL_ID BIGINT;  
+	DECLARE USER_ID BIGINT; 
+	DECLARE USERNAME VARCHAR(22);
+	DECLARE OUT_RECORDS INTEGER;
+	DECLARE ALERT_NUM INTEGER;
+	
+	CALL "sap.tm.trp.db.planningcockpit::p_ext_lock_simulation_plan_by_id"(:SIMULATION_PLAN_ID, V_LOCK_SESSION_ID, V_LOCK_USER_ID, V_LOCK_LAST_MODIFYED_ON);
+	 
+    SELECT A.PLAN_STATUS,A.ID,B.ID,B.FRESH_FLAG,A.SD_PLAN_ID
+    INTO  V_PLAN_STATUS,V_SIMULATION_ID,V_SCENARIO_ID,V_FRESG_FLAG,V_PLAN_MODEL_ID
+    FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" A, 
+         "sap.tm.trp.db.planningcockpit::t_scenario" B
+    WHERE A.ID=B.REL_SM_PLAN_ID 
+    AND B.ID=:SCENARIO_ID;   
+    
+    SELECT USERNAME INTO USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+       
+	IF :V_LOCK_USER_ID = :USER_ID AND 
+	   :V_LOCK_LAST_MODIFYED_ON IS NOT NULL THEN
+	
+	     IF :V_PLAN_STATUS = 1 THEN
+	         MESSAGE := 'MSG_ERROR_FINALIZED';
+	         MODIFIED_BY := USERNAME;
+	     ELSEIF :V_FRESG_FLAG <>-1 THEN
+	         MESSAGE := 'MSG_ERROR_SYNCED';
+	         MODIFIED_BY := USERNAME;
+	     ELSE    
+	         --SELECT IFNULL(MAX(ID), 0) INTO TMP_EXECUTION_ID FROM "sap.tm.trp.db.pipeline::t_plan_execution" a WHERE PLAN_MODEL_ID = :V_PLAN_MODEL_ID;
+	         SELECT IFNULL(MAX(EXCUTE_ID), 0) INTO TMP_EXECUTION_ID 
+	         FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" a WHERE ID = :SIMULATION_PLAN_ID;
+	         
+	         CALL "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid"(:TMP_EXECUTION_ID,TMP_NODE_ID); 
+	        
+	   
+	         CALL "sap.tm.trp.db.planningcockpit::p_genRuleDataset_callDT_simulation"
+	                 (:V_PLAN_MODEL_ID,:SCENARIO_ID,:TMP_EXECUTION_ID,:TMP_NODE_ID,OUTPUT_ALERT_RECORDS);
+	         
+	         IF (:OUTPUT_ALERT_RECORDS >= 0) THEN 
+	             
+	            /*  CALL "sap.tm.trp.db.planningcockpit::p_normalizing_alert_score_simulation"(:PLAN_EXECUTION_ID,:SCENARIO_ID,OUTPUT_ALERT_SCORE_RECORDS);
+    
+                IF ( :OUTPUT_ALERT_SCORE_RECORDS > 0 )
+			    THEN 
+			      CALL "sap.tm.trp.db.planningcockpit::p_compose_Score_alert_forUI_simulation"(:PLAN_EXECUTION_ID,:SCENARIO_ID,:NODE_ID,:FILTER_TYPE,OUTPUT_RECORDS);  
+			    ELSE
+			        OUTPUT_RECORDS := -1;
+			    END IF;
+			    */
+    
+    
+	               --set refresh flag of scenario
+	              --IF OUT_RECORDS > 0 THEN
+	                
+	                
+	                --Get alert num for the scenario:
+	                  SELECT IFNULL(SUM(ALERT_STATUS),0) INTO ALERT_NUM
+					FROM 
+					(
+						SELECT CASE LOWER(T1.MESSAGE) WHEN 'alert' THEN 1 ELSE 0 END AS ALERT_STATUS
+					    FROM "sap.tm.trp.db.planningcockpit::t_simulationModel_alert_forUI" T1
+					    WHERE T1.NODE_ID = :TMP_NODE_ID  AND PLAN_EXECUTION_ID = :TMP_EXECUTION_ID AND SCENARIO_ID = :SCENARIO_ID
+				     ) AS T_NEW_ALERT;
+	                
+		              UPDATE "sap.tm.trp.db.planningcockpit::t_scenario" T1
+		              SET T1.FRESH_FLAG  = 0, T1.SYNC_FLAG = 1,ALERT_NUM = :ALERT_NUM
+		              WHERE T1.ID = :SCENARIO_ID;
+		              
+		            
+		              MESSAGE :='MSG_SUCCESS_STATUS';
+		              MODIFIED_BY := USERNAME;
+	             /* ELSE
+	                  MESSAGE := 'MSG_ERROR_SYNC_ACTIVITIES';
+	                  MODIFIED_BY := USERNAME;
+	              END IF;
+	              */
+	         ELSE
+	             MESSAGE := 'MSG_ERROR_GET_ALERT_SCORE';
+	             MODIFIED_BY := USERNAME;
+	         END IF;
+	     END IF;
+	 ELSE
+	     MESSAGE := 'MSG_ERROR_LOCKED';
+	     SELECT IFNULL(MAX(USERNAME),'DEACTIVATED USER') INTO MODIFIED_BY FROM "sap.tm.trp.db.systemmanagement.user::t_user" WHERE ID=:V_LOCK_USER_ID ; 
+	 END IF;
+    
+END;

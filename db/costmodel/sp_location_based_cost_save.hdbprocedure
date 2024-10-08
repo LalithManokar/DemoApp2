@@ -1,0 +1,40 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_location_based_cost_save"(
+    IN COST_DATASET_ID BIGINT, 
+    IN CONNECTION_ID VARCHAR(100)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE ACTION_CODE_OVERRIDE VARCHAR(20) :='OVERRIDE';
+    DECLARE DATA_SOURCE_CSV VARCHAR(10) :='CSV';
+    DECLARE HAS_OVERRIDE_ACTION_FLAG INTEGER := 0;
+   
+
+     --Has override action of the connection?
+   SELECT COUNT(1) INTO HAS_OVERRIDE_ACTION_FLAG
+   FROM "sap.tm.trp.db.costmodel::t_location_based_cost_temporary" 
+   WHERE CONNECTION_ID = :CONNECTION_ID
+   AND ACTION_CODE = :ACTION_CODE_OVERRIDE;
+   
+    --if HAS_OVERRIDE_ACTION_FLAG>0, then it means there is at least one override during the dataset update, then delete all the records in t_handling_cost:
+    DELETE FROM "sap.tm.trp.db.costmodel::t_location_based_cost" 
+    WHERE COST_DATASET_ID = :COST_DATASET_ID AND :HAS_OVERRIDE_ACTION_FLAG >0;
+    
+   
+    
+    
+     UPSERT "sap.tm.trp.db.costmodel::t_location_based_cost"(COST_DATASET_ID,FROM_LOCATION_NAME,TO_LOCATION_NAME,RESOURCE_TYPE,
+     TRANSPORTATION_MODE_CODE,UOM_CODE,COST,DATA_SOURCE_CODE,WILD_STAR_COUNT,CARRIER_ID,LAST_MODIFIED_ON)
+     SELECT :COST_DATASET_ID, 
+     FROM_LOCATION_NAME,TO_LOCATION_NAME,
+     RESOURCE_TYPE,TRANSPORTATION_MODE_CODE,UOM_CODE,COST,:DATA_SOURCE_CSV,WILD_STAR_COUNT,CARRIER_ID,ACTION_TIME 
+     FROM "sap.tm.trp.db.costmodel::t_location_based_cost_temporary" A
+     WHERE CONNECTION_ID = :CONNECTION_ID ;
+    
+  
+  DELETE FROM "sap.tm.trp.db.costmodel::t_location_based_cost_temporary" WHERE CONNECTION_ID = :CONNECTION_ID;
+ 
+   
+END;

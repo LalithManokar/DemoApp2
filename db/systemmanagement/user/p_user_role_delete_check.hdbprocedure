@@ -1,0 +1,20 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_user_role_delete_check" (
+   IN ID  BIGINT,
+   OUT WHEREUSED "sap.tm.trp.db.systemmanagement.user::v_user_role" 
+   ) 
+	LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+ 
+
+
+  
+  --get used list by i
+  WHEREUSED = SELECT * 
+              FROM "sap.tm.trp.db.systemmanagement.user::v_user_role"
+              WHERE ID = :ID;
+  
+  
+END;

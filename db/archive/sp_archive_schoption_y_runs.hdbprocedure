@@ -1,0 +1,119 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_archive_schoption_y_runs"
+(IN RULE_ID BIGINT,
+ IN EXECUTION_ID BIGINT,
+ IN TABLE_ID BIGINT,
+ IN TABLE_NAME NVARCHAR(500),
+ IN DATE_COLUMN_NAME NVARCHAR(500),
+ IN SCH_OPTION TINYINT,
+ IN NUM_EXEC BIGINT,
+ OUT STATUS_CODE INTEGER,
+ OUT RECORD_COUNT BIGINT,
+ OUT MESSAGE NVARCHAR(5000)
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP" 
+AS 
+BEGIN
+    
+    DECLARE SUB_TAB_COUNT INT;
+    DECLARE SUB_TAB_NAME NVARCHAR(500);
+    DECLARE SUB_TAB_ID BIGINT;
+    DECLARE RECORD_REF_COL NVARCHAR(500);
+    DECLARE PRIMARY_KEY_COL NVARCHAR(500);
+    DECLARE ARR_TABLE_NAME NVARCHAR(500) ARRAY;
+    DECLARE ARR_IND INT;
+    DECLARE ROOT_TEMP_TAB NVARCHAR(500);
+    DECLARE ROOT_WARM_TAB NVARCHAR(500);
+    DECLARE SQL_STT NVARCHAR(5000);
+    DECLARE SCHEMA_NAME NVARCHAR(20) DEFAULT 'SAP_TM_TRP';
+    DECLARE COLUMN_STR NVARCHAR(1000);
+    DECLARE SUB_TAB_RECORD_COUNT BIGINT;
+
+    DECLARE CHILDTABERROR CONDITION FOR SQL_ERROR_CODE 10001;
+    DECLARE EXIT HANDLER FOR CHILDTABERROR
+    BEGIN
+      --  do nothing
+    END;
+    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        STATUS_CODE := 1;
+        SELECT ::SQL_ERROR_MESSAGE INTO MESSAGE FROM DUMMY;
+    END;  
+  
+    --initialize status code
+    STATUS_CODE := 0; 
+    MESSAGE := 'Success';
+    RECORD_COUNT := 0;
+    SUB_TAB_RECORD_COUNT := 0;
+    
+    SELECT A.RECORD_REF_COL INTO RECORD_REF_COL FROM "sap.tm.trp.db.archive::t_archive_exec_run_metadata" AS A
+    WHERE TABLE_ID = :TABLE_ID;
+    
+    SELECT P.PRIMARY_KEY_COL INTO PRIMARY_KEY_COL FROM "sap.tm.trp.db.archive::t_archive_metadata" AS P
+    WHERE ID = :TABLE_ID;    
+        
+    --move archived rows of root table into temporary table
+    ROOT_WARM_TAB := :TABLE_NAME || '_warm';
+    SELECT REPLACE(REPLACE(:TABLE_NAME,'.','_'),'::','_') || '_warm_temp' INTO ROOT_TEMP_TAB FROM DUMMY;
+    SELECT STRING_AGG(COLUMN_NAME,',') INTO COLUMN_STR FROM TABLE_COLUMNS WHERE SCHEMA_NAME = :SCHEMA_NAME AND TABLE_NAME = :TABLE_NAME;
+        
+    --check if children table exist' 
+    SUB_TAB_COUNT := 0;
+    SELECT COUNT(*) INTO SUB_TAB_COUNT FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE ULTIMATE_PARENT_ID = :TABLE_ID; 
+    
+    IF :SUB_TAB_COUNT > 0 
+    THEN
+    ---archive children tables
+        SUB_TABS =
+            SELECT TABLE_NAME FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE ULTIMATE_PARENT_ID = :TABLE_ID;
+        ARR_TABLE_NAME := ARRAY_AGG(:SUB_TABS.TABLE_NAME);
+        ARR_IND := 0;
+        FOR ARR_IND IN 1 .. CARDINALITY(:ARR_TABLE_NAME) DO
+            SUB_TAB_NAME := :ARR_TABLE_NAME[:ARR_IND];
+            --archive child table
+            CALL "sap.tm.trp.db.archive::sp_archive_archive_sub_tab_y_runs_packets"(:RULE_ID, :EXECUTION_ID, :ROOT_TEMP_TAB, :SUB_TAB_NAME, :COLUMN_STR, :RECORD_REF_COL, :TABLE_NAME, :DATE_COLUMN_NAME, :NUM_EXEC, :STATUS_CODE, :SUB_TAB_RECORD_COUNT, :MESSAGE);
+            --add effected record count
+            RECORD_COUNT := :RECORD_COUNT + :SUB_TAB_RECORD_COUNT;
+            IF :STATUS_CODE != 0 THEN
+                SIGNAL CHILDTABERROR;  --Stop procedure
+            END IF;
+
+        END FOR;
+        
+    END IF;
+    
+    --copy root table entries to temp table
+    SQL_STT := 'INSERT INTO "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:ROOT_TEMP_TAB) || '" (' || escape_single_quotes(COLUMN_STR) || ') SELECT ' 
+    	|| escape_single_quotes(:COLUMN_STR) || ' FROM ( SELECT ' || escape_single_quotes(:COLUMN_STR) ||',ROW_NUMBER() OVER(PARTITION BY ' || :RECORD_REF_COL 
+    	|| ' ORDER BY ' || escape_single_quotes(:DATE_COLUMN_NAME) || ' DESC) AS RANK FROM "' 
+    	|| :SCHEMA_NAME || '"."' || escape_double_quotes(:TABLE_NAME) || '" ) WHERE RANK > ' || :NUM_EXEC ;
+    EXECUTE IMMEDIATE :SQL_STT;  
+    
+    ---archive root table
+    SQL_STT :=
+    'DELETE FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:TABLE_NAME) || '" WHERE ' || :PRIMARY_KEY_COL 
+    || ' IN ( SELECT T.' || :PRIMARY_KEY_COL || ' FROM ( SELECT ' || :PRIMARY_KEY_COL 
+    || ',ROW_NUMBER() OVER(PARTITION BY ' || :RECORD_REF_COL || ' ORDER BY ' 
+    || escape_single_quotes(:DATE_COLUMN_NAME) || ' DESC) AS RANK FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:TABLE_NAME) 
+    || '" ) AS T WHERE RANK >' || :NUM_EXEC || ' )';
+    EXECUTE IMMEDIATE :SQL_STT;
+    SQL_STT := 'UPDATE "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:ROOT_TEMP_TAB) || '" SET TRP_RULE_ID = ' || :RULE_ID || ', TRP_EXECUTION_ID = ' || :EXECUTION_ID;
+    EXECUTE IMMEDIATE :SQL_STT;
+    COLUMN_STR := :COLUMN_STR || ',TRP_RULE_ID,TRP_EXECUTION_ID';
+    SQL_STT := 'INSERT INTO "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:ROOT_WARM_TAB) || '" (' || escape_single_quotes(:COLUMN_STR) || ') SELECT '
+    || escape_single_quotes(:COLUMN_STR) || ' FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:ROOT_TEMP_TAB) || '"';
+    EXECUTE IMMEDIATE :SQL_STT;
+    --CALL "sap.tm.trp.db.archive::sp_archive_archive_root_tab"(:RULE_ID, :EXECUTION_ID, :ROOT_TEMP_TAB, :STATUS_CODE);
+    
+    --clear root temporary table
+    SQL_STT := 'DELETE FROM "' || :SCHEMA_NAME || '"."' || escape_double_quotes(:ROOT_TEMP_TAB) || '"';
+    EXECUTE IMMEDIATE :SQL_STT;
+    
+    COMMIT;
+
+    --get count
+    RECORD_COUNT := :RECORD_COUNT + ::ROWCOUNT;
+    
+END;

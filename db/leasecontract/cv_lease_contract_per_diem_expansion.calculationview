@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_lease_contract_per_diem_expansion" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_lease_per_diem_expand"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="LEASE_CONTRACT_ID_IN" parameter="true">
+      <descriptions defaultDescription="LEASE_CONTRACT_ID_IN"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="LEASE_CONTRACT_ID"/>
+        <viewAttribute datatype="BIGINT" id="PER_DIEM_ID"/>
+        <viewAttribute datatype="NVARCHAR" id="EQUIPMENT_CODE" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="EQUIPMENT_GROUP_NAME" length="22"/>
+        <viewAttribute datatype="TINYINT" id="EQUIPMENT_CODE_TYPE"/>
+        <viewAttribute datatype="DECIMAL" id="PER_DIEM" length="13" scale="3"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#LEASE_CONTRACT_ID_IN</localVariable>
+      <definition> 
+  
+ BEGIN
+
+ IF :LEASE_CONTRACT_ID_IN = 0 THEN 
+ 
+ --Filter the per diem table for the better performance 
+PER_DIEM_FILTER = SELECT * FROM &quot;sap.tm.trp.db.leasecontract::t_lease_contract_per_diem&quot; 
+WHERE PER_DIEM IS NOT NULL AND ACTIVE=1 ;
+ 
+ ELSE  
+ 
+ --Filter the per diem table for the better performance 
+PER_DIEM_FILTER = SELECT * FROM &quot;sap.tm.trp.db.leasecontract::t_lease_contract_per_diem&quot; 
+WHERE PER_DIEM IS NOT NULL AND LEASE_CONTRACT_ID=:LEASE_CONTRACT_ID_IN AND ACTIVE=1 ;
+ 
+ END IF;
+ 
+
+
+--For equipment type
+	PER_DIEM_EQUIP_TYPE = 
+	SELECT 
+		  PD.LEASE_CONTRACT_ID AS LEASE_CONTRACT_ID,
+		  PD.ID AS PER_DIEM_ID,
+	 	  PD.EQUIPMENT_CODE AS EQUIPMENT_CODE,
+		  PD.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,
+		  PD.EQUIPMENT_CODE_TYPE,
+		  PD.PER_DIEM
+	FROM :PER_DIEM_FILTER PD
+	WHERE PD.EQUIPMENT_CODE_TYPE=1 ; 
+	
+--For equipment group
+	PER_DIEM_EQUIP_GROUP=
+	SELECT 
+		  PD.LEASE_CONTRACT_ID AS LEASE_CONTRACT_ID,
+		  PD.ID AS PER_DIEM_ID,
+		  EGI.EQUI_CODE AS EQUIPMENT_CODE,
+		  PD.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,
+		  PD.EQUIPMENT_CODE_TYPE,
+		  PD.PER_DIEM
+	FROM :PER_DIEM_FILTER PD
+	INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_equipment_group&quot; EG ON PD.EQUIPMENT_CODE = EG.CODE
+	INNER JOIN &quot;sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth&quot; EGI ON EG.ID=EGI.EQUIPMENT_GROUP_ID
+	WHERE PD.EQUIPMENT_CODE_TYPE=2 ; 
+	
+--For null equipments
+	PER_DIEM_EQUIP_NULL=
+	SELECT 
+		  PD.LEASE_CONTRACT_ID AS LEASE_CONTRACT_ID,
+		  PD.ID AS PER_DIEM_ID,
+	 	  PD.EQUIPMENT_CODE AS EQUIPMENT_CODE,
+		  PD.EQUIPMENT_CODE AS EQUIPMENT_GROUP_NAME,
+		  PD.EQUIPMENT_CODE_TYPE,
+		  PD.PER_DIEM
+	FROM :PER_DIEM_FILTER PD
+	WHERE PD.EQUIPMENT_CODE_TYPE IS NULL ; 
+
+--Do the union of equipment type and equipment group
+var_out= 	SELECT * FROM :PER_DIEM_EQUIP_TYPE UNION
+				SELECT * FROM :PER_DIEM_EQUIP_GROUP UNION 
+				SELECT * FROM :PER_DIEM_EQUIP_NULL;
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="LEASE_CONTRACT_ID" order="1">
+        <descriptions defaultDescription="LEASE_CONTRACT_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASE_CONTRACT_ID"/>
+      </attribute>
+      <attribute id="PER_DIEM_ID" order="2">
+        <descriptions defaultDescription="PER_DIEM_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="PER_DIEM_ID"/>
+      </attribute>
+      <attribute id="EQUIPMENT_CODE" order="3">
+        <descriptions defaultDescription="EQUIPMENT_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_CODE"/>
+      </attribute>
+      <attribute id="EQUIPMENT_GROUP_NAME" order="4">
+        <descriptions defaultDescription="EQUIPMENT_GROUP_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_GROUP_NAME"/>
+      </attribute>
+      <attribute id="EQUIPMENT_CODE_TYPE" order="5">
+        <descriptions defaultDescription="EQUIPMENT_CODE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIPMENT_CODE_TYPE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="PER_DIEM" order="6" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="PER_DIEM"/>
+        <measureMapping columnObjectName="Script_View" columnName="PER_DIEM"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

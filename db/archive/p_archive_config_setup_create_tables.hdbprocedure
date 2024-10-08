@@ -1,0 +1,98 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::p_archive_config_setup_create_tables" 
+(IN v_table_name varchar(256),
+ IN v_parent_flag tinyint,
+ IN v_date_column varchar(256),
+ IN v_is_tm tinyint,
+ IN CONFIGURATION_TYPE NVARCHAR(100),
+ IN P_RS_NAME NVARCHAR(100),
+ IN P_RS_DBNAME NVARCHAR(256),
+ IN P_RS_SCHEMA NVARCHAR(256)) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP" AS
+	
+TABLE_NAME_WARM nvarchar(250);
+TEMP_HOT_TABLE nvarchar(250);
+TEMP_WARM_TABLE nvarchar(250);
+TEMP_TABLE nvarchar(250);
+SQL_CREATE NVARCHAR(2000);
+SQL_DROP NVARCHAR(2000);
+SCHEMA_NAME NVARCHAR(100);
+OBJECT_SCHEMA NVARCHAR(100);
+TABLE_EXIST INTEGER;
+V_COUNT BIGINT;
+V_COUNTER BIGINT:=1;
+BEGIN
+
+IF :v_is_tm = 0 THEN
+	TABLE_NAME_WARM := :v_table_name ||'_warm';
+	SELECT REPLACE(REPLACE(:v_table_name,'.','_'),'::','_') || '_hot_temp' INTO TEMP_HOT_TABLE FROM DUMMY;
+	SELECT REPLACE(REPLACE(:v_table_name,'.','_'),'::','_') || '_warm_temp' INTO TEMP_WARM_TABLE FROM DUMMY;
+	SCHEMA_NAME := 'SAP_TM_TRP';
+	
+ELSE 
+	TABLE_NAME_WARM := :v_table_name ||'_warm';
+	TEMP_HOT_TABLE := :v_table_name||'_hot_temp';
+	TEMP_WARM_TABLE := :v_table_name||'_warm_temp';
+	--SCHEMA_NAME := 'SAPTM';
+	SELECT IFNULL (MAX(OBJECT_SCHEMA),'') INTO OBJECT_SCHEMA FROM "SYS"."SYNONYMS" WHERE SCHEMA_NAME=:SCHEMA_NAME AND SYNONYM_NAME=:v_table_name;
+	
+END IF;
+
+
+SELECT COUNT(1) INTO TABLE_EXIST FROM "SYS"."TABLES" WHERE SCHEMA_NAME='SAP_TM_TRP' AND TABLE_NAME=:TABLE_NAME_WARM;
+IF :TABLE_EXIST = 0 THEN
+   call "sap.tm.trp.db.archive::sp_data_archive_table_create"(v_table_name,v_date_column, v_parent_flag,CONFIGURATION_TYPE,P_RS_NAME,P_RS_DBNAME,P_RS_SCHEMA,v_is_tm);  
+ELSE 
+   IF :CONFIGURATION_TYPE = 'DT' THEN 
+		CALL "sap.tm.trp.db.archive::sp_data_archive_table_alter"(v_table_name,v_is_tm);
+   ELSE IF :CONFIGURATION_TYPE = 'SDA' THEN
+		--Alter is not possible on remote data source.
+   END IF;
+   END IF;
+END IF;
+
+WHILE :V_COUNTER <= 2 DO
+	IF :V_COUNTER = 1 THEN 
+		TEMP_TABLE:=:TEMP_HOT_TABLE;
+	ELSE 
+		TEMP_TABLE:=:TEMP_WARM_TABLE;
+	END IF;
+	
+	SELECT COUNT(1) INTO TABLE_EXIST FROM "SYS"."TABLES" WHERE SCHEMA_NAME='SAP_TM_TRP' AND TABLE_NAME=:TEMP_TABLE;
+	IF :TABLE_EXIST <> 0 THEN
+		--Drop. 
+		SQL_DROP := 'DROP TABLE "'||escape_double_quotes(:TEMP_TABLE)||'"';
+		EXECUTE IMMEDIATE SQL_DROP;
+	END IF;
+	
+	-- Create newly
+	IF :V_COUNTER = 1 THEN 
+		IF :v_is_tm = 0 THEN
+			SQL_CREATE := 'CREATE COLUMN TABLE "'||escape_double_quotes(:TEMP_TABLE)||'" LIKE "'||:SCHEMA_NAME||'"."'||escape_double_quotes(:v_table_name)||'"';
+		ELSE 
+			SQL_CREATE := 'CREATE COLUMN TABLE "'||escape_double_quotes(:TEMP_TABLE)||'" LIKE "'||escape_double_quotes(:OBJECT_SCHEMA)||'"."'||escape_double_quotes(:v_table_name)||'"';
+		END IF;
+	ELSE 
+		IF :v_is_tm = 0 THEN
+			SQL_CREATE := 'CREATE COLUMN TABLE "'||escape_double_quotes(:TEMP_TABLE)||'" LIKE "'||escape_double_quotes(:TABLE_NAME_WARM)||'"';
+		ELSE 
+			SQL_CREATE := 'CREATE COLUMN TABLE "'||escape_double_quotes(:TEMP_TABLE)||'" LIKE "'||escape_double_quotes(:TABLE_NAME_WARM)||'"';
+		END IF;
+	END IF;
+	
+	EXECUTE IMMEDIATE SQL_CREATE;
+	SELECT COUNT(1) INTO V_COUNT FROM "SYS"."CONSTRAINTS" WHERE TABLE_NAME=:TEMP_TABLE;
+	IF :V_COUNT > 0 THEN 
+		SQL_CREATE := 'ALTER TABLE "'||escape_double_quotes(:TEMP_TABLE)||'" DROP PRIMARY KEY';
+		EXECUTE IMMEDIATE SQL_CREATE;
+	END IF;	
+	IF :V_COUNTER = 1 THEN 
+		IF :v_parent_flag = 0 THEN 
+			SQL_CREATE := 'ALTER TABLE "'||escape_double_quotes(:TEMP_TABLE)||'" ADD ('||escape_single_quotes(:v_date_column)||' TIMESTAMP)';
+			EXECUTE IMMEDIATE SQL_CREATE;
+		END IF;
+	END IF;
+	V_COUNTER := :V_COUNTER + 1;
+END WHILE;
+END;

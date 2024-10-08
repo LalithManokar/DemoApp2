@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_auth_equip_code_by_equip_filter_id" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_auth_equip_code_by_equip_filter_id"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/> 
+  <localVariables>
+    <variable id="IV_EQUIPMENT_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="IV_EQUIPMENT_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="EQUIP_TYPE_ID" length="22" scale="0"/>
+        <viewAttribute datatype="BIGINT" id="EQUIP_FILTER_ID" length="19" scale="0"/>
+        <viewAttribute datatype="NVARCHAR" id="EQUIP_GROUP_ID" length="22" scale="0"/>
+        <viewAttribute datatype="NVARCHAR" id="EQUIP_CODE" length="10" scale="0"/>
+        <viewAttribute datatype="NVARCHAR" id="RESOURCE_CATEGORY" length="50" scale="0"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IV_EQUIPMENT_FILTER_ID</localVariable>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+ BEGIN 
+ 		declare lv_admin_check integer :=0;
+       declare lv_username nvarchar(100);
+
+       --Get XS User / Session User  
+       select IFNULL(SESSION_CONTEXT('XS_APPLICATIONUSER'),SESSION_USER) into lv_username from dummy;
+
+       --Check if the User is Admin or has full authorization
+       --1. If user type = 99, then everything authorized 
+       select count(username) into lv_admin_check
+                                        from &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot; 
+                                        where username = :lv_username and user_type_id = 99;
+
+       --2. if user type &lt;>99, then check if he has 'UnrestrictedRead'
+       if :lv_admin_check &lt;> 1 then
+             SELECT count(user_name) into lv_admin_check
+                           FROM &quot;SYS&quot;.&quot;EFFECTIVE_APPLICATION_PRIVILEGES&quot; T1
+                           WHERE USER_NAME = :lv_username and 
+                                 T1.PRIVILEGE = 'sap.tm.trp.service::UnrestrictedRead' and
+                                 IS_VALID ='TRUE';
+       end if;
+       
+       lt_equi_list =  select * from &quot;sap.tm.trp.db.filter::t_equipment_filter_equipment&quot; t_equip_filter
+                     				where t_equip_filter.equipment_filter_id = :iv_equipment_filter_id;
+		
+		  if :lv_admin_check &lt;> 1 then
+             --Not admin user, role check required
+             --3. Get the list of roles for that user
+             lt_roles = select role_id from &quot;sap.tm.trp.db.systemmanagement.user::t_user_role&quot;
+                                   where user_id = (select id from &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot; where username = :lv_username);
+       
+             lt_equi_auth = select equip_grp.* 
+                                          from &quot;sap.tm.trp.db.systemmanagement.user::t_role_resource&quot; role_res
+                                            inner join &quot;sap.tm.trp.db.systemmanagement::t_equipment_group_item&quot; equip_grp
+                                              on equip_grp.EQUI_CODE = role_res.res_type and
+                                                    equip_grp.resource_category = role_res.res_category
+                                          where role_res.role_id in (select role_id from :lt_roles);
+             
+             --Check for Equipment code
+             lt_equi_grp_authorized = select distinct equipment_filter_id,
+                                                                                 equipment_group_id,
+                                                                   EQUI_CODE,
+                                                                   resource_category
+                                                             from :lt_equi_list
+                                         where exists (select * FROM :lt_equi_auth WHERE :lt_equi_list.equipment_group_id = :lt_equi_auth.equipment_group_id);
+
+             --Check for Equipment group
+             lt_equi_code_authorized = select distinct equipment_filter_id,
+                                                                                   equipment_group_id,
+                                                                                   equi_code,
+                                                                    resource_category
+                                                             from :lt_equi_list
+                                         where exists (select * FROM :lt_equi_auth  WHERE :lt_equi_list.equi_code = :lt_equi_auth.equi_code);
+
+             --Combine the results
+             var_out = 
+                    select IFNULL(EQUI_CODE,EQUIPMENT_GROUP_ID) AS EQUIP_TYPE_ID, 
+                              equipment_filter_id as EQUIP_FILTER_ID,
+                              equipment_group_id as EQUIP_GROUP_ID,
+                              EQUI_CODE as EQUIP_CODE,
+                              resource_category
+                      from (
+                           select --:lv_admin_check as TYP, 
+                                        equipment_filter_id,
+                                        equipment_group_id,
+                                        EQUI_CODE,
+                                        resource_category
+                                    from :lt_equi_grp_authorized
+                               union
+                           select --:lv_admin_check as TYP, 
+                                        equipment_filter_id,
+                                        equipment_group_id,
+                                        EQUI_CODE,
+                                        resource_category
+                                    from :lt_equi_code_authorized
+                       ) order by EQUIP_TYPE_ID;
+             
+       else
+       --Admin user, just return the equi.types
+             var_out = select --:lv_admin_check as TYP, 
+                                    IFNULL(EQUI_CODE,EQUIPMENT_GROUP_ID) AS EQUIP_TYPE_ID,
+                                    equipment_filter_id as EQUIP_FILTER_ID,
+                                    equipment_group_id as EQUIP_GROUP_ID,
+                                    EQUI_CODE as EQUIP_CODE,
+                                    resource_category
+                           from :lt_equi_list
+                          order by EQUIP_TYPE_ID;
+       end if;
+ 		
+ 	 
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="EQUIP_TYPE_ID" order="1">
+        <descriptions defaultDescription="EQUIP_TYPE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_TYPE_ID"/>
+      </attribute>
+      <attribute id="EQUIP_GROUP_ID" order="3">
+        <descriptions defaultDescription="EQUIP_GROUP_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_GROUP_ID"/>
+      </attribute>
+      <attribute id="EQUIP_CODE" order="4">
+        <descriptions defaultDescription="EQUIP_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_CODE"/>
+      </attribute>
+      <attribute id="RESOURCE_CATEGORY" order="5">
+        <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_CATEGORY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="EQUIP_FILTER_ID" order="2" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="EQUIP_FILTER_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="EQUIP_FILTER_ID"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

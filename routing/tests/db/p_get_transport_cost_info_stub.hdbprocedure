@@ -1,0 +1,17 @@
+PROCEDURE "SAP_TM_ROUTING_TEST"."sap.tm.trp.routing.tests.db::p_get_transport_cost_info_stub" (
+   IN COST_MODEL_ID BIGINT,
+   OUT COST_INFO_OUT "sap.tm.trp.db.costmodel::tt_location_based_cost_info"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING_TEST
+   READS SQL DATA AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+   cost_info_out = 
+   SELECT priority, from_location_name, to_location_name, transportation_mode_code, resource_type, carrier_id, uom_code, cost, wild_star_count
+   FROM "sap.tm.trp.routing.tests.db::t_transport_cost_test"
+   WHERE cost_model_id = :cost_model_id;
+END

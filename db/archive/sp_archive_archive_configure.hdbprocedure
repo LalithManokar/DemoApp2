@@ -1,0 +1,148 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_archive_archive_configure" ( 
+IN CONFIGURATION_TYPE NVARCHAR(100),
+IN ADAPTER_TYPE NVARCHAR(100),
+IN ADAPTER_NAME NVARCHAR(100),
+IN DATASOURCE_NAME NVARCHAR(100),
+IN SDA_SCHEMA_NAME NVARCHAR(100),
+IN CONFIGURATION_OBJECT NVARCHAR(600),
+OUT STATUS_CODE INTEGER,
+OUT MESSAGE_KEY NVARCHAR(100),
+OUT EXIST_FLAG VARCHAR(1)
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	AS
+BEGIN
+
+
+    DECLARE ROWS_COUNT INT;
+    DECLARE SCHEMA_NAME NVARCHAR(20) DEFAULT 'SAP_TM_TRP';
+    DECLARE WARM_TAB_NAME NVARCHAR(500);
+    DECLARE ARR_TAB_NAMES NVARCHAR(500) ARRAY;
+    DECLARE ARR_IND INT;
+    
+    
+    DECLARE ES_NOT_INSTALL CONDITION FOR SQL_ERROR_CODE 10001;
+    DECLARE REMOTE_SOURCE_NOT_FOUND CONDITION FOR SQL_ERROR_CODE 10002;
+    DECLARE WRITABLE_WARM_TABLE_MISSING CONDITION FOR SQL_ERROR_CODE 10003;
+    
+    DECLARE EXIT HANDLER FOR ES_NOT_INSTALL 
+    BEGIN
+     STATUS_CODE := 1;
+     MESSAGE_KEY := 'MSG_ERROR_ARCHIVE_EXTENDED_SERVER_NOT_INSTALL';
+    END;
+    DECLARE EXIT HANDLER FOR REMOTE_SOURCE_NOT_FOUND
+    BEGIN
+        STATUS_CODE := 2;
+        MESSAGE_KEY := 'MSG_ERROR_ARCHIVE_REMOTE_SOURCE_NOT_FOUND';
+    END;
+    
+    DECLARE EXIT HANDLER FOR WRITABLE_WARM_TABLE_MISSING
+    BEGIN
+        STATUS_CODE := 3;
+        MESSAGE_KEY := 'MSG_ERROR_ARCHIVE_WRITABLE_WARM_TABLE_MISSING';
+    END;    
+    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN 
+	    STATUS_CODE := 4;
+	    MESSAGE_KEY := 'UNKNOWN_INTERNAL_ERROR';
+    END;
+
+	
+--  initialize
+    STATUS_CODE := 0;
+    ROWS_COUNT := 0;
+	EXIST_FLAG := 'F';
+	MESSAGE_KEY := '';
+	
+	--archive methond id Dynamic Tierring ?
+	IF :CONFIGURATION_TYPE='DT'
+	THEN 
+	    --Dynamic Tierring Server installed ?
+	    SELECT COUNT(*) INTO ROWS_COUNT FROM M_SERVICES WHERE SERVICE_NAME = 'esserver' AND ACTIVE_STATUS = 'YES';
+	    IF ROWS_COUNT = 0
+	    THEN
+	    SIGNAL ES_NOT_INSTALL;
+	    END IF;
+	    
+	    --warm table exist in dynamic tiering server ?
+	    TAB_NAMES = 
+	    SELECT TABLE_NAME FROM "sap.tm.trp.db.archive::t_archive_metadata";
+	    ARR_TAB_NAMES := ARRAY_AGG(:TAB_NAMES.TABLE_NAME);
+	    ARR_IND := 0;
+	    FOR ARR_IND IN 1 .. CARDINALITY(:ARR_TAB_NAMES) DO
+	        WARM_TAB_NAME := :ARR_TAB_NAMES[:ARR_IND] || '_warm';
+	        ROWS_COUNT := 0;
+	        SELECT COUNT(*) INTO ROWS_COUNT FROM TABLES WHERE SCHEMA_NAME = :SCHEMA_NAME AND TABLE_NAME =:WARM_TAB_NAME AND TABLE_TYPE = 'EXTENDED';
+	        IF ROWS_COUNT = 0
+	        THEN
+	            SIGNAL WRITABLE_WARM_TABLE_MISSING;
+	        END IF;
+	    END FOR;
+	    
+	    --does DT archive configurations already exist ?
+	    ROWS_COUNT := 0;
+	    SELECT COUNT(*) INTO ROWS_COUNT FROM "sap.tm.trp.db.archive::t_archive_configuration" WHERE KEY = 'CONFIGURATION_TYPE' AND VALUE = 'DT';
+	    IF ROWS_COUNT > 0
+	    THEN
+	        EXIST_FLAG := 'T';
+	        DELETE FROM "sap.tm.trp.db.archive::t_archive_configuration";
+	    END IF;
+	    
+		INSERT INTO "sap.tm.trp.db.archive::t_archive_configuration" values('CONFIGURATION_TYPE',:CONFIGURATION_TYPE);
+		INSERT INTO "sap.tm.trp.db.archive::t_archive_configuration" values('CONFIGURATION_OBJECT',:CONFIGURATION_OBJECT);
+		
+
+	ELSE
+	    --Is the SAP IQ remote resource maintained ?
+	    ROWS_COUNT := 0;
+	    SELECT COUNT(*) INTO ROWS_COUNT FROM "sap.tm.trp.db.archive::t_data_archive_adapters" AS A
+	    INNER JOIN REMOTE_SOURCES AS B
+	    ON A.ADAPTER_CODE = B.ADAPTER_NAME
+	    WHERE B.REMOTE_SOURCE_NAME = :DATASOURCE_NAME;
+	    IF ROWS_COUNT = 0
+	    THEN
+	        SIGNAL REMOTE_SOURCE_NOT_FOUND;
+	    END IF;
+	    
+	    --warm table exist in target remote source database?
+	    TAB_NAMES = 
+	    SELECT TABLE_NAME FROM "sap.tm.trp.db.archive::t_archive_metadata";
+	    ARR_TAB_NAMES := ARRAY_AGG(:TAB_NAMES.TABLE_NAME);
+	    ARR_IND := 0;
+	    FOR ARR_IND IN 1 .. CARDINALITY(:ARR_TAB_NAMES) DO
+	        WARM_TAB_NAME := :ARR_TAB_NAMES[:ARR_IND] || '_warm';
+	        ROWS_COUNT := 0;
+	        SELECT COUNT(*) INTO ROWS_COUNT FROM VIRTUAL_TABLES WHERE SCHEMA_NAME = :SCHEMA_NAME AND TABLE_NAME =:WARM_TAB_NAME 
+	        AND REMOTE_SOURCE_NAME = :DATASOURCE_NAME AND REMOTE_OWNER_NAME = :SDA_SCHEMA_NAME
+	        AND IS_INSERTABLE = 'TRUE';
+	        --AND IS_DELETABLE = 'TRUE'; 
+	        IF ROWS_COUNT = 0
+	        THEN
+	            SIGNAL WRITABLE_WARM_TABLE_MISSING;
+	        END IF;
+	    END FOR;
+	    
+	    --does SDA archive configuration already exist
+	    ROWS_COUNT := 0;
+	    SELECT COUNT(*) INTO ROWS_COUNT FROM "sap.tm.trp.db.archive::t_archive_configuration" WHERE KEY = 'CONFIGURATION_TYPE' AND VALUE = 'SDA';
+	    IF ROWS_COUNT > 0
+	    THEN
+	        EXIST_FLAG := 'T';
+	        DELETE FROM "sap.tm.trp.db.archive::t_archive_configuration";	        
+        
+	    END IF;	    
+	    
+		INSERT INTO "sap.tm.trp.db.archive::t_archive_configuration" values('CONFIGURATION_TYPE',:CONFIGURATION_TYPE);
+		INSERT INTO "sap.tm.trp.db.archive::t_archive_configuration" values('ADAPTER_TYPE',:ADAPTER_TYPE);
+		INSERT INTO "sap.tm.trp.db.archive::t_archive_configuration" values('ADAPTER_NAME',:ADAPTER_NAME);
+		INSERT INTO "sap.tm.trp.db.archive::t_archive_configuration" values('DATASOURCE_NAME',:DATASOURCE_NAME);
+		INSERT INTO "sap.tm.trp.db.archive::t_archive_configuration" values('SCHEMA_NAME',:SDA_SCHEMA_NAME);		
+		INSERT INTO "sap.tm.trp.db.archive::t_archive_configuration" values('CONFIGURATION_OBJECT',:CONFIGURATION_OBJECT);
+		
+	END IF;		
+		
+	
+END;

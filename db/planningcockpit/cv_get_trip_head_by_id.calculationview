@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_trip_head_by_id" applyPrivilegeType="NONE" cacheInvalidationPeriod="DAILY" checkAnalyticPrivileges="false" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_path_trip"/>
+  <localVariables>
+    <variable id="TRIP_ID" parameter="true">
+      <descriptions defaultDescription="TRIP_ID"/>
+      <variableProperties datatype="NVARCHAR" length="100" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="TRIP_NAME" parameter="true">
+      <descriptions defaultDescription="TRIP_NAME"/>
+      <variableProperties datatype="NVARCHAR" length="100" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="SIM_PLAN_ID" parameter="true">
+      <descriptions defaultDescription="SIM_PLAN_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="SCENARIO_ID" parameter="true">
+      <descriptions defaultDescription="SCENARIO_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="ID" length="100"/>
+        <viewAttribute datatype="SMALLINT" id="RULE_NUMBER"/>
+        <viewAttribute datatype="NVARCHAR" id="FROM_LOCATION" length="50"/>
+        <viewAttribute datatype="NVARCHAR" id="TO_LOCATION" length="50"/>
+        <viewAttribute datatype="DECIMAL" id="DURATION" length="18" scale="3"/>
+        <viewAttribute datatype="DECIMAL" id="DISTANCE" length="18" scale="3"/>
+        <viewAttribute datatype="DECIMAL" id="TOTAL_COST" length="18" scale="3"/>
+        <viewAttribute datatype="VARCHAR" id="CURRENCY" length="10"/>
+        <viewAttribute datatype="DECIMAL" id="MIN_CAPACITY" length="34"/>
+        <viewAttribute datatype="VARCHAR" id="MIN_CAPACITY_UOM" length="10"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#TRIP_ID</localVariable>
+      <localVariable>#TRIP_NAME</localVariable>
+      <localVariable>#SIM_PLAN_ID</localVariable>
+      <localVariable>#SCENARIO_ID</localVariable>
+      <definition> 
+BEGIN
+DECLARE DATASET_CODE NVARCHAR(50);
+DECLARE MESSAGE VARCHAR(200);
+
+CALL &quot;sap.tm.trp.db.planningcockpit::p_get_dataset_code_by_simulation_scenario_id&quot;(:SIM_PLAN_ID,:SCENARIO_ID, DATASET_CODE, MESSAGE);
+
+T_TRIP_DETAILS =
+	SELECT
+		:TRIP_ID AS TRIP_ID
+		,MIN(REMAIN_CAPACITY) AS MIN_CAPACITY
+		,MIN(CAPACITY_UOM) AS MIN_CAPACITY_UOM
+	FROM &quot;sap.tm.trp.db.planningcockpit::cv_get_trip_details&quot;(
+			placeholder.&quot;$$TRIP_ID$$&quot;=>:TRIP_ID
+			,placeholder.&quot;$$TRIP_NAME$$&quot;=>:TRIP_NAME
+			,placeholder.&quot;$$SIM_PLAN_ID$$&quot;=>:SIM_PLAN_ID
+			,placeholder.&quot;$$SCENARIO_ID$$&quot;=>:SCENARIO_ID
+		 )  
+;
+
+T_PATH =
+	SELECT 
+		T0.ID AS PATH_ID
+		,SUM(T1.DISTANCE) AS DISTANCE
+		,NULL AS TOTAL_COST
+		,NULL AS CURRENCY
+	FROM &quot;sap.tm.trp.routing.db.dataset::t_path&quot; T0
+	LEFT JOIN &quot;sap.tm.trp.routing.db.dataset::t_path_connection&quot; T1 ON T1.PATH_ID = T0.ID
+	GROUP BY T0.ID
+	;
+
+var_out =
+	SELECT
+		T0.ID
+		,T0.RULE_NUMBER
+		,T0.FROM_LOCATION
+		,T0.TO_LOCATION
+		,SECONDS_BETWEEN(T0.DEPARTURE_TIME,T0.ARRIVAL_TIME)/60 AS DURATION
+		,T1.DISTANCE
+		,T1.TOTAL_COST
+		,T1.CURRENCY
+		,T2.MIN_CAPACITY
+		,T2.MIN_CAPACITY_UOM
+	FROM &quot;sap.tm.trp.routing.db.dataset::v_trip_aggregated&quot; T0
+	LEFT JOIN :T_PATH T1 ON T1.PATH_ID = T0.PATH_ID
+	LEFT JOIN :T_TRIP_DETAILS T2 ON T2.TRIP_ID = T0.ID
+	WHERE T0.ID = :TRIP_ID
+;
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="RULE_NUMBER" order="2">
+        <descriptions defaultDescription="RULE_NUMBER"/>
+        <keyMapping columnObjectName="Script_View" columnName="RULE_NUMBER"/>
+      </attribute>
+      <attribute id="FROM_LOCATION" order="3">
+        <descriptions defaultDescription="FROM_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="FROM_LOCATION"/>
+      </attribute>
+      <attribute id="TO_LOCATION" order="4">
+        <descriptions defaultDescription="TO_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="TO_LOCATION"/>
+      </attribute>
+      <attribute id="DURATION" order="5">
+        <descriptions defaultDescription="DURATIOIN"/>
+        <keyMapping columnObjectName="Script_View" columnName="DURATION"/>
+      </attribute>
+      <attribute id="DISTANCE" order="6">
+        <descriptions defaultDescription="DISTANCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="DISTANCE"/>
+      </attribute>
+      <attribute id="CURRENCY" order="8">
+        <descriptions defaultDescription="CURRENCY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CURRENCY"/>
+      </attribute>
+      <attribute id="MIN_CAPACITY_UOM" order="10">
+        <descriptions defaultDescription="MIN_CAPACITY_UOM"/>
+        <keyMapping columnObjectName="Script_View" columnName="MIN_CAPACITY_UOM"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="TOTAL_COST" order="7" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TOTAL_COST"/>
+        <measureMapping columnObjectName="Script_View" columnName="TOTAL_COST"/>
+      </measure>
+      <measure id="MIN_CAPACITY" order="9" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MIN_CAPACITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="MIN_CAPACITY"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

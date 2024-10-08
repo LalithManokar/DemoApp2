@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_resource_type_category" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_resource_type_category"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="ID" length="20" scale="0"/>
+        <viewAttribute datatype="VARCHAR" id="RES_CATEGORY" length="50" scale="0"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_CATEGORY_NAME" length="100" scale="0"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_CATEGORY_TYPE" length="3"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_CATEGORY_TYPE_DESC" length="50"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition>
+ /********* Begin Procedure Script ************/
+ BEGIN
+ 	 var_out =  SELECT DISTINCT A.RESOURCE_TYPE_CODE AS ID,
+                       C.NAME      AS RES_CATEGORY,
+                       C.NAME      AS RESOURCE_CATEGORY_NAME,
+                       C.RESOURCE_CATEGORY_TYPE AS RESOURCE_CATEGORY_TYPE,
+                       C.RESOURCE_CATEGORY_TYPE_DESC  AS RESOURCE_CATEGORY_TYPE_DESC
+                 FROM  &quot;sap.tm.trp.db.semantic.resource::v_resource_type_with_category&quot; A
+                 INNER JOIN &quot;sap.tm.trp.db.systemmanagement.customization::v_resource_category&quot; C
+                 ON A.RESOURCE_CATEGORY = C.NAME
+      			 WHERE C.ENABLE_FLAG &lt;> 0;
+
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="RES_CATEGORY" order="2">
+        <descriptions defaultDescription="DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="RES_CATEGORY"/>
+      </attribute>
+      <attribute id="RESOURCE_CATEGORY_TYPE" order="4">
+        <descriptions defaultDescription="RC/CN/GE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_CATEGORY_TYPE"/>
+      </attribute>
+      <attribute id="RESOURCE_CATEGORY_TYPE_DESC" order="5">
+        <descriptions defaultDescription="RAILCAR/CONTAINER/GENERIC"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_CATEGORY_TYPE_DESC"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="RESOURCE_CATEGORY_NAME" order="3" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="RESOURCE_CATEGORY_NAME"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

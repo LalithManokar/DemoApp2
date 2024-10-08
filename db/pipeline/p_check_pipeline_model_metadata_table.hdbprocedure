@@ -1,0 +1,38 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_check_pipeline_model_metadata_table" (
+	IN SCHEMA_NAME NVARCHAR(256),
+    IN TABLE_NAME NVARCHAR(256),
+    OUT ERROR_MSG NVARCHAR(256),
+    OUT IS_VALID SMALLINT
+)
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP"
+--READS SQL DATA
+AS
+BEGIN
+	DECLARE ROW_COUNT SMALLINT;
+
+	-- standard table type which can be used to compare
+	DECLARE S_SCHEMA NVARCHAR (10) := 'SAP_TM_TRP';
+	DECLARE S_TT_NAME NVARCHAR (100) := 'sap.tm.trp.db.pipeline::tt_pipeline_metadata';
+	 
+	IS_VALID := 1; -- default value is true
+   	-- 1. check whether metadata table exists
+	SELECT COUNT(1) INTO ROW_COUNT FROM TABLES WHERE SCHEMA_NAME = :SCHEMA_NAME AND TABLE_NAME = :TABLE_NAME;
+	IF(:ROW_COUNT = 1) THEN
+		-- 2. check the metadata table structure
+		call "sap.tm.trp.db.pipeline::p_equals_table_signature"(:SCHEMA_NAME, :TABLE_NAME, :S_SCHEMA, :S_TT_NAME, IS_VALID);
+  		IF (:IS_VALID = 0) THEN
+  			ERROR_MSG := 'MSG_ERR_TABLE_SIGNATURE_MISMATCH_SPECIFICATION';
+		ELSE
+			truncate table "sap.tm.trp.db.pipeline::t_pipeline_check_result_temp";
+			-- 3. check the metadata table content: the check result is saved to the temporary table
+			EXEC 'CALL "sap.tm.trp.db.pipeline::p_check_pipeline_model_metadata_table_content" (' || '"' || escape_double_quotes(:SCHEMA_NAME) || '"."' || escape_double_quotes(:TABLE_NAME) || '" , ?,?,"SAP_TM_TRP"."sap.tm.trp.db.pipeline::t_pipeline_check_result_temp") WITH OVERVIEW';
+			-- get the result from the temporary table
+			SELECT TOP 1 IS_VALID, ERROR_MSG INTO IS_VALID, ERROR_MSG FROM "sap.tm.trp.db.pipeline::t_pipeline_check_result_temp";		
+  		END IF;
+  	ELSE
+  		IS_VALID := 0;
+  		ERROR_MSG := 'MSG_ERR_TABLE_NOT_AVAILIBLE';
+  	END IF;
+END;

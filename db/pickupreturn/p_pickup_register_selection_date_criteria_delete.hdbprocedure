@@ -1,0 +1,36 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_pickup_register_selection_date_criteria_delete" ( 
+    IN ENTRY_ID BIGINT
+)
+   
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+    DECLARE USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE CREATE_TIME TIMESTAMP;
+    DECLARE PAGE_ID integer := 103;
+    DECLARE TU_ID_FIELD VARCHAR(8) := 'TU_ID';
+    
+    SELECT IFNULL(MAX(ID),-1) INTO USER_ID
+    FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    SELECT IFNULL(MAX(SPRAS),'') INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+    
+    DELETE FROM "sap.tm.trp.db.pickupreturn::t_pickup_register_selection_date_criteria_t"
+		
+		WHERE ID  = :ENTRY_ID;
+		
+
+     DELETE FROM "sap.tm.trp.db.pickupreturn::t_pickup_register_selection_date_criteria" 
+    	
+    	WHERE ID = :ENTRY_ID;
+    	
+    	
+    
+
+    
+   
+END

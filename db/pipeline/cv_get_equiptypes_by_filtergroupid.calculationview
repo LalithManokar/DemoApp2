@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_equiptypes_by_filtergroupid" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_equiptypes_by_filtergroupid"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="Filter_Group_ID" parameter="true">
+      <descriptions defaultDescription="Filter_Group_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="EQUIP_CODE" length="10"/>
+        <viewAttribute datatype="VARCHAR" id="EQUIP_GROUP_ID" length="10"/>
+        <viewAttribute datatype="VARCHAR" id="EQUIP_NAME" length="50"/>
+        <viewAttribute datatype="INTEGER" id="EQUIP_FILTER_TYPE"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#Filter_Group_ID</localVariable>
+      <definition> 
+  
+ BEGIN
+ 
+    lt_equipment_filter = select a.equipment_filter_id, a.filter_group_id, b.equi_code, b.equipment_group_id
+				from &quot;sap.tm.trp.db.filter::t_filter_equipment_filter&quot; a
+				inner join &quot;sap.tm.trp.db.filter::v_equipment_filter_equipment_auth&quot; b
+				on (a.EQUIPMENT_FILTER_ID = b.EQUIPMENT_FILTER_ID)
+				where a.FILTER_GROUP_ID = :Filter_Group_ID;
+
+     -- for equipment, we show the equip_name same as equip_code as no long description is needed
+     -- for equipment group, we show the equip_name as the equipment group name     
+     var_out = ( SELECT b.EQUI_CODE AS EQUIP_CODE, b.EQUI_CODE AS EQUIP_GROUP_ID, b.EQUI_CODE AS EQUIP_NAME, 1 AS EQUIP_FILTER_TYPE
+                 FROM :lt_equipment_filter b
+                 WHERE b.EQUI_CODE IS NOT NULL
+                 )
+               UNION 
+               ( 
+                 SELECT c.EQUI_CODE AS EQUIP_CODE, b.EQUIPMENT_GROUP_ID AS EQUIP_GROUP_ID, d.DESC AS EQUIP_NAME, 2 AS EQUIP_FILTER_TYPE
+                 FROM :lt_equipment_filter b  
+                 INNER JOIN &quot;sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth&quot; c ON (b.EQUIPMENT_GROUP_ID = c.EQUIPMENT_GROUP_ID) 
+                 INNER JOIN &quot;sap.tm.trp.db.systemmanagement::t_equipment_group&quot; d ON (c.EQUIPMENT_GROUP_ID = d.ID)
+                 WHERE  b.EQUIPMENT_GROUP_ID IS NOT NULL
+               )
+               ;
+
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="EQUIP_CODE" order="1">
+        <descriptions defaultDescription="EQUIP_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_CODE"/>
+      </attribute>
+      <attribute id="EQUIP_GROUP_ID" order="2">
+        <descriptions defaultDescription="EQUIP_GROUP_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_GROUP_ID"/>
+      </attribute>
+      <attribute id="EQUIP_NAME" order="3">
+        <descriptions defaultDescription="EQUIP_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_NAME"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="EQUIP_FILTER_TYPE" order="4" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="EQUIP_TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="EQUIP_FILTER_TYPE"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

@@ -1,0 +1,15 @@
+schema="SAP_TM_TRP";
+query= "SELECT DISTINCT CASE WHEN (T2.ID <> 0 AND T2.ID IS NOT NULL) THEN T2.ID
+                          ELSE T1.USER_ID END AS ID,
+               T2.USER_TYPE_ID,
+               T3.DESC AS USER_TYPE_DESC,
+               T1.USER_NAME AS USERNAME
+        FROM SYS.USERS t1
+        LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_user\" AS t2
+        ON t1.USER_NAME = t2.USERNAME
+        LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_user_type_t\" T3 
+        ON (T3.ID = T2.USER_TYPE_ID AND T3.SPRAS IN (SELECT SPRAS FROM \"sap.tm.trp.db.semantic.common::v_lang_code\"))";
+
+depends_on_table = ["sap.tm.trp.db.systemmanagement.user::t_user",
+                    "sap.tm.trp.db.systemmanagement.user::t_user_type_t"];
+depends_on_view = ["sap.tm.trp.db.semantic.common::v_lang_code"];

@@ -1,0 +1,16 @@
+//To define the HDB view file use the following syntax: 
+
+schema="SAP_TM_TRP";
+query="
+	SELECT
+		 ID
+		,TIME_FILTER_ITEM_ID
+		,TIME_FILTER_ID
+		,SEQUENCE
+		,START_OFFSET AS START_TIME
+		,END_OFFSET AS END_TIME
+		,END_OFFSET - START_OFFSET AS INTERVAL
+	FROM \"sap.tm.trp.db.filter::t_time_filter_interval\"
+";
+depends_on_table = ["sap.tm.trp.db.filter::t_time_filter_interval"];
+//depends_on_view=["com.sap.test.tables::02_HDB_DEPARTMENT_VIEW"]; 

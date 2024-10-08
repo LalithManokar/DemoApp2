@@ -1,0 +1,33 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_cal_distance"  (
+    IN IT_LOCATION "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_location_lat_lon",
+    OUT ET_LOCATION_DISTANCE "sap.tm.trp.db.pickupreturn.harmonization.ruleset::tt_location_distance"
+ )
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_TRP
+   READS SQL DATA AS
+BEGIN
+
+    declare lc_earth_radius double := 6378.137; 
+
+    lt_calc_distance_interval = select a.from_location_id, a.to_location_id, a.location_from, a.location_to, 
+                               case when (a.lat_from = 0 or a.lon_from = 0 or a.lat_to = 0 or a.lon_to = 0) then 1
+                               when (sin(a.lat_from) * sin(a.lat_to) + cos(a.lat_from) * cos(a.lat_to) * cos(a.lon_from - a.lon_to)) >= 1 then 1
+                                    when (sin(a.lat_from) * sin(a.lat_to) + cos(a.lat_from) * cos(a.lat_to) * cos(a.lon_from - a.lon_to)) <= -1 then -1
+                                    else (sin(a.lat_from) * sin(a.lat_to) + cos(a.lat_from) * cos(a.lat_to) * cos(a.lon_from - a.lon_to)) 
+                               end as interval,
+                               a.trmid , a.distfac, a.ttype, a.trp_mtr
+                                from :it_location a; 
+    
+    lt_cal_distance_normalize = select a.from_location_id, a.to_location_id, a.location_from, a.location_to, a.trmid , a.ttype, a.trp_mtr,
+                                a.distfac, lc_earth_radius * acos( a.interval ) as distance 
+                                from :lt_calc_distance_interval a;
+                                
+    et_location_distance = select a.from_location_id, a.to_location_id, a.location_from, a.location_to, a.trmid , a.ttype, a.trp_mtr,
+                            case when a.distfac = 0 then a.distance 
+                                 else a.distance * a.distfac
+                            end as distance
+                            from :lt_cal_distance_normalize a;
+    
+END
+

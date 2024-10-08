@@ -1,0 +1,82 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.consistencycheck::p_get_inactive_sd_plans" ( 
+ OUT INACTIVE_SD_PLANS TABLE (
+        ID BIGINT,
+        NAME VARCHAR(200)     
+        ),
+  OUT INACTIVE_SD_PLAN_FOR_UPLOAD "sap.tm.trp.db.consistencycheck::tt_sd_plan_massupload_migrate"
+  ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+
+/****************************************** 
+	Getting inactive SD plans for uploading
+ ******************************************/
+  
+ INACTIVE_SCHEDULED_SD_PLANS = 
+	   SELECT ID, NAME FROM (
+	        SELECT                       
+                A.ID,
+                A.NAME,
+                T23.EXPIRY_TIME,
+                T17.PLANNED_TIME AS NEXT_EXECUTION_TIME       
+                FROM "sap.tm.trp.db.pipeline::t_plan_model" A
+                LEFT OUTER JOIN "sap.tm.trp.db.job::t_model_schedule_detail" T23 
+                    ON T23.MODEL_ID = A.ID AND T23.SCHEDULE_TYPE = 'PLAN'
+				LEFT OUTER JOIN 
+                    (SELECT PLAN_MODEL_ID, PLANNED_TIME, EXPIRY_TIME FROM 
+                            (
+                                              
+                    	   SELECT A.MODEL_ID AS "PLAN_MODEL_ID",A.SCHEDULE_ID AS "XS_JOB_ID", 
+				                 IFNULL(C.PLANNED_TIME, A.CREATE_DATE) AS "PLANNED_TIME",
+				                 C.STATUS AS "STATUS",
+				             B.EXPIRY_TIME,A.SCHEDULE_FLAG AS "LATEST_JOB_FLAG"
+				             FROM "sap.tm.trp.db.job::t_job_schedule" A 
+				             INNER JOIN "sap.tm.trp.db.job::t_model_schedule_detail" B ON B.MODEL_ID = A.MODEL_ID AND B.SCHEDULE_TYPE = 'PLAN'
+				             LEFT OUTER JOIN "_SYS_XS"."JOB_LOG" C ON C.ID = A.SCHEDULE_ID
+				             WHERE A.SCHEDULE_TYPE = 'PLAN'
+                             ) 
+                    WHERE STATUS = 'SCHEDULED' AND LATEST_JOB_FLAG = 1) T17 ON A.ID = T17.PLAN_MODEL_ID
+                WHERE A.PLAN_MODEL_TYPE_ID = 1 --- only for scheduled supply and demand plan
+       ) WHERE NEXT_EXECUTION_TIME <=CURRENT_UTCTIMESTAMP AND (EXPIRY_TIME >= CURRENT_UTCTIMESTAMP OR EXPIRY_TIME IS NULL);
+
+
+
+
+INACTIVE_ALL_SD_PLANS = 
+	   SELECT ID, NAME FROM (
+	        SELECT                       
+                A.ID,
+                A.NAME,
+                T23.EXPIRY_TIME,
+                T17.PLANNED_TIME AS NEXT_EXECUTION_TIME       
+                FROM "sap.tm.trp.db.pipeline::t_plan_model" A
+                LEFT OUTER JOIN "sap.tm.trp.db.job::t_model_schedule_detail" T23 
+                    ON T23.MODEL_ID = A.ID AND T23.SCHEDULE_TYPE = 'PLAN'
+				LEFT OUTER JOIN 
+                    (SELECT PLAN_MODEL_ID, PLANNED_TIME, EXPIRY_TIME FROM 
+                            (
+                                              
+                    	   SELECT A.MODEL_ID AS "PLAN_MODEL_ID",A.SCHEDULE_ID AS "XS_JOB_ID", 
+				                 IFNULL(C.PLANNED_TIME, A.CREATE_DATE) AS "PLANNED_TIME",
+				                 C.STATUS AS "STATUS",
+				             B.EXPIRY_TIME,A.SCHEDULE_FLAG AS "LATEST_JOB_FLAG"
+				             FROM "sap.tm.trp.db.job::t_job_schedule" A 
+				             INNER JOIN "sap.tm.trp.db.job::t_model_schedule_detail" B ON B.MODEL_ID = A.MODEL_ID AND B.SCHEDULE_TYPE = 'PLAN'
+				             LEFT OUTER JOIN "_SYS_XS"."JOB_LOG" C ON C.ID = A.SCHEDULE_ID
+				             WHERE A.SCHEDULE_TYPE = 'PLAN'
+                             ) 
+                    WHERE (STATUS = 'SCHEDULED' OR STATUS = 'RUNNING') AND LATEST_JOB_FLAG = 1) T17 ON A.ID = T17.PLAN_MODEL_ID
+                WHERE A.PLAN_MODEL_TYPE_ID = 1 --- only for scheduled supply and demand plan
+       ) WHERE NEXT_EXECUTION_TIME IS NULL AND (EXPIRY_TIME >= CURRENT_UTCTIMESTAMP OR EXPIRY_TIME IS NULL);
+
+       
+   INACTIVE_SD_PLANS_ID = SELECT DISTINCT ID FROM :INACTIVE_SCHEDULED_SD_PLANS UNION 
+                          SELECT DISTINCT ID FROM :INACTIVE_ALL_SD_PLANS;
+   INACTIVE_SD_PLANS = SELECT DISTINCT ID,NAME FROM :INACTIVE_SCHEDULED_SD_PLANS UNION 
+                        SELECT DISTINCT ID,NAME FROM :INACTIVE_ALL_SD_PLANS;
+ 
+   CALL "sap.tm.trp.db.consistencycheck::p_download_sd_plans_by_planid"( :INACTIVE_SD_PLANS_ID , :INACTIVE_SD_PLAN_FOR_UPLOAD);
+END;

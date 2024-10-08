@@ -1,0 +1,51 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline.operator::p_calc_provisional_stock" ( 
+IN demand "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+IN stock "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+IN supply "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+OUT balance "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets")
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+ 
+
+
+   -- The way to calculate provisional stock is as following(for each location&equip type):
+   -- CURRENT_STOCK:  SO1
+   -- TIME_INTERVAL_ID, SUPPLY, DEMAND ,     STOCK 
+   --       46            S1      D1           SO1  
+   --       47            S2      D2        (S1-D1)+SO1 AS SO2 
+   --       48            S3      D3        (S2-D2) + SO2 = (S2-D2) + (S1-D1) +SO1
+   
+   -- So we will first compute the tab like this:
+   -- TIME_INTERVAL_ID, SUPPLY, DEMAND ,     AGG_SD 
+   --       46            S1      D1        (S1-D1)
+   --       47            S2      D2        (S2-D2) 
+   --       48            S3      D3        (S3-D3)
+
+   -- Then agg up to: 
+   -- TIME_INTERVAL_ID, SUPPLY, DEMAND ,     AGG_SD 
+   --       46            S1      D1          0
+   --       47            S2      D2         (S1-D1)
+   --       48            S3      D3       (S2-D2) + (S1-D1)
+   
+   -- Then add the CURRENT_STOCK to each AGG_SD
+   
+   sd_sub = SELECT t1.GEO_ID, t1.EQUIP_TYPE, t1.TIME_INTERVAL_ID, t1.OUTPUT_VALUE - t2.OUTPUT_VALUE AS SD_SUB
+            FROM :supply t1
+            INNER JOIN :demand t2 ON (t1.GEO_ID = t2.GEO_ID AND t1.EQUIP_TYPE = t2.EQUIP_TYPE AND t1.TIME_INTERVAL_ID = t2.TIME_INTERVAL_ID); 
+   
+   agg_sd_sub = SELECT t1.GEO_ID, t1.EQUIP_TYPE, t1.TIME_INTERVAL_ID, IFNULL(SUM(t2.SD_SUB),0) AS AGG_SD_SUB
+                FROM :sd_sub t1 
+                LEFT OUTER JOIN :sd_sub t2 ON (t1.GEO_ID = t2.GEO_ID AND t1.EQUIP_TYPE = t2.EQUIP_TYPE AND t1.TIME_INTERVAL_ID > t2.TIME_INTERVAL_ID)
+                GROUP BY t1.GEO_ID, t1.EQUIP_TYPE, t1.TIME_INTERVAL_ID;
+   
+   -- join t3 to fetch other non-groupby attributes
+   balance = SELECT 'PROVISIONAL_STOCK' as NODE_ID, t1.GEO_ID, t3.GEO_NAME, t3.GEO_FILTER_TYPE, t1.EQUIP_TYPE, t3.EQUIP_NAME, t3.EQUIP_FILTER_TYPE, t3.TIME_INTERVAL_ID,
+             t3.SEQUENCE, t3.START_TIME, t3.END_TIME, t3.INTER_SECONDS, 'STOCK' AS OUTPUT_KEY, (t1.AGG_SD_SUB + t2.OUTPUT_VALUE) AS OUTPUT_VALUE, t3.UNIT
+             FROM :agg_sd_sub  t1 
+             INNER JOIN :stock t2 ON (t1.GEO_ID = t2.GEO_ID AND t1.EQUIP_TYPE = t2.EQUIP_TYPE)
+             LEFT OUTER JOIN :supply t3 ON (t1.GEO_ID = t3.GEO_ID AND t1.EQUIP_TYPE = t3.EQUIP_TYPE AND t1.TIME_INTERVAL_ID = t3.TIME_INTERVAL_ID);      
+
+END;

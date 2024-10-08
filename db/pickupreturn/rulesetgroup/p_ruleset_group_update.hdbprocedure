@@ -1,0 +1,96 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_ruleset_group_update" (
+    IN ID BIGINT,
+    IN NAME VARCHAR(200),
+    IN DESCRIPTION VARCHAR(500),
+    IN JOB_PROCESS BIGINT,
+    IN RESOURCE_CATEGORY VARCHAR(20),
+    IN RULESET_LIST TABLE (ID BIGINT),
+    
+    IN START_TIME TIMESTAMP,
+    IN EXPIRY_TIME TIMESTAMP,
+    IN RECURRENCE_TYPE VARCHAR(50),
+    IN RECURRENCE_INTERVAL INTEGER,
+    IN RECURRENCE_DAY INTEGER,
+    IN EXECUTE_WORKING_HOUR VARCHAR(1),
+    IN START_WORKING_HOUR_TIME TIMESTAMP,
+    IN END_WORKING_HOUR_TIME TIMESTAMP,
+    IN TIMEZONES VARCHAR(50),
+    
+    OUT STATUS INTEGER,  --0 error  1 success
+    OUT MESSAGE VARCHAR(200),
+    OUT JOB_PROCESS_ID INTEGER
+   )
+	 LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+    DECLARE V_USER_ID BIGINT;
+    DECLARE V_SPRAS VARCHAR(10);
+    DECLARE V_TIMESTAMP_START  DATETIME  := CURRENT_UTCTIMESTAMP;
+
+	CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_ruleset_group_check_save"(
+		:ID,
+		:NAME,
+		:DESCRIPTION,
+		NULL,
+		:JOB_PROCESS,
+		:RESOURCE_CATEGORY,
+		:RULESET_LIST,
+		:START_TIME,
+		:EXPIRY_TIME,
+        :RECURRENCE_TYPE,
+        :RECURRENCE_INTERVAL,
+        :RECURRENCE_DAY,
+        :EXECUTE_WORKING_HOUR,
+        :START_WORKING_HOUR_TIME,
+        :END_WORKING_HOUR_TIME,
+        :TIMEZONES,
+        STATUS,
+        MESSAGE
+	);
+	
+	SELECT JOB_PROCESS INTO JOB_PROCESS_ID
+    FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group"
+    where ID = :ID;
+
+    IF :STATUS = 1 THEN
+    
+	    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(V_USER_ID);
+	    SELECT IFNULL (MAX (SPRAS),'') INTO V_SPRAS
+	    FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+	
+      	UPDATE "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group"
+		      SET NAME = :NAME,
+		          CODE = :NAME,
+		          JOB_PROCESS = :JOB_PROCESS,
+		          MODIFIED_BY = :V_USER_ID,
+		          MODIFIED_ON = :V_TIMESTAMP_START,
+		          RESOURCE_CATEGORY = :RESOURCE_CATEGORY
+		      WHERE  ID = :ID;
+
+		UPDATE "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_t"
+			  SET DESC  = :DESCRIPTION
+			  WHERE ID    =:ID
+			  AND SPRAS = :V_SPRAS;
+			  
+		DELETE FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" WHERE RULE_GROUP_ID = :ID;
+		INSERT INTO "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" (RULE_GROUP_ID,RULE_ID)
+		    SELECT :ID, ID FROM :RULESET_LIST;
+			  
+			  UPDATE "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_group_schedule"
+                SET  START_TIME = :START_TIME,
+                     EXPIRY_TIME = :EXPIRY_TIME,
+                     RECURRENCE_TYPE = :RECURRENCE_TYPE,
+                     RECURRENCE_INTERVAL = :RECURRENCE_INTERVAL,
+                     RECURRENCE_DAY = :RECURRENCE_DAY,
+                     EXECUTE_WORKING_HOUR = :EXECUTE_WORKING_HOUR,
+                     START_WORKING_HOUR_TIME = :START_WORKING_HOUR_TIME,
+                     END_WORKING_HOUR_TIME = :END_WORKING_HOUR_TIME,
+                     TIMEZONES = :TIMEZONES
+		      WHERE  GROUP_ID = :ID;
+		      
+	END IF ;
+
+END

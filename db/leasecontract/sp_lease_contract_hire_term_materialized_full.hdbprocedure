@@ -1,0 +1,23 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.leasecontract::sp_lease_contract_hire_term_materialized_full" 
+( OUT OUT_VALUE INT)  
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+
+	update "sap.tm.trp.db.leasecontract::t_lease_object_change_track" set STATUS=3,START_TIME=current_utctimestamp  
+	where status =2 and object_type = -1;
+	
+	delete from "sap.tm.trp.db.leasecontract::t_lease_contract_hire_term_materialized";
+	
+	CHANGE_TRACK = select *,'' as CODE from "sap.tm.trp.db.leasecontract::t_lease_object_change_track" where 1=2;
+	
+	call "sap.tm.trp.db.leasecontract::sp_lease_contract_hire_term_materialized"(1,:CHANGE_TRACK);
+	
+	update "sap.tm.trp.db.leasecontract::t_lease_object_change_track" set STATUS=4,END_TIME=current_utctimestamp  
+	where status =3 and object_type = -1 ;
+	
+	OUT_VALUE := 1;
+
+END;

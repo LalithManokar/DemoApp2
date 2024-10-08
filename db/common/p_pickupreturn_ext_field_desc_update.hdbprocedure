@@ -1,0 +1,43 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.common::p_pickupreturn_ext_field_desc_update" (
+    IN ID BIGINT,
+    IN DESC VARCHAR(500)
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+
+	DECLARE DESC_COUNT SMALLINT;
+	DECLARE SPRAS VARCHAR(10);
+	DECLARE USER_ID BIGINT;
+	DECLARE CREATE_TIME TIMESTAMP;
+	
+	SELECT IFNULL(MAX(ID),-1) INTO USER_ID
+    FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    SELECT IFNULL(MAX(SPRAS),'') INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+	
+	--insert the description into text table
+	SELECT COUNT(*) INTO DESC_COUNT FROM "sap.tm.trp.db.common::t_extended_fields_t"
+		WHERE ID = :ID AND SPRAS = :SPRAS;
+	
+	IF (:DESC_COUNT = 1) THEN
+		
+		--Update the description
+		UPDATE "sap.tm.trp.db.common::t_extended_fields_t"
+		SET DESC  = :DESC
+		WHERE ID  = :ID
+		AND SPRAS = :SPRAS;	
+		
+	ELSE
+	
+		--Insert the description
+		INSERT INTO "sap.tm.trp.db.common::t_extended_fields_t"
+			(ID, SPRAS, DESC) VALUES (:ID, :SPRAS, :DESC);
+		
+	END IF;
+
+END;
+

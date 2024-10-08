@@ -1,0 +1,7 @@
+schema = "SAP_TM_TRP";
+query = "SELECT QUERY_NODE AS ROOT_ID, result_node as ZONE_ID, CONCAT(LEVEL+1,'00') AS LEVEL 
+		from \"_SYS_BIC\".\"sap.tm.trp.db.semantic.location/at_hierarchy_view/hier/parent_child\" 
+		(\"EXPRESSION\"='subtree(inputtable(\"SAP_TM_TRP\",\"sap.tm.trp.db.systemmanagement.location::t_root\"), 0)')";
+		
+depends_on_table = ["sap.tm.trp.db.systemmanagement.location::t_root"];
+depends_on_view = ["sap.tm.trp.db.semantic.location::at_hierarchy_view"];

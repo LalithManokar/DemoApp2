@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_stock_alerts" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_stock_alerts"/>
+  <localVariables>
+    <variable id="IN_RESOURCE_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="IN_RESOURCE_FILTER_ID"/>
+      <variableProperties datatype="INTEGER" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_RESOURCE_TYPE_CODE" parameter="true">
+      <descriptions defaultDescription="IN_RESOURCE_TYPE_CODE"/>
+      <variableProperties datatype="VARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_LOCATION_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="IN_LOCATION_FILTER_ID"/>
+      <variableProperties datatype="INTEGER" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_LOCATION_ID" parameter="true">
+      <descriptions defaultDescription="IN_LOCATION_ID"/>
+      <variableProperties datatype="VARCHAR" length="22" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_LOCATION_NAME" parameter="true">
+      <descriptions defaultDescription="IN_LOCATION_NAME"/>
+      <variableProperties datatype="VARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_LOCATION_TYPE" parameter="true">
+      <descriptions defaultDescription="IN_LOCATION_TYPE"/>
+      <variableProperties datatype="INTEGER" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_RESOURCE_CATEGORY" parameter="true">
+      <descriptions defaultDescription="IN_RESOURCE_CATEGORY"/>
+      <variableProperties datatype="VARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="INTEGER" id="MAX_CAPACITY"/>
+        <viewAttribute datatype="INTEGER" id="MAX_SAFETY_STOCK"/>
+        <viewAttribute datatype="INTEGER" id="MIN_SAFETY_STOCK"/>
+        <viewAttribute datatype="INTEGER" id="STOCK"/>
+        <viewAttribute datatype="TIMESTAMP" id="TIME"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_TYPE_CATEGORY" length="128"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_TYPE_NAME" length="128"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_TYPE_ID" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_TYPE" length="128"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_NAME" length="128"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_ID" length="22"/>
+        <viewAttribute datatype="INTEGER" id="LOCATION_LEVEL"/>
+        <viewAttribute datatype="VARCHAR" id="RULE_NAME" length="64"/>
+        <viewAttribute datatype="INTEGER" id="ROW_ID"/>
+        <viewAttribute datatype="NVARCHAR" id="MESSAGE" length="256"/>
+        <viewAttribute datatype="NVARCHAR" id="ALERT_REASON" length="256"/>
+        <viewAttribute datatype="INTEGER" id="SURPLUS_DEFICIT_NUM"/>
+        <viewAttribute datatype="DECIMAL" id="SURPLUS_DEFICIT_PERCENT" length="16" scale="6"/>
+        <viewAttribute datatype="INTEGER" id="ALERT_SCORE"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_RESOURCE_FILTER_ID</localVariable>
+      <localVariable>#IN_RESOURCE_TYPE_CODE</localVariable>
+      <localVariable>#IN_LOCATION_FILTER_ID</localVariable>
+      <localVariable>#IN_LOCATION_ID</localVariable>
+      <localVariable>#IN_LOCATION_NAME</localVariable>
+      <localVariable>#IN_LOCATION_TYPE</localVariable>
+      <localVariable>#IN_RESOURCE_CATEGORY</localVariable>
+      <definition>	 
+BEGIN
+    --GET ALERT STOCKS
+    CALL &quot;sap.tm.trp.db.stock::p_get_alert_stock&quot;(
+        :IN_RESOURCE_FILTER_ID,
+        :IN_RESOURCE_TYPE_CODE,
+        :IN_LOCATION_FILTER_ID,
+        :IN_LOCATION_ID,
+        :IN_LOCATION_NAME,
+        :IN_LOCATION_TYPE,
+        :IN_RESOURCE_CATEGORY,
+        stocks); 
+    
+   -- locEquip_stocks =
+    locEquip_loc_stocks = 
+    SELECT LOCATION_ID
+        ,LOCATION_NAME
+        ,LOCATION_TYPE
+        ,LOCATION_LEVEL
+        ,EQUIP_TYPE_ID
+        ,EQUIP_TYPE_NAME
+        ,EQUIP_TYPE_CATEGORY
+        ,DATE
+        ,STOCK
+		,MIN_SAFETY_STOCK
+		,MAX_SAFETY_STOCK
+		,MAX_CAPACITY
+    FROM :stocks AS a;
+
+    
+    
+    CALL &quot;sap.tm.trp.db.hrf.resourceStock::p_get_stock_alert&quot;(:locEquip_loc_stocks, :IN_RESOURCE_CATEGORY, :STOCK_ALERT);
+    
+    --No need to do ROLE CHECK, all the alerts should be returned based on the latest solution
+	var_out = 
+		SELECT 
+			T0.MAX_CAPACITY,
+      		T0.MAX_SAFETY_STOCK,
+      		T0.MIN_SAFETY_STOCK,
+      		T0.STOCK,
+      		T0.TIME,
+      		T0.RESOURCE_TYPE_CATEGORY,
+      		T0.RESOURCE_TYPE_NAME,
+      		T0.RESOURCE_TYPE_ID,
+     		T0.LOCATION_TYPE,
+      		T0.LOCATION_NAME,
+      		T0.LOCATION_ID,
+      		T0.LOCATION_LEVEL,
+      		T0.RULE_NAME,
+      		T0.ROW_ID,
+      		T0.MESSAGE,
+      		T0.ALERT_REASON,
+      		T0.SURPLUS_DEFICIT_NUM,
+      		T0.SURPLUS_DEFICIT_PERCENT,
+      		T0.ALERT_SCORE
+		FROM :STOCK_ALERT T0;
+		--INNER JOIN &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(PLACEHOLDER.&quot;$$IN_LOCATION_TYPE$$&quot;=>:IN_LOCATION_TYPE) T1
+        --ON T0.LOCATION_ID = T1.LOCATION_ID;
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="RESOURCE_TYPE_CATEGORY" order="6">
+        <descriptions defaultDescription="RESOURCE_TYPE_CATEGORY"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE_CATEGORY"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE_NAME" order="7">
+        <descriptions defaultDescription="RESOURCE_TYPE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE_NAME"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE_ID" order="8">
+        <descriptions defaultDescription="RESOURCE_TYPE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE_ID"/>
+      </attribute>
+      <attribute id="LOCATION_TYPE" order="9">
+        <descriptions defaultDescription="LOCATION_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_TYPE"/>
+      </attribute>
+      <attribute id="LOCATION_NAME" order="10">
+        <descriptions defaultDescription="LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_NAME"/>
+      </attribute>
+      <attribute id="LOCATION_ID" order="11">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_ID"/>
+      </attribute>
+      <attribute id="RULE_NAME" order="13">
+        <descriptions defaultDescription="RULE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="RULE_NAME"/>
+      </attribute>
+      <attribute id="MESSAGE" order="15">
+        <descriptions defaultDescription="MESSAGE"/>
+        <keyMapping columnObjectName="Script_View" columnName="MESSAGE"/>
+      </attribute>
+      <attribute id="ALERT_REASON" order="16">
+        <descriptions defaultDescription="ALERT_REASON"/>
+        <keyMapping columnObjectName="Script_View" columnName="ALERT_REASON"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="MAX_CAPACITY" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MAX_CAPACITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="MAX_CAPACITY"/>
+      </measure>
+      <measure id="MAX_SAFETY_STOCK" order="2" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MAX_SAFETY_STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="MAX_SAFETY_STOCK"/>
+      </measure>
+      <measure id="MIN_SAFETY_STOCK" order="3" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MIN_SAFETY_STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="MIN_SAFETY_STOCK"/>
+      </measure>
+      <measure id="STOCK" order="4" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="STOCK"/>
+      </measure>
+      <measure id="TIME" order="5" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="DATE"/>
+        <measureMapping columnObjectName="Script_View" columnName="TIME"/>
+      </measure>
+      <measure id="LOCATION_LEVEL" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LOCATION_LEVEL"/>
+        <measureMapping columnObjectName="Script_View" columnName="LOCATION_LEVEL"/>
+      </measure>
+      <measure id="ROW_ID" order="14" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ROW_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="ROW_ID"/>
+      </measure>
+      <measure id="SURPLUS_DEFICIT_NUM" order="17" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="SURPLUS_DEFICIT_NUM"/>
+        <measureMapping columnObjectName="Script_View" columnName="SURPLUS_DEFICIT_NUM"/>
+      </measure>
+      <measure id="SURPLUS_DEFICIT_PERCENT" order="18" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="SURPLUS_DEFICIT_PERCENT"/>
+        <measureMapping columnObjectName="Script_View" columnName="SURPLUS_DEFICIT_PERCENT"/>
+      </measure>
+      <measure id="ALERT_SCORE" order="19" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ALERT_AGGREGATED_SCORE"/>
+        <measureMapping columnObjectName="Script_View" columnName="ALERT_SCORE"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

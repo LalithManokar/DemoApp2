@@ -1,0 +1,63 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_register_exclude_processed_tu_create" (
+    IN NAME VARCHAR(200),
+    IN SCHEMA_NAME VARCHAR(256), 
+    IN PROCEDURE_NAME VARCHAR(256),
+    IN DESC VARCHAR(500),
+    IN ACTIVATION_STATUS TINYINT,
+    OUT ENTRY_ID BIGINT
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+ 
+    DECLARE USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE CREATE_TIME TIMESTAMP;
+    DECLARE TU_ID_FIELD VARCHAR(8) := 'TU_ID';
+    
+    SELECT IFNULL(MAX(ID),-1) INTO USER_ID
+    FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    SELECT IFNULL(MAX(SPRAS),'') INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+    
+    SELECT "sap.tm.trp.db.pickupreturn::s_exclude_tu_col".NEXTVAL INTO ENTRY_ID FROM DUMMY;
+   
+    SELECT CURRENT_UTCTIMESTAMP INTO CREATE_TIME FROM DUMMY;
+
+    INSERT INTO "sap.tm.trp.db.pickupreturn::t_register_exclude_processed_tu"
+    (ID,
+    NAME,
+    SCHEMA_NAME,
+    PROCEDURE_NAME, 
+    CREATE_BY, 
+    CREATE_ON,
+    LAST_MODIFIED_BY, 
+    LAST_MODIFIED_ON, 
+    ACTIVATION_STATUS)
+    VALUES ( :ENTRY_ID, 
+    		 :NAME, 
+    		 :SCHEMA_NAME,
+    		 :PROCEDURE_NAME, 
+    		 :USER_ID, 
+    		 :CREATE_TIME, 
+    		 :USER_ID, 
+    		 :CREATE_TIME, 
+    		 :ACTIVATION_STATUS );
+    
+    INSERT INTO "sap.tm.trp.db.pickupreturn::t_register_exclude_processed_tu_t"(ID, SPRAS, DESC)
+    VALUES(:ENTRY_ID, :SPRAS, IFNULL(:DESC,:NAME));
+
+   
+    IF ACTIVATION_STATUS = 1 THEN
+    
+    --deactivate all other entries. Only one entry should be activated at a time
+	       UPDATE "sap.tm.trp.db.pickupreturn::t_register_exclude_processed_tu" 
+	            SET ACTIVATION_STATUS = 0 
+	            WHERE ID <> :ENTRY_ID;
+                            
+    END IF;
+
+END;

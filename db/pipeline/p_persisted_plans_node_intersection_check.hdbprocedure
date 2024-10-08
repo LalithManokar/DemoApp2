@@ -1,0 +1,54 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_persisted_plans_node_intersection_check" (
+	IN in_new_persisted_plan_ids "sap.tm.trp.db.pipeline::tt_plan_model_location_filter",
+	IN in_selected_persisted_plan_ids "sap.tm.trp.db.pipeline::tt_plan_model_location_filter",
+	OUT node_no_intersection_error_flag SMAllINT
+	) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+
+ DECLARE I_META_DATA_NODE_ID_NUM INTEGER := 0 ;
+ DECLARE I_TOTAL_PLAN_MODEL_ID_NUM INTEGER := 0;
+ 
+ --default, no error: have intersection:
+ node_no_intersection_error_flag :=0;
+ 
+ PP_ID_LIST = SELECT PLAN_MODEL_ID 
+              FROM :in_new_persisted_plan_ids 
+              UNION ALL SELECT PLAN_MODEL_ID 
+              FROM :in_selected_persisted_plan_ids;
+              
+              
+  PP_ID_LIST_METADATA_NODE_ID = 
+ SELECT T1.PLAN_MODEL_ID,T3.METADATA_NODE_ID
+ FROM :PP_ID_LIST T1
+ INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T2 ON (T1.PLAN_MODEL_ID = T2.ID)
+ INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T3 ON (T2.PIPELINE_MODEL_ID = T3.PIPELINE_MODEL_ID);
+ 
+ 
+ 
+ SELECT TOP 1 MAX(NUM) INTO I_META_DATA_NODE_ID_NUM
+ FROM
+ (
+	 SELECT  T1.METADATA_NODE_ID, COUNT(DISTINCT T1.PLAN_MODEL_ID) AS NUM
+	 FROM 
+	 :PP_ID_LIST_METADATA_NODE_ID T1 
+	 GROUP BY T1.METADATA_NODE_ID
+ );
+ 
+ SELECT COUNT(DISTINCT PLAN_MODEL_ID) INTO I_TOTAL_PLAN_MODEL_ID_NUM
+ FROM :PP_ID_LIST;
+   
+   --if the plan model id list have a common meta node id, the common meta node id num counted above should be the same as the count number of the plan model id list.
+  IF :I_META_DATA_NODE_ID_NUM = :I_TOTAL_PLAN_MODEL_ID_NUM THEN
+    node_no_intersection_error_flag := 0;
+  ELSE
+    node_no_intersection_error_flag := 1;
+  END IF;
+ 
+
+ 
+ 
+END;

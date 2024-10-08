@@ -1,0 +1,24 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.dashboard::sp_splitter_clob" (
+    IN iv_input CLOB, 
+    IN iv_delimiter NVARCHAR(1), 
+    OUT ot_split "sap.tm.trp.db.dashboard::tt_string"
+    ) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    READS SQL DATA AS
+BEGIN
+    USING SQLSCRIPT_STRING AS LIBRARY;
+    
+	declare lv_len bigint;
+	DECLARE lt_result TABLE(RESULT NVARCHAR(5000));
+    -- determine length of input
+    select length(iv_input) into lv_len from dummy;
+    
+    if lv_len < 1 then
+        return;
+    end if;
+
+	lt_result = LIBRARY:SPLIT_TO_TABLE(:iv_input,:iv_delimiter);
+    ot_split = select result as "STRING" from :lt_result; 
+END;

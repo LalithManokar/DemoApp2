@@ -1,0 +1,22 @@
+schema = "SAP_TM_TRP";
+query = "SELECT DISTINCT T1.ID AS ID,
+                T1.DESC AS NAME,
+                B.DESC,
+                T1.USER_ID AS USER_ID,
+                T1.VISIBLE_FLAG,
+                T2.USERNAME AS CREATE_BY,
+                T1.CREATE_AT AS CREATE_AT,
+                T1.LAST_MODIFIED_BY,
+                T1.LAST_MODIFIED_AT AS LAST_MODIFIED_TIME
+           FROM \"sap.tm.trp.db.systemmanagement::t_zone_group\" as T1
+                LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement::t_zone_group_t\" AS B
+                ON T1.ID = B.ID
+                LEFT OUTER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS E
+                ON B.SPRAS = E.SPRAS
+                LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS T2
+                ON T1.USER_ID = T2.ID";
+                
+depends_on_table = ["sap.tm.trp.db.systemmanagement::t_zone_group",
+                    "sap.tm.trp.db.systemmanagement::t_zone_group_t"];
+depends_on_view  = ["sap.tm.trp.db.semantic.common::v_lang_code",
+                    "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

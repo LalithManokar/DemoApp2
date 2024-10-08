@@ -1,0 +1,27 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_delete_virtual_tree"(
+    IN IN_PLAN_MODEL_ID BIGINT  
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+ 
+ 
+ 
+  DELETE FROM "sap.tm.trp.db.pipeline::t_virtual_tree_location_info" 
+  WHERE VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_MODEL_ID;
+  
+  
+  DELETE FROM "sap.tm.trp.db.pipeline::t_virtual_tree_hierarchy"  
+  WHERE VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_MODEL_ID;
+  
+ 
+  DELETE FROM "sap.tm.trp.db.pipeline::t_virtual_tree_node_name"
+  WHERE VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_MODEL_ID;
+  
+
+  
+            
+END;

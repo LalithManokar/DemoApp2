@@ -1,0 +1,705 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_ext_determination_for_pickup_op_1_rulegroup" ( 
+	IN RULE_GROUP_ID BIGINT,
+    IN EXECUTION_ID VARCHAR(200),
+    IN V_NODE_ID BIGINT,
+    IN IN_START_TIME TIMESTAMP,
+    IN t_transportation_cost "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_transportation_cost_rulegroup",
+    IN t_handling_cost "sap.tm.trp.db.pickupreturn::tt_handling_cost",
+    IN t_storage_cost "sap.tm.trp.db.costmodel.storagecost::tt_storage_cost_period",
+    IN TU_INFO "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_tu_info_rulegroup",
+    IN t_handling_capacity "sap.tm.trp.db.planningcockpit::tt_location_handling_capacity", 
+	IN PLAN_DATA "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_plan_data_rulegroup", 
+	IN RULE_PLAN_LOC "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_rule_plan_loc_rulegroup"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	AS
+BEGIN
+
+    DECLARE LDR_ID INTEGER;
+    DECLARE i INTEGER := 0;
+    DECLARE OFFSET INTEGER;
+    DECLARE IN_END_TIME TIMESTAMP;
+    DECLARE USER_ID BIGINT;
+    DECLARE V_USERNAME VARCHAR(60);
+    DECLARE V_OP_SETTING_TYPE INTEGER;
+    DECLARE V_OPTIMIZATION_OPTION NVARCHAR(50); 
+    DECLARE V_SD_PLAN_ID BIGINT;
+    DECLARE PICKUPRETURN_MODE VARCHAR(2); 
+    DECLARE DATE_OFFSET INTEGER;
+    DECLARE MANDATORY_COST_MODEL_ID INTEGER; 
+    DECLARE V_NETWORK_SETTING_GROUP_ID BIGINT;
+    DECLARE IN_RUN_ID_STAMP VARCHAR(30); 
+    DECLARE RULE_SP VARCHAR(200);  
+    
+    --LOOPING VARIABLES
+    DECLARE j INTEGER := 0;
+	DECLARE lv_offset BIGINT;
+	DECLARE lv_batch_offset BIGINT;
+	DECLARE lv_rule_id VARCHAR(20);
+	DECLARE lv_plan_id VARCHAR(20);
+	DECLARE lv_ldr_rules VARCHAR(20);
+	DECLARE lv_no_of_batches BIGINT;
+	DECLARE lv_of_tus_per_batch BIGINT;
+	DECLARE lv_configuration_count INTEGER;
+	DECLARE lv_tu_count bigint;
+	DECLARE lv_loc_count bigint;
+	------configuration variables
+    DECLARE lv_tu_batch_max_process_record VARCHAR(20);
+    DECLARE lv_tu_batch_max_tu_count VARCHAR(20);
+    DECLARE lv_tu_batch_max_process_record_cnt bigint;
+    DECLARE lv_tu_batch_max_tu_count_cnt bigint;
+    DECLARE lv_data_packet_size bigint;
+    DECLARE lv_default_data_packet_size bigint := 5000000 ; -- 5 Million
+    DECLARE lv_min_data_packet_size bigint := 100000; -- 1lakh
+    DECLARE lv_max_data_packet_size bigint := 50000000; --50 Million
+
+    ----------------------------------------------------------username details---------------------------------------------------------
+    SELECT IFNULL (MAX (USERNAME),'')
+    INTO V_USERNAME
+    FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+
+    SELECT T1.ID INTO USER_ID 
+    FROM "sap.tm.trp.db.systemmanagement.user::t_user" T1
+    INNER JOIN "sap.tm.trp.db.systemmanagement.user::cv_get_username" T2
+    ON (T1.USERNAME = T2.USERNAME);
+    
+    SELECT IFNULL(MAX (DATE_OFFSET), 0) INTO DATE_OFFSET
+    FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+    WHERE USER = :V_USERNAME;
+    
+    ----------------------------------------------------------network setting group--------------------------------------------------------- 
+    
+    SELECT NETWORK_SETTING_GROUP_ID INTO V_NETWORK_SETTING_GROUP_ID
+    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID in (SELECT TOP 1 RULE_ID from "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" where RULE_GROUP_ID = :RULE_GROUP_ID);
+    
+    ----------------------------------------------------------cost model_id --------------------------------------------------------- 
+    SELECT IFNULL (MAX (MANDATORY_COST_MODEL_ID),0) INTO MANDATORY_COST_MODEL_ID
+    FROM "sap.tm.trp.db.planningcockpit::t_network_setting_group"
+    WHERE ID = :V_NETWORK_SETTING_GROUP_ID;
+     
+    ----------------------------------------------------------pickup return model--------------------------------------------------------- 
+    
+    SELECT IFNULL(MAX(CASE RULESET_TYPE WHEN 1 THEN 'EP' WHEN 2 THEN 'ER' END),'') INTO PICKUPRETURN_MODE
+    FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group"
+    WHERE ID=:RULE_GROUP_ID;
+    
+    ----------------------------------------------------------current_stock and related queries--------------------------------------------------------- 
+    --To Get CURRENT_STOCK
+    PLAN_ID_GROUP = SELECT DISTINCT SD_PLAN_ID AS PLAN_ID FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID in (SELECT RULE_ID from "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" where RULE_GROUP_ID = :RULE_GROUP_ID);
+    
+    V_FILTER_GROUP_ID = SELECT ID AS PLAN_ID,FILTER_GROUP_ID FROM "sap.tm.trp.db.pipeline::t_plan_model"
+    WHERE ID IN (SELECT PLAN_ID FROM :PLAN_ID_GROUP);
+    
+    OUT_LOCATION_FILTER_ID = SELECT LOCATION_FILTER_ID FROM "sap.tm.trp.db.filter::t_filter_location_filter"
+    WHERE FILTER_GROUP_ID IN (SELECT FILTER_GROUP_ID FROM :V_FILTER_GROUP_ID);
+    
+    ---------------------------------------------------------CURRENT_STOCK---------------------------------------------------------------
+     -- Location filter
+    filtered_locations = SELECT LOCATION_ID AS GEO_ID, LOCATION_ID, 1 AS TYPE, LOCATION_ID AS GEO_GROUP_ID 
+                         FROM "sap.tm.trp.db.filter::t_location_filter_location" 
+                         WHERE LOCATION_FILTER_ID IN (SELECT LOCATION_FILTER_ID FROM :OUT_LOCATION_FILTER_ID);       
+    
+    --(Why we have resource category column in the filter equip table? it should only be in resource filter table)
+    CALL "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_auth_equip_code_by_sd_plan_id"
+    	 (:PLAN_ID_GROUP,RESOURCES_DETAILS); 
+    
+    lt_equipment_filter=SELECT T2.PLAN_ID AS PLAN_ID,T3.EQUIP_TYPE_ID,T3.EQUIP_FILTER_ID,T3.EQUIP_GROUP_ID,T3.EQUIP_CODE,T3.RESOURCE_CATEGORY
+	            	 FROM :RESOURCES_DETAILS T3 
+	            	 LEFT JOIN "sap.tm.trp.db.filter::t_filter_equipment_filter" T1
+	            	 ON T3.EQUIP_FILTER_ID=T1.EQUIPMENT_FILTER_ID
+	            	 INNER JOIN :V_FILTER_GROUP_ID T2 ON (T1.FILTER_GROUP_ID = T2.FILTER_GROUP_ID);
+
+    filtered_equiptypes = SELECT DISTINCT * FROM (( SELECT b.EQUIP_CODE,b.EQUIP_CODE AS EQUIP_GROUP_ID,b.RESOURCE_CATEGORY
+                 FROM :lt_equipment_filter b
+                 WHERE b.EQUIP_CODE IS NOT NULL
+                 )
+               UNION ALL
+               ( 
+                 SELECT EG1.EQUI_CODE,EG1.EQUI_CODE AS EQUIP_GROUP_ID,EF1.RESOURCE_CATEGORY
+                 FROM "sap.tm.trp.db.systemmanagement::t_equipment_group_item"  EG1
+                 INNER JOIN :lt_equipment_filter EF1
+                 ON (EF1.EQUIP_GROUP_ID=EG1.EQUIPMENT_GROUP_ID AND EG1.RESOURCE_CATEGORY = EF1.RESOURCE_CATEGORY)
+                 WHERE EG1.EQUIPMENT_GROUP_ID IS NOT NULL
+               ));
+    
+    resource_out = 
+       SELECT T1.RESOURCE_ID AS RESID,D.GEO_GROUP_ID,E.EQUIP_GROUP_ID 
+       FROM "sap.tm.trp.db.semantic.resource::v_stock_resource_last_status" T1
+       INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t6 ON (t1.RESOURCE_CATEGORY = t6.MAPPING_CODE)
+       INNER JOIN :filtered_equiptypes AS E ON (E.EQUIP_CODE = T1.RESOURCE_TYPE AND E.RESOURCE_CATEGORY = T6.CODE)
+       INNER JOIN :filtered_locations AS D ON (D.LOCATION_ID = T1.LOCATION_ID);
+    
+    /*
+    Calculate stock group by location, equipment type and status
+    */
+        stock_out = SELECT GEO_GROUP_ID,
+                           EQUIP_GROUP_ID,
+                           COUNT(1) AS OUTPUT_VALUE
+                    FROM :resource_out
+                     GROUP BY GEO_GROUP_ID,EQUIP_GROUP_ID;
+    /*
+    Loaction and equipment group
+    */
+        car_out =  SELECT DISTINCT A.GEO_GROUP_ID,B.EQUIP_GROUP_ID
+                   FROM :filtered_locations A, :filtered_equiptypes B;
+    /*
+    Output stock by location and equipment
+    */
+        pre_out = SELECT A.GEO_GROUP_ID AS LOCATION_ID, 
+                         A.EQUIP_GROUP_ID AS RESOURCE_TYPE,
+                         IFNULL(B.OUTPUT_VALUE,0) AS CURRENT_STOCK
+                  FROM :car_out A 
+                  LEFT OUTER JOIN :stock_out B ON 
+                  (A.GEO_GROUP_ID = B.GEO_GROUP_ID and A.EQUIP_GROUP_ID = B.EQUIP_GROUP_ID);
+                  
+        CURRENT_STOCK = SELECT A.LOCATION_ID, 
+                         A.RESOURCE_TYPE,
+                         A.CURRENT_STOCK
+                  FROM :pre_out A;
+
+    ----------------------------------------------------------transportation cost--------------------------------------------------------- 
+    
+    lt_transportation_cost = 
+        SELECT 
+            FROM_LOCATION,
+            TO_LOCATION,
+            RESOURCE_TYPE,
+            MTR,
+            MIN(COST) AS COST
+        FROM :t_transportation_cost
+		GROUP BY FROM_LOCATION, TO_LOCATION, RESOURCE_TYPE, MTR;
+    
+    ----------------------------------------------------------tu_tbl--------------------------------------------------------- 
+    PLAN_ID_FROM_RULE = SELECT DISTINCT RULE_ID, PLAN_ID FROM :RULE_PLAN_LOC;
+    
+    TU_TBL  = SELECT DISTINCT 
+                     T1.RULE_ID,
+                     PLAN_ID,
+                     TU_ID,
+                     TU_TYPE_CODE AS TU_TYPE,
+                     RESOURCE_TYPE,
+                     ITE_KEY,
+                     SHIPPER_ID,
+                     SHIPPER,
+                     CONSIGNEE_ID,
+                     CONSIGNEE,
+                     IFNULL (ORIGINAL_PICKUP_LOCATION_ID,POL)
+                     AS CUR_LOCATION_ID,
+                     QUANTITY,
+                     IFNULL(ORIGINAL_PICKUP_DATE,NULL)
+                     CUR_DATE,
+                     IFNULL(ORIGINAL_PICKUP_DATE,NULL)
+                     PRE_DATE,
+                     CASE WHEN DESTINATION_LOCATION_ID  = '' THEN POL
+                          ELSE DESTINATION_LOCATION_ID 
+                     END AS SHIPPER_LOCATION_ID,
+                     CASE WHEN DESTINATION_LOCATION     = '' THEN POL_NAME
+                          ELSE DESTINATION_LOCATION 
+                     END AS SHIPPER_LOCATION,
+                     CASE WHEN SOURCE_LOCATION_ID       = '' THEN POD
+                          ELSE SOURCE_LOCATION_ID 
+                     END AS CONSIGNEE_LOCATION_ID,
+                     CASE WHEN SOURCE_LOCATION          = '' THEN POD_NAME
+                          ELSE SOURCE_LOCATION 
+                     END AS CONSIGNEE_LOCATION,
+                     CUSTOMER_NAME,
+                     BOOKING_DATE,
+                     FLAG,
+                     RELEVANT_PLANNING,
+                     POL,
+                     POL_NAME,
+                     POD,
+                     POD_NAME,
+                     EXECUTION_STATUS_CODE AS STATUS,
+                     LIFECYCLE_CODE AS LIFECYCLE_STATUS
+              FROM  :TU_INFO T1
+              INNER JOIN :PLAN_ID_FROM_RULE T2 ON (T1.RULE_ID = T2.RULE_ID)
+              WHERE (FLAG <> 2 OR FLAG IS NULL) ;
+    
+    -----------------------------------------------------initialization----------------------------------------------
+    
+    LDR_RESULT_BATCH_TEMP = SELECT 
+                PR_RULE_ID AS RULE_ID,
+                TU_ID,
+                EQUIPMENT_ID AS RESOURCE_TYPE,
+                LOCATION_ID,
+                DEPOT_ID,
+                DEPOT_NAME
+            from "SAP_TM_TRP"."sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_trp_hrf_ER_LDR_output_base"
+            where 1=2;
+    
+    
+    -----------------------------------------------------looping configuration--------------------------------------------------------
+    tu_count=SELECT COUNT(DISTINCT TU_ID) AS TU_COUNT, PLAN_ID,RULE_ID FROM :TU_TBL GROUP BY PLAN_ID,RULE_ID;
+    loc_count=SELECT COUNT(DISTINCT LOCATION_NAME) AS LOC_COUNT, PLAN_ID FROM :PLAN_DATA  GROUP BY PLAN_ID;
+    
+    loc_tu_data =  SELECT T1.PLAN_ID, 
+					   T1.LOC_COUNT ,
+					   T2.RULE_ID,
+					   T2.TU_COUNT, 
+					   T1.LOC_COUNT*T2.TU_COUNT LOC_TU_MULTIPLE 
+					   FROM :LOC_COUNT T1 
+					   INNER JOIN :TU_COUNT T2 
+					   ON T1.PLAN_ID=T2.PLAN_ID;
+	
+    ldr_rule_id = SELECT
+                        T1.ID as RULE_ID,
+                        T1.LOCATION_DETERMIN_ID as ldr_rules
+                    FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" T1
+                    INNER JOIN "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" T2 
+                    on (T1.ID = T2.RULE_ID and T2.RULE_GROUP_ID = :RULE_GROUP_ID)
+                    where T1.LOCATION_DETERMIN_ID is not null;
+	
+	ldr_rule_combine=select string_agg(t1.rule_id,',') as rule_id,
+							           string_agg(plan_id,',') as plan_id,
+							          ldr_rules,
+							          sum(tu_count) as tu_count,
+							          sum(loc_count) as loc_count,
+							          sum(loc_tu_multiple) as loc_tu_multiple
+			                    from :loc_tu_data t1
+			                    left join :ldr_rule_id t2 
+			                    on t1.rule_id=t2.rule_id
+			                    group by ldr_rules;
+			                    
+	-----------------------------------------------------Fetch Data Packet Size from configuration table-----------------------------
+    SELECT value INTO lv_tu_batch_max_process_record
+    	    FROM "sap.tm.trp.db.systemmanagement.customization::t_general_parameters"
+            WHERE NAME =  'OPTIMIZE_TU_BATCH_MAX_PROCESS_RECORDS';
+            
+    SELECT value INTO lv_tu_batch_max_tu_count
+    	    FROM "sap.tm.trp.db.systemmanagement.customization::t_general_parameters"
+            WHERE NAME =  'OPTIMIZE_TU_BATCH_MAX_TU_COUNT';
+            
+    SELECT count(*) INTO lv_tu_batch_max_process_record_cnt
+    	    FROM "sap.tm.trp.db.systemmanagement.customization::t_general_parameters"
+            WHERE NAME =  'OPTIMIZE_TU_BATCH_MAX_PROCESS_RECORDS';
+            
+    SELECT count(*) INTO lv_tu_batch_max_tu_count_cnt
+    	    FROM "sap.tm.trp.db.systemmanagement.customization::t_general_parameters"
+            WHERE NAME =  'OPTIMIZE_TU_BATCH_MAX_TU_COUNT';
+    
+    if(:lv_tu_batch_max_process_record_cnt > 0 ) then
+    	if (:lv_tu_batch_max_process_record='auto') then
+    		lv_data_packet_size = :lv_default_data_packet_size;
+    	else
+    		if(:lv_tu_batch_max_process_record>=:lv_max_data_packet_size) then
+        		lv_data_packet_size = :lv_default_data_packet_size;
+    	    elseif (:lv_tu_batch_max_process_record<=:lv_min_data_packet_size) then
+        		lv_data_packet_size = :lv_default_data_packet_size;
+    	    else
+        		lv_data_packet_size = :lv_tu_batch_max_process_record;
+    	    end if;
+    	end if;
+    end if;
+    
+    configuration_with_ldr=SELECT *,CEIL(TU_COUNT/NO_OF_BATCHES) AS NO_OF_TUS_PER_BATCH from (
+    select *,CEIL(LOC_TU_MULTIPLE/:lv_data_packet_size) NO_OF_BATCHES from :ldr_rule_combine);
+    
+    for i in 1..RECORD_COUNT(:configuration_with_ldr) DO
+    lv_offset = :i-1; 
+            SELECT rule_id,plan_id,ldr_rules,tu_count,loc_count,NO_OF_BATCHES,NO_OF_TUS_PER_BATCH 
+            		INTO 
+            		lv_rule_id,lv_plan_id,lv_ldr_rules,lv_tu_count,lv_loc_count,lv_no_of_batches,lv_of_tus_per_batch 
+            		FROM :configuration_with_ldr limit 1 offset :lv_offset;
+         
+         if(:lv_tu_count > :lv_tu_batch_max_tu_count) then 
+         	if(:lv_tu_batch_max_tu_count*:lv_loc_count > :lv_data_packet_size) then 
+         	else
+         		new_config=select *, :lv_tu_batch_max_tu_count as NO_OF_TUS_PER_BATCH from (
+         		select *, ceil(tu_count/:lv_tu_batch_max_tu_count) as NO_OF_BATCHES from :ldr_rule_combine)
+         		where tu_count > :lv_tu_batch_max_tu_count ;
+         		
+         		configuration_with_ldr=select * from :configuration_with_ldr where tu_count < :lv_tu_batch_max_tu_count 
+         		union all 
+         		select * from :new_config;
+         		
+         	end if;
+         end if; 		
+           
+    end for;
+
+    --------------------------------------------------TU-BATCH-PROCESSING-LOOP--------------------------------------------     
+        FOR i IN 1..RECORD_COUNT(:configuration_with_ldr) DO
+			
+			lv_offset = :i-1; 
+            SELECT rule_id,plan_id,ldr_rules,NO_OF_BATCHES,NO_OF_TUS_PER_BATCH 
+            		INTO 
+            		lv_rule_id,lv_plan_id,lv_ldr_rules,lv_no_of_batches,lv_of_tus_per_batch 
+            		FROM :configuration_with_ldr limit 1 offset :lv_offset;
+            		
+			--FETCH RULE_SP
+            SELECT IFNULL(MAX(T1.NAME), '') INTO RULE_SP
+		        FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule" T1
+        	    WHERE T1.RULE_ID = :lv_ldr_rules;
+        
+				FOR j IN 1..:lv_no_of_batches DO
+				    
+				    IF :j=1 then
+				        lv_batch_offset = :j-1; 
+				    else
+				        lv_batch_offset = :lv_of_tus_per_batch+:lv_batch_offset;
+				    end if; 
+				    
+				    CALL "SAP_TM_TRP"."sap.tm.trp.db.dashboard::sp_splitter_clob" (:lv_rule_id,',',splitter_lv_rule_id);
+
+				    RULE_ITR = SELECT A.* FROM :TU_TBL A 
+				                WHERE A.RULE_ID IN (SELECT STRING FROM :splitter_lv_rule_id) 
+					            ORDER BY TU_ID
+							    LIMIT :lv_of_tus_per_batch
+								OFFSET :lv_batch_offset;
+				    
+				    PLAN_DATA_TU_INFO_ITR = SELECT DISTINCT
+                                    T4.RULE_ID,
+                                    T4.PLAN_ID,
+                                    T4.TU_ID,
+                                    T4.RESOURCE_TYPE,
+                                    T0.EQUIP_TYPE_NAME,
+                                    T4.QUANTITY ,
+                                    T4.SHIPPER_LOCATION_ID AS N_LOCATION_ID,
+                                    T4.SHIPPER_LOCATION AS N_LOCATION_NAME,
+                                    T4.PRE_DATE,
+                                    T4.TU_TYPE,
+                                    T4.ITE_KEY, -- T5.ITE_KEY,
+                                    T4.SHIPPER_ID,
+                                    T4.SHIPPER,
+                                    T4.POL,
+                                    T4.POL_NAME,
+                                    T4.POD,
+                                    T4.POD_NAME,
+                                    T4.CONSIGNEE_ID,
+                                    T4.CONSIGNEE,
+                                    T4.CUSTOMER_NAME, --T5."CUSTOMER_NAME",
+                                    T4.RELEVANT_PLANNING,
+                                    T4.STATUS, --T5."EXECUTION_STATUS",
+                                    T4.LIFECYCLE_STATUS, --T5."LIFECYCLE_STATUS",
+                                    T4.BOOKING_DATE,
+                                    T0.LOCATION_ID,
+                                    T0.LOCATION_NAME,
+                                    T0.EQUIP_TYPE_ID,
+                                    T0.START_TIME,
+                					T0.END_TIME,
+                                    T0.SUPPLY,
+                                    T0.DEMAND,
+                                    T0.BALANCE_SUPPLY_DEMAND,
+                                    T0.BALANCE_STOCK_SUPPLY_DEMAND,
+                                    IFNULL (T0.MIN_SAFETY_STOCK,0) AS MIN_SAFETY_STOCK,
+                                    T0.MAX_CAPACITY            AS MAX_CAPACITY,
+                                    T0.MAX_SAFETY_STOCK,
+                                    T0.MIN_SAFETY_STOCK_HEADER,
+                                    T0.MAX_SAFETY_STOCK_HEADER,
+                                    T0.MAX_CAPACITY_HEADER,
+                                    T0.STOCK_BALANCE_HEADER,
+                                    T0.NODE_ID,
+                                    T4.FLAG
+                                FROM :PLAN_DATA T0
+                                INNER JOIN :RULE_ITR T4
+                                    ON T0.PLAN_ID = T4.PLAN_ID AND 
+                                    T0.EQUIP_TYPE_ID = T4.RESOURCE_TYPE AND
+                                    ADD_DAYS (T0.END_TIME, :DATE_OFFSET) >= T4.PRE_DATE AND
+                                    ADD_DAYS(T0.START_TIME, :DATE_OFFSET)< T4.PRE_DATE;
+                                
+                TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_booking_ER_LDR_balance_cost_base_inputGlobalTemp";
+            
+                lt_ldr = SELECT DISTINCT
+                            T0.RULE_ID AS RULE_ID,
+                            T0.TU_ID,
+                            T0.RESOURCE_TYPE,
+                            T0.EQUIP_TYPE_NAME,
+                            T0.QUANTITY ,
+                            T0.N_LOCATION_ID AS N_LOCATION_ID,
+                            T0.N_LOCATION_NAME,
+                            T0.PRE_DATE,
+                            T0.TU_TYPE,
+                            T0.ITE_KEY,
+                            T0.SHIPPER_ID,
+                            T0.SHIPPER AS SHIPPER_NAME,
+                            T0.POL,
+                            T0.POL_NAME,
+                            T0.POD,
+                            T0.POD_NAME,
+                            T0.CONSIGNEE_ID,
+                            T0.CONSIGNEE AS CONSIGNEE_NAME,
+                            T0.CUSTOMER_NAME,
+                            T0.RELEVANT_PLANNING,
+                            T0.STATUS,
+                            T0.LIFECYCLE_STATUS,
+                            T0.BOOKING_DATE,
+                            0  AS EXECUTION_ID,
+                            T0.PLAN_ID AS SD_PLAN_ID,
+                            :V_NODE_ID AS NODE_ID,
+                            T0.LOCATION_ID,
+                            T0.LOCATION_NAME,
+                            IFNULL(T5.CURRENT_STOCK, 0) AS stock,
+                            T0.SUPPLY,
+                            T0.DEMAND,
+                            IFNULL(T6.QUANTITY,0) AS IMPACTED_DEMAND,
+                            IFNULL(T7.QUANTITY,0) AS IMPACTED_SUPPLY,
+                            T0.BALANCE_SUPPLY_DEMAND,
+                            T0.BALANCE_STOCK_SUPPLY_DEMAND,
+                            IFNULL (T0.MIN_SAFETY_STOCK,0) AS MIN_STOCK,
+                            T0.MAX_CAPACITY AS MAX_CAPACITY,
+                            :MANDATORY_COST_MODEL_ID AS COST_MODEL_ID,
+                            T1.COST AS TRANSPORTATION_COST,
+                            T2.COST AS HANDLING_COST,
+                            0 AS FREE_DAYS,
+                            0 AS FREE_AMOUNT,
+                            T3.COST AS STORAGE_COST,
+                            T0.MAX_SAFETY_STOCK,
+                            T0.MIN_SAFETY_STOCK_HEADER,
+                            T0.MAX_SAFETY_STOCK_HEADER,
+                            T0.MAX_CAPACITY_HEADER,
+                            T0.STOCK_BALANCE_HEADER,
+                            T8.HANDLING_CAPACITY,
+                            IFNULL(T8.SUPPLY + T8.DEMAND,0) AS SUPPLY_DEMAND,
+                            T8.HANDLING_CAPACITY - T8.SUPPLY - T8.DEMAND AS REMAINING_HANDLING_CAPACITY 
+                        FROM :PLAN_DATA_TU_INFO_ITR T0
+                            INNER JOIN :lt_transportation_cost T1 
+                                ON T0.LOCATION_NAME=T1.FROM_LOCATION AND
+                                T0.N_LOCATION_NAME=T1.TO_LOCATION AND 
+                                T1.RESOURCE_TYPE=T0.EQUIP_TYPE_ID 
+                            LEFT JOIN :t_handling_cost T2 
+                                ON T0.LOCATION_NAME=T2.LOCATION AND 
+                                T2.RESOURCE_TYPE=T0.EQUIP_TYPE_ID
+                            LEFT JOIN :t_storage_cost T3 
+                                ON T0.LOCATION_NAME = T3.LOCATION AND 
+                                T0.EQUIP_TYPE_ID = T3.RESOURCE_TYPE AND 
+                                T0.START_TIME = T3.START_TIME AND 
+                                T0.END_TIME = T3.END_TIME
+                            LEFT OUTER JOIN :CURRENT_STOCK T5
+                                ON T0.EQUIP_TYPE_ID = T5.RESOURCE_TYPE AND  
+                                T0.LOCATION_ID   = T5.LOCATION_ID
+                            LEFT OUTER JOIN (SELECT TOP 1 * FROM :TU_INFO)  T6
+                                ON T0.EQUIP_TYPE_ID= T6.RESOURCE_TYPE AND
+                                ADD_DAYS(T0.END_TIME, :DATE_OFFSET)   >= T6.PICKUP_DATE AND
+                                ADD_DAYS(T0.START_TIME, :DATE_OFFSET) <= T6.PICKUP_DATE AND
+                                T6.RULE_ID= T0.RULE_ID
+                            LEFT OUTER JOIN (SELECT TOP 1 * FROM :TU_INFO)  T7
+                                ON T0.EQUIP_TYPE_ID= T7.RESOURCE_TYPE AND
+                                T0.LOCATION_ID         = T7.PICKUP_LOCATION_ID AND
+                                ADD_DAYS (T0.START_TIME, :DATE_OFFSET)<= T7.ORIGINAL_PICKUP_DATE AND
+                                ADD_DAYS (T0.END_TIME, :DATE_OFFSET)  >=T7.ORIGINAL_PICKUP_DATE  AND
+                                T7.RULE_ID = T0.RULE_ID                                AND
+                                T7.FLAG = 2  --tbc
+          	                LEFT OUTER JOIN :T_HANDLING_CAPACITY T8
+        				        ON T0.LOCATION_ID = T8.LOCATION_ID 
+        				        AND T0.START_TIME = T8.START_TIME
+        				        AND T0.END_TIME = T8.END_TIME               
+                        WHERE   
+                        T0.NODE_ID = :V_NODE_ID AND   
+                        T0.FLAG <>2;
+                
+                INSERT INTO "SAP_TM_TRP"."sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::t_booking_ER_LDR_balance_cost_base_inputGlobalTemp"(
+                    PR_RULE_ID,
+                    TU_ID,
+                    EQUIPMENT_ID,
+                    EQUIP_TYPE_NAME,
+                    QUANTITY,
+                    LOCATION_ID,
+                    LOCATION_NAME,
+                    PLANNED_DATE,
+                    TU_TYPE,
+                    ITE_KEY,
+                    SHIPPER_ID,
+                    SHIPPER_NAME,
+                    POL,
+                    POL_NAME,
+                    POD,
+                    POD_NAME,
+                    CONSIGNEE_ID,
+                    CONSIGNEE_NAME,
+                    CUSTOMER_NAME,
+                    PLANNING_RELEVANT,
+                    EXECUTION_STATUS,
+                    LIFECYCLE_STATUS,
+                    BOOKING_DATE,
+                    PLAN_EXECUTION_ID,
+                    PLAN_MODEL_ID,
+                    NODE_ID,
+                    DEPOT_ID,
+                    DEPOT_NAME,
+                    STOCK,
+                    SUPPLY,
+                    DEMAND,
+                    IMPACTED_SUPPLY,
+                    IMPACTED_DEMAND,
+                    BALANCE_SUPPLY_DEMAND,
+                    BALANCE_STOCK_SUPPLY_DEMAND,
+                    MIN_SAFETY_STOCK,
+                    MAX_CAPACITY,
+                    COST_MODEL_ID,
+                    TR_COST,
+                    HANDLE_COST,
+                    FREE_DAYS,
+                    FREE_AMOUNT,
+                    STORAGE_COST,
+                    MAX_SAFETY_STOCK,
+                    MIN_SAFETY_STOCK_HEADER,
+                    MAX_SAFETY_STOCK_HEADER,
+                    MAX_CAPACITY_HEADER,
+                    STOCK_BALANCE_HEADER,
+                    HANDLING_CAPACITY,
+                    SUPPLY_DEMAND,
+                    REMAINING_HANDLING_CAPACITY)
+                 select 
+                    RULE_ID,
+                    TU_ID,
+                    RESOURCE_TYPE,
+                    EQUIP_TYPE_NAME,
+                    QUANTITY,
+                    N_LOCATION_ID,
+                    N_LOCATION_NAME,
+                    PRE_DATE,
+                    TU_TYPE,
+                    ITE_KEY,
+                    SHIPPER_ID,
+                    SHIPPER_NAME,
+                    POL,
+                    POL_NAME,
+                    POD,
+                    POD_NAME,
+                    CONSIGNEE_ID,
+                    CONSIGNEE_NAME,
+                    CUSTOMER_NAME,
+                    RELEVANT_PLANNING,
+                    STATUS,
+                    LIFECYCLE_STATUS,
+                    BOOKING_DATE,
+                    EXECUTION_ID,
+                    SD_PLAN_ID,
+                    NODE_ID,
+                    LOCATION_ID,
+                    LOCATION_NAME,
+                    stock,
+                    SUPPLY,
+                    DEMAND,
+                    IMPACTED_DEMAND,
+                    IMPACTED_SUPPLY,
+                    BALANCE_SUPPLY_DEMAND,
+                    BALANCE_STOCK_SUPPLY_DEMAND,
+                    MIN_STOCK,
+                    MAX_CAPACITY,
+                    COST_MODEL_ID,
+                    TRANSPORTATION_COST,
+                    HANDLING_COST,
+                    FREE_DAYS,
+                    FREE_AMOUNT,
+                    STORAGE_COST,
+                    MAX_SAFETY_STOCK,
+                    MIN_SAFETY_STOCK_HEADER,
+                    MAX_SAFETY_STOCK_HEADER,
+                    MAX_CAPACITY_HEADER,
+                    STOCK_BALANCE_HEADER,
+                    HANDLING_CAPACITY,
+                    SUPPLY_DEMAND,
+                    REMAINING_HANDLING_CAPACITY
+                    from :lt_ldr;
+        
+                CALL "sap.tm.trp.db.hrf.pickupReturnScenario.locationDetermination.ERLDR::p_call_ER_LDR_rules"(
+                      :PICKUPRETURN_MODE,
+                      :RULE_SP,
+                      ER_LDR_RESULT
+                     );
+                
+                LDR_RESULT_BATCH_RUN= 
+                    SELECT 
+                        RULE_ID,
+                        TU_ID,
+                        RESOURCE_TYPE,
+                        LOCATION_ID,
+                        DEPOT_ID,
+                        DEPOT_NAME
+                    FROM (  SELECT DISTINCT
+                                PR_RULE_ID AS RULE_ID,
+                                TU_ID,EQUIPMENT_ID AS RESOURCE_TYPE,
+                                LOCATION_ID,
+                                DEPOT_ID,
+                                DEPOT_NAME,
+                                ROW_NUMBER()OVER (PARTITION BY PR_RULE_ID,TU_ID,EQUIPMENT_ID,LOCATION_ID ORDER BY LOC_RANK) AS RANK
+                            FROM (SELECT DISTINCT * FROM :ER_LDR_RESULT WHERE ER_LDR = 'LDR')
+                        )
+                    WHERE RANK =  1;
+                    
+                    LDR_RESULT_BATCH_TEMP=SELECT * FROM :LDR_RESULT_BATCH_RUN
+                                    UNION ALL 
+                                    SELECT * FROM :LDR_RESULT_BATCH_TEMP;
+				END FOR;
+		END FOR;
+		
+		LDR_RESULT = select * from :LDR_RESULT_BATCH_TEMP;
+                         
+        OPT_RESULT = SELECT DISTINCT 
+                T1.EXECUTION_ID,
+    			T1.RULE_ID,
+    	        T1.TU_ID,
+    	        T1.EXECUTION_STATUS_CODE,
+    	        T1.SHIPPER_ID,
+    	        T1.CONSIGNEE_ID,
+    	        T1.RESOURCE_TYPE,
+    	        T1.QUANTITY,
+    	        T1.SOURCE_LOCATION_ID,
+    	        T1.DESTINATION_LOCATION_ID,
+    	        T1.STREETTURN_TU_ID,
+    	        T1.POL, 
+    	        T1.POD,
+    	        T1.VESSEL_CUTOFF_TIME AS DATE,
+    	        IFNULL (T2.DEPOT_ID,T1.PICKUP_LOCATION_ID) AS PRE_LOCATION_ID,
+    	        T1.ORIGINAL_PICKUP_LOCATION_ID AS CUR_LOCATION_ID,
+    	        T1.PICKUP_DATE AS PRE_DATE,
+    	        T1.ORIGINAL_PICKUP_DATE AS CUR_DATE,
+    	        CASE WHEN T2.LOCATION_ID IS NULL THEN 
+    	                T1.FLAG ELSE 1 
+    	        END AS FLAG,
+                IFNULL (T2.DEPOT_NAME,T1.PICKUP_LOCATION) AS PRE_LOCATION,
+    	        T1.ORIGINAL_PICKUP_LOCATION AS CUR_LOCATION,
+                CASE WHEN T2.LOCATION_ID IS NULL THEN 
+                    T1.ASSIGN_STATUS ELSE 1 
+                END AS ASSIGN_STATUS
+	        FROM :TU_INFO T1
+	        LEFT JOIN :LDR_RESULT T2
+            ON (T1.RULE_ID = T2.RULE_ID AND 
+                T1.TU_ID = T2.TU_ID AND 
+                T1.RESOURCE_TYPE =T2.RESOURCE_TYPE AND 
+                T1.FLAG <> 2);
+      
+            IN_END_TIME := current_UTCtimestamp;
+            IN_RUN_ID_STAMP= :RULE_GROUP_ID || TO_VARCHAR(:IN_END_TIME, 'YYYYMMDDHH24MISS');
+      	     
+            UPDATE "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result" A
+                    SET
+                    A.USER = :V_USERNAME,
+	                A.EXECUTION_STATUS_CODE=T1.EXECUTION_STATUS_CODE,
+	                A.SHIPPER_ID=T1.SHIPPER_ID,
+	                A.CONSIGNEE_ID=T1.CONSIGNEE_ID,
+	                A.RESOURCE_TYPE=T1.RESOURCE_TYPE,
+	                A.QUANTITY=T1.QUANTITY,
+	                A.SOURCE_LOCATION_ID=T1.SOURCE_LOCATION_ID,
+	                A.DESTINATION_LOCATION_ID=T1.DESTINATION_LOCATION_ID,	
+	                A.STREETTURN_TU_ID=T1.STREETTURN_TU_ID,
+	                A.POL=T1.POL,
+	                A.POD=T1.POD,
+	                A.DATE=T1.DATE,
+	                A.PRE_LOCATION_ID=T1.PRE_LOCATION_ID,
+	                A.CUR_LOCATION_ID=T1.CUR_LOCATION_ID,
+	                A.CUR_DATE=T1.CUR_DATE,
+	                A.FLAG=T1.FLAG,
+	                A.OP_SETTING_TYPE=1,
+	                A.EXECUTION_TIME=:IN_END_TIME,
+                    A.EXECUTION_BY=:USER_ID,
+                    A.PRE_LOCATION=T1.PRE_LOCATION,
+                    A.CUR_LOCATION=T1.CUR_LOCATION,
+                    A.ASSIGN_STATUS=T1.ASSIGN_STATUS,
+                    A.STATUS = 'O',
+                    A.RULE_GROUP_ID2= :RULE_GROUP_ID,
+                    A.PROCESS_2_EXECUTION_ID=:EXECUTION_ID,
+                    A.PROCESS_2_EXECUTION_START_TIME=:IN_START_TIME,
+                    A.PROCESS_2_EXECUTION_END_TIME=:IN_END_TIME
+                FROM :OPT_RESULT T1
+                INNER JOIN "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result" A
+                    ON A.RULE_ID = T1.RULE_ID AND 
+                    A.TU_ID = T1.TU_ID AND
+                    A.PROCESS_1_EXECUTION_ID = T1.EXECUTION_ID
+                WHERE A.STATUS = 'F';
+END;

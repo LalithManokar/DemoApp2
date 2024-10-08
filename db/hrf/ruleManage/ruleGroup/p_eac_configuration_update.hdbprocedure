@@ -1,0 +1,66 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_eac_configuration_update" (
+    IN ID BIGINT,
+    IN NAME VARCHAR(200), --should be mapped to code field in the tables
+    IN DESCRIPTION VARCHAR(500),
+    --IN SCHEMA_NAME VARCHAR(20),
+    IN SP VARCHAR(200),
+    IN LOCATIONS_LIST_STRING CLOB,
+    
+    OUT STATUS INTEGER,  --0 error  1 success
+    OUT MESSAGE VARCHAR(200)
+   ) 
+	 LANGUAGE SQLSCRIPT 
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+    DECLARE V_USER_ID BIGINT;
+    DECLARE V_SPRAS VARCHAR(10);
+    DECLARE V_TIMESTAMP_START  DATETIME  := CURRENT_UTCTIMESTAMP;
+
+    CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:LOCATIONS_LIST_STRING,',',LOCATION_ID_INPUT_STRING);
+        LOCATIONS_LIST = SELECT string as ID FROM :LOCATION_ID_INPUT_STRING;
+ 
+    CALL "sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_eac_configuration_check"(
+		:ID,
+		:NAME,
+		:DESCRIPTION,
+		:SP,
+		:LOCATIONS_LIST,
+        STATUS,
+        MESSAGE
+	);
+	
+
+    IF :STATUS = 1 THEN
+    
+	    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(V_USER_ID);
+	    SELECT IFNULL (MAX (SPRAS),'') INTO V_SPRAS
+	    FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+	
+      	UPDATE "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group"
+		      SET DESC = :NAME,
+		          SP = :SP,
+		          LAST_MODIFIED_BY = :V_USER_ID,
+		          LAST_MODIFIED_AT = :V_TIMESTAMP_START,
+		          CODE = :NAME
+		      WHERE  ID = :ID;
+
+		UPDATE "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group_t"
+			  SET DESC  = :DESCRIPTION
+			  WHERE ID    =:ID
+			  AND SPRAS = :V_SPRAS;
+			  
+		DELETE FROM "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group_item" WHERE LOCATION_RULE_ID = :ID;
+		
+		-- select :ID selects the id of the eac rule group
+		-- select ID (without :) selects the id from locations_list table
+		INSERT INTO "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group_item" (LOCATION_RULE_ID,LOCATION_ID)
+		    SELECT :ID, ID FROM :LOCATIONS_LIST;
+			  
+        
+		      
+	END IF ;
+
+END

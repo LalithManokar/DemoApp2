@@ -1,0 +1,18 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+	{name = "ZONE_NAME"; sqlType = VARCHAR; length = 20; nullable = false;},
+	{name = "PRIME_LOC_ID"; sqlType = VARCHAR; length = 22;},
+	{name = "PRIME_LOC_NAME"; sqlType = VARCHAR; length = 50;},
+	{name = "CITY_CODE"; sqlType = VARCHAR; length = 50;},
+	{name = "CITY_NAME"; sqlType = VARCHAR; length = 50;},
+	{name = "STATE_CODE"; sqlType = VARCHAR; length = 50;},
+	{name = "STATE_NAME"; sqlType = VARCHAR; length = 50;},
+	{name = "COUNTRY_CODE"; sqlType = VARCHAR; length = 50;},
+	{name = "COUNTRY_NAME"; sqlType = VARCHAR; length = 50;},
+  	{name = "CREATED_BY"; sqlType = BIGINT; nullable = false;},
+	{name = "CREATED_AT"; sqlType = TIMESTAMP;},
+	{name = "LAST_MODIFIED_AT"; sqlType = TIMESTAMP;},
+	{name = "LAST_MODIFIED_BY"; sqlType = BIGINT;}
+];
+table.primaryKey.pkcolumns = ["ZONE_NAME"];

@@ -1,0 +1,17 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT A.ID,
+                 CASE WHEN  UPPER(A.EQUIP_TYPE) = 'PENALTY'  then 'VIRTUAL' ELSE 'PROPOSED-REPOSITIONING' END AS TYPE,
+                 A.FROM_LOC AS FROM_LOC_NAME,
+                 A.TO_LOC AS TO_LOC_NAME,
+                 A.EQUIP_TYPE,
+                 A.QUANTITY,
+                 A.UOM,
+                 A.COST,
+                 A.CURRENCY,
+                 A.START_TIME,
+                 A.END_TIME,
+                 A.REL_SCENARIO_ID
+            FROM \"sap.tm.trp.db.planningcockpit::t_balancing_list\" AS A
+          ";
+
+depends_on_table = ["sap.tm.trp.db.planningcockpit::t_balancing_list"];

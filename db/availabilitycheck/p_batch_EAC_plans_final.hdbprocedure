@@ -1,0 +1,706 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.availabilitycheck::p_batch_EAC_plans_final" (
+   IN SD_PLANS_CLOB CLOB,
+   OUT check_result "sap.tm.trp.db.availabilitycheck::tt_check_result",
+   OUT message "sap.tm.trp.db.common::tt_message"
+   ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+    AS
+BEGIN
+
+DECLARE COUNT_SD INTEGER;
+DECLARE SD_PLANS_COUNT INTEGER;
+DECLARE v_count INTEGER;
+DECLARE SD_PLAN_STRING NVARCHAR(500);
+DECLARE SD_PLAN_CLAS_SCH_COUNT INTEGER;
+DECLARE SD_PLAN_VIR_SCH_COUNT INTEGER;
+DECLARE V_EXECUTION_ID INTEGER := 0;
+DECLARE NODE_OUTPUT_KEY_SUPPLY VARCHAR(20) := 'SUPPLY';
+DECLARE NODE_OUTPUT_KEY_DEMAND VARCHAR(20) := 'DEMAND';
+DECLARE DRILL_DOWN_FLAG_0 INTEGER := 0;
+DECLARE DRILL_DOWN_FLAG_1 INTEGER := 1;
+DECLARE v_classic_count INTEGER;
+DECLARE v_classic_inst_count INTEGER;
+DECLARE ITR_TEMP INTEGER;
+DECLARE SD_PLAN_ITR INTEGER;
+DECLARE LOWER_RANGE INTEGER :=1;
+DECLARE UPPER_RANGE INTEGER :=3;
+DECLARE SD_TOP_COUNT INTEGER := 0;
+DECLARE LV_LOCATION_COUNT INTEGER;
+DECLARE TEMP INTEGER := 0;
+DECLARE OFFSET_CNT INTEGER :=0;
+DECLARE DEFAULT_NUM_THREADS INTEGER := 5;
+DECLARE MIN_NUM_THREADS INTEGER := 1;
+DECLARE MAX_NUM_THREADS INTEGER := 10;
+DECLARE PARAM_COUNT INTEGER := 0;
+DECLARE IN_THREADS VARCHAR(50) ;
+DECLARE NUMERIC_FLAG INTEGER ;
+DECLARE AR_SD_PLAN_IDS BIGINT ARRAY;
+DECLARE AR_SD_PLANS VARCHAR(50) ARRAY;
+DECLARE AR_NODE_IDS INTEGER ARRAY;
+
+DECLARE METADATA_NODE_ID_NUM INTEGER;
+DECLARE DEFAULT_METADATA_NODE_NUM INTEGER;
+DECLARE PP_ID INTEGER;
+
+    message = SELECT 'I' AS severity, '' AS message_id,
+        '' AS message, '' AS var0, '' AS var1, '' AS var2, '' AS var3,
+        '' AS var4 FROM dummy WHERE 1 <> 1;
+    
+    check_result = SELECT
+        '' AS sd_plan,
+        '' AS location_no,
+        '' AS equip_type,
+        null AS start_time,
+        null AS end_time,
+        0  AS supply,
+        0 AS demand,
+        0 AS level
+        FROM dummy WHERE 1 <> 1; 
+        
+    --clob splitter logic  
+    CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:sd_plans_clob,'~',sd_plan_temp);
+   
+    SD_PLANS_LIST  = SELECT  CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 1) as VARCHAR(50)) as LOCATION_NAME,
+                        CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 2) as VARCHAR(10)) as LOCATION_TYPE,
+                        CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 3) as NVARCHAR(50)) as EQUIP_TYP,
+                        CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 4) as TIMESTAMP) as REQUEST_TIME,
+                        CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 5) as INTEGER) as QUANTITY,
+                        CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 6) as NVARCHAR(50)) as REQUEST_CHECK_TYPE,
+                        CAST(SUBSTR_REGEXPR('[^,]+' IN "STRING" OCCURRENCE 7) as NVARCHAR(50)) as SD_PLAN
+                from :sd_plan_temp;
+    
+   SD_PLANS = select distinct SD_PLAN from :SD_PLANS_LIST where SD_PLAN is not null;
+    
+    SELECT count(SD_PLAN) into COUNT_SD FROM :SD_PLANS;
+    if COUNT_SD = 0 then
+         message = SELECT 'E' AS severity, 'MSG_NO_AVAIL_CHECK_PLAN_MODEL' AS message_id,
+        'No Supply and Demand plan available' AS message, '' AS var0, '' AS var1, '' AS var2, '' AS var3,
+        '' AS var4 FROM dummy;
+        return;
+    end if;
+    
+    SELECT count(*) into v_count
+    FROM :SD_PLANS    
+    WHERE SD_PLAN in (select CODE FROM "sap.tm.trp.db.pipeline::t_plan_model");
+    
+    IF :v_count < :count_sd THEN
+    
+        SELECT RTRIM(STRING_AGG(SD_PLAN||','),',') INTO SD_PLAN_STRING
+        FROM :SD_PLANS
+        WHERE SD_PLAN not in (select code FROM "sap.tm.trp.db.pipeline::t_plan_model");        
+        
+        message = SELECT 'E' AS severity, 'MSG_PLAN_MODEL_CODE_NOT_FOUND' AS message_id,
+        'Supply and Demand Plan not found' AS message, :SD_PLAN_STRING AS var0, '' AS var1, '' AS var2, '' AS var3,
+        '' AS var4 FROM dummy;
+        
+        IF :v_count = 0 THEN
+            message = SELECT 'E' AS severity, 'MSG_PLAN_MODEL_CODE_NOT_FOUND' AS message_id,
+            'No Supply and Demand plan available' AS message, '' AS var0, '' AS var1, '' AS var2, '' AS var3,
+            '' AS var4 FROM dummy;
+            return;
+        END IF;    
+    END IF;
+    
+    SD_PLAN_IDS = SELECT p.sd_plan,m.id, m.plan_model_type_id 
+    	          FROM "sap.tm.trp.db.pipeline::t_plan_model" m
+                  inner join :SD_PLANS  p on m.code = p.sd_plan;
+                  
+    SELECT COUNT(*) INTO SD_PLANS_COUNT FROM :SD_PLAN_IDS WHERE PLAN_MODEL_TYPE_ID = 1;
+
+    IF :SD_PLANS_COUNT > 0 THEN 
+    
+        -- Fetch only classic sd plan list 
+    SD_PLAN_CLSC_TMP = select sd_plan,sd_plan_id,pipeline_model_id,pipeline_model,instant_enabled from (
+    		                               SELECT m.sd_plan,m.id as sd_plan_id, m.plan_model_type_id,t1.PIPELINE_MODEL_ID as PIPELINE_MODEL_ID,t2.name as PIPELINE_MODEL, IFNULL (T2.INSTANT_ENABLED,'') as instant_enabled
+	               					       FROM "sap.tm.trp.db.pipeline::t_plan_model" AS T1
+	               						   INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_model" AS T2 ON T1.PIPELINE_MODEL_ID = T2.ID
+	               						   INNER JOIN :SD_PLAN_IDS m on t1.id = m.id and m.plan_model_type_id = 1);
+	
+	select count(*) into v_classic_count from :SD_PLAN_CLSC_TMP where instant_enabled <> 'X';
+	select count(*) into v_classic_inst_count from :SD_PLAN_CLSC_TMP where instant_enabled = 'X';
+	
+	IF :v_classic_count > 0 OR  :v_classic_inst_count > 0 THEN 
+	 
+		IF :v_classic_count > 0 THEN
+	
+			SD_PLAN_CLSC = SELECT sd_plan,sd_plan_id from :SD_PLAN_CLSC_TMP where instant_enabled <> 'X';
+			
+			SD_PLAN_CLSC_MAX_EX_ID =  SELECT m.sd_plan,m.sd_plan_id,IFNULL (MAX(p.ID),0) AS MAX_EXECUTION_ID
+								      FROM "sap.tm.trp.db.pipeline::t_plan_execution" p
+								      INNER JOIN :SD_PLAN_CLSC m on m.sd_plan_id = p.PLAN_MODEL_ID
+								      group by m.sd_plan,m.sd_plan_id;
+			      
+			SD_PLAN_CLSC_FINAL =    SELECT sd_plan,sd_plan_id,MAX_EXECUTION_ID,COALESCE(max(ID),-1) as NODE_ID FROM (
+									SELECT T0.DEFAULT_NODE_ID AS ID,m.sd_plan,m.sd_plan_id,m.MAX_EXECUTION_ID
+									FROM "sap.tm.trp.db.pipeline::v_pipeline_default_node" T0
+									INNER JOIN "sap.tm.trp.db.pipeline::t_execution_context" T1 ON T0.PIPELINE_MODEL_ID = T1.VALUE
+									INNER JOIN :SD_PLAN_CLSC_MAX_EX_ID m on m.MAX_EXECUTION_ID = T1.EXECUTION_ID 
+									                                    AND T1.KEY = 'PIPELINE_MODEL_ID')
+									group by sd_plan,sd_plan_id,MAX_EXECUTION_ID;
+	
+			LOCATION = SELECT * FROM "sap.tm.trp.db.supplydemand.instant::t_cm_execution_parameter_location_temp";	
+		
+			        
+
+		       SD_EXECUTIION_RESULT_CLASSIC = SELECT m.sd_plan,
+
+
+		                                              LOCATION_ID,
+		                                              LOCATION_NAME,			            	
+			            						      EQUIP_TYPE_ID,
+			            						      OUTPUT_KEY,	
+			            						      OUTPUT_VALUE,
+			            						      START_TIME,
+			                                          END_TIME
+		                                       FROM :SD_PLAN_CLSC_FINAL m		                                       
+			                        	       INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" t  on m.max_execution_id = t.plan_execution_id 
+			                        	                                    and m.node_id = t.node_id
+			                        	                                     
+			                                   where  plan_execution_id in (select max_execution_id from :SD_PLAN_CLSC_FINAL);
+		
+			                        	                                    
+	-- replace with pass in location
+		  	SELECT COUNT(*) INTO LV_LOCATION_COUNT FROM :LOCATION;
+		  	IF :LV_LOCATION_COUNT <> 0 THEN
+				SD_EXECUTIION_RESULT_CLASSIC = SELECT T1.* FROM :SD_EXECUTIION_RESULT_CLASSIC T1 
+				                               INNER JOIN :LOCATION T2 ON T1.LOCATION_ID = T2.LOCATION_ID;      
+			END IF; 
+			                       
+			SQL_FILTERED = SELECT * FROM :SD_EXECUTIION_RESULT_CLASSIC t1 
+		                   		INNER JOIN 
+		                   	    "sap.tm.trp.db.semantic.location::v_location" AS t3
+		                        ON t1.location_name = t3.name;		                        
+		                        
+		        SQL2 =  SELECT  SD_PLAN,                
+			            	LOCATION_NAME,			            	
+			            	EQUIP_TYPE_ID,			            	
+			                CASE  WHEN OUTPUT_KEY = 'DEMAND'
+			                    THEN OUTPUT_VALUE  
+			                    ELSE 0 END AS DEMAND,
+			                CASE WHEN OUTPUT_KEY = 'SUPPLY'
+			                    THEN OUTPUT_VALUE 
+			                    ELSE 0 END AS SUPPLY, 
+			                START_TIME,
+			                END_TIME			              
+		            FROM :SQL_FILTERED;
+		            
+		        convert_plan_data = SELECT SD_PLAN, 		                              
+		                              LOCATION_NAME,		                              
+		                              EQUIP_TYPE_ID,		                             
+		                              SUM(SUPPLY) AS SUPPLY,
+		                              SUM(DEMAND) AS DEMAND,		                              
+		                              START_TIME,
+		                              END_TIME		                             
+		                        FROM :SQL2
+		                        GROUP BY
+		                              SD_PLAN,		                             
+		                              LOCATION_NAME,		                              
+		                              EQUIP_TYPE_ID,		                              
+		                              START_TIME,
+		                              END_TIME;		                                                                           
+
+			    check_result_classic = 	SELECT t1.sd_plan,
+										        t1.location_name AS location_no,
+										        TO_VARCHAR(t1.equip_type_id) AS equip_type,
+										        t1.start_time,
+										        t1.end_time,
+										        t1.supply,
+										        t1.demand,
+										        0 AS level
+			        	       FROM :convert_plan_data t1; 
+    END IF;
+    
+    IF :v_classic_inst_count > 0 THEN 
+    
+	    SD_PLAN_CLSC_INST = SELECT sd_plan,
+	                               sd_plan_id,
+	                               pipeline_model_id 
+	                        from :SD_PLAN_CLSC_TMP 
+	                        where instant_enabled = 'X'; 	     
+	    
+	    SD_PLAN_CLSC_INST_NODEIDS = 
+                                      SELECT sd_plan,sd_plan_id, COALESCE(max(ID),-1) as NODE_ID
+							          FROM (
+												SELECT sd_plan,sd_plan_id,T0.DEFAULT_NODE_ID AS ID
+												FROM :SD_PLAN_CLSC_INST m
+												INNER JOIN "sap.tm.trp.db.pipeline::v_pipeline_default_node" T0 on
+											                T0.PIPELINE_MODEL_ID = m.PIPELINE_MODEL_ID
+									       )group by sd_plan,sd_plan_id;		
+		
+		
+		-- Find number of iteration required 
+		SELECT COUNT(*) INTO PARAM_COUNT 
+		FROM "sap.tm.trp.db.systemmanagement.customization::t_general_parameters"
+        WHERE NAME =  'EAC_CHECK_INSTANT_PARALLEL_THREAD'; 
+        
+        IF :PARAM_COUNT > 0 THEN
+        
+				SELECT VALUE,length(ltrim(VALUE,' +-.0123456789')) INTO IN_THREADS,NUMERIC_FLAG 
+				FROM "sap.tm.trp.db.systemmanagement.customization::t_general_parameters"
+		        WHERE NAME =  'EAC_CHECK_INSTANT_PARALLEL_THREAD'; 
+		     
+		        
+		        IF NUMERIC_FLAG = 0 AND (IN_THREADS IS NOT NULL AND IN_THREADS <> '') THEN
+		            IF :IN_THREADS < 1 THEN 
+		               DEFAULT_NUM_THREADS := :MIN_NUM_THREADS; 
+		            ELSEIF :IN_THREADS >= :MIN_NUM_THREADS AND :IN_THREADS <= :MAX_NUM_THREADS
+		              THEN DEFAULT_NUM_THREADS := :IN_THREADS;        
+		            ELSEIF  :IN_THREADS > :MAX_NUM_THREADS THEN 
+		                DEFAULT_NUM_THREADS := :MAX_NUM_THREADS;
+		            END IF;          
+		        END IF; 
+        END IF;    
+         		
+		ITR_TEMP = v_classic_inst_count/:DEFAULT_NUM_THREADS;
+		
+		IF ITR_TEMP < 1 THEN 
+		   SD_PLAN_ITR = 1 ;
+		ELSEIF ITR_TEMP >= 1 AND MOD(v_classic_inst_count,:DEFAULT_NUM_THREADS) >= 1 THEN 
+		   SD_PLAN_ITR = ITR_TEMP+1;
+		ELSE  SD_PLAN_ITR = ITR_TEMP;
+		END IF;
+								   
+  		WHILE :TEMP < :SD_PLAN_ITR DO  
+  		 
+	  		SD_PLAN_LST= SELECT * FROM :SD_PLAN_CLSC_INST_NODEIDS 
+	  		             ORDER BY sd_plan_id  LIMIT :DEFAULT_NUM_THREADS OFFSET :OFFSET_CNT;	
+	  		
+	  		AR_SD_PLAN_IDS := ARRAY_AGG(:SD_PLAN_LST.SD_PLAN_ID);
+		    AR_SD_PLANS := ARRAY_AGG(:SD_PLAN_LST.SD_PLAN);
+		    AR_NODE_IDS := ARRAY_AGG(:SD_PLAN_LST.NODE_ID);   		
+	    
+            SELECT COUNT(*) into SD_TOP_COUNT FROM :SD_PLAN_LST;         
+           
+	     	IF SD_TOP_COUNT = 10 THEN
+	     	
+		     	BEGIN PARALLEL EXECUTION
+						   	call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[1],:AR_SD_PLANS[1],:AR_NODE_IDS[1], instant_data1); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[2],:AR_SD_PLANS[2],:AR_NODE_IDS[2], instant_data2);
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[3],:AR_SD_PLANS[3],:AR_NODE_IDS[3], instant_data3);
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[4],:AR_SD_PLANS[4],:AR_NODE_IDS[4], instant_data4); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[5],:AR_SD_PLANS[5],:AR_NODE_IDS[5], instant_data5); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[6],:AR_SD_PLANS[6],:AR_NODE_IDS[6], instant_data6);
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[7],:AR_SD_PLANS[7],:AR_NODE_IDS[7], instant_data7); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[8],:AR_SD_PLANS[8],:AR_NODE_IDS[8], instant_data8); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[9],:AR_SD_PLANS[9],:AR_NODE_IDS[9], instant_data9); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[10],:AR_SD_PLANS[10],:AR_NODE_IDS[10], instant_data10); 			   
+					    END;
+					    
+					   SD_EXECUTIION_RESULT_TMP  = SELECT *  FROM :instant_data1
+					                            UNION ALL
+					                               SELECT *  FROM :instant_data2
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data3
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data4
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data5 
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data6
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data7
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data8
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data9
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data10; 
+	     	ELSEIF SD_TOP_COUNT = 9 THEN
+	     	
+		     	BEGIN PARALLEL EXECUTION
+						   	call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[1],:AR_SD_PLANS[1],:AR_NODE_IDS[1], instant_data1); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[2],:AR_SD_PLANS[2],:AR_NODE_IDS[2], instant_data2);
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[3],:AR_SD_PLANS[3],:AR_NODE_IDS[3], instant_data3);
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[4],:AR_SD_PLANS[4],:AR_NODE_IDS[4], instant_data4); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[5],:AR_SD_PLANS[5],:AR_NODE_IDS[5], instant_data5); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[6],:AR_SD_PLANS[6],:AR_NODE_IDS[6], instant_data6);
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[7],:AR_SD_PLANS[7],:AR_NODE_IDS[7], instant_data7); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[8],:AR_SD_PLANS[8],:AR_NODE_IDS[8], instant_data8); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[9],:AR_SD_PLANS[9],:AR_NODE_IDS[9], instant_data9); 			   
+					    END;
+					    
+					   SD_EXECUTIION_RESULT_TMP  = SELECT *  FROM :instant_data1
+					                            UNION ALL
+					                               SELECT *  FROM :instant_data2
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data3
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data4
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data5 
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data6
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data7
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data8
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data9;   
+	     	ELSEIF SD_TOP_COUNT = 8 THEN
+	     	
+		     	BEGIN PARALLEL EXECUTION
+						   	call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[1],:AR_SD_PLANS[1],:AR_NODE_IDS[1], instant_data1); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[2],:AR_SD_PLANS[2],:AR_NODE_IDS[2], instant_data2);
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[3],:AR_SD_PLANS[3],:AR_NODE_IDS[3], instant_data3);
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[4],:AR_SD_PLANS[4],:AR_NODE_IDS[4], instant_data4); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[5],:AR_SD_PLANS[5],:AR_NODE_IDS[5], instant_data5); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[6],:AR_SD_PLANS[6],:AR_NODE_IDS[6], instant_data6);
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[7],:AR_SD_PLANS[7],:AR_NODE_IDS[7], instant_data7); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[8],:AR_SD_PLANS[8],:AR_NODE_IDS[8], instant_data8);  			   
+					    END;
+					    
+					   SD_EXECUTIION_RESULT_TMP  = SELECT *  FROM :instant_data1
+					                            UNION ALL
+					                               SELECT *  FROM :instant_data2
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data3
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data4
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data5 
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data6
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data7
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data8;
+	     	ELSEIF SD_TOP_COUNT = 7 THEN
+	     	
+		     	BEGIN PARALLEL EXECUTION
+						   	call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[1],:AR_SD_PLANS[1],:AR_NODE_IDS[1], instant_data1); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[2],:AR_SD_PLANS[2],:AR_NODE_IDS[2], instant_data2);
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[3],:AR_SD_PLANS[3],:AR_NODE_IDS[3], instant_data3);
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[4],:AR_SD_PLANS[4],:AR_NODE_IDS[4], instant_data4); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[5],:AR_SD_PLANS[5],:AR_NODE_IDS[5], instant_data5); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[6],:AR_SD_PLANS[6],:AR_NODE_IDS[6], instant_data6);
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[7],:AR_SD_PLANS[7],:AR_NODE_IDS[7], instant_data7);   			   
+					    END;
+					    
+					   SD_EXECUTIION_RESULT_TMP  = SELECT *  FROM :instant_data1
+					                            UNION ALL
+					                               SELECT *  FROM :instant_data2
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data3
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data4
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data5 
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data6
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data7;   
+	     	ELSEIF SD_TOP_COUNT = 6 THEN
+	     	
+		     	BEGIN PARALLEL EXECUTION
+						   	call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[1],:AR_SD_PLANS[1],:AR_NODE_IDS[1], instant_data1); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[2],:AR_SD_PLANS[2],:AR_NODE_IDS[2], instant_data2);
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[3],:AR_SD_PLANS[3],:AR_NODE_IDS[3], instant_data3);
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[4],:AR_SD_PLANS[4],:AR_NODE_IDS[4], instant_data4); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[5],:AR_SD_PLANS[5],:AR_NODE_IDS[5], instant_data5); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[6],:AR_SD_PLANS[6],:AR_NODE_IDS[6], instant_data6);   			   
+					    END;
+					    
+					   SD_EXECUTIION_RESULT_TMP  = SELECT *  FROM :instant_data1
+					                            UNION ALL
+					                               SELECT *  FROM :instant_data2
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data3
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data4
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data5 
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data6;   
+	     	ELSEIF SD_TOP_COUNT = 5 THEN
+	     	
+		     	BEGIN PARALLEL EXECUTION
+						   	call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[1],:AR_SD_PLANS[1],:AR_NODE_IDS[1], instant_data1); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[2],:AR_SD_PLANS[2],:AR_NODE_IDS[2], instant_data2);
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[3],:AR_SD_PLANS[3],:AR_NODE_IDS[3], instant_data3);
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[4],:AR_SD_PLANS[4],:AR_NODE_IDS[4], instant_data4); 
+						    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[5],:AR_SD_PLANS[5],:AR_NODE_IDS[5], instant_data5);   			   
+					    END;
+					    
+					   SD_EXECUTIION_RESULT_TMP  = SELECT *  FROM :instant_data1
+					                            UNION ALL
+					                               SELECT *  FROM :instant_data2
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data3
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data4
+					                            UNION ALL 
+					                               SELECT *  FROM :instant_data5; 
+	     	ELSEIF SD_TOP_COUNT = 4 THEN 
+	     	
+		     	BEGIN PARALLEL EXECUTION
+					   	call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[1],:AR_SD_PLANS[1],:AR_NODE_IDS[1], instant_data1); 
+					    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[2],:AR_SD_PLANS[2],:AR_NODE_IDS[2], instant_data2);
+					    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[3],:AR_SD_PLANS[3],:AR_NODE_IDS[3], instant_data3);
+					    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[4],:AR_SD_PLANS[4],:AR_NODE_IDS[4], instant_data4);   			   
+				    END;
+				   SD_EXECUTIION_RESULT_TMP  = SELECT *  FROM :instant_data1
+				                            UNION ALL
+				                               SELECT *  FROM :instant_data2
+				                            UNION ALL 
+				                               SELECT *  FROM :instant_data3
+				                            UNION ALL 
+				                               SELECT *  FROM :instant_data4;  
+	     	
+	     	ELSEIF SD_TOP_COUNT = 3 THEN     	
+	     	 
+		     	BEGIN PARALLEL EXECUTION
+					   	call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[1],:AR_SD_PLANS[1],:AR_NODE_IDS[1], instant_data1); 
+					    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[2],:AR_SD_PLANS[2],:AR_NODE_IDS[2], instant_data2);
+					    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[3],:AR_SD_PLANS[3],:AR_NODE_IDS[3], instant_data3);  			   
+				END;
+			   SD_EXECUTIION_RESULT_TMP  = SELECT *  FROM :instant_data1
+			                            UNION ALL
+			                               SELECT *  FROM :instant_data2
+			                            UNION ALL 
+			                               SELECT *  FROM :instant_data3;			    		    
+		    ELSEIF SD_TOP_COUNT = 2 THEN  
+				               
+		        BEGIN PARALLEL EXECUTION
+					   	call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[1],:AR_SD_PLANS[1],:AR_NODE_IDS[1], instant_data1); 
+					    call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[2],:AR_SD_PLANS[2],:AR_NODE_IDS[2], instant_data2);				   			   
+			    END;
+			    SD_EXECUTIION_RESULT_TMP  = SELECT *  FROM :instant_data1
+			                              UNION ALL
+			                                SELECT *  FROM :instant_data2;			                         
+		    
+		    ELSE 
+			        call "sap.tm.trp.db.availabilitycheck::p_pipeline_procedure_wrapper_call_stage"(:AR_SD_PLAN_IDS[1],:AR_SD_PLANS[1],:AR_NODE_IDS[1], instant_data1); 
+			        SD_EXECUTIION_RESULT_TMP  = SELECT *  FROM :instant_data1;			   
+		    END IF;    
+	 
+			IF :TEMP = 0 THEN
+				   check_result_instant =    SELECT *
+							                         FROM  :SD_EXECUTIION_RESULT_TMP;					                        
+			ELSE 
+			       check_result_instant =    SELECT * FROM :check_result_instant
+						                           UNION ALL
+						                     		 SELECT *
+								                     FROM  :SD_EXECUTIION_RESULT_TMP; 
+			END IF;               
+	                         
+	  TEMP := TEMP+1;
+	  OFFSET_CNT := OFFSET_CNT + :DEFAULT_NUM_THREADS;
+	  
+	END WHILE;                             
+    	
+    END IF;  
+
+  END IF;     
+        
+  END IF;
+  
+    SD_PLAN_VIRTUAL_IDS = SELECT * FROM :SD_PLAN_IDS 
+                    WHERE PLAN_MODEL_TYPE_ID =3;
+                    
+    SELECT COUNT(*)  INTO SD_PLANS_COUNT FROM :SD_PLAN_VIRTUAL_IDS;
+    
+    IF :SD_PLANS_COUNT > 0 THEN 
+    
+        SD_PLAN_VIRTUAL_PERSISTED_IDS = select virtual_plan_model_id ,persisted_plan_model_id AS BASIC_SD_PLAN_ID from 
+        (SELECT
+            virtual_plan_model_id,
+            ROW_NUMBER() OVER (PARTITION BY virtual_plan_model_id ) AS RowNumber,
+            persisted_plan_model_id from "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan"
+            where virtual_plan_model_id in (SELECT ID FROM :SD_PLAN_VIRTUAL_IDS)) T where RowNumber = 1;
+        
+        SD_PLANS_VIRTUAL_ALL = SELECT T3.virtual_plan_model_id, IFNULL (T2.INSTANT_ENABLED,'') AS V_INSTANT_ENABLED
+            FROM "sap.tm.trp.db.pipeline::t_plan_model" AS T1
+            INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_model" AS T2 ON T1.PIPELINE_MODEL_ID = T2.ID
+            INNER JOIN :SD_PLAN_VIRTUAL_PERSISTED_IDS T3 ON T1.ID = T3.BASIC_SD_PLAN_ID;
+     
+    
+        SD_PLAN_VIRTUAL_SCH_IDS = 
+            SELECT T1.VIRTUAL_PLAN_MODEL_ID AS VIRTUAL_PLAN_ID FROM :SD_PLANS_VIRTUAL_ALL T1 WHERE T1.V_INSTANT_ENABLED <> 'X';
+    
+        SD_PLANS_VIRTUAL_INST_ALL = 
+            SELECT T1.VIRTUAL_PLAN_MODEL_ID FROM :SD_PLANS_VIRTUAL_ALL T1 WHERE T1.V_INSTANT_ENABLED = 'X';
+    
+        SELECT COUNT(*) INTO SD_PLAN_VIR_SCH_COUNT FROM :SD_PLAN_VIRTUAL_SCH_IDS;
+  
+        IF :SD_PLAN_VIR_SCH_COUNT > 0 THEN 
+  
+--call "ZTEST_PACKAGE.EAC::p_get_default_node_for_virtual_plan"(:SD_PLAN_VIRTUAL_SCH_IDS, V_NODE_NAMES); 
+ -- get the intersection nodes of the virtual plan
+		 METADATA_NODE_ID_INTERSECTION = 
+			 SELECT T2.VIRTUAL_PLAN_ID, T1.NAME 
+			 FROM "sap.tm.trp.db.pipeline::t_virtual_tree_node_name" T1
+			 INNER JOIN :SD_PLAN_VIRTUAL_SCH_IDS T2
+			 ON
+			 T1.VIRTUAL_PLAN_MODEL_ID = T2.VIRTUAL_PLAN_ID;
+		
+		--if no node names , then set default_node to ' ' 
+		 DEFAULT_NODES = 
+		    SELECT DISTINCT
+		    T1.VIRTUAL_PLAN_ID, 
+		    '' AS DEFAULT_NODE_NAME
+		    FROM :SD_PLAN_VIRTUAL_SCH_IDS T1 WHERE T1.VIRTUAL_PLAN_ID NOT IN (SELECT DISTINCT VIRTUAL_PLAN_ID FROM :METADATA_NODE_ID_INTERSECTION);
+		    --ON T1.VIRTUAL_PLAN_ID != T2.VIRTUAL_PLAN_ID ;
+		
+		--PLAN ids which have multiple node names, calculate default
+		--get plan_ids which have node names
+		 PLAN_IDS = 
+		    SELECT DISTINCT VIRTUAL_PLAN_ID FROM :METADATA_NODE_ID_INTERSECTION ; 
+		    
+		-- get the sub persisted plans for this virual plan
+		    PP_ID_LIST =
+			 	SELECT T2.VIRTUAL_PLAN_ID, T1.PERSISTED_PLAN_MODEL_ID AS ID
+			 	FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" T1
+			 	INNER JOIN
+			 	:PLAN_IDS T2
+			    ON
+			    T1.VIRTUAL_PLAN_MODEL_ID = T2.VIRTUAL_PLAN_ID;
+			    
+			 -- get calculation model and default node for each persisted plan
+			 PP_ID_LIST_METADATA_NODE_ID = 
+				 SELECT T1.VIRTUAL_PLAN_ID, T1.ID AS PLAN_MODEL_ID,T3.DEFAULT_NODE_ID, T4.METADATA_NODE_ID
+				 FROM :PP_ID_LIST T1
+				 INNER JOIN "sap.tm.trp.db.pipeline::t_plan_model" T2 ON (T1.ID = T2.ID) -- get the calculation model id
+				 INNER JOIN "sap.tm.trp.db.pipeline::v_pipeline_default_node" T3 ON (T2.PIPELINE_MODEL_ID = T3.PIPELINE_MODEL_ID) -- get the default node;
+				 INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T4 ON (T3.DEFAULT_NODE_ID = T4.ID); -- get the default metadata node id
+			
+			 -- get the intersection of the default nodes
+			 DEFAULT_NODE_LIST = 
+				 SELECT T1.VIRTUAL_PLAN_ID, T1.PLAN_MODEL_ID, T1.DEFAULT_NODE_ID, T1.METADATA_NODE_ID
+				 FROM :PP_ID_LIST_METADATA_NODE_ID T1
+				 INNER JOIN :METADATA_NODE_ID_INTERSECTION T2 ON T1.VIRTUAL_PLAN_ID = T2.VIRTUAL_PLAN_ID AND T1.METADATA_NODE_ID = T2.NAME;
+		
+		 -- get the number of different metadata node id	 
+			 DEFAULT_NODE_LIST_COUNT = 
+			    SELECT DISTINCT VIRTUAL_PLAN_ID, COUNT(*) AS  DEFAULT_METADATA_NODE_NUM FROM
+			    :DEFAULT_NODE_LIST GROUP BY VIRTUAL_PLAN_ID;
+		
+			 -- then apply the following rules
+				-- 1. If there are only one metadata node id for the default nodes, then return this metadata node id
+		    DEFAULT_NODES = 
+			    SELECT * FROM :DEFAULT_NODES 
+			    UNION ALL
+			    SELECT T1.VIRTUAL_PLAN_ID, METADATA_NODE_ID AS DEFAULT_NODE_NAME
+			    FROM :DEFAULT_NODE_LIST T1 
+			    INNER JOIN 
+			    :DEFAULT_NODE_LIST_COUNT T2
+			    ON T1.VIRTUAL_PLAN_ID = T2.VIRTUAL_PLAN_ID AND T2.DEFAULT_METADATA_NODE_NUM = 1;
+			    
+			PP_IDS =
+			    SELECT VIRTUAL_PLAN_ID, PP_ID FROM 
+			        (SELECT  T1.VIRTUAL_PLAN_ID, 
+			                 T1.ID AS PP_ID,
+			                 ROW_NUMBER() OVER (PARTITION BY T1.VIRTUAL_PLAN_ID ) AS RowNumber
+			                 FROM 
+			        :PP_ID_LIST T1
+			        INNER JOIN 
+			        :DEFAULT_NODE_LIST_COUNT T2
+			        ON T1.VIRTUAL_PLAN_ID = T2.VIRTUAL_PLAN_ID AND T2.DEFAULT_METADATA_NODE_NUM != 1) T WHERE RowNumber = 1;
+			
+			NODE_ID_LIST = 
+				 	SELECT T5.VIRTUAL_PLAN_ID, T3.ID AS NODE_ID, T4.NAME AS METADATA_NODE_ID
+				 	FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+				 	INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_model" T2 ON (T1.PIPELINE_MODEL_ID = T2.ID) -- get the calculation model id
+				 	INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" T3 ON (T2.ID = T3.PIPELINE_MODEL_ID) -- get the node id
+				 	INNER JOIN :METADATA_NODE_ID_INTERSECTION T4 ON (T3.METADATA_NODE_ID = T4.NAME)
+				 	INNER JOIN :PP_IDS T5 ON 
+				 	T1.ID = T5.PP_ID -- garantee they are in the same persisted plan i.e. Calculation Model
+				 	ORDER BY T3.ID DESC;
+			
+			-- 2. If there is no default node in the intersection, then just return the metadata node id with maximial node id in the intersection	 	
+		    DEFAULT_NODES = 
+			    SELECT * FROM :DEFAULT_NODES 
+			    UNION ALL
+			    SELECT VIRTUAL_PLAN_ID, DEFAULT_NODE_NAME FROM 
+			        (SELECT T1.VIRTUAL_PLAN_ID, T1.METADATA_NODE_ID AS DEFAULT_NODE_NAME,
+			        ROW_NUMBER() OVER (PARTITION BY T1.VIRTUAL_PLAN_ID ) AS RowNumber
+			        FROM :NODE_ID_LIST T1 
+			        INNER JOIN 
+			        :DEFAULT_NODE_LIST_COUNT T2
+			        ON T1.VIRTUAL_PLAN_ID = T2.VIRTUAL_PLAN_ID AND T2.DEFAULT_METADATA_NODE_NUM = 0 ORDER BY T1.NODE_ID DESC) T WHERE RowNumber = 1;
+			    
+			-- 3. If there are multiple metadata node ids for the default nodes, then return the metadata node id with maximal node id in the default node set
+			DEFAULT_NODES = 
+			    SELECT * FROM :DEFAULT_NODES 
+			    UNION ALL
+			    SELECT VIRTUAL_PLAN_ID, DEFAULT_NODE_NAME FROM 
+			        (SELECT T1.VIRTUAL_PLAN_ID, T1.METADATA_NODE_ID AS DEFAULT_NODE_NAME,
+			        ROW_NUMBER() OVER (PARTITION BY T1.VIRTUAL_PLAN_ID ) AS RowNumber
+			        FROM :DEFAULT_NODE_LIST T1
+			        INNER JOIN 
+			        :NODE_ID_LIST T2 ON  T1.METADATA_NODE_ID = T2.METADATA_NODE_ID
+			        INNER JOIN 
+			        :DEFAULT_NODE_LIST_COUNT T3
+			        ON T2.VIRTUAL_PLAN_ID = T3.VIRTUAL_PLAN_ID AND T3.DEFAULT_METADATA_NODE_NUM > 1 ORDER BY T1.DEFAULT_NODE_ID DESC) T WHERE RowNumber = 1;
+		
+	
+	        
+      SELECT COUNT(*) INTO SD_PLANS_COUNT FROM :DEFAULT_NODES T1 WHERE T1.DEFAULT_NODE_NAME = NULL OR T1.DEFAULT_NODE_NAME = '';
+            
+       IF :SD_PLANS_COUNT > 0 THEN
+             
+                SELECT RTRIM(STRING_AGG(A.SD_PLAN||','),',') INTO SD_PLAN_STRING
+                    FROM :SD_PLAN_VIRTUAL_IDS A
+                    INNER JOIN 
+                    :DEFAULT_NODES B ON A.ID = B.VIRTUAL_PLAN_ID WHERE B.DEFAULT_NODE_NAME = NULL OR B.DEFAULT_NODE_NAME = '';
+            
+                message = SELECT 'E' AS severity, 'MSG_NO_DEFALT_PLAN_MODEL_NODE' AS message_id,
+                'Default Plan model node not found' AS message, :SD_PLAN_STRING AS var0, '' AS var1, '' AS var2, '' AS var3,
+                '' AS var4 FROM dummy;   
+             
+            END IF;
+
+            call "sap.tm.trp.db.availabilitycheck::p_get_aggregate_execution_result_for_virtual_plan_eac_vsd"
+            (
+            :DEFAULT_NODES, :V_EXECUTION_ID, t_sd_result, t_no_data_plan
+            );
+
+            check_result_virtual = SELECT
+            t1.sd_plan,
+            t1.location_name AS location_no,
+            t1.equip_type,
+            t1.start_time,
+            t1.end_time,
+            t1.output_value AS supply,
+            t2.output_value AS demand,
+            0 AS LEVEL
+            FROM (SELECT T2.SD_PLAN,T1.location_name, T1.equip_type_id AS equip_type, T1.start_time, T1.end_time, T1.sequence, T1.output_value
+            FROM :t_sd_result T1
+            INNER JOIN 
+            :SD_PLAN_VIRTUAL_IDS T2 ON T2.ID = T1.VIRTUAL_PLAN_ID
+            WHERE T1.output_key = :NODE_OUTPUT_KEY_SUPPLY AND T1.has_drilldown_flag IN (:DRILL_DOWN_FLAG_0, :DRILL_DOWN_FLAG_1)
+            ) AS t1
+            INNER JOIN (SELECT T2.SD_PLAN,T1.location_name, T1.equip_type_id AS equip_type, T1.sequence, T1.output_value
+            FROM :t_sd_result T1
+            INNER JOIN 
+            :SD_PLAN_VIRTUAL_IDS T2 ON T2.ID = T1.VIRTUAL_PLAN_ID
+            WHERE T1.output_key = :NODE_OUTPUT_KEY_DEMAND AND T1.has_drilldown_flag IN (:DRILL_DOWN_FLAG_0, :DRILL_DOWN_FLAG_1)
+            ) AS t2
+            ON T1.SD_PLAN = T2.SD_PLAN 
+            AND t1.location_name = t2.location_name
+            AND t1.equip_type = t2.equip_type
+            AND t1.sequence = t2.sequence;
+        END IF ;
+    END IF;
+    
+    SELECT COUNT(*) INTO SD_PLANS_COUNT FROM :SD_PLAN_IDS WHERE PLAN_MODEL_TYPE_ID NOT IN (1, 3);
+    IF :SD_PLANS_COUNT > 0 THEN 
+    
+        SELECT RTRIM(STRING_AGG(SD_PLAN||','),',') INTO SD_PLAN_STRING
+        FROM :SD_PLAN_IDS
+        WHERE PLAN_MODEL_TYPE_ID not in (1, 3);
+    
+        message = SELECT 'E' AS severity, 'MSG_PLAN_TYPE_NOT_SUPPORTED' AS message_id,
+        'The Supply and Demand Plan type is not supported' AS message, :SD_PLAN_STRING AS var0,  '' AS var1,
+        '' AS var2, '' AS var3, '' AS var4 FROM dummy;
+    END IF;
+
+    check_result = 
+    select * from :check_result_classic
+    union all 
+    select * from :check_result_instant
+    UNION ALL
+    SELECT * FROM :check_result_virtual;
+
+
+END;

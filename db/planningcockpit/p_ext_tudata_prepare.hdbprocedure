@@ -1,0 +1,182 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_ext_tudata_prepare"  
+   (IN SCENARIO_ID  BIGINT,
+    OUT MESSAGE VARCHAR(200),
+    OUT MODIFIED_BY VARCHAR(60),
+    OUT T_CHECK_EQUIP_TYPE  "sap.tm.trp.db.planningcockpit::tt_check_equip_type" ,
+    OUT result  "sap.tm.trp.db.planningcockpit::tt_activity_prepare"
+     )
+    LANGUAGE SQLSCRIPT   
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    
+    DECLARE USER_ID BIGINT;
+    DECLARE USER_NAME VARCHAR(60);    
+    DECLARE V_TIMESTAMP_START  DATETIME  := CURRENT_UTCTIMESTAMP;
+    DECLARE V_LOCK_SESSION_ID  VARCHAR(200);  
+    DECLARE V_LOCK_USER_ID  BIGINT;  
+    DECLARE V_LOCK_LAST_MODIFYED_ON  TIMESTAMP; 
+    DECLARE V_PLAN_STATUS INTEGER;
+    DECLARE V_SIMULATION_ID  BIGINT; 
+    DECLARE V_SCENARIO_ID  BIGINT; 
+    DECLARE V_COUNT INT;
+    DECLARE V_CHECK_EQUIP_TYPE_COUNT INT;
+    DECLARE V_BALANCE_COST_NOT_EXIST INTEGER;
+    DECLARE TRQ_ITEM_CATEGORY VARCHAR(3);
+    DECLARE MOVEMENT_TYPE VARCHAR(3);
+    DECLARE UOM VARCHAR(3);
+    DECLARE SALES_ORGNIZATION VARCHAR(60);
+    DECLARE TRQ_CATEGORY VARCHAR(2);
+    DECLARE TRQ_ITEM_TYPE VARCHAR(4);
+    DECLARE TRQ_TYPE VARCHAR(4);
+    DECLARE BUILD_TU VARCHAR(1);
+    DECLARE TRAFFIC_DIRECTION VARCHAR(10);
+    DECLARE TRANSPORTATION_MODE_CATEGORY VARCHAR(10);
+    DECLARE TRANSPORTATION_MODE VARCHAR(2);
+    DECLARE RESOURCE_CATEGORY VARCHAR(50);
+    
+    SELECT IFNULL (MAX (T1.RESOURCE_CATEGORY),'') INTO RESOURCE_CATEGORY
+    FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" T1
+    INNER JOIN "sap.tm.trp.db.planningcockpit::t_scenario" T2
+    ON (T1.ID = T2.REL_SM_PLAN_ID AND T2.ID = :SCENARIO_ID);
+    
+    RESOURCE_TYPES = SELECT T1.RESOURCE_TYPE_CODE, FIRST_VALUE(T2.EQUI_TYPE ORDER BY T2.EQUI_TYPE) AS EQUI_TYPE
+                FROM "sap.tm.trp.db.semantic.resource::v_resource_type_with_category" T1
+                INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_type" T2
+                ON (T1.RESOURCE_TYPE_CODE = T2.RESOURCE_TYPE_CODE)
+                WHERE T1.RESOURCE_CATEGORY = :RESOURCE_CATEGORY
+                GROUP BY T1.RESOURCE_TYPE_CODE;
+    
+    CALL "sap.tm.trp.db.planningcockpit::p_ext_lock_simulation_plan_by_scenario_id"
+    (:SCENARIO_ID, V_LOCK_SESSION_ID, V_LOCK_USER_ID, V_SIMULATION_ID, V_LOCK_LAST_MODIFYED_ON);
+    
+    SELECT A.PLAN_STATUS, A.ID, B.ID
+      INTO V_PLAN_STATUS, V_SIMULATION_ID, V_SCENARIO_ID
+      FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" A, "sap.tm.trp.db.planningcockpit::t_scenario" B
+     WHERE A.ID=B.REL_SM_PLAN_ID 
+       AND B.ID=:SCENARIO_ID;  
+    
+    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+ 	SELECT USERNAME INTO USER_NAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";   
+ 	
+ 	CALL "sap.tm.trp.db.systemmanagement.customization::p_ext_resource_category_repositioning"(
+    	:RESOURCE_CATEGORY,
+    	TRQ_ITEM_CATEGORY,
+    	MOVEMENT_TYPE,
+    	UOM,
+    	SALES_ORGNIZATION,
+    	TRQ_CATEGORY,
+    	TRQ_ITEM_TYPE,
+    	TRQ_TYPE,
+    	BUILD_TU,
+    	TRAFFIC_DIRECTION,
+    	TRANSPORTATION_MODE_CATEGORY,
+    	TRANSPORTATION_MODE
+	);
+ 	
+ 	
+    IF :V_LOCK_USER_ID = :USER_ID AND 
+       :V_LOCK_LAST_MODIFYED_ON IS NOT NULL THEN  
+
+               --Check if all the Balancing cost of the simulation plan is exists:
+               SELECT COUNT(1) INTO V_BALANCE_COST_NOT_EXIST  
+               FROM "sap.tm.trp.db.planningcockpit::t_scenario" T1
+               WHERE REL_SM_PLAN_ID = :V_SIMULATION_ID AND BALANCING_COST IS NULL;
+               
+                  
+               IF V_PLAN_STATUS=1 THEN       
+                   MESSAGE:='MSG_ERROR_FANILAZIED'; 
+                   MODIFIED_BY :=USER_NAME; 
+               
+               ELSEIF :V_BALANCE_COST_NOT_EXIST > 0 THEN  
+                   MESSAGE := 'MSG_ERROR_BALANCING_COST_MISSING';
+                 MODIFIED_BY := '';
+                  RETURN;   
+               ELSE    
+             
+                  SELECT COUNT(*) INTO V_COUNT
+                    FROM "sap.tm.trp.db.planningcockpit::v_activity_ui"
+                   WHERE REL_SCENARIO_ID = :SCENARIO_ID AND (ACTIVITY_TYPE = '1' OR ACTIVITY_TYPE = '2')
+                     AND ACTIVITY_STATUS_CODE = '0';     
+                     
+                  IF V_COUNT=0 THEN 
+                   MESSAGE := 'MSG_ERROR_NO_VALID_ACTIVITY_DATA';       
+                   MODIFIED_BY := USER_NAME; 
+                 
+                  ELSE              
+                  
+                    
+                    T_CHECK_EQUIP_TYPE =
+                    SELECT A.ID,A.TYPE,B.RESOURCE_CATEGORY as EQUI_TYPE,COUNT(*) as CNT 
+                    FROM "sap.tm.trp.db.planningcockpit::v_activity_ui" A, "sap.tm.trp.db.semantic.resource::v_resource_type_with_category" B
+                    WHERE  A.REL_SCENARIO_ID = :SCENARIO_ID
+                      AND  A.ACTIVITY_STATUS_CODE = 0
+                      AND  A.EQUIP_TYPE = B.RESOURCE_TYPE_CODE
+                      AND  B.RESOURCE_CATEGORY = :RESOURCE_CATEGORY
+                    GROUP BY  A.ID,A.TYPE,B.RESOURCE_CATEGORY                          
+                    HAVING  COUNT(*)>1;   -- why this table type need to be output  ?
+                            
+                            
+                    SELECT COUNT(*) INTO V_CHECK_EQUIP_TYPE_COUNT  FROM   :T_CHECK_EQUIP_TYPE;
+                    
+                    IF   V_CHECK_EQUIP_TYPE_COUNT >0 THEN
+                    
+                      MESSAGE := 'MSG_ERROR_NO_VALID_EQUIP_TYPE';       
+                      MODIFIED_BY := USER_NAME; 
+                    
+                    
+                    ELSE
+                    
+                    
+                    result = 
+               
+                     SELECT
+                     :TRQ_TYPE AS TRQ_TYPE,
+                     :SCENARIO_ID AS BASE_BTD_ID,
+                     :TRANSPORTATION_MODE AS MOT,
+                     :TRANSPORTATION_MODE_CATEGORY AS MOT_CAT,                     
+                     A.FROM_LOC_ID AS SRC_LOC_ID,
+                     A.TO_LOC_ID AS DES_LOC_ID,
+                     TO_VARCHAR (A.START_DATE, 'YYYYMMDD')||TO_VARCHAR (A.START_DATE, 'HH24MISS') AS REQ_DEP_DATE ,
+                     TO_VARCHAR (A.END_DATE,   'YYYYMMDD')||TO_VARCHAR (A.END_DATE,   'HH24MISS') AS REQ_ARR_DATE ,
+                     :SALES_ORGNIZATION AS SALES_ORG_ID,                                
+                     :BUILD_TU AS BUILD_TUS,
+                     A.ID AS BASE_BTDITEM_ID,                          
+                     :TRQ_ITEM_CATEGORY AS ITEM_CAT,
+                     :TRQ_ITEM_TYPE AS ITEM_TYPE,
+                     B.EQUI_TYPE   AS TURES_CAT,
+                     A.EQUIP_TYPE AS TURES_TCO,
+                     A.QUANTITY AS QUA_PCS_VAL,
+                     :UOM AS QUA_PCS_UNI,
+                     :TRAFFIC_DIRECTION AS TRAFFIC_DIRECTION,
+                     :TRQ_CATEGORY AS TRQ_CAT,
+                     :MOVEMENT_TYPE AS MOVEMENT_TYPE
+                      FROM "sap.tm.trp.db.planningcockpit::v_activity_ui" A
+                      INNER JOIN :RESOURCE_TYPES B
+                      ON (A.EQUIP_TYPE = B.RESOURCE_TYPE_CODE)
+                     WHERE A.REL_SCENARIO_ID = :SCENARIO_ID
+                       AND A.ACTIVITY_STATUS_CODE = 0
+                       AND A.ACTIVITY_TYPE in (1,2);               
+                
+                  --update lock  
+                    UPDATE "sap.tm.trp.db.planningcockpit::t_lock"
+                       SET --SESSION_ID = :SESSION_ID,
+                           USER_ID= :USER_ID ,
+                           LAST_MODIFYED_ON = :V_TIMESTAMP_START                     
+                     WHERE SIMULATION_ID    = :V_SIMULATION_ID;                   
+                             
+              
+                   MESSAGE := 'MSG_SUCCESS_STATUS';       
+                   MODIFIED_BY := USER_NAME; 
+                   
+                   END IF;
+               
+                  END IF; 
+          
+               END IF;  
+    ELSE     
+         MESSAGE:='MSG_ERROR_LOCKED';
+         SELECT IFNULL(MAX(USERNAME),'DEACTIVATED USER') INTO MODIFIED_BY FROM "sap.tm.trp.db.systemmanagement.user::t_user" WHERE ID=:V_LOCK_USER_ID ;         
+    END IF;
+END;

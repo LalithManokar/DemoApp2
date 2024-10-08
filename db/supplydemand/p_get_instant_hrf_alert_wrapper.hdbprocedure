@@ -1,0 +1,19 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand::p_get_instant_hrf_alert_wrapper" ( 
+    IN PLAN_ID BIGINT,
+    IN IT_INSTANT_DATASET "SAP_TM_TRP"."sap.tm.trp.db.supplydemand::tt_instant_output_dataset",
+    OUT output_trp_hrf_sd_output "sap.tm.trp.db.supplydemand::tt_hrf_sd_output_alert"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_TRP
+   --READS SQL DATA 
+   AS
+BEGIN
+
+    --Returns table sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_DeltaFlag
+    call "SAP_TM_TRP"."sap.tm.trp.db.supplydemand::p_get_instant_hrf_alert"(
+        :PLAN_ID,
+        :IT_INSTANT_DATASET,
+        output_trp_hrf_sd_output
+    );
+END

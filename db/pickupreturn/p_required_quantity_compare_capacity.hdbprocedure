@@ -1,0 +1,338 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_required_quantity_compare_capacity" (
+    IN LOCATION_ID VARCHAR(22),
+    IN LOCATION_RULE_ID  BIGINT,
+    IN TU_IDS CLOB,
+    OUT VALID_STATUS "sap.tm.trp.db.pickupreturn::tt_tu_assign_status",
+    OUT TU_INFO "sap.tm.trp.db.pickupreturn::tt_location_assignment_tu"
+   )
+	LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+      DECLARE RESOURCE_CATEGORY VARCHAR(20);
+      DECLARE DATE_OFFSET INTEGER :=0;
+	  DECLARE COUNT_TU INTEGER;
+	  DECLARE V_PRE_DATE TIMESTAMP;
+	  DECLARE V_RESOURCE_TYPE VARCHAR(20);
+	  DECLARE V_RES_TYPE_COUNT INTEGER;
+	  DECLARE V_TIME_INTERVAL_COUNT INTEGER;
+	  DECLARE V_OUT_RANGE_INTERVAL_COUNT INTEGER;
+	  DECLARE TOTAL_QUANTITY INTEGER;
+
+	  --rule info
+	  DECLARE V_RULE_TYPE INTEGER;
+	  DECLARE V_SD_PLAN_ID BIGINT;
+	  DECLARE V_SD_LF_ID BIGINT;
+	  DECLARE V_SD_EF_ID BIGINT;
+	  DECLARE V_NETWORK_SETTING_GROUP_ID BIGINT;
+	  DECLARE V_TIME_RANGE_ID BIGINT;
+	  DECLARE V_EQUIP_FILTER_ID BIGINT;
+	  DECLARE V_LOCATION_FILTER_ID BIGINT;
+	  DECLARE V_OP_SETTING_TYPE INTEGER;
+	  DECLARE V_OPTIMIZATION INTEGER;
+	  DECLARE V_SCHEDULE_TIME_TYPE INTEGER;
+	  DECLARE V_LDR_RULE_ID INTEGER;
+	  DECLARE V_EXCLUSIVE_RULE_ID INTEGER;
+	  DECLARE V_OPTIMIZATION_OPTION VARCHAR(50);
+	  DECLARE V_FILTER_EXECUTION SMALLINT;
+	  DECLARE IMPACTED_SD INTEGER;
+	  DECLARE V_ALL_RESULTS VARCHAR(1);
+
+	  --location determination rule para
+	  DECLARE END_TIME TIMESTAMP;
+	  DECLARE START_TIME TIMESTAMP;
+      
+       DECLARE V_EXECUTION_ID BIGINT;
+       DECLARE V_NODE_ID BIGINT;
+       DECLARE TU_IDS_P TABLE(
+        "TU_ID" VARCHAR(200)
+       );
+        CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:TU_IDS,',',TU_IDS_STRING);
+        TU_IDS_P = SELECT string as TU_ID FROM :TU_IDS_STRING;
+       
+      SELECT IFNULL(MAX(DATE_OFFSET), 0) INTO DATE_OFFSET
+	  FROM "sap.tm.trp.db.stock::t_start_time_for_user"
+	  WHERE USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+	  SELECT ADD_DAYS(CURRENT_UTCTIMESTAMP, :DATE_OFFSET), ADD_DAYS(CURRENT_UTCTIMESTAMP, :DATE_OFFSET - 180)
+	  INTO END_TIME, START_TIME FROM DUMMY;
+
+	  --get the location rule info
+	  CALL "sap.tm.trp.db.pickupreturn::p_location_ruleset_info" (
+	      :LOCATION_RULE_ID,
+	      V_RULE_TYPE,
+	      V_SD_PLAN_ID,
+	      V_TIME_RANGE_ID,
+	      V_EQUIP_FILTER_ID,
+	      V_LOCATION_FILTER_ID,
+	      V_NETWORK_SETTING_GROUP_ID,
+	      V_OP_SETTING_TYPE,
+	      V_OPTIMIZATION,
+	      V_SCHEDULE_TIME_TYPE,
+	      V_LDR_RULE_ID,
+	      V_EXCLUSIVE_RULE_ID,
+	      V_FILTER_EXECUTION,
+	      RESOURCE_CATEGORY
+	    );
+
+	  -- Get TUs
+	  CALL "sap.tm.trp.db.pickupreturn::p_ext_get_staging_tu"(:LOCATION_RULE_ID, TU_INFO);
+	  SELECTEDTUS = SELECT RULE_ID,TRANSPORTATION_ID AS TU_ID,QUANTITY,RESOURCE_TYPE
+          FROM :TU_INFO
+          WHERE TRANSPORTATION_ID IN (SELECT TU_ID FROM :TU_IDS_P)
+          AND RULE_ID = :LOCATION_RULE_ID;
+
+	  -- TODO: NULL vs '' ??
+	  IF :V_RULE_TYPE=1 THEN
+	    selected_tu_info = SELECT DISTINCT T1.TRANSPORTATION_ID AS TU_ID,
+	                     T1.TU_TYPE_CODE AS TU_TYPE,
+	                     T1.RESOURCE_TYPE,
+	                     T1.QUANTITY,
+	                     T1.ITE_KEY,
+	                     T1.SHIPPER_ID,
+	                     T1.SHIPPER,
+	                     T1.CONSIGNEE_ID,
+	                     T1.CONSIGNEE,
+	                     IFNULL(T1.ORIGINAL_PICKUP_LOCATION_ID,T1.POL) AS CUR_LOCATION_ID,
+	                     IFNULL(T1.ORIGINAL_PICKUP_DATE,NULL) AS CUR_DATE,
+	                     IFNULL(T1.PICKUP_LOCATION_ID,'') AS PRE_LOCATION_ID,
+	                     IFNULL(T1.PICKUP_DATE,NULL) AS PRE_DATE,
+	                     CASE WHEN T1.DESTINATION_LOCATION_ID  = '' THEN T1.POL
+	                          ELSE T1.DESTINATION_LOCATION_ID END AS SHIPPER_LOCATION_ID,
+	                     CASE WHEN T1.DESTINATION_LOCATION  = '' THEN T1.POL_NAME
+	                          ELSE T1.DESTINATION_LOCATION END AS SHIPPER_LOCATION,
+	                     NULL AS CONSIGNEE_LOCATION_ID,
+	                     NULL AS CONSIGNEE_LOCATION,
+	                     T1.CUSTOMER_NAME,
+	                     T1.RELEVANT_PLANNING,
+	                     T1.POL,
+	                     T1.POL_NAME,
+	                     T1.POD,
+	                     T1.POD_NAME,
+	                     T1.BOOKING_DATE,
+	                     T1.EXECUTION_STATUS_CODE AS STATUS,
+	                     T1.LIFECYCLE_CODE AS LIFECYCLE_STATUS,
+	                     T1.FLAG,
+	                     IFNULL(T1.DESTINATION_LOCATION,T1.POL_NAME) AS CUR_LOCATION_NAME
+	                     FROM :TU_INFO T1
+	                     INNER JOIN :SELECTEDTUS T2 ON (T1.TRANSPORTATION_ID = T2.TU_ID);
+	  ELSE
+	    selected_tu_info = SELECT DISTINCT T1.TRANSPORTATION_ID AS TU_ID,
+	                     T1.TU_TYPE_CODE AS TU_TYPE,
+	                     T1.RESOURCE_TYPE,
+	                     T1.QUANTITY,
+	                     T1.ITE_KEY,
+	                     T1.SHIPPER_ID,
+	                     T1.SHIPPER,
+	                     T1.CONSIGNEE_ID,
+	                     T1.CONSIGNEE,
+	                     IFNULL (T1.ORIGINAL_RETURN_LOCATION_ID,T1.POD) AS CUR_LOCATION_ID,
+	                     IFNULL (T1.ORIGINAL_RETURN_DATE,NULL) AS CUR_DATE,
+	                     IFNULL (T1.RETURN_LOCATION_ID,'') AS PRE_LOCATION_ID,
+	                     IFNULL (T1.RETURN_DATE,NULL) AS PRE_DATE,
+	                     NULL AS SHIPPER_LOCATION_ID,
+	                     NULL AS SHIPPER_LOCATION,
+	                     CASE WHEN T1.SOURCE_LOCATION_ID = '' THEN T1.POD
+	                          ELSE T1.SOURCE_LOCATION_ID END AS CONSIGNEE_LOCATION_ID,
+	                     CASE WHEN T1.SOURCE_LOCATION = '' THEN T1.POD_NAME
+	                          ELSE T1.SOURCE_LOCATION END AS CONSIGNEE_LOCATION,
+	                     T1.CUSTOMER_NAME,
+	                     T1.RELEVANT_PLANNING,
+	                     T1.POL,
+	                     T1.POL_NAME,
+	                     T1.POD,
+	                     T1.POD_NAME,
+	                     T1.BOOKING_DATE,
+	                     T1.EXECUTION_STATUS_CODE AS STATUS,
+	                     T1.LIFECYCLE_CODE AS LIFECYCLE_STATUS,
+	                     T1.FLAG,
+	                     IFNULL (T1.SOURCE_LOCATION,T1.POD_NAME) AS CUR_LOCATION_NAME
+	                     FROM :TU_INFO T1
+	                     INNER JOIN :SELECTEDTUS T2 ON (T1.TRANSPORTATION_ID = T2.TU_ID);
+	  END IF;
+
+	  -- Get selected TU amount
+	  SELECT COUNT(1),'' INTO COUNT_TU,V_ALL_RESULTS FROM :selected_tu_info;
+
+	  -- sd results
+	  CALL "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_get_plan_data_by_sd_planid"(:V_SD_PLAN_ID, :V_RESOURCE_TYPE, :V_ALL_RESULTS,V_SD_LF_ID, V_SD_EF_ID, V_EXECUTION_ID, V_NODE_ID,sd_res,SD_EXECUTIION_RESULT);
+	  -- single tu or the multiple selected tu have the same resource types
+	  SELECT COUNT(DISTINCT RESOURCE_TYPE) INTO V_RES_TYPE_COUNT FROM :selected_tu_info;
+
+	  -- multiple selected tu have the same time interval
+	  SELECT COUNT(DISTINCT START_TIME, END_TIME) INTO V_TIME_INTERVAL_COUNT
+	  FROM :selected_tu_info T1
+	  CROSS JOIN (SELECT DISTINCT START_TIME, END_TIME FROM :sd_res) T2
+	  WHERE T1.PRE_DATE >= T2.START_TIME AND T1.PRE_DATE < T2.END_TIME;
+
+	  SELECT COUNT(PRE_DATE) INTO V_OUT_RANGE_INTERVAL_COUNT
+	  FROM :selected_tu_info  T1
+	  WHERE T1.PRE_DATE < (SELECT MIN(START_TIME) FROM :sd_res)
+	  OR T1.PRE_DATE >= (SELECT MAX(END_TIME) FROM :sd_res);
+
+	  -- If single tu or multiple tu have same resource type and time interval(no one out of time interval),
+	  -- return the new/old sd and storage conditions
+	    IF :COUNT_TU = 1 OR
+	     (:COUNT_TU > 1 AND :V_RES_TYPE_COUNT = 1 AND :V_TIME_INTERVAL_COUNT = 1 AND V_OUT_RANGE_INTERVAL_COUNT = 0) THEN
+
+	      -- if the multiple tu have the same interval, any of the pre_date is ok to be used
+	      SELECT IFNULL (MAX (RESOURCE_TYPE),'')
+	      INTO V_RESOURCE_TYPE FROM :selected_tu_info;
+
+	      SELECT IFNULL (MAX (PRE_DATE),'')
+	      INTO V_PRE_DATE FROM :selected_tu_info;
+
+	      -- only the modified tu effect the sd values
+	      updated_tu = SELECT *
+	                   FROM :TU_INFO
+	                   WHERE RULE_TYPE = 1 AND RESOURCE_TYPE = :V_RESOURCE_TYPE
+	                   AND ( PICKUP_DATE <> ORIGINAL_PICKUP_DATE OR
+	                   (PICKUP_LOCATION_ID IS NOT NULL AND PICKUP_LOCATION_ID <> '' AND PICKUP_LOCATION_ID <> ORIGINAL_PICKUP_LOCATION_ID)
+	                    OR (STREETTURN_TU_ID IS NOT NULL AND STREETTURN_TU_ID <> '') )
+	                   UNION ALL
+	                   SELECT *
+	                   FROM :TU_INFO
+	                   WHERE RULE_TYPE = 2 AND RESOURCE_TYPE = :V_RESOURCE_TYPE
+	                   AND ( RETURN_DATE <> ORIGINAL_RETURN_DATE OR
+	                   (RETURN_LOCATION_ID IS NOT NULL AND RETURN_LOCATION_ID <> '' AND RETURN_LOCATION_ID <> ORIGINAL_RETURN_LOCATION_ID )
+	                   OR (STREETTURN_TU_ID IS NOT NULL AND STREETTURN_TU_ID <> '') );
+
+	      paired_tu_ids = SELECT DISTINCT STREETTURN_TU_ID AS TU_ID FROM :updated_tu WHERE STREETTURN_TU_ID IS NOT NULL AND STREETTURN_TU_ID <> '';
+
+	      CALL "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_get_streetturn_tu_info"(:RESOURCE_CATEGORY, :V_RULE_TYPE, :paired_tu_ids, paired_tu);
+
+	      -- Get the old and new supply demand values
+	      CALL "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_get_updated_supply_demand" (
+	         :V_RULE_TYPE,
+	         :V_SD_PLAN_ID,
+	         :V_SD_LF_ID,
+	         :V_SD_EF_ID,
+	         :V_PRE_DATE,
+	         :V_RESOURCE_TYPE,
+	         :updated_tu,
+	         :paired_tu,
+	         :sd_res,
+	         t_impacted_supply_demand
+	      );
+	  ELSE
+		  t_impacted_supply_demand =
+		       SELECT NULL AS LOCATION_ID, NULL AS LOCATION_NAME, NULL AS EQUIP_TYPE_ID, NULL AS EQUIP_TYPE_NAME,
+			   NULL AS START_TIME,NULL AS END_TIME,NULL AS SUPPLY,NULL AS DEMAND,NULL AS BALANCE_SUPPLY_DEMAND,
+	           NULL AS BALANCE_STOCK_SUPPLY_DEMAND,NULL AS STOCK,NULL AS MIN_SAFETY_STOCK,NULL AS MAX_SAFETY_STOCK,
+	           NULL AS MAX_CAPACITY,NULL AS MIN_SAFETY_STOCK_HEADER,NULL AS MAX_SAFETY_STOCK_HEADER,
+               NULL AS MAX_CAPACITY_HEADER,NULL AS STOCK_BALANCE_HEADER,NULL AS IMPACTED_SUPPLY,NULL AS IMPACTED_DEMAND FROM DUMMY WHERE 1 = 0;
+
+	  END IF;
+
+	  SELECT IFNULL (MAX (SUPPLY - DEMAND - IMPACTED_DEMAND + IMPACTED_SUPPLY),NULL) INTO IMPACTED_SD
+	  FROM :t_impacted_supply_demand
+	  WHERE LOCATION_ID = :LOCATION_ID
+	  AND EQUIP_TYPE_NAME = :V_RESOURCE_TYPE;
+
+      IF :IMPACTED_SD IS NULL THEN
+      	--set valid flag
+	  	VALID_STATUS = SELECT RULE_ID,TU_ID,QUANTITY,1 AS ASSIGN_STATUS,'MSG_SUCCESS' AS MESSAGE_KEY
+			                 FROM :SELECTEDTUS;
+      ELSE
+	      --union assigned TUs and selected TUs with same assigned location
+	      UNIONTABLE = SELECT DISTINCT RULE_ID,TU_ID,QUANTITY,RESOURCE_TYPE
+			           FROM(SELECT RULE_ID,TU_ID,QUANTITY,RESOURCE_TYPE
+			                FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assignment_draft"
+			                WHERE RULE_ID = :LOCATION_RULE_ID
+			                AND (CUR_LOCATION_ID <> PRE_LOCATION_ID AND PRE_LOCATION_ID = :LOCATION_ID)
+			                AND USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username")
+			                AND TU_ID NOT IN (SELECT DISTINCT TU_ID FROM :SELECTEDTUS)
+			                AND RESOURCE_TYPE = :V_RESOURCE_TYPE
+			                UNION
+			                SELECT RULE_ID,TRANSPORTATION_ID AS TU_ID,QUANTITY,RESOURCE_TYPE
+			                FROM :TU_INFO
+			                WHERE RULE_ID = :LOCATION_RULE_ID
+			                AND (((PICKUP_LOCATION_ID IS NULL OR PICKUP_LOCATION_ID = '') AND ORIGINAL_PICKUP_LOCATION_ID = :LOCATION_ID)
+			                     OR ((RETURN_LOCATION_ID IS NULL OR RETURN_LOCATION_ID = '') AND ORIGINAL_RETURN_LOCATION_ID = :LOCATION_ID))
+			                AND TRANSPORTATION_ID NOT IN (SELECT DISTINCT TU_ID FROM :SELECTEDTUS)
+			                AND RESOURCE_TYPE = :V_RESOURCE_TYPE
+			                UNION
+			                SELECT RULE_ID,TU_ID,QUANTITY,RESOURCE_TYPE
+			                FROM :SELECTEDTUS
+			                WHERE RESOURCE_TYPE = :V_RESOURCE_TYPE);
+
+	      SELECT SUM(QUANTITY) INTO TOTAL_QUANTITY
+	      FROM :UNIONTABLE
+	      GROUP BY RULE_ID;
+
+	      IF :V_RULE_TYPE = 2 THEN
+
+			  --get equipment type's capacity of location
+			  LOC_RESOURCE_CAPACITY = SELECT DISTINCT T1.LOCATION_ID,IFNULL (T2.EQUIP_CODE,'') AS RESOURCE_TYPE,
+			                                 IFNULL (IFNULL (IFNULL (T2.MAX_SAFETY,T2.MAX_CAPACITY),T3.LOCATION_MAX_CAPACITY),999999) AS CAPACITY
+			                          FROM (SELECT ID AS LOCATION_ID
+	                                        FROM "sap.tm.trp.db.semantic.location::v_all_location"
+	                                        WHERE ID = :LOCATION_ID) T1
+			                          LEFT JOIN "sap.tm.trp.db.stock::t_stock_config" T2
+			                          ON (T1.LOCATION_ID = T2.LOCATION_ID
+			                              AND T2.LOCATION_HEAD_FLAG = 0
+    			                          AND T2.RESOURCE_CATEGORY = :RESOURCE_CATEGORY
+    			                          AND T2.EQUIP_CODE = :V_RESOURCE_TYPE
+    			                          AND T2.LOCATION_TYPE = 1
+			                          )
+			                          LEFT JOIN (
+			                            SELECT LOCATION_ID,IFNULL (MAX_SAFETY,MAX_CAPACITY) AS LOCATION_MAX_CAPACITY
+			                            FROM "sap.tm.trp.db.stock::t_stock_config"
+			                            WHERE LOCATION_ID = :LOCATION_ID
+			                            AND LOCATION_HEAD_FLAG = 1
+			                            AND RESOURCE_CATEGORY = :RESOURCE_CATEGORY
+			                            AND LOCATION_TYPE = 1
+			                          ) T3 ON (T3.LOCATION_ID = T1.LOCATION_ID)
+			                        ;
+
+			  --caculate whether the required quantities of equipments are over the capacity
+			  REMAINING_QUANTITY = SELECT case when T2.CAPACITY is null then 999999 else (T2.CAPACITY- :TOTAL_QUANTITY - :IMPACTED_SD) end AS REMAINING_CAPACITY,
+			                                T1.RULE_ID,T1.TU_ID,T1.QUANTITY,T1.RESOURCE_TYPE
+			                        FROM :UNIONTABLE T1
+			                        LEFT OUTER JOIN :LOC_RESOURCE_CAPACITY T2 ON (T1.RESOURCE_TYPE = T2.RESOURCE_TYPE);
+			  --set valid flag
+			  VALID_STATUS = SELECT RULE_ID,TU_ID,QUANTITY,CASE WHEN REMAINING_CAPACITY >=0 THEN 1
+			                                                    WHEN REMAINING_CAPACITY <0  THEN 2
+			                                                    ELSE 0 END AS ASSIGN_STATUS,
+			                                               CASE WHEN REMAINING_CAPACITY >=0 THEN 'MSG_SUCCESS'
+
+			                                                    WHEN REMAINING_CAPACITY <0 THEN 'MSG_ERROR_MORE_THAN_MAX_CAPACITY'
+			                                                    ELSE '' END AS MESSAGE_KEY
+			                 FROM :REMAINING_QUANTITY;
+
+	      ELSEIF :V_RULE_TYPE = 1 THEN
+
+	       --get equipment type's safety stock of location
+			  LOC_RESOURCE_SAFETY = SELECT DISTINCT T1.LOCATION_ID,IFNULL (T2.EQUIP_CODE,'') AS RESOURCE_TYPE,
+			                                 IFNULL (T2.MIN_SAFETY,0) AS MIN_SAFETY_STOCK
+			                          FROM (SELECT ID AS LOCATION_ID
+	                                        FROM "sap.tm.trp.db.semantic.location::v_all_location"
+	                                        WHERE ID = :LOCATION_ID) T1
+			                          LEFT JOIN "sap.tm.trp.db.stock::t_stock_config" T2
+			                          ON (T1.LOCATION_ID = T2.LOCATION_ID
+			                              and T2.LOCATION_HEAD_FLAG = 0
+			                              AND T2.RESOURCE_CATEGORY = :RESOURCE_CATEGORY
+			                              AND T2.EQUIP_CODE = :V_RESOURCE_TYPE
+			                              AND T2.LOCATION_TYPE = 1);
+
+	        --caculate whether the required quantities of equipments are over the capacity
+			  REMAINING_STOCK = SELECT (:IMPACTED_SD - :TOTAL_QUANTITY-ifnull(T2.MIN_SAFETY_STOCK,0)) AS REMAINING_CAPACITY,(:IMPACTED_SD - :TOTAL_QUANTITY) AS REMAINING_CAP,
+			                                T1.RULE_ID,T1.TU_ID,T1.QUANTITY,T1.RESOURCE_TYPE
+			                        FROM :UNIONTABLE T1
+			                        LEFT OUTER JOIN :LOC_RESOURCE_SAFETY T2 ON (T1.RESOURCE_TYPE = T2.RESOURCE_TYPE);
+
+			  --set valid flag
+			  VALID_STATUS = SELECT RULE_ID,TU_ID,QUANTITY,CASE WHEN REMAINING_CAPACITY >=0 THEN 1
+			                                                    WHEN REMAINING_CAPACITY <0 THEN 2
+			                                                    ELSE 0 END AS ASSIGN_STATUS,
+			                                               CASE WHEN REMAINING_CAPACITY >=0 THEN 'MSG_SUCCESS'
+			                                               		WHEN REMAINING_CAP <= 0 THEN 'MSG_NOT_ENOUGH_STOCK'
+			                                                    WHEN REMAINING_CAPACITY <0 THEN 'MSG_NOT_ENOUGH_MIN_STOCK'
+			                                                    ELSE '' END AS MESSAGE_KEY
+			                 FROM :REMAINING_STOCK
+			                 WHERE TU_ID IN (SELECT DISTINCT TU_ID FROM :SELECTEDTUS);
+
+	      END IF ;
+      END IF ;
+END;

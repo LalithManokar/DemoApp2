@@ -1,0 +1,16 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_ext_assign_role" (
+  IN USER_ID BIGINT,
+  IN USER_TYPE_ID INTEGER,
+  IN ROLE_IDS "sap.tm.trp.db.systemmanagement.user::tt_roles")
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+
+    UPDATE "sap.tm.trp.db.systemmanagement.user::t_user" SET USER_TYPE_ID = :USER_TYPE_ID WHERE ID = :USER_ID;
+
+    DELETE FROM "sap.tm.trp.db.systemmanagement.user::t_user_role" WHERE USER_ID = :USER_ID;
+    INSERT INTO "sap.tm.trp.db.systemmanagement.user::t_user_role" (USER_ID, ROLE_ID) SELECT :USER_ID, ID FROM :ROLE_IDS;
+
+END;

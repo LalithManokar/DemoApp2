@@ -1,0 +1,16 @@
+schema = "SAP_TM_TRP";
+query = "SELECT T1.ID AS GROUP_ID,
+                SUM(T4.XPOS) / COUNT(T4.XPOS) AS XPOS,
+                SUM(T4.YPOS) / COUNT(T4.YPOS) AS YPOS
+           FROM \"sap.tm.trp.db.systemmanagement::t_region_group\" AS T1
+                LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement::t_region_group_item\" AS T2
+                ON T1.ID = T2.REGION_GROUP_ID
+                LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.location::v_region_location_all\" AS T3
+                ON T2.ZONE_ID = T3.ROOT_ID
+                LEFT OUTER JOIN \"sap.tm.trp.db.semantic.location::v_location\" AS T4
+                ON T3.LOCATION_ID = T4.ID
+       GROUP BY T1.ID";
+
+depends_on_view = ["sap.tm.trp.db.systemmanagement.location::v_region_location_all",
+                   "sap.tm.trp.db.semantic.location::v_location"];
+depends_on_table = ["sap.tm.trp.db.systemmanagement::t_region_group", "sap.tm.trp.db.systemmanagement::t_region_group_item"];

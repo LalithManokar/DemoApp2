@@ -1,0 +1,35 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline.operator::p_add_five_supply_sources" ( 
+IN input1 "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+	IN input2 "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+	IN input3 "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+	IN input4 "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+	IN input5 "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+	OUT sum "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets") 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+-- all the inputs have the same number of records and same GEO/EQUIP/INTERVAL information
+-- so just need to join with one of them to fetch the non-groupby attributes 
+sum = 
+	SELECT 'SUPPLY_ADD_FIVE' AS NODE_ID, T2.GEO_ID, T2.GEO_NAME, T2.GEO_FILTER_TYPE, T2.EQUIP_TYPE, T2.EQUIP_NAME, T2.EQUIP_FILTER_TYPE, 
+	       T2.TIME_INTERVAL_ID, T2.SEQUENCE, T2.START_TIME, T2.END_TIME, T2.INTER_SECONDS, 'SUPPLY' AS OUTPUT_KEY, T1.OUTPUT_VALUE, T2.UNIT
+    FROM 
+	( 
+	  SELECT GEO_ID,EQUIP_TYPE,TIME_INTERVAL_ID, SUM(OUTPUT_VALUE) AS OUTPUT_VALUE FROM 
+	  (
+		SELECT * from :input1
+		UNION ALL
+		SELECT * from :input2
+		UNION ALL
+		SELECT * from :input3
+		UNION ALL
+		SELECT * from :input4
+		UNION ALL
+		SELECT * from :input5
+	  ) GROUP BY GEO_ID, EQUIP_TYPE, TIME_INTERVAL_ID
+	) T1
+	INNER JOIN :input1 T2 ON (T1.GEO_ID = T2.GEO_ID AND T1.EQUIP_TYPE = T2.EQUIP_TYPE AND T1.TIME_INTERVAL_ID = T2.TIME_INTERVAL_ID) ;	
+			
+END;

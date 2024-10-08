@@ -1,0 +1,142 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant.datasource::p_resource_on_off_hire" ( 
+  OUT OUTPUT "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::t_basic_node"  
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+ 
+ DECLARE V_ON_HIRE  VARCHAR(7) := 'ON_HIRE';
+ DECLARE V_OFF_HIRE VARCHAR(8) := 'OFF_HIRE'; 
+ DECLARE MAX_UPDATE_ON_HIRE TIMESTAMP;
+ DECLARE MAX_UPDATE_OFF_HIRE TIMESTAMP;
+ 
+ SELECT MAX(UPDATE_TIME) INTO MAX_UPDATE_ON_HIRE FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" WHERE SOURCE_TYPE = :V_ON_HIRE;
+ SELECT MAX(UPDATE_TIME) INTO MAX_UPDATE_OFF_HIRE FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" WHERE SOURCE_TYPE = :V_OFF_HIRE;
+
+ MASTER_DATA_ON_HIRE = 
+    SELECT
+	 t1.RESOURCE_ID,
+	t1.ON_HIRE_LOC,
+	t1.EQUITYPE,
+	t1.RESOURCE_TYPE_CODE,
+	TO_TIMESTAMP(t1.CHANGEDATE) AS CHANGEDATE, 
+	TO_TIMESTAMP(t1.ON_HIRE_DT) AS ON_HIRE_DT
+   FROM "sap.tm.trp.db.semantic.resource::v_resource_master" t1
+   WHERE ON_HIRE_DT IS NOT NULL AND ON_HIRE_DT <> 0 
+     AND ON_HIRE_LOC IS NOT NULL AND ON_HIRE_LOC <> '' ;
+
+MASTER_DATA_OFF_HIRE = 
+    SELECT
+	 t1.RESOURCE_ID,
+	t1.OFF_HIRE_LOC,
+	t1.EQUITYPE,
+	t1.RESOURCE_TYPE_CODE,
+	TO_TIMESTAMP(t1.CHANGEDATE) AS CHANGEDATE, 
+	TO_TIMESTAMP(t1.OFF_HIRE_DT) AS OFF_HIRE_DT
+   FROM "sap.tm.trp.db.semantic.resource::v_resource_master" t1
+   WHERE OFF_HIRE_DT IS NOT NULL AND OFF_HIRE_DT <> 0 
+     AND OFF_HIRE_LOC IS NOT NULL AND OFF_HIRE_LOC <> '';
+
+OUTPUT=SELECT 
+	'' AS CLIENT,
+	'0000' AS COMPANY_CODE,
+	RESOURCE_ID AS SOURCE_KEY, 
+	:V_ON_HIRE AS SOURCE_TYPE,
+	:V_ON_HIRE AS NODE,
+	ON_HIRE_LOC AS LOCATION_ID,
+	EQUITYPE AS RESOURCE_GROUP,
+	RESOURCE_TYPE_CODE AS RESOURCE_TYPE,
+	'SUPPLY' AS OUTPUT_KEY,
+	1 AS QUANTITY,
+	CHANGEDATE AS UPDATE_TIME, 
+	ON_HIRE_DT AS OCCURRED_TIME, 
+	'' AS DELETE_FLAG
+	FROM ( 
+		SELECT T1.* FROM :MASTER_DATA_ON_HIRE T1
+   	    WHERE (:MAX_UPDATE_ON_HIRE IS NULL OR T1.CHANGEDATE > :MAX_UPDATE_ON_HIRE)
+   	    UNION
+   	    --mismacthed records
+        SELECT T1.* FROM :MASTER_DATA_ON_HIRE T1
+	        INNER JOIN "sap.tm.trp.db.supplydemand.instant::t_basic_node" AS harmize_tab
+	     	ON harmize_tab.SOURCE_KEY = T1.RESOURCE_ID
+			AND harmize_tab.UPDATE_TIME < T1.CHANGEDATE
+			WHERE harmize_tab.DELETE_FLAG <> 'X'
+			AND harmize_tab.SOURCE_TYPE = 'ON_HIRE'
+			AND T1.CHANGEDATE < :MAX_UPDATE_ON_HIRE
+	    UNION
+	    --missed records
+	    SELECT T1.* FROM :MASTER_DATA_ON_HIRE T1
+	       WHERE T1.CHANGEDATE < :MAX_UPDATE_ON_HIRE
+	       AND NOT EXISTS (SELECT 1
+					FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" AS harmize_tab
+					WHERE harmize_tab.SOURCE_KEY = T1.RESOURCE_ID
+					AND harmize_tab.SOURCE_TYPE = 'ON_HIRE')
+	)
+	UNION	
+	SELECT 
+	'' AS CLIENT,
+	'0000' AS COMPANY_CODE,
+	 RESOURCE_ID AS SOURCE_KEY, 
+	 :V_OFF_HIRE AS SOURCE_TYPE,
+	 :V_OFF_HIRE AS NODE,
+	 OFF_HIRE_LOC AS LOCATION_ID,
+	 EQUITYPE AS RESOURCE_GROUP,
+	 RESOURCE_TYPE_CODE AS RESOURCE_TYPE,
+	'DEMAND' AS OUTPUT_KEY,
+	1 AS QUANTITY,
+	CHANGEDATE AS UPDATE_TIME, 
+	OFF_HIRE_DT AS OCCURRED_TIME, 
+	'' AS DELETE_FLAG
+	FROM (
+		SELECT T1.* FROM :MASTER_DATA_OFF_HIRE T1
+	    	WHERE (:MAX_UPDATE_OFF_HIRE IS NULL OR T1.CHANGEDATE > :MAX_UPDATE_OFF_HIRE)
+	    UNION
+	    --mismacthed records
+	    SELECT T1.* FROM :MASTER_DATA_OFF_HIRE T1
+	   		INNER JOIN "sap.tm.trp.db.supplydemand.instant::t_basic_node" AS harmize_tab
+	     	ON harmize_tab.SOURCE_KEY = T1.RESOURCE_ID
+			AND harmize_tab.UPDATE_TIME < T1.CHANGEDATE
+				WHERE harmize_tab.DELETE_FLAG <> 'X'
+				AND SOURCE_TYPE = 'OFF_HIRE'
+				AND T1.CHANGEDATE < :MAX_UPDATE_OFF_HIRE
+		UNION
+		--missed records
+		SELECT T1.* FROM :MASTER_DATA_OFF_HIRE T1
+		WHERE T1.CHANGEDATE < :MAX_UPDATE_OFF_HIRE
+		AND NOT EXISTS (SELECT 1
+						FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" AS harmize_tab
+						WHERE harmize_tab.SOURCE_KEY = T1.RESOURCE_ID
+						AND harmize_tab.SOURCE_TYPE = 'OFF_HIRE')
+	)
+    UNION
+  
+   SELECT 
+    CLIENT,
+	COMPANY_CODE,
+	SOURCE_KEY, 
+	SOURCE_TYPE,
+	NODE,
+	LOCATION_ID,
+	RESOURCE_GROUP,
+	RESOURCE_TYPE,
+	'' AS OUTPUT_KEY,
+	QUANTITY,
+	UPDATE_TIME, 
+	OCCURRED_TIME, 
+	'X' AS DELETE_FLAG --mark entries as deleted if on/off hire info is deleted
+   FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node"
+   WHERE SOURCE_TYPE IN (:V_ON_HIRE,:V_OFF_HIRE) AND DELETE_FLAG = ''
+     AND SOURCE_KEY NOT IN (
+       SELECT DISTINCT RESOURCE_ID
+       FROM ( SELECT RESOURCE_ID FROM "sap.tm.trp.db.semantic.resource::v_resource_master"
+               WHERE ON_HIRE_DT IS NOT NULL AND ON_HIRE_DT <> 0 
+                     AND ON_HIRE_LOC IS NOT NULL AND ON_HIRE_LOC <> ''
+              UNION
+              SELECT RESOURCE_ID FROM "sap.tm.trp.db.semantic.resource::v_resource_master"
+               WHERE OFF_HIRE_DT IS NOT NULL AND OFF_HIRE_DT <> 0 
+                     AND OFF_HIRE_LOC IS NOT NULL AND OFF_HIRE_LOC <> ''
+              ) 
+     );
+END;

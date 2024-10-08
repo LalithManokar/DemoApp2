@@ -1,0 +1,7 @@
+schema="SAP_TM_TRP";
+query="SELECT ZONE_HIERARCHY_ID,
+              ZONE_ID
+         FROM \"sap.tm.trp.db.semantic.location::v_hierarchy_item\" AS A
+        WHERE PARENT_ZONE_ID = ''";
+
+depends_on_view = ["sap.tm.trp.db.semantic.location::v_hierarchy_item"];        

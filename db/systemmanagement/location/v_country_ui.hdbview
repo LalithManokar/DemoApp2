@@ -1,0 +1,10 @@
+schema = "SAP_TM_TRP";
+query = "SELECT T1.CODE AS CODE,
+                T1.NAME AS COUNTRY_NAME,
+                T1.NAME AS NAME
+               
+           FROM \"sap.tm.trp.db.semantic.location::v_country\" AS T1
+                "; 
+                
+ depends_on_view = ["sap.tm.trp.db.semantic.location::v_country"];
+             

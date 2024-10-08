@@ -1,0 +1,26 @@
+procedure "SAP_TM_ROUTING"."sap.tm.trp.routing.db.common::p_get_text" (
+    in text_id nvarchar(256),
+    in params "sap.tm.trp.routing.db.common::tt_message_placeholder",
+    in severity char,
+    out message "sap.tm.trp.routing.db.common::tt_message"
+)
+language sqlscript
+sql security invoker
+default schema "SAP_TM_ROUTING"
+reads sql data
+as begin
+    
+    declare package_name varchar(100) := 'sap.tm.trp.routing.db.common';
+    declare object_name varchar(100) := 'message';
+    declare object_suffix varchar(100) := 'hdbtextbundle';
+    declare text_content varchar(4000);
+    declare current_locale varchar(10);
+    
+    select session_context('locale') into current_locale from dummy;
+    call "HANA_XS_BASE"."sap.hana.xs.i18n::GET_TEXT"
+    (:package_name, :object_name, :object_suffix, :text_id, :current_locale, 
+    :params, :text_content);
+    
+    message = select :severity as severity, :text_content as message from dummy;
+
+end;

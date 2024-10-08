@@ -1,0 +1,45 @@
+/*Below procedure is to delete TUs from harmonized table which are being marked to be deleted and older than given days */
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_get_harmonized_tu_list_deletion" ( 
+    IN iv_keep_days BIGINT default 365, --last these many days preserv tus which marked as to be deleted, by default before 1 year TU will be selected to delete
+    IN iv_simulation varchar(2), --if want to see tus to be deleted but not actually deleted then pass simulation flag with 'X'
+    OUT ov_message varchar(200),
+    OUT ov_tu_list "sap.tm.trp.db.pickupreturn::tt_tu_list"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_TRP
+   AS
+BEGIN
+
+declare flag varchar(1) := 'X';
+declare lv_final_date timestamp;
+declare lv_count bigint;
+
+    lv_final_date := add_days(current_Timestamp,-1*:iv_keep_days);
+
+    ov_tu_list = select tu_id from  "sap.tm.trp.db.pickupreturn.harmonization::t_pr_harmonized_tu_list"
+                 where CD_DELETE_FLAG = :flag and CD_UPDATED_DATE<:lv_final_date;
+    lv_count := record_count(:ov_tu_list);   
+
+if (:iv_simulation is null or :iv_simulation='') then
+
+    if(:lv_count>0) then
+    
+        delete from "sap.tm.trp.db.pickupreturn.harmonization::t_pr_harmonized_tu_list"
+        where CD_DELETE_FLAG = :flag and CD_UPDATED_DATE<:lv_final_date;
+
+        ov_message := 'Total '||:lv_count ||' Tus are deleted which were flagged as "to be deleted" and last changed before ' || :iv_keep_days || ' days.';
+
+    else
+
+        ov_message := 'No Tus are deleted for given criteria';
+
+    end if;
+
+else
+
+    ov_message := 'Simulation ran successfully. '||:lv_count||' TUs are selected in simulation plan. Now to realise this and for actual deletion, run this without simulation flag';
+
+end if;
+
+END

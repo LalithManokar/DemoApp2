@@ -1,0 +1,45 @@
+schema="SAP_TM_TRP";
+query="SELECT DISTINCT A.ID,
+              A.RULE_NAME,
+              B.DESC AS DESCRIPTION, 
+              A.RULE_TYPE,
+              A.SD_PLAN_ID,
+              D.NAME AS SUPPLY_DEMAND_PLAN,
+               CASE
+                    WHEN IFNULL(A.TIME_RANGE, -1) <= 0 THEN -1
+                    ELSE
+                        CASE
+                            WHEN A.TIME_RANGE_UINT=1 THEN A.TIME_RANGE/3600
+                            WHEN A.TIME_RANGE_UINT=2 THEN A.TIME_RANGE/3600/24
+                            WHEN A.TIME_RANGE_UINT=3 THEN A.TIME_RANGE/3600/24/7
+                            ELSE -1
+                        END
+                END AS TIME_RANGE_INTERVAL,              
+              A.TIME_RANGE_UINT AS TIME_RANGE_UNIT,
+              A.EQUIP_FILTER_ID AS RESOURCE_FILTER_ID,
+              A.LOCATION_FILTER_ID,
+              A.NETWORK_SETTING_GROUP_ID,
+              C.NAME AS NETWORK_SETTING_GROUP,
+              C.CURRENCY_CODE AS CURRENCY,
+              A.LOCATION_DETERMIN_ID,
+              E.NAME AS LOCATION_DETERMINATION_RULE,              
+              A.SCHEDULE_TIME_TYPE,
+              A.OP_SETTING_TYPE,
+              A.OPTIMIZATION,
+              A.RESOURCE_CATEGORY,
+              USER.USERNAME AS CREATED_BY,
+              A.ALLOWED_USAGE AS VISIBILITY
+    FROM \"sap.tm.trp.db.pickupreturn::t_location_assignment_rule\" A
+                LEFT OUTER JOIN  \"sap.tm.trp.db.pickupreturn::t_location_rule_t\" B ON A.ID=B.ID
+                LEFT OUTER JOIN  \"sap.tm.trp.db.planningcockpit::v_network_setting_group\" C ON A.NETWORK_SETTING_GROUP_ID=C.ID
+                LEFT OUTER JOIN  \"sap.tm.trp.db.pipeline::t_plan_model\" D ON A.SD_PLAN_ID=D.ID
+                LEFT OUTER JOIN  \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" USER ON A.CREATE_BY=USER.ID
+                LEFT OUTER JOIN  \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule\" E ON A.LOCATION_DETERMIN_ID=E.RULE_ID
+               ";
+depends_on_table = ["sap.tm.trp.db.pickupreturn::t_location_assignment_rule",
+					"sap.tm.trp.db.pickupreturn::t_location_rule_t",
+					"sap.tm.trp.db.pipeline::t_plan_model",
+					"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule"];
+depends_on_view=["sap.tm.trp.db.planningcockpit::v_network_setting_group",
+				 "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];
+

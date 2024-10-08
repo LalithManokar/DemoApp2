@@ -1,0 +1,25 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_network_setting_group_delete_check" (
+   IN ID  BIGINT,
+   OUT WHEREUSED "sap.tm.trp.db.whereusedlist::v_used_network_setting_group" 
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	READS SQL DATA AS
+BEGIN
+DECLARE OBJECT_CODE VARCHAR(40);
+  
+--get code by id
+SELECT IFNULL (MAX (CODE),'') 
+INTO OBJECT_CODE 
+FROM "sap.tm.trp.db.planningcockpit::t_network_setting_group"
+WHERE ID = :ID
+;
+  
+--get used list by code
+WHEREUSED = 
+	SELECT * 
+	FROM "sap.tm.trp.db.whereusedlist::v_used_network_setting_group"
+	WHERE OBJECT_CODE = :OBJECT_CODE
+;
+
+END;

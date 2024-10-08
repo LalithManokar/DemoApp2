@@ -1,0 +1,110 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.streetturn.algorithm::p_streetturn_suggest" (
+in tol_pair double,
+in t_trans "sap.tm.trp.db.streetturn.algorithm::tt_trans",
+in t_booking "sap.tm.trp.db.streetturn.algorithm::tt_booking_trp11",
+in t_dec "sap.tm.trp.db.streetturn.algorithm::tt_movement_dec",
+out t_detail_res "sap.tm.trp.db.streetturn.algorithm::tt_streetturn_res",
+out t_pair "sap.tm.trp.db.streetturn.algorithm::tt_streetturn_pair"
+ )
+LANGUAGE SQLSCRIPT 
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN 
+
+t_dec_aug = SELECT ROW_NUMBER()OVER() AS "NODE_ID",
+				   * 
+			FROM :t_dec;
+
+t_supply_temp = SELECT * FROM :t_dec_aug WHERE "MOVEMENT" = 'Y';
+
+t_demand_temp = SELECT * FROM :t_dec_aug WHERE "MOVEMENT" = 'N';
+
+t_supply = SELECT "NODE_ID",
+				  "BOOKING_ID",
+				  1 AS "SUPPLY_DEMAND" 
+		   FROM :t_supply_temp;
+
+t_demand = SELECT "NODE_ID",
+				  "BOOKING_ID",
+				  -1 AS "SUPPLY_DEMAND" 
+		   FROM :t_demand_temp;
+
+t_node = SELECT "NODE_ID",
+				"SUPPLY_DEMAND" 
+		 FROM :t_supply 
+		 UNION ALL
+		 SELECT "NODE_ID",
+				"SUPPLY_DEMAND" 
+		 FROM :t_demand;
+
+t_supply_aug = SELECT B."NODE_ID",
+					  A."BOOKING_ID",
+					  A."CUSTOMER_LOCATION",
+					  A."START_TIME",
+					  A."BOOKING_TIME",
+					  B."SUPPLY_DEMAND",
+					  A."CONTAINER_TYPE",
+					  A."MODE"
+			   FROM :t_booking A
+			   INNER JOIN :t_supply B ON A."BOOKING_ID" = B."BOOKING_ID";
+
+t_demand_aug = SELECT B."NODE_ID",
+					  A."BOOKING_ID",
+					  A."CUSTOMER_LOCATION",
+					  A."START_TIME",
+					  A."BOOKING_TIME",
+					  B."SUPPLY_DEMAND",
+					  A."CONTAINER_TYPE",
+					  A."MODE"
+			   FROM :t_booking A
+			   INNER JOIN :t_demand B ON A."BOOKING_ID" = B."BOOKING_ID";	
+					  
+					  
+t_arc = SELECT B."NODE_ID" AS "FROM_ID",
+			   C."NODE_ID" AS "TO_ID",
+			   0 AS "LOWER",
+			   1000000 AS "CAPACITY",
+			   A. "COST"
+	    FROM :t_trans A
+	    INNER JOIN :t_supply_aug B ON A."FROM_LOCATION" = B."CUSTOMER_LOCATION"
+	    INNER JOIN :t_demand_aug C ON A."TO_LOCATION" = C."CUSTOMER_LOCATION" 
+		AND ABS(SECONDS_BETWEEN(B."BOOKING_TIME",C."BOOKING_TIME")/3600) < :tol_pair
+	    AND	SECONDS_BETWEEN(B."START_TIME",C."BOOKING_TIME")/3600 >= A."DURATION" 
+		AND B."CONTAINER_TYPE" = C."CONTAINER_TYPE" AND B."MODE" != C."MODE";		  
+
+call "_SYS_AFL"."OFL_AREA_NETWORK_SIMPLEX_SOLVE_PROC"(:t_node, :t_arc, t_flow);
+
+t_no_move = SELECT B."BOOKING_ID",
+				   B."CUSTOMER_LOCATION" AS "FROM_LOCATION",
+				   B."START_TIME" AS "FROM_TIME",
+				   B."CUSTOMER_LOCATION" AS "TO_LOCATION",
+				   B."BOOKING_TIME"AS "TO_TIME",
+				   B."CONTAINER_TYPE"
+			FROM :t_flow A
+			INNER JOIN :t_demand_aug B ON A."TO_ID"=B."NODE_ID";
+
+t_move = SELECT B."BOOKING_ID",
+				B."CUSTOMER_LOCATION" AS "FROM_LOCATION",
+				B."START_TIME" AS "FROM_TIME",
+				C."CUSTOMER_LOCATION" AS "TO_LOCATION",
+				C."BOOKING_TIME" AS "TO_TIME",
+				B."CONTAINER_TYPE"
+		 FROM :t_flow A
+		 INNER JOIN :t_supply_aug B ON A."FROM_ID" = B."NODE_ID"
+		 INNER JOIN :t_demand_aug C ON A."TO_ID" = C."NODE_ID";
+
+t_pair = SELECT B."BOOKING_ID" AS "BOOKING_ID_MOVE",
+				C."BOOKING_ID" AS "BOOKING_ID_STAY"
+		 FROM :t_flow A
+		 INNER JOIN :t_supply_aug B ON A."FROM_ID" = B."NODE_ID"
+		 INNER JOIN :t_demand_aug C ON A."TO_ID" = C."NODE_ID";
+
+				
+t_detail_res = SELECT * 
+			   FROM :t_no_move
+			   UNION ALL 
+			   SELECT * 
+			   FROM :t_move;
+
+END;

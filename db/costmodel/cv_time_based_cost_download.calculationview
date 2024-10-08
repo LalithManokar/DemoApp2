@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_time_based_cost_download" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_anna_privilege_check"/>
+  <localVariables>
+    <variable id="COST_DATASET_ID" parameter="true">
+      <descriptions defaultDescription="COST_DATASET_ID"/>
+      <variableProperties datatype="BIGINT" defaultValue="" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_TYPE" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_NAME" length="200"/>
+        <viewAttribute datatype="INTEGER" id="THRESHOLD_FROM"/>
+        <viewAttribute datatype="INTEGER" id="THRESHOLD_TO"/>
+        <viewAttribute datatype="DECIMAL" id="PER_DIEM_COST" length="13" scale="3"/>
+        <viewAttribute datatype="VARCHAR" id="UOM_DESC" length="200"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#COST_DATASET_ID</localVariable>
+      <definition> 
+  
+ BEGIN
+ /*
+    VAR_OUT = SELECT T1.RESOURCE_TYPE,T1.LOCATION_NAME,T1.THRESHOLD_FROM,
+    T1.THRESHOLD_TO,
+    T1.PER_DIEM_COST,--T1.UOM_CODE,
+    T5.DESC AS UOM_DESC--,
+   -- T1.DATA_SOURCE_CODE,T1.LAST_MODIFIED_ON
+    --,T1.WILD_STAR_COUNT
+    FROM &quot;sap.tm.trp.db.costmodel::t_time_based_storage_cost&quot; T1
+    INNER JOIN
+    (
+            SELECT T2.CODE,IFNULL(A.DESC ,T2.DESC) AS DESC
+            FROM &quot;sap.tm.trp.db.costmodel::t_uom&quot; T2
+            LEFT OUTER JOIN 
+            ( 
+	                SELECT T3.UOM_CODE,T3.DESC
+	                FROM &quot;sap.tm.trp.db.costmodel::t_uom_t&quot; T3 
+	                INNER JOIN &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot; T4 ON (T3.LANG_CODE = T4.SPRAS)
+             )A ON (T2.CODE = A.UOM_CODE)
+             
+     )T5 ON (T1.UOM_CODE = T5.CODE)
+    WHERE COST_DATASET_ID = :COST_DATASET_ID;
+    
+    */
+    
+    VAR_OUT = SELECT T1.RESOURCE_TYPE,T1.LOCATION_NAME,T1.THRESHOLD_FROM,
+    T1.THRESHOLD_TO,
+    T1.PER_DIEM_COST,
+    T1.UOM_CODE AS UOM_DESC
+    FROM &quot;sap.tm.trp.db.costmodel::t_time_based_storage_cost&quot; T1
+    INNER JOIN
+    (
+            SELECT T2.CODE,IFNULL(A.DESC ,T2.DESC) AS DESC
+            FROM &quot;sap.tm.trp.db.costmodel::t_uom&quot; T2
+            LEFT OUTER JOIN 
+            ( 
+	                SELECT T3.UOM_CODE,T3.DESC
+	                FROM &quot;sap.tm.trp.db.costmodel::t_uom_t&quot; T3 
+	                INNER JOIN &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot; T4 ON (T3.LANG_CODE = T4.SPRAS)
+             )A ON (T2.CODE = A.UOM_CODE)
+             
+     )T5 ON (T1.UOM_CODE = T5.CODE)
+    WHERE COST_DATASET_ID = :COST_DATASET_ID;
+    
+END 
+
+</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="RESOURCE_TYPE" order="1">
+        <descriptions defaultDescription="CARRIER_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE"/>
+      </attribute>
+      <attribute id="LOCATION_NAME" order="2">
+        <descriptions defaultDescription="FROM_LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_NAME"/>
+      </attribute>
+      <attribute id="UOM_DESC" order="6">
+        <descriptions defaultDescription="UOM_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="UOM_DESC"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="THRESHOLD_FROM" order="3" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="THRESHOLD_FROM"/>
+        <measureMapping columnObjectName="Script_View" columnName="THRESHOLD_FROM"/>
+      </measure>
+      <measure id="THRESHOLD_TO" order="4" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="THRESHOLD_TO"/>
+        <measureMapping columnObjectName="Script_View" columnName="THRESHOLD_TO"/>
+      </measure>
+      <measure id="PER_DIEM_COST" order="5" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="COST"/>
+        <measureMapping columnObjectName="Script_View" columnName="PER_DIEM_COST"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

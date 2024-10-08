@@ -1,0 +1,42 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_ext_equipment_filter_create"(
+    IN NAME VARCHAR(50),
+    IN DESC VARCHAR(500),
+    IN VISIBLE_FLAG VARCHAR(3),
+    IN ITEMS "sap.tm.trp.db.pipeline::tt_geo_id",
+    IN FILTER_TYPE INTEGER,
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),
+    OUT FILTER_ID BIGINT
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+
+    SELECT IFNULL(MAX(ID),-100) INTO USER_ID FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+    SELECT IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E') INTO SPRAS FROM DUMMY;
+
+    SELECT "sap.tm.trp.db.filter::s_equipment_filter".NEXTVAL INTO FILTER_ID FROM DUMMY;
+
+    INSERT INTO "sap.tm.trp.db.filter::t_equipment_filter"(ID, DESC, VISIBLE_FLAG, FILTER_TYPE, CREATE_BY, CREATE_AT, CODE, RESOURCE_CATEGORY, LAST_MODIFIED_BY, LAST_MODIFIED_AT)
+    VALUES(:FILTER_ID, :NAME, :VISIBLE_FLAG, :FILTER_TYPE, :USER_ID, CURRENT_UTCTIMESTAMP, UPPER(:NAME), :RESOURCE_CATEGORY_ID, :USER_ID, CURRENT_UTCTIMESTAMP);
+
+    INSERT INTO "sap.tm.trp.db.filter::t_equipment_filter_t"(ID, SPRAS, DESC)
+    VALUES(:FILTER_ID, :SPRAS, :DESC);
+
+    IF :FILTER_TYPE = 1 THEN
+        INSERT INTO "sap.tm.trp.db.filter::t_equipment_filter_equipment"(EQUIPMENT_FILTER_ID, EQUI_CODE, RESOURCE_CATEGORY)
+        SELECT :FILTER_ID, A.ID, :RESOURCE_CATEGORY_ID FROM :ITEMS A
+        join "sap.tm.trp.db.systemmanagement.user::v_resource_auth" B
+        on A.ID = B.res_type AND B.RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID; --authorization check
+    ELSEIF :FILTER_TYPE = 2 THEN
+        INSERT INTO "sap.tm.trp.db.filter::t_equipment_filter_equipment"(EQUIPMENT_FILTER_ID, EQUIPMENT_GROUP_ID, RESOURCE_CATEGORY)
+        SELECT :FILTER_ID, A.ID, :RESOURCE_CATEGORY_ID FROM :ITEMS A
+        join "sap.tm.trp.db.systemmanagement::v_equipment_group_id_auth" B
+        on A.ID = B.equipment_group_id; --authorization check;
+    END IF;
+END;

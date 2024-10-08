@@ -1,0 +1,48 @@
+schema="SAP_TM_TRP";
+query=" SELECT DISTINCT b.RUN_ID,
+              c.RULE_ID,
+              c.TU_ID,
+              c.CUR_LOCATION_ID,
+              d.NAME AS CUR_LOCATION_NAME,
+              c.PRE_LOCATION_ID,
+              e.NAME AS PRE_LOCATION_NAME, 
+              c.POL,
+              f.NAME AS POL_NAME,
+              c.POD,
+              g.NAME AS POD_NAME,
+              j.NAME AS SHIPPER_NAME,
+              k.NAME AS CONSIGNEE_NAME,
+              c.RESOURCE_TYPE,
+              c.QUANTITY,
+              h.NAME AS SOURCE_LOCATION_NAME,--tmp.SHIPPER_LOCATION_NAME,
+              I.NAME AS DESTINATION_LOCATION_NAME,--tmp.CONSIGNEE_LOCATION_NAME,
+              c.DATE,
+              l.DESC AS EXECUTION_STATUS,
+              c.CUR_DATE,
+              c.PRE_DATE,
+              c.STREETTURN_TU_ID,
+              'Sent to TM' AS FINALIZE_RESULT,
+              2 AS IS_SUCCESS
+       FROM \"sap.tm.trp.db.pickupreturn::cv_role_check_location_rule\"  a 
+       INNER JOIN \"sap.tm.trp.db.pickupreturn::t_location_rule_running_log\" b  ON a.ID = b.RULE_ID
+       INNER JOIN \"sap.tm.trp.db.pickupreturn::v_location_rule_assign_result\" c ON b.RULE_ID = c.RULE_ID  and b.RUN_ID=c.RUN_ID
+       LEFT JOIN \"sap.tm.trp.db.semantic.location::v_all_location\" d
+       ON c.CUR_LOCATION_ID= d.ID
+       LEFT JOIN \"sap.tm.trp.db.semantic.location::v_all_location\"  e ON c.PRE_LOCATION_ID= e.ID
+       LEFT JOIN \"sap.tm.trp.db.semantic.location::v_all_location\"  f ON c.POL= f.ID
+       LEFT JOIN \"sap.tm.trp.db.semantic.location::v_all_location\"  g ON c.POD= g.ID
+       LEFT JOIN \"sap.tm.trp.db.semantic.location::v_all_location\"  h ON c.SOURCE_LOCATION_ID= h.ID
+       LEFT JOIN \"sap.tm.trp.db.semantic.location::v_all_location\"  i ON c.DESTINATION_LOCATION_ID= i.ID
+       LEFT JOIN (SELECT DISTINCT ID,NAME FROM \"sap.tm.trp.db.semantic.common::v_partner\") j ON (c.SHIPPER_ID = j.ID)
+       LEFT JOIN (SELECT DISTINCT ID,NAME FROM \"sap.tm.trp.db.semantic.common::v_partner\") k ON (c.CONSIGNEE_ID = k.ID)
+       LEFT JOIN \"sap.tm.trp.db.semantic.order::v_tor_execution_status_t\" l ON (c.EXECUTION_STATUS_CODE = l.CODE)";
+       
+depends_on_table=[
+    "sap.tm.trp.db.pickupreturn::t_location_rule_running_log"
+   ];
+   
+depends_on_view=["sap.tm.trp.db.semantic.common::v_partner",
+                 "sap.tm.trp.db.semantic.location::v_all_location",
+                 "sap.tm.trp.db.pickupreturn::cv_role_check_location_rule",
+                 "sap.tm.trp.db.pickupreturn::v_location_rule_assign_result",
+                 "sap.tm.trp.db.semantic.order::v_tor_execution_status_t"];

@@ -1,0 +1,24 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::p_basic_node_update" ( ) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+
+CALL "sap.tm.trp.db.supplydemand.instant.datasource::p_resource"(RESOURCE);
+CALL "sap.tm.trp.db.supplydemand.instant.datasource::p_transportation_unit"(TU);
+CALL "sap.tm.trp.db.supplydemand.instant.datasource::p_resource_downtime"(RES_DOWNTIME);
+CALL "sap.tm.trp.db.supplydemand.instant.datasource::p_resource_on_off_hire"(RES_ON_OFF_HIRE);
+CALL "sap.tm.trp.db.supplydemand.instant.datasource::p_logic_del"(DEL_DATA);
+
+DATASET = SELECT * FROM :RESOURCE
+UNION SELECT * FROM :TU
+UNION SELECT * FROM :RES_DOWNTIME
+UNION SELECT * FROM :RES_ON_OFF_HIRE
+UNION SELECT * FROM :DEL_DATA;
+
+UPSERT "sap.tm.trp.db.supplydemand.instant::t_basic_node" SELECT * FROM :DATASET;
+
+CALL "sap.tm.trp.db.supplydemand.instant::p_basic_node_attribute"(:DATASET);
+
+END;

@@ -1,0 +1,43 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_lease_contract_type_upload" ( 
+    IN LEASE_CONTRACT_TYPE_INPUT "sap.tm.trp.db.massupload::tt_lease_contract_type_upload",  
+    IN CONNECTION_ID VARCHAR(100)
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_TRP"
+  AS
+BEGIN
+   --Declarations   
+    DECLARE VAR_CURRENT_UTCTIMESTAMP TIMESTAMP := CURRENT_UTCTIMESTAMP;
+    
+    ---Get Source data
+    SOURCE = 
+			 SELECT LEASE_CONTRACT_TYPE, DESCRIPTION, ROW_INDEX
+			 FROM :LEASE_CONTRACT_TYPE_INPUT;
+			 
+    					
+    --Delete the records in temporary table in case there're already some uploaded data with same db connection
+    DELETE FROM "sap.tm.trp.db.massupload::t_lease_contract_type_temporary" 
+    WHERE CONNECTION_ID = :CONNECTION_ID;
+    
+    
+    --Add records to temporary table
+    INSERT INTO "sap.tm.trp.db.massupload::t_lease_contract_type_temporary"
+    (ROW_NUM,TYPE_ID,LEASE_CONTRACT_TYPE,DESCRIPTION,ACTION_TIME,CONNECTION_ID,IND_UPD)
+    SELECT
+       LCT.ROW_INDEX AS ROW_INDEX,
+       LC.ID AS ID,
+       LCT.LEASE_CONTRACT_TYPE,
+       LCT.DESCRIPTION,
+       :VAR_CURRENT_UTCTIMESTAMP AS TIMESTAMPIN,
+       :CONNECTION_ID AS CONNECTION_ID,
+       (CASE
+       WHEN LC.ID IS NULL
+       THEN '0'
+       ELSE '1'
+       END) AS IND_UPD  
+      FROM :SOURCE AS LCT 
+      LEFT OUTER JOIN  "sap.tm.trp.db.leasecontract::t_lease_contract_type" AS LC
+      ON LCT.LEASE_CONTRACT_TYPE = LC.CODE;	
+    
+END;

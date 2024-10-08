@@ -1,0 +1,43 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_query_quantity_based_storage_cost_info"(
+   IN COST_MODEL_ID BIGINT,
+   IN QUANTITY_BASED_INFO "sap.tm.trp.db.costmodel::tt_query_quantity_based_cost_info",
+   OUT COST_INFO_OUT "sap.tm.trp.db.costmodel::tt_query_quantity_based_cost_info"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+   QUANTITY_BASED_DATASET_INFO_IN_DB = 
+            SELECT T2.COST_DATASET_ID, T2.RESOURCE_TYPE, T2.LOCATION_NAME,
+		    T2.FREE_POOL_TYPE,T2.START_AT,T2.START_TIME,
+		    T2.THRESHOLD_FROM
+		    FROM "sap.tm.trp.db.costmodel::t_cost_model_dataset" T1
+		    --INNER JOIN "sap.tm.trp.db.costmodel::t_quantity_based_storage_cost" T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID)
+		    INNER JOIN "sap.tm.trp.db.costmodel::cv_quantity_cost_model_resource_type_explode"(PLACEHOLDER."$$IP_COST_DATASET_ID$$"=>0,PLACEHOLDER."$$IP_COST_MODEL_ID$$"=>:COST_MODEL_ID) T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID)		    
+		    WHERE T1.COST_MODEL_ID = :COST_MODEL_ID;
+  
+   --Note: As discussed with Kevin, the input param :QUANTITY_BASED_INFO will not contain the * value for any column.
+    COST_INFO_OUT = 
+		SELECT T3.RESOURCE_TYPE, T3.LOCATION_NAME,
+		T3.FREE_POOL_TYPE,T3.START_AT,
+		T3.START_TIME,T3.THRESHOLD_FROM
+		FROM :QUANTITY_BASED_INFO T1
+		LEFT OUTER JOIN
+		(
+		    SELECT DISTINCT T2.RESOURCE_TYPE, T2.LOCATION_NAME,
+		    T2.FREE_POOL_TYPE,T2.START_AT,T2.START_TIME,
+		    T2.THRESHOLD_FROM
+		    FROM :QUANTITY_BASED_DATASET_INFO_IN_DB T2
+		)T3 ON (
+		(T1.RESOURCE_TYPE = T3.RESOURCE_TYPE OR T3.RESOURCE_TYPE = '*')
+		AND (T1.LOCATION_NAME = T3.LOCATION_NAME OR T3.LOCATION_NAME = '*')
+		AND T1.FREE_POOL_TYPE = T3.FREE_POOL_TYPE  --free_pool_type: daily, weekly, monthly could not be * 
+		AND T1.START_AT = T3.START_AT --could not be *
+		AND T1.START_TIME = T3.START_TIME --could not be *
+		AND T1.THRESHOLD_FROM = T3.THRESHOLD_FROM)--could not be *
+		WHERE T3.RESOURCE_TYPE IS NULL;
+	
+   
+END;

@@ -1,0 +1,100 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant.datasource::p_transportation_unit" ( 
+	--IN DELTA_FLAG CHAR(1),
+	OUT OUTPUT "SAP_TM_TRP"."sap.tm.trp.db.supplydemand.instant::t_basic_node"
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+
+DECLARE MAX_UPDATE_TIME TIMESTAMP;
+DECLARE tolerance VARCHAR(500);
+SELECT MAX(UPDATE_TIME) INTO MAX_UPDATE_TIME FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" WHERE SOURCE_TYPE = 'TU_FROM' OR SOURCE_TYPE = 'TU_TO' OR SOURCE_TYPE = 'TU';
+SELECT CASE WHEN VALUE='X' THEN '-3' ELSE VALUE END AS tolerance INTO tolerance FROM "sap.tm.trp.db.systemmanagement.customization::t_general_parameters" 
+WHERE NAME='INSTANT_SD_TOLERANCE';
+
+MAST_DATA=SELECT *, CASE
+			WHEN NODE = 'MAIN_CARGO_IN_FROM_TM' OR NODE = 'EMPTY_PICKUP' OR NODE = 'INLAND_EMPTY_RP_OUT' OR NODE = 'MARITIME_EMPTY_RP_OUT' THEN 'TU_FROM'
+			WHEN NODE = 'MAIN_CARGO_OUT_FROM_TM' OR NODE = 'EMPTY_RETURN' OR NODE = 'INLAND_EMPTY_RP_IN' OR NODE = 'MARITIME_EMPTY_RP_IN'  THEN 'TU_TO'
+			ELSE 'TU'
+		END AS SOURCE_TYPE,
+		CASE
+			WHEN NODE = 'MAIN_CARGO_IN_FROM_TM' OR NODE = 'EMPTY_PICKUP' OR NODE = 'INLAND_EMPTY_RP_OUT' OR NODE = 'MARITIME_EMPTY_RP_OUT' THEN 'DEMAND'
+			WHEN NODE = 'MAIN_CARGO_OUT_FROM_TM' OR NODE = 'EMPTY_RETURN' OR NODE = 'INLAND_EMPTY_RP_IN' OR NODE = 'MARITIME_EMPTY_RP_IN'  THEN 'SUPPLY'
+			ELSE ''
+		END AS OUTPUT_KEY
+		FROM (SELECT DISTINCT		
+			TO_TIMESTAMP(T1.CHANGED_ON) AS CHANGED_ON,
+			t2.DB_KEY AS TOR_ITEM_KEY,T2.RESOURCE_TYPE,T2.QUA_PCS_VAL,t2.RESOURCE_CATEGORY,
+			stp.LOCATION_ID, TO_TIMESTAMP(stp.SEL_TIME) AS SEL_TIME,
+			CASE 
+		--main cargo TU should be considered as demand at source loaction only when EP is not requested by customer
+		WHEN (t1.MOVEMENT_CAT = '' AND trq.TRQ_CAT = '03' AND trq_itm.PROVISION_REQ = ''    AND stp.STOP_ROLE = 'TF') THEN 'MAIN_CARGO_IN_FROM_TM'
+		--main cargo TU should be considered as supply at dest loaction only when ER is not requested by customer
+		WHEN (t1.MOVEMENT_CAT = '' AND trq.TRQ_CAT = '03' AND trq_itm.EMPTY_RETURN_REQ = '' AND stp.STOP_ROLE = 'TL') THEN 'MAIN_CARGO_OUT_FROM_TM'
+		--Emepty provisioning TU should be considered as demand at source location
+		WHEN (t1.MOVEMENT_CAT = 'EP' AND stp.STOP_ROLE = 'TF') THEN 'EMPTY_PICKUP'
+		--Emepty Return TU should be considered as supply at dest location
+		WHEN (t1.MOVEMENT_CAT = 'ER' AND stp.STOP_ROLE = 'TL') THEN 'EMPTY_RETURN'
+		--Repositioning TU should be considered as demand at source location
+		WHEN (t1.MOVEMENT_CAT = 'RP' AND stp.STOP_ROLE = 'TF' AND stage.DB_KEY IS NULL) THEN 'INLAND_EMPTY_RP_OUT'		
+		WHEN (t1.MOVEMENT_CAT = 'RP' AND stp.STOP_ROLE = 'TF' AND stage.DB_KEY IS NOT NULL) THEN 'MARITIME_EMPTY_RP_OUT'
+		--Repositioning TU should be considered as supply at dest location
+		WHEN (t1.MOVEMENT_CAT = 'RP' AND stp.STOP_ROLE = 'TL' AND stage.DB_KEY IS NULL) THEN 'INLAND_EMPTY_RP_IN'
+		WHEN (t1.MOVEMENT_CAT = 'RP' AND stp.STOP_ROLE = 'TL' AND stage.DB_KEY IS NOT NULL) THEN 'MARITIME_EMPTY_RP_IN'
+		--uncategorized TU should be removed from the harmonized table		
+		--ELSE 'UNCATEGORIZED'
+		END AS NODE
+		FROM 	   "sap.tm.trp.db.semantic.order::v_transportation_unit" t1 
+		INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_item"  t2 ON (t2.TU_KEY = t1.DB_KEY) 
+		INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop"  stp 
+		--the departured and unloaded stauts should be considered at source and dest location accordingly
+		ON (stp.TU_KEY = t1.DB_KEY AND ((stp.STOP_ROLE = 'TF' AND DEPARTURED = 0) OR (stp.STOP_ROLE = 'TL' AND UNLOADED = 0)))
+		--populate the ocean stage
+		LEFT  JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stage" stage ON (stage.TU_KEY = t1.DB_KEY AND stage.MOT_CAT = '3')
+		--populate the TRQ relevant information
+		LEFT  JOIN "sap.tm.trp.db.semantic.order::v_customer_order" trq on (t2.REF_TRQ_ROOT_KEY = trq.DB_KEY)
+		LEFT  JOIN "sap.tm.trp.db.semantic.order::v_customer_order_item"  trq_itm ON (t2.REF_TRQ_ITEM_KEY = trq_itm.DB_KEY and trq_itm.LEADING_ITEM_KEY = '00000000000000000000000000000000')
+		WHERE t1.TOR_CAT = 'TU'
+		AND (:MAX_UPDATE_TIME IS NULL OR TO_TIMESTAMP(T1.CHANGED_ON) > add_days(:MAX_UPDATE_TIME,:tolerance)) --change  
+		)
+		WHERE NODE IS NOT NULL;
+
+OUTPUT = 
+SELECT 
+		'' AS CLIENT,
+		'0000' AS COMPANY_CODE,
+		TOR_ITEM_KEY AS SOURCE_KEY,
+		SOURCE_TYPE,
+		NODE,
+		LOCATION_ID,
+		RESOURCE_CATEGORY AS RESOURCE_GROUP,
+		RESOURCE_TYPE,
+		OUTPUT_KEY,
+		QUA_PCS_VAL AS QUANTITY,
+		CHANGED_ON AS UPDATE_TIME,
+		SEL_TIME AS OCCURRED_TIME,
+		'' DELETE_FLAG
+	FROM
+	(
+		 SELECT T1.* FROM :MAST_DATA T1
+		WHERE (:MAX_UPDATE_TIME IS NULL OR T1.CHANGED_ON > :MAX_UPDATE_TIME) --delta support
+		 UNION
+		--mismacthed records
+		SELECT T1.* FROM :MAST_DATA T1
+		INNER JOIN "sap.tm.trp.db.supplydemand.instant::t_basic_node" harmize_tab
+		ON harmize_tab.SOURCE_KEY=T1.TOR_ITEM_KEY
+		WHERE harmize_tab.DELETE_FLAG <> 'X' 
+		AND harmize_tab.UPDATE_TIME < T1.CHANGED_ON
+		AND (harmize_tab.SOURCE_TYPE = 'TU_FROM' OR harmize_tab.SOURCE_TYPE = 'TU_TO' OR harmize_tab.SOURCE_TYPE = 'TU')
+		AND T1.CHANGED_ON < :MAX_UPDATE_TIME
+		UNION 
+		--missed records
+		SELECT T1.* FROM :MAST_DATA T1
+		WHERE (T1.CHANGED_ON < :MAX_UPDATE_TIME)
+		AND NOT EXISTS (SELECT 1 FROM "sap.tm.trp.db.supplydemand.instant::t_basic_node" harmize_tab
+						WHERE harmize_tab.SOURCE_KEY=T1.TOR_ITEM_KEY
+						AND (harmize_tab.SOURCE_TYPE = 'TU_FROM' OR harmize_tab.SOURCE_TYPE = 'TU_TO' OR harmize_tab.SOURCE_TYPE = 'TU'))
+	);
+END;

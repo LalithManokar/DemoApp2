@@ -1,0 +1,22 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+  {name = "ID";sqlType =BIGINT; nullable = false;unique = true;},
+  {name = "CODE";sqlType =VARCHAR; length = 20; nullable = true;unique = true;},
+  {name = "RESOURCE_CATEGORY_TYPE"; sqlType = VARCHAR; length = 3; },
+  {name = "RESOURCE_GROUP_TYPE"; sqlType = VARCHAR; length = 2;},
+  {name = "RESOURCE_CLASS"; sqlType = VARCHAR; length = 2;},
+  {name = "ENABLE_FLAG"; sqlType = SMALLINT; },
+  {name = "LEASE_CONTRACT_FLAG"; sqlType = INTEGER;},
+  {name = "BASE_RESOURCE_TYPE"; sqlType = VARCHAR; length = 20;},
+  {name = "CREATE_BY"; sqlType = BIGINT; comment="create user id";},
+  {name = "CREATE_AT"; sqlType = TIMESTAMP;},
+  {name = "LAST_MODIFIED_BY"; sqlType = BIGINT;},
+  {name = "LAST_MODIFIED_AT"; sqlType = TIMESTAMP;}
+  
+];
+
+table.indexes = [
+  {name = "RESOURCE_CATEGORY_SETTING_CODE_INDEX"; unique = true; indexColumns = ["CODE"];}
+];
+table.primaryKey.pkcolumns = ["ID"];

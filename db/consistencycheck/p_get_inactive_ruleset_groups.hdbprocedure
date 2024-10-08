@@ -1,0 +1,146 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.consistencycheck::p_get_inactive_ruleset_groups" (
+  OUT INACTIVE_PR_RULESETS TABLE (
+    ID BIGINT,
+    RULE_NAME VARCHAR(200)  ,
+    SCHEDULE_TYPE VARCHAR(500)
+   )
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+/***********************************************************
+	Getting inactive Pickup and Return Rulesets for uploading 
+ ***********************************************************/
+     INACTIVE_FETCH_ALL_RULESETS = 	    
+			SELECT ID, RULE_NAME,'FETCH_TU' AS SCHEDULE_TYPE				
+				FROM ( 
+				SELECT 
+				DISTINCT A.GROUP_ID AS ID,
+                C.NAME as RULE_NAME,
+                A.EXPIRY_TIME,	
+	            G.PLANNED_TIME AS NEXT_EXECUTION_TIME
+               FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_group_schedule" A
+               INNER JOIN "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group" C 
+               ON (A.GROUP_ID = C.ID AND C.JOB_PROCESS=1)
+               LEFT OUTER JOIN (SELECT MODEL_ID, PLANNED_TIME
+				 FROM "sap.tm.trp.db.job::t_job_schedule" A 
+				 INNER JOIN "_SYS_XS"."JOB_LOG" B 
+				 ON A.SCHEDULE_ID = B.ID
+				 WHERE A.SCHEDULE_TYPE = 'FETCH_TU' AND (B.STATUS = 'SCHEDULED' OR B.STATUS = 'RUNNING')) G 
+                 ON A.GROUP_ID = G.MODEL_ID 
+                )
+             WHERE NEXT_EXECUTION_TIME IS NULL AND  EXPIRY_TIME >= CURRENT_TIMESTAMP;
+            
+      INACTIVE_FETCH_SCHEDULE_RULESETS = 	    
+             SELECT ID, RULE_NAME,'FETCH_TU' AS SCHEDULE_TYPE				
+               FROM ( 
+               SELECT 
+               DISTINCT A.GROUP_ID AS ID,
+                       C.NAME as RULE_NAME,
+                       A.EXPIRY_TIME,	
+                     G.PLANNED_TIME AS NEXT_EXECUTION_TIME
+                      FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_group_schedule" A
+                      INNER JOIN "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group" C 
+                      ON (A.GROUP_ID = C.ID AND C.JOB_PROCESS=1)
+                      LEFT OUTER JOIN (SELECT MODEL_ID, PLANNED_TIME
+                FROM "sap.tm.trp.db.job::t_job_schedule" A 
+                INNER JOIN "_SYS_XS"."JOB_LOG" B 
+                ON A.SCHEDULE_ID = B.ID
+                WHERE A.SCHEDULE_TYPE = 'FETCH_TU' AND B.STATUS = 'SCHEDULED') G 
+                        ON A.GROUP_ID = G.MODEL_ID 
+                       )
+                    WHERE NEXT_EXECUTION_TIME <= CURRENT_TIMESTAMP AND  EXPIRY_TIME >= CURRENT_TIMESTAMP;
+
+
+      INACTIVE_OPT_ALL_RULESETS = 	    
+			SELECT ID, RULE_NAME,'OPTIMIZE_TU' AS SCHEDULE_TYPE				
+				FROM ( 
+				SELECT 
+				DISTINCT A.GROUP_ID AS ID,
+                C.NAME as RULE_NAME,
+                A.EXPIRY_TIME,	
+	            G.PLANNED_TIME AS NEXT_EXECUTION_TIME
+               FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_group_schedule" A
+               INNER JOIN "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group" C 
+               ON (A.GROUP_ID = C.ID AND C.JOB_PROCESS=2)
+               LEFT OUTER JOIN (SELECT MODEL_ID, PLANNED_TIME
+				 FROM "sap.tm.trp.db.job::t_job_schedule" A 
+				 INNER JOIN "_SYS_XS"."JOB_LOG" B 
+				 ON A.SCHEDULE_ID = B.ID
+				 WHERE A.SCHEDULE_TYPE = 'OPTIMIZE_TU' AND (B.STATUS = 'SCHEDULED' OR B.STATUS = 'RUNNING')) G 
+                 ON A.GROUP_ID = G.MODEL_ID 
+                )
+             WHERE NEXT_EXECUTION_TIME IS NULL AND  EXPIRY_TIME >= CURRENT_TIMESTAMP;    
+
+             
+      INACTIVE_OPT_SCHEDULED_RULESETS = 	    
+             SELECT ID, RULE_NAME,'OPTIMIZE_TU' AS SCHEDULE_TYPE				
+               FROM ( 
+               SELECT 
+               DISTINCT A.GROUP_ID AS ID,
+                       C.NAME as RULE_NAME,
+                       A.EXPIRY_TIME,	
+                     G.PLANNED_TIME AS NEXT_EXECUTION_TIME
+                      FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_group_schedule" A
+                      INNER JOIN "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group" C 
+                      ON (A.GROUP_ID = C.ID AND C.JOB_PROCESS=2)
+                      LEFT OUTER JOIN (SELECT MODEL_ID, PLANNED_TIME
+                FROM "sap.tm.trp.db.job::t_job_schedule" A 
+                INNER JOIN "_SYS_XS"."JOB_LOG" B 
+                ON A.SCHEDULE_ID = B.ID
+                WHERE A.SCHEDULE_TYPE = 'OPTIMIZE_TU' AND B.STATUS = 'SCHEDULED') G 
+                        ON A.GROUP_ID = G.MODEL_ID 
+                       )
+                    WHERE NEXT_EXECUTION_TIME <= CURRENT_TIMESTAMP AND  EXPIRY_TIME >= CURRENT_TIMESTAMP;    
+ 
+                    
+      INACTIVE_UPDATE_ALL_RULESETS = 	    
+        SELECT ID, RULE_NAME,'FINALIZE_TU' AS SCHEDULE_TYPE				
+          FROM ( 
+          SELECT 
+          DISTINCT A.GROUP_ID AS ID,
+                  C.NAME as RULE_NAME,
+                  A.EXPIRY_TIME,	
+                G.PLANNED_TIME AS NEXT_EXECUTION_TIME
+                FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_group_schedule" A
+                INNER JOIN "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group" C 
+                ON (A.GROUP_ID = C.ID AND C.JOB_PROCESS=3)
+                LEFT OUTER JOIN (SELECT MODEL_ID, PLANNED_TIME
+          FROM "sap.tm.trp.db.job::t_job_schedule" A 
+          INNER JOIN "_SYS_XS"."JOB_LOG" B 
+          ON A.SCHEDULE_ID = B.ID
+          WHERE A.SCHEDULE_TYPE = 'FINALIZE_TU' AND (B.STATUS = 'SCHEDULED' OR B.STATUS = 'RUNNING')) G 
+                  ON A.GROUP_ID = G.MODEL_ID 
+                  )
+              WHERE NEXT_EXECUTION_TIME IS NULL AND  EXPIRY_TIME >= CURRENT_TIMESTAMP;   
+
+      INACTIVE_UPDATE_SCHEDULED_RULESETS = 	    
+             SELECT ID, RULE_NAME,'FINALIZE_TU' AS SCHEDULE_TYPE				
+               FROM ( 
+               SELECT 
+               DISTINCT A.GROUP_ID AS ID,
+                       C.NAME as RULE_NAME,
+                       A.EXPIRY_TIME,	
+                     G.PLANNED_TIME AS NEXT_EXECUTION_TIME
+                      FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_group_schedule" A
+                      INNER JOIN "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group" C 
+                      ON (A.GROUP_ID = C.ID AND C.JOB_PROCESS=3)
+                      LEFT OUTER JOIN (SELECT MODEL_ID, PLANNED_TIME
+                FROM "sap.tm.trp.db.job::t_job_schedule" A 
+                INNER JOIN "_SYS_XS"."JOB_LOG" B 
+                ON A.SCHEDULE_ID = B.ID
+                WHERE A.SCHEDULE_TYPE = 'FINALIZE_TU' AND B.STATUS = 'SCHEDULED') G 
+                        ON A.GROUP_ID = G.MODEL_ID 
+                       )
+                    WHERE NEXT_EXECUTION_TIME <= CURRENT_TIMESTAMP AND  EXPIRY_TIME >= CURRENT_TIMESTAMP;   
+        
+      INACTIVE_PR_RULESETS = SELECT * FROM :INACTIVE_FETCH_ALL_RULESETS UNION
+                             SELECT * FROM :INACTIVE_FETCH_SCHEDULE_RULESETS UNION
+                             SELECT * FROM :INACTIVE_OPT_ALL_RULESETS UNION
+                             SELECT * FROM :INACTIVE_OPT_SCHEDULED_RULESETS UNION
+                             SELECT * FROM :INACTIVE_UPDATE_ALL_RULESETS UNION
+                             SELECT * FROM :INACTIVE_UPDATE_SCHEDULED_RULESETS;
+   
+END;

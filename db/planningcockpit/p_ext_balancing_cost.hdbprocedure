@@ -1,0 +1,117 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_ext_balancing_cost"    
+    (
+     IN SIMULATION_ID BIGINT,      
+     IN SCENARIO_ID  BIGINT,  
+     OUT MESSAGE VARCHAR(200),
+     OUT MODIFIED_BY VARCHAR(60) ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"   
+	AS
+BEGIN
+   
+    DECLARE USER_ID BIGINT;
+    DECLARE USER_NAME VARCHAR(200);    
+    DECLARE V_TIMESTAMP_START  DATETIME  := CURRENT_UTCTIMESTAMP;
+    DECLARE V_LOCK_SESSION_ID  VARCHAR(200);  
+    DECLARE V_LOCK_USER_ID  BIGINT;  
+    DECLARE V_LOCK_LAST_MODIFYED_ON  TIMESTAMP; 
+    DECLARE V_PLAN_STATUS INTEGER;
+    DECLARE V_PLAN_MODEL_ID BIGINT;
+    DECLARE V_COST_MODEL_ID BIGINT := 0;
+    DECLARE V_SUCCESS_FLAG_L  INT;
+    DECLARE SOLVER_RT_CODE VARCHAR(30);  
+    DECLARE V_STORAGE_COST DOUBLE;  
+    DECLARE CURRENCY VARCHAR(30);
+    
+    CALL "sap.tm.trp.db.planningcockpit::p_ext_lock_simulation_plan_by_id"(:SIMULATION_ID, V_LOCK_SESSION_ID, V_LOCK_USER_ID, V_LOCK_LAST_MODIFYED_ON);
+    
+    SELECT B.PLAN_STATUS,B.SD_PLAN_ID 
+      INTO V_PLAN_STATUS, V_PLAN_MODEL_ID
+      FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" B
+     WHERE B.ID = :SIMULATION_ID; 
+     
+    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+ 	SELECT USERNAME INTO USER_NAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";   
+             
+    IF :V_LOCK_USER_ID = :USER_ID AND 
+       :V_LOCK_LAST_MODIFYED_ON IS NOT NULL THEN  
+             
+               IF V_PLAN_STATUS=1 THEN       
+                   MESSAGE:='MSG_ERROR_FINALIZED'; 
+                   MODIFIED_BY :=USER_NAME; 
+               ELSE
+               
+               -- invoke solver                                                 
+               CALL "sap.tm.trp.db.planningcockpit::p_ext_call_solver"(
+                        :SIMULATION_ID, :SCENARIO_ID,:V_PLAN_MODEL_ID,
+                        out_route_res, MESSAGE,SOLVER_RT_CODE); 
+
+               DELETE FROM "sap.tm.trp.db.planningcockpit::t_balancing_list"
+               WHERE REL_SCENARIO_ID=:SCENARIO_ID;
+                                   
+               IF  :MESSAGE <> 'MSG_ERROR_SOLVER_FAILED' THEN
+
+               CALL "sap.tm.trp.db.planningcockpit::p_get_currenty_of_simulation_plan"(
+                       :SIMULATION_ID,CURRENCY);
+                                
+               INSERT INTO "sap.tm.trp.db.planningcockpit::t_balancing_list"
+                      (ID,CODE,
+                       FROM_LOC,TO_LOC,EQUIP_TYPE,QUANTITY,UOM,COST,CURRENCY,START_TIME,END_TIME,
+                       REL_SCENARIO_ID,CREATED_BY,CREATED_ON)
+                       
+               SELECT "sap.tm.trp.db.planningcockpit::s_balancing_list".NEXTVAL ,'NA', 
+                       FROM_LOCATION, TO_LOCATION,CONTAINER_TYPE,QUANTITY,'PCs',TOTAL_COST, :CURRENCY,
+                       FROM_TIME, TO_TIME, :SCENARIO_ID,:USER_ID, :V_TIMESTAMP_START
+                       FROM :out_route_res;   
+               
+               -- comment out the procedure until it's stable
+               V_STORAGE_COST := 0;
+               --CALL get storage cost for the scenario:           
+               CALL "sap.tm.trp.db.planningcockpit::p_get_storage_cost_for_scenario_new" (:SIMULATION_ID,:SCENARIO_ID, V_STORAGE_COST);
+                
+                
+               UPDATE "sap.tm.trp.db.planningcockpit::t_scenario"
+                  SET  BALANCING_COST = (SELECT IFNULL(SUM(COST),0) FROM "sap.tm.trp.db.planningcockpit::t_balancing_list" 
+                                         WHERE REL_SCENARIO_ID=:SCENARIO_ID),
+                       CAL_BALCOST_MEG = :MESSAGE,
+                       STORAGE_COST = :V_STORAGE_COST                                  
+               WHERE  ID=:SCENARIO_ID;  
+      
+               --update lock  
+               UPDATE "sap.tm.trp.db.planningcockpit::t_lock"
+                  SET USER_ID= :USER_ID ,
+                 LAST_MODIFYED_ON = :V_TIMESTAMP_START                     
+                WHERE SIMULATION_ID= :SIMULATION_ID;  
+               /*
+               -- there is virtual activity for penalty cost even if no reposition activity can be proposed
+               ELSEIF :MESSAGE = 'MSG_BALANCE_INFEASIBLE' OR :MESSAGE = 'MSG_ALREADY_OPTIMAL' THEN 
+               
+               --update balance cost to 0 
+               UPDATE "sap.tm.trp.db.planningcockpit::t_scenario"
+                  SET  BALANCING_COST =  0,                  
+                       CAL_BALCOST_MEG = :MESSAGE                                    
+               WHERE  ID= :SCENARIO_ID;                
+
+               --update lock  
+               UPDATE "sap.tm.trp.db.planningcockpit::t_lock"
+                  SET USER_ID= :USER_ID ,
+                 LAST_MODIFYED_ON = :V_TIMESTAMP_START                     
+               WHERE SIMULATION_ID= :SIMULATION_ID; 
+              */ 
+               ELSE
+               
+               UPDATE "sap.tm.trp.db.planningcockpit::t_scenario"
+                  SET  CAL_BALCOST_MEG = :MESSAGE                                   
+               WHERE  ID= :SCENARIO_ID; 
+                                    
+               END IF;
+               MODIFIED_BY := USER_NAME;  
+                         
+           END IF;  
+    ELSE     
+         MESSAGE:='MSG_ERROR_LOCKED';
+         SELECT IFNULL(MAX(USERNAME),'DEACTIVATED USER') INTO MODIFIED_BY FROM "sap.tm.trp.db.systemmanagement.user::t_user" WHERE ID=:V_LOCK_USER_ID ;         
+    END IF;
+
+END

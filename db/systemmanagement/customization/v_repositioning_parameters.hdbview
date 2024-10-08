@@ -1,0 +1,13 @@
+schema = "SAP_TM_TRP";
+query = "SELECT T1.ID,
+                T1.KEY AS PARAMETER_CODE,
+                IFNULL(T2.DESC,T1.DESC) AS PARAMETER_DESC                
+         FROM \"sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters\" T1 
+         LEFT OUTER JOIN (SELECT A.* FROM \"sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters_t\" A
+                          INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" B
+                          ON (A.SPRAS = B.SPRAS)) AS T2
+         ON (T1.ID = T2.ID )";
+
+depends_on_table = ["sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters",
+                    "sap.tm.trp.db.systemmanagement.customization::t_repositioning_config_parameters_t"];
+depends_on_view = ["sap.tm.trp.db.semantic.common::v_lang_code"];                              

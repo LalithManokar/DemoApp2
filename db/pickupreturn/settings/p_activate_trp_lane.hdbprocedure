@@ -1,0 +1,12 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.settings::p_activate_trp_lane" ()
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_TRP
+   --READS SQL DATA 
+   AS
+BEGIN
+
+	DECLARE ERROR_CODE VARCHAR(500);
+    CALL "sap.tm.trp.db.systemmanagement.customization::p_set_general_parameter"('LANE_TRP','X',ERROR_CODE);
+    
+END

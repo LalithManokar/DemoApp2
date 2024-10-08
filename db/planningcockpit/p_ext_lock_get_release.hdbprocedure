@@ -1,0 +1,99 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_ext_lock_get_release" (
+    --IN SESSION_ID VARCHAR(200),
+    IN SIMULATION_ID BIGINT,
+    IN FLG INT, --1 lock   2 release
+    OUT MESSAGE VARCHAR(200),
+    OUT MODIFIED_BY VARCHAR(60)
+    )
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE V_COUNT INT;
+    DECLARE V_TIMESTAMP_START  DATETIME  := CURRENT_UTCTIMESTAMP;
+    DECLARE USER_ID BIGINT;
+    DECLARE USER_NAME VARCHAR(60);
+    DECLARE V_LOCK_SESSION_ID  VARCHAR(200);
+    DECLARE V_LOCK_USER_ID  BIGINT;
+    DECLARE V_LOCK_LAST_MODIFYED_ON  TIMESTAMP;
+    DECLARE V_PLAN_STATUS INTEGER;
+
+    CALL "sap.tm.trp.db.planningcockpit::p_ext_lock_simulation_plan_by_id"(:SIMULATION_ID, V_LOCK_SESSION_ID, V_LOCK_USER_ID, V_LOCK_LAST_MODIFYED_ON);
+
+    SELECT B.PLAN_STATUS
+      INTO V_PLAN_STATUS
+      FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" B
+     WHERE B.ID=:SIMULATION_ID;
+
+    SELECT COUNT(*) INTO V_COUNT FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan"
+    WHERE ID = :SIMULATION_ID;
+
+    IF V_COUNT=0 THEN  MESSAGE := 'MSG_ERROR_NODATA';
+    ELSE
+         CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+ 		 SELECT USERNAME INTO USER_NAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+ 		
+         IF FLG=1 THEN
+
+                 -- plan is locked and locked by the same user
+                 IF :V_LOCK_LAST_MODIFYED_ON IS NOT NULL AND :V_LOCK_USER_ID = :USER_ID THEN
+
+                     UPDATE "sap.tm.trp.db.planningcockpit::t_lock"
+                         SET USER_ID= :USER_ID,
+                             LAST_MODIFYED_ON = :V_TIMESTAMP_START
+                       WHERE SIMULATION_ID=:SIMULATION_ID;
+                     
+                     -- only report warning if same user record exist within the time out range
+                     -- there are situations that users don't click 'RELEASE' button and just exit or crash
+                     -- then the modified time would not be cleaned and we would report false warning if 
+                     -- no following processing
+                     IF (SECONDS_BETWEEN (:V_LOCK_LAST_MODIFYED_ON,:V_TIMESTAMP_START) < 60*20) THEN
+                      MESSAGE := 'MSG_PLAN_SELF_LOCKED';
+                     ELSE 
+                      MESSAGE := 'MSG_SUCCESS_STATUS';                    
+                     END IF;
+                     MODIFIED_BY := USER_NAME;
+
+                 ELSEIF :V_LOCK_LAST_MODIFYED_ON IS NULL OR  --lock is released
+                      (SECONDS_BETWEEN (:V_LOCK_LAST_MODIFYED_ON,:V_TIMESTAMP_START)>60*20) --out of time
+                 THEN
+
+                      UPDATE "sap.tm.trp.db.planningcockpit::t_lock"
+                         SET USER_ID= :USER_ID,
+                             LAST_MODIFYED_ON = :V_TIMESTAMP_START
+                       WHERE SIMULATION_ID=:SIMULATION_ID;
+
+                     MESSAGE := 'MSG_SUCCESS_STATUS';
+                     MODIFIED_BY := USER_NAME;
+
+                 ELSE
+
+                     MESSAGE :='MSG_ERROR_LOCKED';
+                     SELECT IFNULL(MAX(USERNAME),'DEACTIVATED USER') INTO MODIFIED_BY FROM "sap.tm.trp.db.systemmanagement.user::t_user" WHERE ID=:V_LOCK_USER_ID ;
+
+                 END IF;
+
+         ELSEIF FLG=2 THEN
+
+
+                 IF V_LOCK_USER_ID=USER_ID THEN
+                     UPDATE "sap.tm.trp.db.planningcockpit::t_lock"
+                         SET LAST_MODIFYED_ON = NULL
+                       WHERE SIMULATION_ID=:SIMULATION_ID
+                         AND USER_ID= :USER_ID;
+
+                       MESSAGE := 'MSG_SUCCESS_STATUS';
+                       MODIFIED_BY := USER_NAME;
+                  ELSE
+                      MESSAGE:='MSG_ERROR_LOCKED';
+                      SELECT IFNULL(MAX(USERNAME),'DEACTIVATED USER') INTO MODIFIED_BY FROM "sap.tm.trp.db.systemmanagement.user::t_user" WHERE ID=:V_LOCK_USER_ID ;
+                  END IF;
+
+         ELSE
+                 MESSAGE := 'MSG_ERROR_LOCK_FLAG';
+                 MODIFIED_BY := USER_NAME;
+
+         END IF;
+    END IF;
+END;

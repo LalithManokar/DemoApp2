@@ -1,0 +1,7 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "NODE_ID"; sqlType = BIGINT;},
+    {name = "SUBSEQUENT_NODE_ID"; sqlType = BIGINT;}
+    ];
+table.primaryKey.pkcolumns = ["NODE_ID", "SUBSEQUENT_NODE_ID"];

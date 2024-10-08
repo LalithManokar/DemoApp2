@@ -1,0 +1,193 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.movingstock::p_get_load_discharge_freight_order" (
+IN IN_Document_ID VARCHAR(100) ,
+IN IN_Equip_Types "sap.tm.trp.db.movingstock::tt_equip_types",
+IN IN_RESOURCE_CATEGORY VARCHAR(50),
+OUT lus "sap.tm.trp.db.movingstock::tt_resource_load_discharge_for_freight_order"    
+)
+  LANGUAGE SQLSCRIPT
+  SQL SECURITY INVOKER
+  DEFAULT SCHEMA "SAP_TM_TRP"
+  READS SQL DATA 
+  
+AS  
+BEGIN
+
+    DECLARE VAL_ITEM_CAT VARCHAR(50);
+
+  SELECT  "VALUE"  INTO  VAL_ITEM_CAT 
+        from  "sap.tm.trp.db.systemmanagement::t_config_cust"  a  
+       where  a.CODE = :IN_RESOURCE_CATEGORY
+         and  a.KEY = 'ITEM_CAT';
+         
+         
+  -- get all the departure locations for the given voyage
+   locs_stops = 
+   SELECT STP.*, STS.VESSEL AS VESSEL_ID, DEP.VOYAGE, SCH.SCHEDULE AS SCH_DEP, ROW_NUMBER()over (order by STP.ARRIVAL_UTC) as LOC_SEQ FROM 
+   ( 
+    SELECT IFNULL(t1.TOR_ID, t2.TOR_ID) AS TOR_ID, IFNULL(t1.DB_KEY, t2.DB_KEY) AS DB_KEY, IFNULL(t1.PARENT_KEY, t2.PARENT_KEY) AS PARENT_KEY,
+    IFNULL(t1.LOCATION_ID,t2.LOCATION_ID) AS LOCATION_ID, IFNULL(t1.LOCATION_NAME,t2.LOCATION_NAME) AS LOCATION_NAME,
+    t1.DEPARTURE_UTC, t2.ARRIVAL_UTC, IFNULL(t1.SCHED_STOP_KEY, t2.SCHED_STOP_KEY) AS SCHED_STOP_KEY FROM
+   (
+     SELECT TOR_ID, DB_KEY, PARENT_KEY,LOCATION_ID,LOCATION_NAME,SEQUENCE, PLAN_TRANS_TIME AS DEPARTURE_UTC, STOP_CAT, SCHED_STOP_KEY FROM
+     (SELECT ROOT.TOR_ID, ROW_NUMBER() over (partition by STP.FREIGHT_ORDER_KEY order by STP.PLAN_TRANS_TIME ,STP.STOP_SEQ_POS) AS SEQUENCE,
+      STP.DB_KEY, STP.FREIGHT_ORDER_KEY AS PARENT_KEY, STP.LOCATION_ID,STP.LOCATION_NAME, STP.PLAN_TRANS_TIME, 
+      STP.SCHED_STOP_KEY, STP.STOP_CAT
+      FROM  "sap.tm.trp.db.semantic.order::v_freight_order" ROOT
+      INNER JOIN  "sap.tm.trp.db.semantic.order::v_freight_order_stop" STP  ON STP.FREIGHT_ORDER_KEY = ROOT.DB_KEY             
+      WHERE  ROOT.TOR_ID=:IN_Document_ID
+        AND  STOP_CAT = 'O'
+     )
+   
+   ) t1
+   FULL JOIN                  
+   (SELECT TOR_ID, DB_KEY, PARENT_KEY,LOCATION_ID,LOCATION_NAME,SEQUENCE, PLAN_TRANS_TIME AS ARRIVAL_UTC, STOP_CAT, SCHED_STOP_KEY FROM
+    (SELECT ROOT.TOR_ID, ROW_NUMBER() over (partition by STP.FREIGHT_ORDER_KEY order by STP.PLAN_TRANS_TIME,STP.STOP_SEQ_POS) AS SEQUENCE,
+     STP.DB_KEY, STP.FREIGHT_ORDER_KEY AS PARENT_KEY, STP.LOCATION_ID, STP.LOCATION_NAME, STP.PLAN_TRANS_TIME,
+     STP.SCHED_STOP_KEY, STP.STOP_CAT
+     FROM  "sap.tm.trp.db.semantic.order::v_freight_order" ROOT
+     INNER JOIN  "sap.tm.trp.db.semantic.order::v_freight_order_stop" STP  ON STP.FREIGHT_ORDER_KEY = ROOT.DB_KEY             
+     WHERE  ROOT.TOR_ID=:IN_Document_ID
+       AND   STOP_CAT = 'I'
+    )
+   
+   ) t2 on (t2.PARENT_KEY = t1.PARENT_KEY AND t2.SEQUENCE + 1 = t1.SEQUENCE)
+   ) STP
+   LEFT OUTER JOIN "sap.tm.trp.db.semantic.order::v_freight_order_stage" STS  ON STS.FROM_STOP_KEY =STP.DB_KEY
+   LEFT OUTER JOIN "sap.tm.trp.db.semantic.schedule::v_departure_location" DPL ON STP.SCHED_STOP_KEY =DPL.DB_KEY
+   LEFT OUTER JOIN "sap.tm.trp.db.semantic.schedule::v_departure" DEP ON DPL.PARENT_KEY = DEP.DB_KEY 
+   LEFT OUTER JOIN "sap.tm.trp.db.semantic.schedule::v_schedule" SCH  ON (DPL.ROOT_KEY = SCH.DB_KEY );
+   
+   -- get all the items whose source stops are the above calculated stops
+   -- these items are considered to load at the stops 
+                
+    load_items = SELECT
+                       t1.LOCATION_ID,
+                       t1.LOCATION_NAME ,
+                       t1.SEL_TIME, 
+                       t2.RESOURCE_TYPE, t2.QUA_PCS_VAL AS QUANTITY,t4.TOR_ID, t3.MOVEMENT_CAT 
+                FROM "sap.tm.trp.db.semantic.order::v_freight_order_stop" T1
+                INNER JOIN "sap.tm.trp.db.semantic.order::v_freight_order_item" T2 ON (t2.FROM_STOP_KEY = t1.DB_KEY
+                  AND t2.ITEM_CAT = :VAL_ITEM_CAT)
+                INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t10 
+                ON (t2.RESOURCE_CATEGORY = t10.MAPPING_CODE AND t10.CODE = :IN_RESOURCE_CATEGORY)      
+                INNER JOIN :IN_Equip_Types t5 ON (t2.RESOURCE_TYPE = t5.EQUIPMENT_TYPE)
+                INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit" T3 ON (t3.DB_KEY = t2.REF_TU_KEY )
+                INNER JOIN "sap.tm.trp.db.semantic.order::v_freight_order" T4 ON (t4.DB_KEY = t2.FREIGHT_ORDER_KEY )               
+                WHERE t4.TOR_ID=:IN_Document_ID
+                ;
+
+    -- get all the items whose destination stops are the above calculated stops
+    -- these items are considered to discharge at the stops (SCHEDULE info is on BO level while movement type is on TU level, so find the TU)
+                
+     unload_items = SELECT 
+                       t1.LOCATION_ID,
+                       t1.LOCATION_NAME,
+                       t1.SEL_TIME, 
+                       t2.RESOURCE_TYPE, t2.QUA_PCS_VAL AS QUANTITY,t4.TOR_ID,t3.MOVEMENT_CAT
+                FROM "sap.tm.trp.db.semantic.order::v_freight_order_stop" T1
+                INNER JOIN "sap.tm.trp.db.semantic.order::v_freight_order_item" T2 ON (t2.TO_STOP_KEY = t1.DB_KEY 
+                   AND t2.ITEM_CAT = :VAL_ITEM_CAT)
+                INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t10 
+                ON (t2.RESOURCE_CATEGORY = t10.MAPPING_CODE AND t10.CODE = :IN_RESOURCE_CATEGORY)       
+                INNER JOIN :IN_Equip_Types t5 ON (t2.RESOURCE_TYPE = t5.EQUIPMENT_TYPE)
+                INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit" T3 ON (t3.DB_KEY = t2.REF_TU_KEY)
+                INNER JOIN "sap.tm.trp.db.semantic.order::v_freight_order" T4 ON (t4.DB_KEY = t2.FREIGHT_ORDER_KEY)                
+                WHERE t4.TOR_ID=:IN_Document_ID;    
+   
+   -- aggregate the loaded items number for all the RP TU as the empty load
+   empty_loads = SELECT LOCATION_ID,LOCATION_NAME, SEL_TIME,RESOURCE_TYPE, SUM(QUANTITY) AS QUANTITY
+                 FROM :load_items 
+                 WHERE MOVEMENT_CAT IN ('RP','ER','EP')
+                 GROUP BY  LOCATION_ID,LOCATION_NAME, SEL_TIME,RESOURCE_TYPE ; 
+
+   -- aggregate the load items number for all the non-RP TU as the laden load
+   laden_loads = SELECT LOCATION_ID,LOCATION_NAME, SEL_TIME,RESOURCE_TYPE, SUM(QUANTITY) AS QUANTITY
+                 FROM :load_items 
+                 WHERE MOVEMENT_CAT NOT IN ('RP','ER','EP')
+                 GROUP BY  LOCATION_ID,LOCATION_NAME, SEL_TIME,RESOURCE_TYPE ;  
+
+   -- aggregate the unloaded items number for all the RP TU as the empty discharge
+   empty_unloads = SELECT  LOCATION_ID,LOCATION_NAME, SEL_TIME,RESOURCE_TYPE, SUM(QUANTITY) AS QUANTITY
+                   FROM :unload_items 
+                   WHERE MOVEMENT_CAT IN ('RP','ER','EP')
+                   GROUP BY  LOCATION_ID,LOCATION_NAME, SEL_TIME,RESOURCE_TYPE ;
+
+   -- aggregate the unloaded items number for all the non-RP TU as the laden discharge
+   laden_unloads = SELECT  LOCATION_ID,LOCATION_NAME, SEL_TIME,RESOURCE_TYPE, SUM(QUANTITY) AS QUANTITY
+                   FROM :unload_items 
+                   WHERE MOVEMENT_CAT NOT IN ('RP','ER','EP')
+                   GROUP BY  LOCATION_ID,LOCATION_NAME, SEL_TIME,RESOURCE_TYPE ;                          
+
+  
+       locs_stops_equip = select  t1.*, t2.EQUIPMENT_TYPE as RESOURCE_TYPE from :locs_stops t1 cross join :IN_Equip_Types t2;
+
+
+   
+    -- compute the empty/laden load/discharge quantity for the above data dimensions 
+/*    lus = SELECT IN_Document_ID as TOR_ID,
+                 t1.LOC_SEQ, 
+                 t1.LOCATION_ID,
+                 t1.LOCATION_NAME,
+                 t1.ARRIVAL_UTC,
+                 t1.DEPARTURE_UTC,
+                 t1.RESOURCE_TYPE,
+                 IFNULL(t5.QUANTITY,0) AS QUANTITY_LADEN_UNLOAD,
+                 IFNULL(t3.QUANTITY,0) AS QUANTITY_EMPTY_UNLOAD,
+                 IFNULL(t4.QUANTITY,0) AS QUANTITY_LADEN_LOAD,
+                 IFNULL(t2.QUANTITY,0) AS QUANTITY_EMPTY_LOAD,
+                 SCH_DEP,
+                 VOYAGE,
+                 t1.VESSEL_ID
+          FROM :locs_stops_equip t1
+          LEFT OUTER JOIN :empty_loads t2 ON ( t1.LOCATION_ID = t2.LOCATION_ID AND t1.RESOURCE_TYPE =t2.RESOURCE_TYPE AND (t2.SEL_TIME=t1.ARRIVAL_UTC or t2.SEL_TIME=t1.DEPARTURE_UTC)) 
+          LEFT OUTER JOIN :empty_unloads t3 ON ( t1.LOCATION_ID = t3.LOCATION_ID AND t1.RESOURCE_TYPE =t3.RESOURCE_TYPE AND (t3.SEL_TIME=t1.ARRIVAL_UTC or t3.SEL_TIME=t1.DEPARTURE_UTC)) 
+          LEFT OUTER JOIN :laden_loads t4 ON ( t1.LOCATION_ID = t4.LOCATION_ID AND t1.RESOURCE_TYPE =t4.RESOURCE_TYPE AND (t4.SEL_TIME=t1.ARRIVAL_UTC or t4.SEL_TIME=t1.DEPARTURE_UTC)) 
+          LEFT OUTER JOIN :laden_unloads t5 ON ( t1.LOCATION_ID = t5.LOCATION_ID AND t1.RESOURCE_TYPE =t5.RESOURCE_TYPE AND (t5.SEL_TIME=t1.ARRIVAL_UTC or t5.SEL_TIME=t1.DEPARTURE_UTC)) 
+        ; 
+ */
+ lus1 = SELECT IN_Document_ID as TOR_ID,
+                 t1.LOC_SEQ, 
+                 t1.LOCATION_ID,
+                 t1.LOCATION_NAME,
+                 t1.ARRIVAL_UTC,
+                 t1.DEPARTURE_UTC,
+                 t1.RESOURCE_TYPE,
+                 IFNULL(t5.QUANTITY,0) AS QUANTITY_LADEN_UNLOAD,
+                 IFNULL(t3.QUANTITY,0) AS QUANTITY_EMPTY_UNLOAD,
+                 IFNULL(t4.QUANTITY,0) AS QUANTITY_LADEN_LOAD,
+                 IFNULL(t2.QUANTITY,0) AS QUANTITY_EMPTY_LOAD,
+                 SCH_DEP,
+                 VOYAGE,
+                 t1.VESSEL_ID
+          FROM :locs_stops_equip t1
+          LEFT OUTER JOIN :empty_loads t2 ON ( t1.LOCATION_ID = t2.LOCATION_ID AND t1.RESOURCE_TYPE =t2.RESOURCE_TYPE AND t2.SEL_TIME=t1.ARRIVAL_UTC) 
+          LEFT OUTER JOIN :empty_unloads t3 ON ( t1.LOCATION_ID = t3.LOCATION_ID AND t1.RESOURCE_TYPE =t3.RESOURCE_TYPE AND t3.SEL_TIME=t1.ARRIVAL_UTC)
+          LEFT OUTER JOIN :laden_loads t4 ON ( t1.LOCATION_ID = t4.LOCATION_ID AND t1.RESOURCE_TYPE =t4.RESOURCE_TYPE AND t4.SEL_TIME=t1.ARRIVAL_UTC) 
+          LEFT OUTER JOIN :laden_unloads t5 ON ( t1.LOCATION_ID = t5.LOCATION_ID AND t1.RESOURCE_TYPE =t5.RESOURCE_TYPE AND t5.SEL_TIME=t1.ARRIVAL_UTC);
+		  
+    lus2 = SELECT IN_Document_ID as TOR_ID,
+                     t1.LOC_SEQ, 
+                     t1.LOCATION_ID,
+                     t1.LOCATION_NAME,
+                     t1.ARRIVAL_UTC,
+                     t1.DEPARTURE_UTC,
+                     t1.RESOURCE_TYPE,
+                     IFNULL(t5.QUANTITY,0) AS QUANTITY_LADEN_UNLOAD,
+                     IFNULL(t3.QUANTITY,0) AS QUANTITY_EMPTY_UNLOAD,
+                     IFNULL(t4.QUANTITY,0) AS QUANTITY_LADEN_LOAD,
+                     IFNULL(t2.QUANTITY,0) AS QUANTITY_EMPTY_LOAD,
+                     SCH_DEP,
+                     VOYAGE,
+                     t1.VESSEL_ID
+              FROM :locs_stops_equip t1
+              LEFT OUTER JOIN :empty_loads t2 ON ( t1.LOCATION_ID = t2.LOCATION_ID AND t1.RESOURCE_TYPE =t2.RESOURCE_TYPE AND t2.SEL_TIME=t1.DEPARTURE_UTC) 
+              LEFT OUTER JOIN :empty_unloads t3 ON ( t1.LOCATION_ID = t3.LOCATION_ID AND t1.RESOURCE_TYPE =t3.RESOURCE_TYPE AND t3.SEL_TIME=t1.DEPARTURE_UTC) 
+              LEFT OUTER JOIN :laden_loads t4 ON ( t1.LOCATION_ID = t4.LOCATION_ID AND t1.RESOURCE_TYPE =t4.RESOURCE_TYPE AND t4.SEL_TIME=t1.DEPARTURE_UTC) 
+              LEFT OUTER JOIN :laden_unloads t5 ON ( t1.LOCATION_ID = t5.LOCATION_ID AND t1.RESOURCE_TYPE =t5.RESOURCE_TYPE AND t5.SEL_TIME=t1.DEPARTURE_UTC);
+    		  
+
+lus =	SELECT * FROM :lus1
+		UNION
+		SELECT * FROM :lus2;
+		
+END;

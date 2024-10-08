@@ -1,0 +1,96 @@
+schema="SAP_TM_TRP";
+query = "
+SELECT 
+			T1.GROUP_ID,
+			1 AS SCHEDULE_TIME_TYPE,
+			T1.RECURRENCE_INTERVAL,
+              T1.RECURRENCE_TYPE,
+              T1.RECURRENCE_DAY,
+              CASE
+              WHEN ( T1.START_TIME = '' OR T1.START_TIME IS NULL) THEN
+                    NULL
+	          WHEN ( T1.TIMEZONES = '' OR T1.TIMEZONES IS NULL) THEN
+	               TO_VARCHAR(UTCTOLOCAL(T1.START_TIME, 'UTC', 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          ELSE
+	               TO_VARCHAR(UTCTOLOCAL(T1.START_TIME, T1.TIMEZONES, 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          END
+	          AS START_DATETIME,
+              CASE
+              WHEN ( T1.EXPIRY_TIME = '' OR T1.EXPIRY_TIME IS NULL ) THEN
+                    NULL
+	          WHEN ( T1.TIMEZONES = '' OR T1.TIMEZONES IS NULL) THEN
+	               TO_VARCHAR(UTCTOLOCAL(T1.EXPIRY_TIME, 'UTC', 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          ELSE
+	               TO_VARCHAR(UTCTOLOCAL(T1.EXPIRY_TIME, TIMEZONES, 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          END
+	          AS END_DATETIME,
+			  
+			  CASE
+              WHEN ( T3.MAX_STARTED_AT = '' OR T3.MAX_STARTED_AT IS NULL ) THEN
+                    NULL
+	          WHEN ( T1.TIMEZONES = '' OR T1.TIMEZONES IS NULL) THEN
+	               TO_VARCHAR(UTCTOLOCAL(T3.MAX_STARTED_AT, 'UTC', 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          ELSE
+	               TO_VARCHAR(UTCTOLOCAL(T3.MAX_STARTED_AT, TIMEZONES, 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          END
+	          AS LAST_EXECUTION_TIME,
+	          
+              CASE WHEN T3.STATUS = 'SUCCESS' THEN 1 WHEN T3.STATUS IS NULL THEN NULL ELSE -1 END AS LAST_EXECUTION_STATUS,
+              
+			  CASE
+              WHEN ( T4.PLANNED_TIME = '' OR T4.PLANNED_TIME IS NULL ) THEN
+                    NULL
+	          WHEN ( T1.TIMEZONES = '' OR T1.TIMEZONES IS NULL) THEN
+	               TO_VARCHAR(UTCTOLOCAL(T4.PLANNED_TIME, 'UTC', 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          ELSE
+	               TO_VARCHAR(UTCTOLOCAL(T4.PLANNED_TIME, TIMEZONES, 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          END
+	          AS NEXT_EXECUTION_TIME,
+	          
+              T1.EXECUTE_WORKING_HOUR,
+              CASE
+              WHEN ( T1.START_WORKING_HOUR_TIME = '' OR T1.START_WORKING_HOUR_TIME IS NULL ) THEN
+                    NULL
+	          WHEN ( T1.TIMEZONES = '' OR T1.TIMEZONES IS NULL) THEN
+	               TO_VARCHAR(UTCTOLOCAL(T1.START_WORKING_HOUR_TIME, 'UTC', 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          ELSE
+	               TO_VARCHAR(UTCTOLOCAL(T1.START_WORKING_HOUR_TIME, TIMEZONES, 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          END
+	          AS START_WORKING_HOUR_TIME,
+              CASE
+              WHEN ( T1.END_WORKING_HOUR_TIME = '' OR T1.END_WORKING_HOUR_TIME IS NULL ) THEN
+                    NULL
+	          WHEN ( T1.TIMEZONES = '' OR T1.TIMEZONES IS NULL) THEN
+	               TO_VARCHAR(UTCTOLOCAL(T1.END_WORKING_HOUR_TIME, 'UTC', 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          ELSE
+	               TO_VARCHAR(UTCTOLOCAL(T1.END_WORKING_HOUR_TIME, TIMEZONES, 'platform'),'YYYY-MM-DD HH24:MI:SS')
+	          END
+	          AS END_WORKING_HOUR_TIME, 
+	          T1.TIMEZONES,
+			  T11.OFFSET AS TIMEZONE_OFFSET,
+              T9.DESC AS TIMEZONES_DESC
+    FROM \"sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_group_schedule\" T1
+	INNER JOIN \"sap.tm.trp.db.systemmanagement.user::v_time_zone\" T11 ON T1.TIMEZONES = T11.CODE
+    INNER JOIN \"sap.tm.trp.db.pickupreturn.rulesetgroup::v_ruleset_group\" T2 ON T1.GROUP_ID = T2.ID
+    LEFT JOIN (
+	    SELECT * FROM (
+			SELECT A.ID,A.MODEL_ID,A.SCHEDULE_TYPE,B.PLANNED_TIME,B.STATUS,B.ERROR_MESSAGE,B.STARTED_AT,MAX(B.STARTED_AT) OVER(PARTITION BY A.MODEL_ID ) AS MAX_STARTED_AT FROM \"sap.tm.trp.db.job::t_job_schedule\" A
+			INNER JOIN \"_SYS_XS\".\"JOB_LOG\" B ON A.SCHEDULE_ID = B.ID AND B.STATUS <> 'SCHEDULED' AND B.STATUS <> 'RUNNING'
+			) WHERE STARTED_AT = MAX_STARTED_AT
+    ) T3 ON T1.GROUP_ID = T3.MODEL_ID AND T2.JOB_PROCESS_CODE = T3.SCHEDULE_TYPE
+    LEFT JOIN (
+	    SELECT A.ID,A.MODEL_ID,A.SCHEDULE_TYPE,B.PLANNED_TIME,B.STATUS,B.ERROR_MESSAGE FROM \"sap.tm.trp.db.job::t_job_schedule\" A
+			INNER JOIN \"_SYS_XS\".\"JOB_LOG\" B ON A.SCHEDULE_ID = B.ID AND B.STATUS = 'SCHEDULED' AND B.STATUS <> 'RUNNING'
+    ) T4 ON T1.GROUP_ID = T4.MODEL_ID AND T2.JOB_PROCESS_CODE = T4.SCHEDULE_TYPE
+       LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::v_time_zone\" T9 ON T9.CODE = T1.TIMEZONES
+";
+
+depends_on_table = [
+	"sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_group_schedule",
+	"sap.tm.trp.db.job::t_job_schedule",
+	"_SYS_XS::JOB_LOG"
+	];
+depends_on_view = [
+	"sap.tm.trp.db.systemmanagement.user::v_time_zone",
+	"sap.tm.trp.db.pickupreturn.rulesetgroup::v_ruleset_group"
+];      

@@ -1,0 +1,10 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "RESOURCE_CATEGORY_NAME"; sqlType = VARCHAR; length = 100; nullable = false;},
+    {name = "ID"; sqlType = INTEGER; nullable = false;},
+    {name = "KEY"; sqlType = VARCHAR; length = 100;nullable = false;unique = true;},
+    {name = "VALUE"; sqlType = VARCHAR; length = 100; nullable = true;}
+    
+ ]; 
+table.primaryKey.pkcolumns = ["RESOURCE_CATEGORY_NAME","ID"];

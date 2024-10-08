@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_current_stock" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_pipeline_stock"/>
+  <localVariables>
+    <variable id="IN_LOCATION_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="IN_LOCATION_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_RESOURCE_ID" parameter="true">
+      <descriptions defaultDescription="IN_RESOURCE_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_ID" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_TYPE" length="10"/>
+        <viewAttribute datatype="INTEGER" id="CURRENT_STOCK"/>
+        <viewAttribute datatype="VARCHAR" id="UNIT" length="3"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_LOCATION_FILTER_ID</localVariable>
+      <localVariable>#IN_RESOURCE_ID</localVariable>
+      <definition> 
+ BEGIN
+    
+    -- Location filter
+    filtered_locations = SELECT LOCATION_ID AS GEO_ID, LOCATION_ID, 1 AS TYPE, LOCATION_ID AS GEO_GROUP_ID 
+                         FROM &quot;sap.tm.trp.db.filter::t_location_filter_location&quot; 
+                         WHERE LOCATION_FILTER_ID = :IN_LOCATION_FILTER_ID;       
+    
+    --(Why we have resource category column in the filter equip table? it should only be in resource filter table)
+    filtered_equiptypes = 
+      SELECT * FROM (SELECT EQUI_CODE AS EQUIP_CODE, EQUI_CODE AS EQUIP_GROUP_ID,RESOURCE_CATEGORY
+                     FROM &quot;sap.tm.trp.db.filter::v_equipment_filter_equipment_auth&quot; T1
+                     WHERE EQUIPMENT_FILTER_ID = :IN_RESOURCE_ID and EQUI_CODE IS NOT NULL)
+                    UNION 
+                    (SELECT a.EQUI_CODE AS EQUIP_CODE, a.EQUIPMENT_GROUP_ID AS EQUIP_GROUP_ID, a.RESOURCE_CATEGORY
+                     FROM &quot;sap.tm.trp.db.filter::v_equipment_filter_equipment_auth&quot; a   
+                     INNER JOIN &quot;sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth&quot; b ON (a.EQUIPMENT_GROUP_ID = b.EQUIPMENT_GROUP_ID AND B.RESOURCE_CATEGORY = A.RESOURCE_CATEGORY) 
+                     WHERE a.EQUIPMENT_FILTER_ID = :IN_RESOURCE_ID and a.EQUIPMENT_GROUP_ID IS NOT NULL); 
+        
+    resource_out = 
+       SELECT T1.RESOURCE_ID AS RESID,D.GEO_GROUP_ID,E.EQUIP_GROUP_ID 
+       FROM &quot;sap.tm.trp.db.semantic.resource::v_stock_resource_last_status&quot; T1
+       INNER JOIN  &quot;sap.tm.trp.db.semantic.resource::v_resource_category&quot; t6 ON (t1.RESOURCE_CATEGORY = t6.MAPPING_CODE)
+       INNER JOIN :filtered_equiptypes AS E ON (E.EQUIP_CODE = T1.RESOURCE_TYPE AND E.RESOURCE_CATEGORY = T6.CODE)
+       INNER JOIN :filtered_locations AS D ON (D.LOCATION_ID = T1.LOCATION_ID);
+
+/*
+Calculate stock group by location, equipment type and status
+*/
+    stock_out = SELECT GEO_GROUP_ID,
+                       EQUIP_GROUP_ID,
+                       COUNT(1) AS OUTPUT_VALUE
+                FROM :resource_out
+                 GROUP BY GEO_GROUP_ID,EQUIP_GROUP_ID;
+/*
+Loaction and equipment group
+*/
+    car_out =  SELECT DISTINCT A.GEO_GROUP_ID,B.EQUIP_GROUP_ID
+               FROM :filtered_locations A, :filtered_equiptypes B;
+/*
+Output stock by location and equipment
+*/
+    pre_out = SELECT A.GEO_GROUP_ID AS LOCATION_ID, 
+                     A.EQUIP_GROUP_ID AS RESOURCE_TYPE,
+                     IFNULL(B.OUTPUT_VALUE,0) AS CURRENT_STOCK
+              FROM :car_out A 
+              LEFT OUTER JOIN :stock_out B ON 
+              (A.GEO_GROUP_ID = B.GEO_GROUP_ID and A.EQUIP_GROUP_ID = B.EQUIP_GROUP_ID);
+              
+    var_out = SELECT A.LOCATION_ID, 
+                     A.RESOURCE_TYPE,
+                     A.CURRENT_STOCK,
+                     C.UNIT_CODE AS UNIT
+              FROM :pre_out A, &quot;sap.tm.trp.db.systemmanagement::v_unit&quot; C;
+
+ END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="LOCATION_ID" order="1">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_ID"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE" order="2">
+        <descriptions defaultDescription="RESOURCE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE"/>
+      </attribute>
+      <attribute id="UNIT" order="4">
+        <descriptions defaultDescription="UNIT"/>
+        <keyMapping columnObjectName="Script_View" columnName="UNIT"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="CURRENT_STOCK" order="3" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="CURRENT_STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="CURRENT_STOCK"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

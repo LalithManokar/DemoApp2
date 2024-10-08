@@ -1,0 +1,31 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+	{name = "ROW_NUM"; sqlType = INTEGER;  },
+    {name = "LC_ID"; sqlType = BIGINT;},
+    {name = "LEASE_CONTRACT_REFERENCE"; sqlType = NVARCHAR; length = 100; comment = "Actual lease contract reference";  nullable = true;},
+	{name = "LEASE_TYPE"; sqlType = BIGINT; nullable = false;},
+    {name = "LESSOR_ID"; sqlType = BIGINT; nullable = false;},
+	{name = "START_TIME"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "END_TIME"; sqlType = TIMESTAMP; nullable = true;},
+	{name = "CURRENCY_CODE"; sqlType = NVARCHAR; length = 3; nullable = false; comment = "lease contract currency code";},
+	{name = "UNIT"; sqlType = NVARCHAR; length = 3; nullable = true; comment = "lease contract unit value";},
+	{name = "CREATED_ON"; sqlType = TIMESTAMP; nullable = true;},
+	{name = "CREATED_BY"; sqlType = BIGINT; nullable = true;},
+	{name = "MODIFIED_ON"; sqlType = TIMESTAMP; nullable = true;},
+	{name = "MODIFIED_BY"; sqlType = BIGINT; nullable = true;},
+	{name = "MAX_HIRE_QUANTITY"; sqlType = INTEGER; nullable = true; comment = "Contract level maximum hire quantity"; },
+	{name = "MIN_HIRE_QUANTITY"; sqlType = INTEGER; nullable = true; comment = "Contract level minimum hire quantity"; },
+	{name = "ACTIVE"; sqlType = TINYINT; nullable = false; defaultValue = "1";},
+	{name = "LESSOR_CODE"; sqlType = NVARCHAR; length = 22; nullable = false;},
+	{name = "LEASE_TYPE_CODE"; sqlType = NVARCHAR; length = 22; nullable = false;},
+	{name = "RESOURCE_CATEGORY"; sqlType = NVARCHAR; length = 22; nullable = false;},
+	{name = "UNIT_TYPE"; sqlType = NVARCHAR; length = 50; nullable = false;},
+	{name = "CONNECTION_ID"; sqlType = VARCHAR; length = 100; nullable = true; },
+	{name = "PER_DIEM_ID"; sqlType =BIGINT;},  
+    {name = "EQUIPMENT_CODE"; sqlType = NVARCHAR; length = 50; nullable = true;},
+	{name = "EQUIPMENT_CODE_TYPE"; sqlType = TINYINT; nullable = true; comment= "1 - Equipment, 2 - Equipment group";},
+    {name = "PER_DIEM"; sqlType = DECIMAL; precision = 13; scale = 3; nullable = true; comment = "per diem could be on a contract basis";},
+    {name = "PER_DIEM_ACTIVE"; sqlType = TINYINT; nullable = false; defaultValue = "1";},
+    {name = "IND_UPD"; sqlType = INTEGER; }
+];

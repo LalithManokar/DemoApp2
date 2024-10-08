@@ -1,0 +1,30 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    
+    {name = "ROW_NUM"; sqlType = INTEGER;},
+    {name = "VSDP_ID"; sqlType = BIGINT;},
+    {name = "VSDP_NAME"; sqlType = NVARCHAR; length = 50;},
+    {name = "DESCRIPTION"; sqlType = NVARCHAR; length = 100; },
+    {name = "IND_UPD"; sqlType = INTEGER;},
+    {name = "STATUS"; sqlType = INTEGER;},
+    {name = "TYPE_NAME"; sqlType = NVARCHAR; length = 100; },
+    {name = "FILTER_GROUP_ID"; sqlType = BIGINT;},
+    {name = "VISIBILITY_FLAG"; sqlType = VARCHAR; length = 3; },
+    {name = "LOC_ID"; sqlType = BIGINT;},
+    {name = "LOCATION_FILTER_NAME"; sqlType = NVARCHAR; length = 30; },
+    {name = "LOCATION_TYPE"; sqlType = INTEGER;},
+    {name = "RES_ID"; sqlType = BIGINT;},
+    {name = "RESOURCE_FILTER_NAME"; sqlType = NVARCHAR; length = 30; },
+    {name = "TIME_FILTER_ID"; sqlType = BIGINT;},
+    {name = "SDP_ID"; sqlType = BIGINT;},
+    {name = "SDP_NAME"; sqlType = NVARCHAR; length = 30; },
+    {name = "USER_ID"; sqlType =  BIGINT;  nullable = false;},
+    {name = "CREATE_BY"; sqlType = BIGINT;},
+    {name = "CREATE_ON"; sqlType = TIMESTAMP;},
+    {name = "ACTION_TIME"; sqlType = TIMESTAMP; nullable = false;},
+    {name = "CONNECTION_ID"; sqlType = VARCHAR; length = 100; nullable = false;},
+    {name = "RESOURCE_CATEGORY"; sqlType = VARCHAR; length = 50; },
+    {name = "USAGE"; sqlType = VARCHAR; length = 1; },
+    {name = "USAGE_CODE"; sqlType = VARCHAR; length = 4; }
+];

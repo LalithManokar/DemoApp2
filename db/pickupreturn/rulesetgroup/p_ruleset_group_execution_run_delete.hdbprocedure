@@ -1,0 +1,67 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_ruleset_group_execution_run_delete" (
+ 	IN RULE_GROUP_ID  BIGINT
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN  
+ 
+	DECLARE NUM_EXEC BIGINT;
+    DECLARE SCHEMA_NAME NVARCHAR(20) DEFAULT 'SAP_TM_TRP';
+   
+    SELECT KEEP_EXECUTION_RUNS INTO NUM_EXEC FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" T1
+    WHERE T1.ID IN 
+    (SELECT TOP 1 RULE_ID FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" T1
+    WHERE T1.RULE_GROUP_ID = :RULE_GROUP_ID);
+
+  	
+  	IF NUM_EXEC > 0 THEN
+  	
+  	RANK_EXEC = SELECT * FROM 
+  	(SELECT *, ROW_NUMBER() OVER (PARTITION BY RULE_GROUP_ID ORDER BY EXECUTION_START_TIME DESC )
+	AS RANK FROM
+  	(SELECT DISTINCT RULE_GROUP_ID3 AS RULE_GROUP_ID, RUN_ID, PROCESS_3_EXECUTION_START_TIME AS EXECUTION_START_TIME
+  	FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result" 
+	WHERE RULE_GROUP_ID3 = :RULE_GROUP_ID
+  	));
+  	
+  	-- Rank of all the executions > keep execution runs
+  	RANK_EXEC_MORE = SELECT * FROM :RANK_EXEC WHERE RANK > :NUM_EXEC;
+  	
+    -- Rank of all the executions <= keep execution runs
+  	RANK_EXEC_LESS = SELECT * FROM  :RANK_EXEC 	WHERE RANK <= :NUM_EXEC;
+    
+  	RESULTS = SELECT DISTINCT A.* FROM  "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result" A
+  	WHERE RUN_ID IN (SELECT RUN_ID FROM :RANK_EXEC_MORE) ;
+  	
+  	--get TUs which can be deleted from result/error table 
+  	PROCESSED_TUS = SELECT DISTINCT A.RUN_ID,A.TU_ID FROM :RESULTS A
+  	LEFT JOIN "sap.tm.trp.db.semantic.order::v_log_update" b
+	on a.RUN_ID = b.RUN_ID and a.RULE_ID = b.RULE_ID and a.TU_ID = b.TU_ID and a.USER = b.CREATED_BY
+	WHERE ( AYSNC_TM_UPD = '1' AND B.STATUS = 'S') OR ( AYSNC_TM_UPD = '1' AND b.STATUS = 'F') OR ( AYSNC_TM_UPD = '1' AND b.STATUS = 'I')
+	       OR (AYSNC_TM_UPD = '2');
+    
+    --TU_IDs of the records to be checked
+    TU_IDS_SUCCESS = SELECT TU_ID FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result" a
+             WHERE RUN_ID IN (SELECT RUN_ID FROM :RANK_EXEC_LESS) ;
+             
+    --TU_IDS of the error records to be checked
+    TU_IDS_ERROR = SELECT TU_ID FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assign_error" a
+             WHERE RUN_ID IN (SELECT RUN_ID FROM :RANK_EXEC_LESS) ;
+    
+    --Delete only those entries which are already processed
+  	DELETE FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result"
+  	WHERE ((RUN_ID,TU_ID) IN 
+  	(SELECT RUN_ID, TU_ID FROM :PROCESSED_TUS)
+  	AND TU_ID IN (SELECT TU_ID FROM :TU_IDS_SUCCESS));
+  	
+  	DELETE FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assign_error"
+  	WHERE ((RUN_ID,TU_ID) IN 
+  	(SELECT RUN_ID,TU_ID FROM :PROCESSED_TUS)
+  	AND TU_ID IN (SELECT TU_ID FROM :TU_IDS_ERROR));
+  	
+
+  	END IF; 
+  	
+END;

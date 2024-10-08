@@ -1,0 +1,497 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::p_balancing2"(
+IN name_value_conf "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_name_value_conf",
+IN t_supply_demand "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_supply_demand_range",
+IN t_route "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_route",
+IN t_route_cap "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_route_cap",
+IN t_type_teu "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_type_teu",
+IN t_storage_cost "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_storage_cost_time",
+IN t_penalty_cost "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_penalty_cost",
+OUT t_route_res "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_route_res",
+OUT t_bottleneck "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::tt_bottleneck",
+OUT v_obj DOUBLE,
+OUT solver_runtime INT,
+OUT flag VARCHAR(20)
+)
+LANGUAGE SQLSCRIPT 
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN 
+
+-- storage cost
+-- evacuation rule
+
+DECLARE solverstart TIMESTAMP;
+DECLARE solverend TIMESTAMP;
+DECLARE counting1 INT;
+DECLARE counting2 INT;
+DECLARE storageID INT;
+DECLARE counting3 INT;
+DECLARE counting4 INT;
+DECLARE counting5 INT;
+DECLARE counting6 INT;
+DECLARE opt_option VARCHAR(50);
+DECLARE pt_mode INT;
+DECLARE temp_value INT;
+DECLARE var_pt_mode VARCHAR(20);
+DECLARE penalty_hours DOUBLE;
+DECLARE penalty INT;
+DECLARE deficit_rule INT;
+DECLARE max_cost BIGINT;
+
+counting1 := 0;
+counting2 := 0;
+counting3 := 0;
+
+SELECT COUNT(*) INTO counting1 FROM :name_value_conf WHERE "NAME" = 'DEFICIT_PENALTY_RULE';
+
+IF (:counting1>0) THEN
+
+SELECT "VALUE" INTO penalty_hours 
+FROM :name_value_conf 
+WHERE "NAME" = 'DEFICIT_PENALTY_RULE';
+
+ELSE
+
+penalty_hours := 24;
+
+END IF;  
+
+SELECT COUNT(*) INTO counting1 FROM :name_value_conf WHERE "NAME" = 'DEFICIT_RULE';
+
+IF (:counting1>0) THEN
+
+SELECT "VALUE" INTO deficit_rule 
+FROM :name_value_conf 
+WHERE "NAME" = 'DEFICIT_RULE';
+
+ELSE
+
+deficit_rule := 0;
+
+END IF;
+t_type_teu = SELECT * 
+			 FROM :t_type_teu
+			 WHERE "CONTAINER_TYPE" IN (SELECT "CONTAINER_TYPE"
+			     						FROM :t_supply_demand);
+							
+t_route_cap = SELECT * 
+			  FROM :t_route_cap 
+			  WHERE "CAPACITY" IS NOT NULL;
+t_route_cap = SELECT * 
+			  FROM :t_route_cap 
+			  WHERE "ROUTE_ID" IN (SELECT "ROUTE_ID" 
+								   FROM :t_route);
+
+
+t_route_zero = SELECT "ROUTE_ID"
+			   FROM :t_route
+			   WHERE "ROUTE_ID" IN (SELECT "ROUTE_ID"
+			   						FROM :t_route_cap
+			   						WHERE "CAPACITY" <= 0);
+
+t_route_cap = SELECT *
+			  FROM :t_route_cap
+			  WHERE "CAPACITY">0;
+			  
+t_route = SELECT  "ROUTE_ID",
+				  "CONTAINER_TYPE",
+				  TO_INT(100*"TOTAL_COST") AS "TOTAL_COST",
+				  "FROM_LOCATION",
+				  "TO_LOCATION",
+				  "FROM_TIME",
+				  "TO_TIME" 
+		  FROM :t_route
+		  WHERE "ROUTE_ID" NOT IN (SELECT "ROUTE_ID"
+		  						   FROM :t_route_zero);
+						   
+SELECT COUNT(*) INTO counting2 FROM :t_route;								   
+SELECT COUNT(*) INTO counting3 FROM :t_route_cap;
+
+IF (:counting3>0) THEN
+t_route = SELECT * 
+		  FROM :t_route
+		  WHERE "CONTAINER_TYPE" IN (SELECT "CONTAINER_TYPE"
+			     					 FROM :t_type_teu);		
+END IF;
+
+SELECT MAX("TOTAL_COST") INTO penalty FROM :t_route;
+
+SELECT COUNT(*) INTO counting4 FROM :name_value_conf WHERE "NAME" = 'OPTIMIZER_TYPE';
+
+IF (counting4 > 0) THEN
+SELECT "VALUE" INTO opt_option FROM :name_value_conf WHERE "NAME" = 'OPTIMIZER_TYPE';
+ELSE
+opt_option := 'LARGE SCALE';
+END IF;
+
+IF (:opt_option IS NULL) THEN
+opt_option := 'LARGE SCALE';
+END IF;
+
+t_storage_pair_temp1 = SELECT A."CONTAINER_TYPE",
+							1 AS "TOTAL_COST",
+							A."LOCATION" AS "FROM_LOCATION",
+							B."LOCATION" AS "TO_LOCATION",
+							A."START_TIME" AS "FROM_TIME",
+							B."START_TIME" AS "TO_TIME"
+					 FROM :t_supply_demand A
+					 INNER JOIN :t_supply_demand B
+					 ON A."CONTAINER_TYPE" = B."CONTAINER_TYPE"
+					 AND A."LOCATION" = B."LOCATION"
+					 AND SECONDS_BETWEEN(A."START_TIME",B."START_TIME")>0
+					 AND A."SUPPLY">A."DEMAND"
+					 AND B."SUPPLY"<B."DEMAND";
+					 
+t_storage_pair_1 = SELECT A."CONTAINER_TYPE",
+						  IFNULL(B."COST",A."TOTAL_COST") AS "TOTAL_COST",
+						  A."FROM_LOCATION",
+						  A."TO_LOCATION" AS "TO_LOCATION",
+						  A."FROM_TIME",
+						  A."TO_TIME"
+					FROM :t_storage_pair_temp1 A
+					LEFT JOIN :t_storage_cost B
+					ON A."CONTAINER_TYPE"=B."CONTAINER_TYPE"
+					AND A."FROM_LOCATION"=B."LOCATION"
+					AND SECONDS_BETWEEN(A."FROM_TIME",A."TO_TIME")/3600>=B."THRESHOLD_FROM"
+					AND SECONDS_BETWEEN(A."FROM_TIME",A."TO_TIME")/3600<B."THRESHOLD_TO";
+
+--penalty cost for deficit location					 
+t_storage_pair_2_t = SELECT A."CONTAINER_TYPE",
+							0 AS "TOTAL_COST",
+							A."LOCATION" AS "FROM_LOCATION",
+							B."LOCATION" AS "TO_LOCATION",
+							A."START_TIME" AS "FROM_TIME",
+							B."START_TIME" AS "TO_TIME",
+							IFNULL (B."DEMAND",0)-IFNULL (B."SUPPLY",0) AS "DEFICIT"
+					 FROM :t_supply_demand A
+					 INNER JOIN :t_supply_demand B
+					 ON A."CONTAINER_TYPE" = B."CONTAINER_TYPE"
+					 AND A."LOCATION" = B."LOCATION"
+					 AND A."SUPPLY">A."DEMAND"
+					 AND B."SUPPLY"<B."DEMAND"
+					 AND SECONDS_BETWEEN(B."START_TIME",A."START_TIME")>=0;
+					-- AND SECONDS_BETWEEN(A."START_TIME",B."END_TIME")>=IFNULL(SECONDS_BETWEEN(B."START_TIME",B."END_TIME")-:delay,0);
+
+t_storage_pair_2 = SELECT  A."CONTAINER_TYPE",
+						   IFNULL(DAYS_BETWEEN(A."TO_TIME",A."FROM_TIME")*24*IFNULL (B."PENALTY", 999999)*A."DEFICIT"*:penalty_hours,0) AS "TOTAL_COST",
+						   A."FROM_LOCATION",
+						   A."TO_LOCATION",
+						   A."FROM_TIME",
+						   A."TO_TIME"
+				   FROM :t_storage_pair_2_t A
+				   LEFT JOIN :t_penalty_cost B
+				   ON A."CONTAINER_TYPE"=B."CONTAINER_TYPE"
+				   AND A."FROM_LOCATION"=B."LOCATION";
+
+t_storage_pair = SELECT * FROM :t_storage_pair_1
+				 UNION ALL
+				 SELECT * FROM :t_storage_pair_2;
+
+
+SELECT MAX("ROUTE_ID") INTO storageID FROM :t_route;
+
+t_storage_pair_temp = SELECT ROW_NUMBER() OVER() AS "ROUTE_ID",
+							 "CONTAINER_TYPE",
+							 "TOTAL_COST",
+							 "FROM_LOCATION",
+							 "TO_LOCATION",
+							 "FROM_TIME",
+							 "TO_TIME"
+					   FROM :t_storage_pair;
+
+t_virtual_storage = SELECT "ROUTE_ID"+:storageID AS "ROUTE_ID",
+						  "CONTAINER_TYPE",
+						  "TOTAL_COST",
+						  "FROM_LOCATION",
+						  "TO_LOCATION",
+						  "FROM_TIME",
+						  "TO_TIME"
+			 		FROM :t_storage_pair_temp;
+
+select * from :t_virtual_storage;
+select * from :t_route;
+ 
+t_route_all = SELECT * 
+			  FROM :t_route
+ 			  UNION ALL
+ 			  SELECT * 
+ 			  FROM :t_virtual_storage;					 
+
+ 			  
+solverstart := CURRENT_UTCTIMESTAMP;
+						 
+t_node_tbl = SELECT ROW_NUMBER() OVER() AS "NODE_ID", 
+					"START_TIME",
+					"END_TIME",
+					"LOCATION",
+					"CONTAINER_TYPE",
+					IFNULL ("SUPPLY",0)-IFNULL ("DEMAND",0) AS "SUPPLY_DEMAND"
+			 FROM :t_supply_demand;
+
+SELECT MAX("NODE_ID") INTO counting6 FROM :t_node_tbl;
+
+
+t_node = SELECT "NODE_ID",
+				"SUPPLY_DEMAND"
+		 FROM :t_node_tbl
+		 WHERE "SUPPLY_DEMAND"<>0;
+
+t_node_tbl_p = SELECT * FROM :t_node_tbl WHERE "SUPPLY_DEMAND">0;
+t_node_tbl_n = SELECT * FROM :t_node_tbl WHERE "SUPPLY_DEMAND"<0;
+
+select * from :t_node_tbl_p;
+select * from :t_node_tbl_n;
+
+IF (:deficit_rule=1) THEN  
+t_path_temp = SELECT A."ROUTE_ID",								
+					  A."CONTAINER_TYPE",
+					  A."FROM_LOCATION",
+					  A."TO_LOCATION",
+					  A."FROM_TIME",
+					  A."TO_TIME",
+					  B."NODE_ID" AS "SOURCE_NODE_ID",
+					  C."NODE_ID" AS "SINK_NODE_ID",
+					  0 AS "LOWER",
+					  1000000 AS "CAPACITY",
+					  A."TOTAL_COST"+ TO_BIGINT((
+					  CASE WHEN A."TO_TIME" >=C."END_TIME" THEN SECONDS_BETWEEN(C."END_TIME",A."TO_TIME") ELSE 0 END
+					  +
+					  CASE WHEN A."FROM_TIME"<=B."START_TIME" THEN SECONDS_BETWEEN(A."FROM_TIME",B."START_TIME") ELSE 0 END
+					  )/3600*penalty/24) AS "COST",
+					  A."TOTAL_COST" AS "OCOST"
+			  FROM :t_route_all A
+			  INNER JOIN :t_node_tbl_p B 
+			  ON A."CONTAINER_TYPE"=B."CONTAINER_TYPE" 
+			  AND A."FROM_LOCATION"=B."LOCATION"
+			  AND SECONDS_BETWEEN(B."START_TIME",A."FROM_TIME")>=0
+			  INNER JOIN :t_node_tbl_n C 
+			  ON A."CONTAINER_TYPE"=C."CONTAINER_TYPE" 
+			  AND A."TO_LOCATION"=C."LOCATION"
+			  AND B."NODE_ID"!=C."NODE_ID";
+
+t_path_temp = SELECT A."ROUTE_ID",
+					 A."CONTAINER_TYPE",
+					 A."FROM_LOCATION",
+					 A."TO_LOCATION",
+					 A."FROM_TIME",
+					 A."TO_TIME",
+					 A."SOURCE_NODE_ID",
+					 A."SINK_NODE_ID",
+					 A."LOWER",
+					 A."CAPACITY",
+					 IFNULL(A."COST"-B."COST"*SECONDS_BETWEEN(A."FROM_TIME",A."TO_TIME")/3600,A."COST") AS "COST",
+					 A."OCOST"
+			  FROM :t_path_temp A
+			  LEFT JOIN :t_storage_cost B
+			  ON A."FROM_LOCATION"=B."LOCATION"
+			  AND A."CONTAINER_TYPE"=B."CONTAINER_TYPE"
+			  AND SECONDS_BETWEEN(A."FROM_TIME",A."TO_TIME")/3600>=B."THRESHOLD_FROM"
+			  AND SECONDS_BETWEEN(A."FROM_TIME",A."TO_TIME")/3600<B."THRESHOLD_TO";
+
+
+			  
+ELSE			  
+t_path_temp = SELECT A."ROUTE_ID",								
+					  A."CONTAINER_TYPE",
+					  A."FROM_LOCATION",
+					  A."TO_LOCATION",
+					  A."FROM_TIME",
+					  A."TO_TIME",
+					  B."NODE_ID" AS "SOURCE_NODE_ID",
+					  C."NODE_ID" AS "SINK_NODE_ID",
+					  0 AS "LOWER",
+					  1000000 AS "CAPACITY",
+					  A."TOTAL_COST"+ TO_BIGINT((
+					  CASE WHEN A."TO_TIME" >=C."END_TIME" THEN SECONDS_BETWEEN(C."END_TIME",A."TO_TIME") ELSE 0 END
+					  +
+					  CASE WHEN A."FROM_TIME"<=B."START_TIME" THEN SECONDS_BETWEEN(A."FROM_TIME",B."START_TIME") ELSE 0 END
+					  )/3600*penalty/24) AS "COST",
+					  A."TOTAL_COST" AS "OCOST"
+			  FROM :t_route_all A
+			  INNER JOIN :t_node_tbl_p B 
+			  ON A."CONTAINER_TYPE"=B."CONTAINER_TYPE" 
+			  AND A."FROM_LOCATION"=B."LOCATION"
+			  INNER JOIN :t_node_tbl_n C 
+			  ON A."CONTAINER_TYPE"=C."CONTAINER_TYPE" 
+			  AND A."TO_LOCATION"=C."LOCATION"
+			  AND B."NODE_ID"!=C."NODE_ID";
+
+
+t_path_temp = SELECT A."ROUTE_ID",
+					 A."CONTAINER_TYPE",
+					 A."FROM_LOCATION",
+					 A."TO_LOCATION",
+					 A."FROM_TIME",
+					 A."TO_TIME",
+					 A."SOURCE_NODE_ID",
+					 A."SINK_NODE_ID",
+					 A."LOWER",
+					 A."CAPACITY",
+					 IFNULL(A."COST"-B."COST"*SECONDS_BETWEEN(A."FROM_TIME",A."TO_TIME")/3600,A."COST") AS "COST",
+					 A."OCOST"
+			  FROM :t_path_temp A
+			  LEFT JOIN :t_storage_cost B
+			  ON A."FROM_LOCATION"=B."LOCATION"
+			  AND A."CONTAINER_TYPE"=B."CONTAINER_TYPE"
+			  AND SECONDS_BETWEEN(A."FROM_TIME",A."TO_TIME")/3600>=B."THRESHOLD_FROM"
+			  AND SECONDS_BETWEEN(A."FROM_TIME",A."TO_TIME")/3600<B."THRESHOLD_TO";
+
+END IF;		
+			  	  
+t_path_temp = SELECT "ROUTE_ID",
+					 "CONTAINER_TYPE",
+					 "FROM_LOCATION",
+					 "TO_LOCATION",
+					 "FROM_TIME",
+					 "TO_TIME",
+					 "SOURCE_NODE_ID",
+					 "SINK_NODE_ID",
+					 "LOWER",
+					 "CAPACITY",
+					 MIN("COST") AS "COST",
+					 MIN("OCOST") AS "OCOST"
+			  FROM :t_path_temp
+			  GROUP BY "ROUTE_ID",
+					 "CONTAINER_TYPE",
+					 "FROM_LOCATION",
+					 "TO_LOCATION",
+					 "FROM_TIME",
+					 "TO_TIME",
+					 "SOURCE_NODE_ID",
+					 "SINK_NODE_ID",
+					 "LOWER",
+					 "CAPACITY";
+
+t_flow_cost = SELECT ROW_NUMBER() OVER() AS "PATH_ID",
+					 *
+			  FROM :t_path_temp;
+
+t_path = SELECT "PATH_ID",
+				"SOURCE_NODE_ID",
+				"SINK_NODE_ID",
+				"LOWER",
+				"CAPACITY",
+				CASE WHEN "COST" <0 THEN 1 ELSE "COST" END AS "COST"
+		  FROM :t_flow_cost;
+
+--LEMON/GENIOS Auto-switch
+IF (:counting3 > 0) THEN
+
+SELECT COUNT(*) INTO temp_value FROM :name_value_conf WHERE "NAME"='MAX_SOLVER_RUNTIME';
+
+IF (:temp_value > 0) THEN
+SELECT "VALUE" INTO var_pt_mode  FROM :name_value_conf WHERE "NAME"='MAX_SOLVER_RUNTIME'; 
+END IF;
+
+IF (:var_pt_mode IS NULL) THEN 
+   pt_mode := -1;
+ELSE
+   pt_mode := TO_INT (var_pt_mode);
+END IF;
+
+t_route_cap_aug = SELECT A."ROUTE_ID",A."CONTAINER_TYPE",A."GROUP_ID",A."CAPACITY",
+                  --begin handling capacity verification.
+						 --B."TEU"
+						 CASE A."TYPE" WHEN 'HC' THEN 1
+						 				   ELSE B."TEU"
+						 END AS "TEU"
+				  --end handling capacity verification	 
+				  FROM :t_route_cap A
+				  INNER JOIN :t_type_teu B ON A."CONTAINER_TYPE"=B."CONTAINER_TYPE";					
+
+t_flow_cap = SELECT  A."PATH_ID",
+		             B."GROUP_ID" AS "CONSTRAINT_ID",
+		             B."CAPACITY",
+		             B."TEU"
+             FROM :t_flow_cost AS A
+             INNER JOIN :t_route_cap_aug AS B
+             ON A."ROUTE_ID" = B."ROUTE_ID" AND A."CONTAINER_TYPE" = B."CONTAINER_TYPE";
+
+t_initial = SELECT TOP 0 NULL AS "PATH_ID", NULL AS "FLOW" FROM dummy;
+
+select * from :t_node;
+select * from :t_path;
+select * from :t_flow_cap;
+
+CALL "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::p_genios_path_cap_types_solve2"(
+:pt_mode,
+:t_initial,
+:t_node,
+:t_path,
+:t_flow_cap,
+t_path_res,
+t_dual_var,
+v_obj,
+flag
+);
+
+select * from :t_path_res;
+
+t_bottleneck = SELECT "CONSTRAINT_ID" AS "GROUP_ID",
+					  "DUAL_VAR" AS "REMAINING_SPACE"
+			   FROM :t_dual_var;
+                    
+ELSE
+flag := 'OPTIMAL SOLUTION';
+CALL "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::p_path_flow_solve2"(
+:opt_option,
+:t_node,
+:t_path,
+t_path_res
+);
+END IF;
+
+solverend := CURRENT_UTCTIMESTAMP;	 
+
+t_route_res = SELECT B."ROUTE_ID",
+					 B."CONTAINER_TYPE",
+					 A."FLOW" AS "QUANTITY",
+					 B."OCOST"*A."FLOW"/100 AS "TOTAL_COST",
+					 B."FROM_LOCATION",
+					 B."TO_LOCATION",
+					 B."FROM_TIME",
+					 B."TO_TIME"
+			  FROM :t_path_res A
+			  INNER JOIN :t_flow_cost B ON A."PATH_ID"=B."PATH_ID";
+
+SELECT COUNT(*) INTO counting5 FROM :t_route_res;
+IF (:counting5 = 0 AND flag = 'OPTIMAL SOLUTION') THEN
+flag := 'ALREADY OPTIMAL';
+ELSE
+SELECT SUM("TOTAL_COST") INTO v_obj FROM :t_route_res;
+END IF;
+
+IF (:v_obj IS NULL) THEN
+v_obj :=0;
+END IF;	
+
+t_route_res = SELECT * FROM :t_route_res WHERE "ROUTE_ID" NOT IN (SELECT "ROUTE_ID" FROM :t_virtual_storage);
+t_route_res = SELECT * FROM :t_route_res WHERE "QUANTITY"<>0;	
+
+t_route_res = SELECT "ROUTE_ID",
+					 "CONTAINER_TYPE",
+					 SUM("QUANTITY") AS "QUANTITY",
+					 SUM("TOTAL_COST") AS "TOTAL_COST",
+					 "FROM_LOCATION",
+					 "TO_LOCATION",
+					 "FROM_TIME",
+					 "TO_TIME"
+			  FROM :t_route_res
+			  GROUP BY "ROUTE_ID",
+					 "CONTAINER_TYPE",
+					 "FROM_LOCATION",
+					 "TO_LOCATION",
+					 "FROM_TIME",
+					 "TO_TIME";
+
+
+
+IF (:counting2 = 0) THEN
+flag := 'NO ROUTE AVAILABLE';
+END IF;
+
+solver_runtime := NANO100_BETWEEN (:solverstart, :solverend)/10000;
+
+END;
+

@@ -1,0 +1,9 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "used for getting overdue node offset for flowgraph";
+table.columns = [
+  {name = "PIPELINE_MODEL_ID"; sqlType = BIGINT;},
+  {name = "OVERDUE_NAME"; sqlType = NVARCHAR; length = 32;},
+  {name = "OVERDUE_OFFSET"; sqlType = INTEGER;}
+];
+table.primaryKey.pkcolumns = ["PIPELINE_MODEL_ID", "OVERDUE_NAME"];

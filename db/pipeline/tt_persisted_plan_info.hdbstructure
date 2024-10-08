@@ -1,0 +1,27 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+  {name = "ID"; sqlType = BIGINT;},
+  {name = "PLAN_TYPE_ID"; sqlType = INTEGER;},
+  {name = "PLAN_TYPE_NAME"; sqlType = VARCHAR;length = 32;},
+  {name = "KPI_TYPE"; sqlType = VARCHAR;length = 300;},
+  {name = "NAME"; sqlType = VARCHAR;length = 500;},
+  {name = "DESC"; sqlType = VARCHAR;length = 500;},
+  {name = "RESOURCE_FILTER_ID"; sqlType = BIGINT; },
+  {name = "RESOURCE_FILTER_NAME"; sqlType = VARCHAR; length = 50;},
+  {name = "LOCATION_FILTER_ID"; sqlType = BIGINT; },
+  {name = "LOCATION_FILTER_NAME"; sqlType = VARCHAR; length = 50;},
+  {name = "TIME_FILTER_ID"; sqlType = BIGINT; },
+  {name = "TIME_FILTER_NAME"; sqlType = VARCHAR; length = 50;},
+  {name = "VISIBILITY"; sqlType = VARCHAR;length = 10;},
+  {name = "VISIBILITY_DESC"; sqlType = VARCHAR;length = 32;},
+  {name = "CREATED_BY"; sqlType = VARCHAR;length = 60;},
+  {name = "LAST_MODIFIED_TIME"; sqlType = TIMESTAMP; },
+  {name = "EXPIRY_TIME"; sqlType = TIMESTAMP; },
+  {name = "LAST_EXECUTION_STATUS"; sqlType = VARCHAR; length = 50;},
+  {name = "PLAN_STATUS"; sqlType = SMALLINT;},
+  {name = "PLAN_STATUS_DESC"; sqlType = VARCHAR;length = 200;},
+  {name = "USAGE"; sqlType = VARCHAR; length = 1;},
+  {name = "USAGE_CODE"; sqlType = VARCHAR; length = 4;},
+  {name = "USAGE_DESC"; sqlType = VARCHAR; length = 50;}
+];

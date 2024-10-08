@@ -1,0 +1,93 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_time_filter_update"(
+	IN TIME_FILTER_ID BIGINT,
+    IN DESC VARCHAR(200),
+    IN DIRECTION_FLAG INTEGER,
+    IN CODE NVARCHAR(20),
+    IN NAME VARCHAR(50),
+    IN OFFSET_FLAG INTEGER,
+    IN TIMEZONE_ID VARCHAR(50),
+    IN HOUR_START_FROM INTEGER,
+    IN MINUTE_START_FROM INTEGER,
+    IN WEEK_START_FROM INTEGER,
+    IN MONTH_START_FROM INTEGER,
+    IN VISIBILITY CHAR(1),
+    IN ITEM_LIST "sap.tm.trp.db.filter::tt_time_filter_item_value",
+    OUT MSG_CODE VARCHAR(50)
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	--READS SQL DATA 
+AS
+USER_ID BIGINT;
+CODE VARCHAR(50);
+BEGIN
+
+DECLARE I_COUNT INT;
+DECLARE VIRTUAL_KPI_PLAN INT := 5;
+DECLARE VIRTUAL_SD_PLAN INT := 3;
+
+MSG_CODE := 'MSG_SUCCESS';
+
+-- GET CURRENT USER_ID
+SELECT IFNULL(MAX(ID),-1) INTO USER_ID
+FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+SELECT COUNT(1) INTO I_COUNT 
+FROM "sap.tm.trp.db.filter::t_time_filter" 
+WHERE ID = :TIME_FILTER_ID AND OFFSET_FLAG = 1;
+
+IF TIMEZONE_ID IS NULL OR TIMEZONE_ID = '' THEN
+    TIMEZONE_ID='UTC';
+END IF;
+
+IF :I_COUNT = 1 AND :OFFSET_FLAG = 0 THEN
+	--Check if the time filter been used by an virtual plan
+	SELECT COUNT(1) INTO I_COUNT
+	FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+	INNER JOIN  "sap.tm.trp.db.filter::t_filter_group" T2 ON (T1.FILTER_GROUP_ID = T2.ID)
+	WHERE PLAN_MODEL_TYPE_ID IN (:VIRTUAL_KPI_PLAN,:VIRTUAL_SD_PLAN) AND T2.TIME_FILTER_ID = :TIME_FILTER_ID;
+    --If a time filter has been used by an virtual plan, then the time filter offset should not be changed from 1 to 0:
+    IF :I_COUNT >0 THEN
+      MSG_CODE := 'MSG_OFFSET_CHANGE_ERROR';
+    END IF;
+
+END IF;
+
+-- UPDATE TIME FILTER METADATA
+UPDATE "sap.tm.trp.db.filter::t_time_filter"
+SET	DESC = :DESC,
+	DIRECTION_FLAG = :DIRECTION_FLAG,
+	CODE = UPPER(:NAME),
+	NAME = :NAME,
+	OFFSET_FLAG = :OFFSET_FLAG,
+	TIMEZONE_ID = :TIMEZONE_ID,
+	HOUR_START_FROM = :HOUR_START_FROM,
+	MINUTE_START_FROM = :MINUTE_START_FROM,
+	WEEK_START_FROM = :WEEK_START_FROM,
+	MONTH_START_FROM = :MONTH_START_FROM,
+	VISIBILITY = :VISIBILITY,
+	MODIFIED_BY = :USER_ID,
+	MODIFIED_ON = CURRENT_UTCTIMESTAMP
+WHERE ID = :TIME_FILTER_ID
+;
+
+-- DELETE OLD TIME FILTER ITEM
+DELETE FROM "sap.tm.trp.db.filter::t_time_filter_item"
+WHERE TIME_FILTER_ID = :TIME_FILTER_ID
+;
+-- DELETE OLD ITEM INTERVAL
+DELETE FROM "sap.tm.trp.db.filter::t_time_filter_interval"
+WHERE TIME_FILTER_ID = :TIME_FILTER_ID
+;
+
+-- INSERT INTO TIME FILTER ITEM
+CALL "sap.tm.trp.db.filter::p_time_filter_insert_filter_item"(:TIME_FILTER_ID,:DIRECTION_FLAG,:ITEM_LIST);
+
+-- SET USED PLAN STATUS TO NEED_CHECK (1)
+SELECT IFNULL(MAX(CODE),'') INTO CODE FROM "sap.tm.trp.db.filter::t_time_filter" WHERE ID = :TIME_FILTER_ID;
+CALL "sap.tm.trp.db.pipeline::p_set_plan_status_need_check"(:CODE,'TIME_FILTER');
+
+
+END;

@@ -1,0 +1,11 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.temporary = true;
+table.columns = [
+    {name = "EQUIPMENT_ID"; sqlType = VARCHAR; length = 22; nullable = false;},
+    {name = "LOCATION_ID"; sqlType = VARCHAR; length = 22; nullable = false;},
+    {name = "THRESHOLD_FROM"; sqlType = INTEGER; nullable = false;},
+    {name = "THRESHOLD_TO"; sqlType = INTEGER; nullable = true;},
+    {name = "COST"; sqlType = DECIMAL; precision = 13; scale = 3; nullable = false;},
+    {name = "CURRENCY"; sqlType = VARCHAR; length = 3; nullable = true;}
+];

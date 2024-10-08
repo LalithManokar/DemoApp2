@@ -1,0 +1,22 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "LEASE_CONTRACT_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "EQUIPMENT_CODE"; sqlType = NVARCHAR; length = 50; nullable = true;},
+	{name = "EQUIPMENT_CODE_TYPE"; sqlType = TINYINT; nullable = true; comment= "1 - Equipment, 2 - Equipment group";},
+    {name = "PER_DIEM"; sqlType = DECIMAL; precision = 13; scale = 3; nullable = true; comment = "per diem could be on a contract basis";},
+    {name = "CREATION_DATE"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "MODIFIED_DATE"; sqlType = TIMESTAMP; nullable = true;},
+	{name = "CREATED_BY"; sqlType = BIGINT; nullable = true;},
+	{name = "MODIFIED_BY"; sqlType = BIGINT; nullable = true;},
+	{name = "ACTIVE"; sqlType = TINYINT; nullable = false; defaultValue = "1";},
+	{name = "CODE"; sqlType = NVARCHAR; length = 22; nullable = false;},
+	{name = "CONTRACT_CODE"; sqlType = NVARCHAR; length = 22; nullable = false;}
+
+];
+
+table.indexes = [
+  {name = "LEASE_PER_DIEM_INDEX1"; unique = true; indexColumns = ["LEASE_CONTRACT_ID", "EQUIPMENT_CODE"];}
+];
+table.primaryKey.pkcolumns = ["ID"];

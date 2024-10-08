@@ -1,0 +1,329 @@
+{
+    "description":"r_stock_default",
+    "status":"Active",
+    "ruleBody":{
+        "type":"decisionTable",
+        "hitPolicy":"firstMatch",
+        "content":{
+            "headers":[
+                {
+                    "colID":"CS14ab91649f6x662be",
+                    "expression":"resource_stock.LOCATION_TYPE",
+                    "alias":"LOCATION_TYPE",
+                    "type":"condition",
+                    "width":100
+                },
+                {
+                    "colID":"CS14ab916559fxbae91",
+                    "expression":"resource_stock.LOCATION_NAME",
+                    "alias":"LOCATION_NAME",
+                    "type":"condition",
+                    "width":100
+                },
+                {
+                    "colID":"CS14ab916814fxa4387",
+                    "expression":"resource_stock.EQUIP_TYPE_CATEGORY",
+                    "alias":"EQUIP_TYPE_CATEGORY",
+                    "type":"condition",
+                    "width":100
+                },
+                {
+                    "colID":"CS14ab9168acfxcfdd8",
+                    "expression":"resource_stock.EQUIP_TYPE_NAME",
+                    "alias":"EQUIP_TYPE_NAME",
+                    "type":"condition",
+                    "width":100
+                },
+                {
+                    "colID":"CS14ab916b8d4x1fb6",
+                    "expression":"resource_stock.DATE",
+                    "alias":"DATE",
+                    "type":"condition",
+                    "width":137
+                },
+                {
+                    "colID":"CS14ab916c833x7decf",
+                    "expression":"resource_stock.STOCK",
+                    "alias":"STOCK",
+                    "type":"condition",
+                    "width":285
+                },
+                {
+                    "colID":"CS157607daf56xb3fb5",
+                    "expression":"resource_stock.RESOURCE_CATEGORY",
+                    "alias":"RESOURCE_CATEGORY",
+                    "type":"condition",
+                    "width":100
+                },
+                {
+                    "colID":"AS14ab9157db2xe4c84",
+                    "name":"MESSAGE",
+                    "type":"output",
+                    "width":110
+                },
+                {
+                    "colID":"AS14ab9157db2xf1b55y63",
+                    "name":"ALERT_REASON",
+                    "type":"output",
+                    "width":100
+                },
+                {
+                    "colID":"AS14ab9157db2x2615dy64",
+                    "name":"ALERT_SCORE_EMER",
+                    "type":"output",
+                    "width":100
+                }
+            ],
+            "rows":[
+                {
+                    "rowID":"0",
+                    "row":[
+                        {
+                            "colID":"CS14ab91649f6x662be",
+                            "content":"exists in(1,2,3,4,5,6)",
+                            "span":"4"
+                        },
+                        {
+                            "colID":"CS14ab916559fxbae91",
+                            "content":"is not like 'null'",
+                            "span":"4"
+                        },
+                        {
+                            "colID":"CS14ab916814fxa4387",
+                            "content":"exists in (1,2)",
+                            "span":"2"
+                        },
+                        {
+                            "colID":"CS14ab9168acfxcfdd8",
+                            "content":"is not like 'null'",
+                            "span":"2"
+                        },
+                        {
+                            "colID":"CS14ab916b8d4x1fb6",
+                            "content":"is after '01/01/2012'",
+                            "span":"2"
+                        },
+                        {
+                            "colID":"CS14ab916c833x7decf",
+                            "content":"is less than resource_stock.MIN_SAFETY_STOCK",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS157607daf56xb3fb5",
+                            "content":"is not like 'null'",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"AS14ab9157db2xe4c84",
+                            "content":"'Alert'"
+                        },
+                        {
+                            "colID":"AS14ab9157db2xf1b55y63",
+                            "content":"concatenate('Stock quantity for resource type ', resource_stock.EQUIP_TYPE_NAME,' at location ' ,resource_stock.LOCATION_NAME,' is ', resource_stock.STOCK, '. It is below the minimum safety stock (', resource_stock.MIN_SAFETY_STOCK, ').')"
+                        },
+                        {
+                            "colID":"AS14ab9157db2x2615dy64",
+                            "content":"resource_stock.STOCK - resource_stock.MIN_SAFETY_STOCK"
+                        }
+                    ]
+                },
+                {
+                    "rowID":"1",
+                    "row":[
+                        {
+                            "colID":"CS14ab91649f6x662be",
+                            "content":"exists in(1,2,3,4,5,6)",
+                            "span":"-1"
+                        },
+                        {
+                            "colID":"CS14ab916559fxbae91",
+                            "content":"is not like 'null'",
+                            "span":"-1"
+                        },
+                        {
+                            "colID":"CS14ab916814fxa4387",
+                            "content":"exists in (1,2)",
+                            "span":"-1"
+                        },
+                        {
+                            "colID":"CS14ab9168acfxcfdd8",
+                            "content":"is not like 'null'",
+                            "span":"-1"
+                        },
+                        {
+                            "colID":"CS14ab916b8d4x1fb6",
+                            "content":"is after '01/01/2012'",
+                            "span":"-1"
+                        },
+                        {
+                            "colID":"CS14ab916c833x7decf",
+                            "content":"is greater than resource_stock.MAX_SAFETY_STOCK",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS157607daf56xb3fb5",
+                            "content":"is not like 'null'",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"AS14ab9157db2xe4c84",
+                            "content":"'Alert'"
+                        },
+                        {
+                            "colID":"AS14ab9157db2xf1b55y63",
+                            "content":"concatenate('Stock quantity for resource type ', resource_stock.EQUIP_TYPE_NAME,' at location ' ,resource_stock.LOCATION_NAME,' is ', resource_stock.STOCK, '. It exceeds the maximum safety stock (', resource_stock.MAX_SAFETY_STOCK, ').')"
+                        },
+                        {
+                            "colID":"AS14ab9157db2x2615dy64",
+                            "content":"resource_stock.STOCK - resource_stock.MAX_SAFETY_STOCK"
+                        }
+                    ]
+                },
+                {
+                    "rowID":"2",
+                    "row":[
+                        {
+                            "colID":"CS14ab91649f6x662be",
+                            "content":"exists in(1,2,3,4,5,6)",
+                            "span":"-2"
+                        },
+                        {
+                            "colID":"CS14ab916559fxbae91",
+                            "content":"is not like 'null'",
+                            "span":"-2"
+                        },
+                        {
+                            "colID":"CS14ab916814fxa4387",
+                            "content":"does not exist in (1,2)",
+                            "span":"2"
+                        },
+                        {
+                            "colID":"CS14ab9168acfxcfdd8",
+                            "content":"is like 'N/A'",
+                            "span":"2"
+                        },
+                        {
+                            "colID":"CS14ab916b8d4x1fb6",
+                            "content":"is after '01/01/2012'",
+                            "span":"2"
+                        },
+                        {
+                            "colID":"CS14ab916c833x7decf",
+                            "content":"is less than resource_stock.MIN_SAFETY_STOCK",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS157607daf56xb3fb5",
+                            "content":"is not like 'null'",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"AS14ab9157db2xe4c84",
+                            "content":"'Alert'"
+                        },
+                        {
+                            "colID":"AS14ab9157db2xf1b55y63",
+                            "content":"concatenate('Stock quantity at location ' ,resource_stock.LOCATION_NAME,' is ', resource_stock.STOCK, '. It is below the minimum safety stock (', resource_stock.MIN_SAFETY_STOCK, ').')"
+                        },
+                        {
+                            "colID":"AS14ab9157db2x2615dy64",
+                            "content":"resource_stock.STOCK - resource_stock.MIN_SAFETY_STOCK"
+                        }
+                    ]
+                },
+                {
+                    "rowID":"3",
+                    "row":[
+                        {
+                            "colID":"CS14ab91649f6x662be",
+                            "content":"exists in(1,2,3,4,5,6)",
+                            "span":"-3"
+                        },
+                        {
+                            "colID":"CS14ab916559fxbae91",
+                            "content":"is not like 'null'",
+                            "span":"-3"
+                        },
+                        {
+                            "colID":"CS14ab916814fxa4387",
+                            "content":"does not exist in (1,2)",
+                            "span":"-1"
+                        },
+                        {
+                            "colID":"CS14ab9168acfxcfdd8",
+                            "content":"is like 'N/A'",
+                            "span":"-1"
+                        },
+                        {
+                            "colID":"CS14ab916b8d4x1fb6",
+                            "content":"is after '01/01/2012'",
+                            "span":"-1"
+                        },
+                        {
+                            "colID":"CS14ab916c833x7decf",
+                            "content":"is greater than resource_stock.MAX_SAFETY_STOCK",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"CS157607daf56xb3fb5",
+                            "content":"is not like 'null'",
+                            "span":"1"
+                        },
+                        {
+                            "colID":"AS14ab9157db2xe4c84",
+                            "content":"'Alert'"
+                        },
+                        {
+                            "colID":"AS14ab9157db2xf1b55y63",
+                            "content":"concatenate('Stock quantity at location ' ,resource_stock.LOCATION_NAME,' is ', resource_stock.STOCK, '. It exceeds the maximum safety stock(', resource_stock.MAX_SAFETY_STOCK, ').')"
+                        },
+                        {
+                            "colID":"AS14ab9157db2x2615dy64",
+                            "content":"resource_stock.STOCK - resource_stock.MAX_SAFETY_STOCK"
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "vocabulary":"sap.tm.trp.db.hrf.resourceStock::voc_resource_stock",
+    "output":"stock_alert_view",
+    "embeddedServices":[
+        {
+            "readOnly":true,
+            "allowCalibration":false,
+            "executionContext":{
+                "dataObject":{
+                    "name":"resource_stock",
+                    "keys":[
+                        "LOCATION_ID",
+                        "LOCATION_TYPE",
+                        "EQUIP_TYPE_ID",
+                        "EQUIP_TYPE_CATEGORY",
+                        "DATE"
+                    ]
+                },
+                "parameters":{
+                    "definition":[
+                        {
+                            "name":"resource_stock",
+                            "dataType":"DataObject",
+                            "description":"resource_stock info",
+                            "persist":false,
+                            "dataObject":{
+                                "name":"resource_stock",
+                                "identifiers":[
+                                    "LOCATION_ID",
+                                    "LOCATION_TYPE",
+                                    "EQUIP_TYPE_ID",
+                                    "EQUIP_TYPE_CATEGORY",
+                                    "DATE"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

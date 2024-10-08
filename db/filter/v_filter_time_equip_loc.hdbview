@@ -1,0 +1,17 @@
+//To define the HDB view file use the following syntax: 
+
+schema="SAP_TM_TRP";
+query="
+	SELECT
+		T3.ID
+		,T3.TIME_FILTER_ID
+		,T5.EQUIPMENT_FILTER_ID
+		,T7.LOCATION_FILTER_ID 
+ 	FROM \"sap.tm.trp.db.filter::t_filter_group\" AS T3
+ 	LEFT JOIN \"sap.tm.trp.db.filter::t_filter_equipment_filter\" AS T5 ON T3.ID = T5.FILTER_GROUP_ID
+ 	LEFT JOIN \"sap.tm.trp.db.filter::t_filter_location_filter\" AS T7 ON T3.ID = T7.FILTER_GROUP_ID
+ 	";
+depends_on_table = ["sap.tm.trp.db.filter::t_filter_group"
+					,"sap.tm.trp.db.filter::t_filter_equipment_filter"
+					,"sap.tm.trp.db.filter::t_filter_location_filter"
+					];

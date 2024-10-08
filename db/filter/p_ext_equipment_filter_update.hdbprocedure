@@ -1,0 +1,63 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_ext_equipment_filter_update"(
+    IN FILTER_ID BIGINT,
+    IN NAME VARCHAR(50),
+    IN DESC VARCHAR(500),
+    IN VISIBLE_FLAG VARCHAR(3),
+    IN ITEMS "sap.tm.trp.db.pipeline::tt_geo_id",
+    IN FILTER_TYPE INTEGER,
+    IN RESOURCE_CATEGORY_ID VARCHAR(20)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE CODE VARCHAR(20);
+
+	declare has_auth  tinyint;
+
+	select COUNT (1) into has_auth from "sap.tm.trp.db.filter::v_equipment_filter_id_auth"
+	where equipment_filter_id = :FILTER_ID; -- authorization check
+
+	if :has_auth > 0 then
+
+	    SELECT IFNULL(MAX(ID),-100) INTO USER_ID FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+	    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+
+	    SELECT IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E') INTO SPRAS FROM DUMMY;
+
+	    UPDATE "sap.tm.trp.db.filter::t_equipment_filter"
+	    SET DESC = :NAME,
+	        VISIBLE_FLAG = :VISIBLE_FLAG,
+	        FILTER_TYPE = :FILTER_TYPE,
+	        LAST_MODIFIED_BY = :USER_ID,
+	        -- LAST_MODIFIED_AT = CURRENT_TIMESTAMP
+	        LAST_MODIFIED_AT = CURRENT_UTCTIMESTAMP
+	    WHERE ID = :FILTER_ID;
+
+	    UPDATE "sap.tm.trp.db.filter::t_equipment_filter_t"
+	    SET DESC = :DESC,
+	        SPRAS = :SPRAS
+	    WHERE ID = :FILTER_ID;
+
+	    DELETE FROM "sap.tm.trp.db.filter::t_equipment_filter_equipment"
+	    WHERE EQUIPMENT_FILTER_ID = :FILTER_ID;
+
+	    IF :FILTER_TYPE = 1 THEN
+	        INSERT INTO "sap.tm.trp.db.filter::t_equipment_filter_equipment"(EQUIPMENT_FILTER_ID, EQUI_CODE, RESOURCE_CATEGORY)
+	        SELECT :FILTER_ID, ID, :RESOURCE_CATEGORY_ID FROM :ITEMS;
+	    ELSEIF :FILTER_TYPE = 2 THEN
+	        INSERT INTO "sap.tm.trp.db.filter::t_equipment_filter_equipment"(EQUIPMENT_FILTER_ID, EQUIPMENT_GROUP_ID, RESOURCE_CATEGORY)
+	        --SELECT :FILTER_ID, TO_INTEGER(ID) FROM :ITEMS;
+	        SELECT :FILTER_ID, ID, :RESOURCE_CATEGORY_ID FROM :ITEMS;
+	    END IF;
+
+	    SELECT IFNULL(MAX(CODE), '') INTO CODE FROM "sap.tm.trp.db.filter::t_equipment_filter"
+	    WHERE ID = :FILTER_ID;
+
+	    CALL "sap.tm.trp.db.filter::p_set_resource_filter_need_check"(:CODE, 'RESOURCE_FILTER');
+
+	 end if;
+END;

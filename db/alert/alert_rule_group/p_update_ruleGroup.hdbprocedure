@@ -1,0 +1,44 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert.alert_rule_group::p_update_ruleGroup" (
+    IN ALERT_RULE_GROUP_ID BIGINT,
+    IN ALERT_GROUP_NAME VARCHAR(50),
+    IN ALERT_GROUP_DESC VARCHAR(200),
+    IN ALERT_RULE_GROUP_CATEGORY_ID INTEGER,
+    IN ALLOWED_USAGED_ID VARCHAR(10)
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+    DECLARE USER_ID BIGINT;
+    DECLARE TRP_LOCALE NVARCHAR(5000);
+
+    select IFNULL(MAX(T1.ID),0) into USER_ID
+    from "sap.tm.trp.db.systemmanagement.user::t_user" T1
+    inner join (SELECT USERNAME AS USER FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username"()) T2
+    on T1.USERNAME = T2.USER;
+    
+    SELECT IFNULL(SESSION_CONTEXT('LOCALE_SAP'),'E') INTO TRP_LOCALE FROM DUMMY;
+
+    UPDATE "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group" 
+    SET NAME = :ALERT_GROUP_NAME,
+        DESC = :ALERT_GROUP_DESC,
+        ALERT_RULE_GROUP_CATEGORY_ID = :ALERT_RULE_GROUP_CATEGORY_ID,
+        ALLOWED_USAGE =:ALLOWED_USAGED_ID,
+        LAST_MODIFIED_BY = :USER_ID,
+        LAST_MODIFIED_ON = CURRENT_UTCTIMESTAMP
+    WHERE ALERT_RULE_GROUP_ID = :ALERT_RULE_GROUP_ID;
+
+    UPSERT "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_t" (
+        ID,
+        SPRAS,
+        DESC
+    )
+    VALUES (
+        :ALERT_RULE_GROUP_ID,
+        :TRP_LOCALE,
+        :ALERT_GROUP_DESC
+    ) WHERE ID = :ALERT_RULE_GROUP_ID AND SPRAS = :TRP_LOCALE;
+                 
+END;
+

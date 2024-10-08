@@ -1,0 +1,79 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_route_head_info" (
+    IN SIM_PLAN_ID BIGINT,
+    IN SCENARIO_ID BIGINT,
+    IN FROM_LOC_NAME VARCHAR(50),
+    IN TO_LOC_NAME VARCHAR(50),
+    IN START_TIME TIMESTAMP,
+    IN END_TIME TIMESTAMP,
+    OUT ROUTES "sap.tm.trp.db.planningcockpit::tt_routes_head",
+    OUT MESSAGE VARCHAR(200)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    READS SQL DATA
+    AS
+BEGIN
+
+   DECLARE NETWORK_ID BIGINT;
+   DECLARE VAR_MIN_FROM_TIME TIMESTAMP; 
+   DECLARE VAR_MAX_FROM_TIME TIMESTAMP; 
+   DECLARE I_COUNT INTEGER; 
+   --Get network code:
+    CALL "sap.tm.trp.db.planningcockpit::p_get_networkid_by_simulation_scenario_id"(:SIM_PLAN_ID,:SCENARIO_ID,NETWORK_ID);
+   
+   IF :NETWORK_ID > -1 THEN
+    --Deal with multiple time interval:
+    
+         CALL "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_query_route"
+        (
+           :NETWORK_ID,
+           '',
+           ROUTE_TABLE,
+           ROUTE_DETAIL
+        );
+         
+         
+         SELECT COUNT(1) INTO I_COUNT FROM :ROUTE_TABLE;
+         IF I_COUNT >0 THEN
+         
+            TMP_ROUTE = SELECT T1.ID AS ROUTE_ID
+            FROM :ROUTE_TABLE T1
+            WHERE (T1.ARRIVAL_TIME <= :END_TIME OR :END_TIME IS NULL OR :END_TIME = '')
+            AND (T1.DEPARTURE_TIME >= :START_TIME OR :START_TIME IS NULL OR :START_TIME = ''); 
+	  
+	    ROUTES = SELECT T1.ID AS ROUTE_ID,T1.FROM_LOCATION,T1.TO_LOCATION,T1.DEPARTURE_TIME,T1.ARRIVAL_TIME
+		  FROM "sap.tm.trp.routing.db.path::t_route" T1
+		  --if one location pair equal to the input from location and to location, then the whole root should be choose:
+	     INNER JOIN (
+		               SELECT DISTINCT T1.ROUTE_ID
+					   FROM  (SELECT SEQUENCE, ROUTE_ID,FROM_LOCATION 
+					          FROM "sap.tm.trp.routing.db.dataset::cv_route_sequence"()
+					   )T1
+					   INNER JOIN( SELECT SEQUENCE,ROUTE_ID,TO_LOCATION
+					               FROM "sap.tm.trp.routing.db.dataset::cv_route_sequence"()
+					   )T2 ON (T1.ROUTE_ID = T2.ROUTE_ID AND T1.SEQUENCE <= T2.SEQUENCE)
+					   WHERE ( T1.FROM_LOCATION = :FROM_LOC_NAME OR :FROM_LOC_NAME = '') 
+					         AND (T2.TO_LOCATION = :TO_LOC_NAME OR :TO_LOC_NAME = '')
+	     )T2 ON (T1.ID = T2.ROUTE_ID)
+	     --filter out the route according to the input start time and end time:
+	     INNER JOIN :TMP_ROUTE T3 ON (T1.ID = T3.ROUTE_ID)
+	     LEFT OUTER JOIN(
+	             --The to_location should not be the start location of the route 
+	             --And the from_location should not be the end location of the route:
+	             SELECT  ID AS ROUTE_ID FROM "sap.tm.trp.routing.db.path::t_route" WHERE FROM_LOCATION = :TO_LOC_NAME
+	             UNION ALL SELECT ID AS ROUTE_ID FROM "sap.tm.trp.routing.db.path::t_route" WHERE TO_LOCATION = :FROM_LOC_NAME
+	     )T4 ON (T3.ROUTE_ID = T4.ROUTE_ID)
+	     WHERE T4.ROUTE_ID IS NULL
+	    ;
+	     MESSAGE := 'MSG_GET_ROUTE_HEAD_SUCCESS';
+          
+         ELSE
+          MESSAGE := 'MSG_NETWORK_NOT_EXIST'; 
+         END IF;
+          
+   ELSE
+      MESSAGE := 'MSG_NETWORK_NOT_EXIST'; 
+   END IF;
+
+END;

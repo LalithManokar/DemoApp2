@@ -1,0 +1,50 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_check_pipeline_by_attr_group" ( 
+    IN ATTR_GROUP_ID BIGINT,
+    IN PIPELINE_ID BIGINT,
+    OUT MISSING_COUNT INT,
+    OUT MISSING_ATTRIBUTES "sap.tm.trp.db.filter::t_attribute_group_attribute"
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP"
+READS SQL DATA
+AS
+BEGIN
+    DECLARE SD_DATA_PROVIDER_CNT INTEGER;
+
+    IF :ATTR_GROUP_ID > 0 THEN
+
+        --Get all the data provider nodes and their output key
+        SELECT 
+            COUNT(*) INTO SD_DATA_PROVIDER_CNT 
+            --DATAPROVIDER_NODE_TBL.PIPELINE_MODEL_ID AS PIPELINE_ID,
+            --LAYOUT_TBL.NODE_ID AS DATAPROVIDER_NODE_ID, 
+            --LAYOUT_TBL.VALUE AS OUTPUT_KEY
+        FROM (
+            SELECT NODE_TBL.PIPELINE_MODEL_ID, OUT_TBL.NODE_ID 
+            FROM "sap.tm.trp.db.pipeline::t_pipeline_node_connection" AS IN_TBL
+            RIGHT OUTER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node_connection" AS OUT_TBL
+                ON IN_TBL.SUBSEQUENT_NODE_ID = OUT_TBL.NODE_ID
+            INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node" AS NODE_TBL
+                ON NODE_TBL.ID = OUT_TBL.NODE_ID
+        ) AS DATAPROVIDER_NODE_TBL 
+        INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node_layout" AS LAYOUT_TBL 
+            ON DATAPROVIDER_NODE_TBL.NODE_ID = LAYOUT_TBL.NODE_ID
+        WHERE
+            KEY='outputKey'
+            AND DATAPROVIDER_NODE_TBL.PIPELINE_MODEL_ID = :PIPELINE_ID 
+            AND LOWER(LAYOUT_TBL.VALUE) IN ('supply','demand')
+        ;
+
+        --Check whether the plan has some supply/demand data providers, if so, do the check
+        IF :SD_DATA_PROVIDER_CNT > 0 THEN
+            CALL "sap.tm.trp.db.supplydemand.dataprovider::p_check_extra_filter_on_transportation_order_item_by_attr_group"(:ATTR_GROUP_ID, MISSING_COUNT, MISSING_ATTRIBUTES);
+        ELSE
+            MISSING_COUNT := 0;
+        END IF;
+    
+    ELSE
+        MISSING_COUNT := 0;
+    
+    END IF;
+END;

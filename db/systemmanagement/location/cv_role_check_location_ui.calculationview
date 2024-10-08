@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_role_check_location_ui" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_role_check_location_ui"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="INTEGER" id="RANK"/>
+        <viewAttribute datatype="NVARCHAR" id="ID" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="NAME" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="DESC" length="40"/>
+        <viewAttribute datatype="NVARCHAR" id="COUNTRY_CODE" length="3"/>
+        <viewAttribute datatype="NVARCHAR" id="COUNTRY_NAME" length="15"/>
+        <viewAttribute datatype="NVARCHAR" id="REGION_CODE" length="3"/>
+        <viewAttribute datatype="NVARCHAR" id="STATE_NAME" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="CITY_ID" length="12"/>
+        <viewAttribute datatype="NVARCHAR" id="CITY_NAME" length="40"/>
+        <viewAttribute datatype="DOUBLE" id="XPOS"/>
+        <viewAttribute datatype="DOUBLE" id="YPOS"/>
+        <viewAttribute datatype="NVARCHAR" id="POSTAL_CODE" length="10"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> 
+  
+ BEGIN 
+ 
+     DECLARE LOCATION_TYPE_LOCATION INTEGER :=1;
+     DECLARE HAS_AUTHORIZATION_FLAG TINYINT;
+     
+     CALL &quot;sap.tm.trp.db.systemmanagement::p_check_location_full_authorization&quot; (
+		 	HAVE_AUTHORIZATION_FLAG => HAS_AUTHORIZATION_FLAG
+		 ); 
+	
+          
+         var_out = SELECT 
+                         T1.RANK,
+                         T1.ID,
+                         T1.NAME,
+                         T1.DESC,
+                         T1.COUNTRY_CODE,
+                         T1.COUNTRY_NAME,
+                         T1.REGION_CODE,
+                         T1.STATE_NAME,
+                         T1.CITY_ID,
+                         T1.CITY_NAME,
+                         T1.XPOS,
+                         T1.YPOS,
+                         T1.POSTAL_CODE         
+                         FROM &quot;sap.tm.trp.db.systemmanagement.location::v_location_ui&quot; T1
+                         WHERE :HAS_AUTHORIZATION_FLAG = 1  
+                     UNION ALL           
+                   SELECT DISTINCT
+                         T1.RANK,
+                         T1.ID,
+                         T1.NAME,
+                         T1.DESC,
+                         T1.COUNTRY_CODE,
+                         T1.COUNTRY_NAME,
+                         T1.REGION_CODE,
+                         T1.STATE_NAME,
+                         T1.CITY_ID,
+                         T1.CITY_NAME,
+                         T1.XPOS,
+                         T1.YPOS,
+                         T1.POSTAL_CODE
+                         FROM &quot;sap.tm.trp.db.systemmanagement.location::v_location_ui&quot; T1
+                         INNER JOIN &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;
+                         (PLACEHOLDER.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_LOCATION) T2
+                         ON T1.ID = T2.LOCATION_ID
+                         WHERE :HAS_AUTHORIZATION_FLAG = 0;
+                                               
+   
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="2">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="NAME" order="3">
+        <descriptions defaultDescription="NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="DESC" order="4">
+        <descriptions defaultDescription="DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+      <attribute id="COUNTRY_CODE" order="5">
+        <descriptions defaultDescription="COUNTRY_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="COUNTRY_CODE"/>
+      </attribute>
+      <attribute id="COUNTRY_NAME" order="6">
+        <descriptions defaultDescription="COUNTRY_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="COUNTRY_NAME"/>
+      </attribute>
+      <attribute id="REGION_CODE" order="7">
+        <descriptions defaultDescription="REGION_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="REGION_CODE"/>
+      </attribute>
+      <attribute id="STATE_NAME" order="8">
+        <descriptions defaultDescription="STATE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="STATE_NAME"/>
+      </attribute>
+      <attribute id="CITY_ID" order="9">
+        <descriptions defaultDescription="CITY_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="CITY_ID"/>
+      </attribute>
+      <attribute id="CITY_NAME" order="10">
+        <descriptions defaultDescription="CITY_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="CITY_NAME"/>
+      </attribute>
+      <attribute id="POSTAL_CODE" order="13">
+        <descriptions defaultDescription="POSTAL_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="POSTAL_CODE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="RANK" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="RANK"/>
+        <measureMapping columnObjectName="Script_View" columnName="RANK"/>
+      </measure>
+      <measure id="XPOS" order="11" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="XPOS"/>
+        <measureMapping columnObjectName="Script_View" columnName="XPOS"/>
+      </measure>
+      <measure id="YPOS" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="YPOS"/>
+        <measureMapping columnObjectName="Script_View" columnName="YPOS"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

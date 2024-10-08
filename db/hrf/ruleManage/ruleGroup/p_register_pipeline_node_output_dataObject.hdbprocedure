@@ -1,0 +1,237 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_register_pipeline_node_output_dataObject" (
+IN  PIPELINE_MODEL_ID BIGINT
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+	DECLARE SUPPLY_FLAG INTEGER;
+    DECLARE DEMAND_FLAG INTEGER;
+    DECLARE STOCK_FLAG  INTEGER;
+/*
+    DECLARE IDLE_RATE_FLAG INTEGER;
+    DECLARE STORAGE_COST_FLAG INTEGER;
+    DECLARE DWELL_TIME_FLAG  INTEGER;
+    DECLARE IMPORT_EXPORT_FLAG  INTEGER;
+     */
+    DECLARE RATE_FLAG INTEGER;
+    DECLARE QUANTITY_FLAG INTEGER;
+        
+    DECLARE EXIST_FLAG  INTEGER;
+    
+    
+    DECLARE PIPELINE_NODE_OUTPUT_KEY VARCHAR(20) := 'outputKey';
+    DECLARE OUTPUT_KEY_SUPPLY VARCHAR(20) := 'SUPPLY';
+    DECLARE OUTPUT_KEY_DEMAND VARCHAR(20) := 'DEMAND';
+    DECLARE OUTPUT_KEY_STOCK VARCHAR(20) := 'STOCK';
+    
+ /*   DECLARE OUTPUT_KEY_IDLE_RATE VARCHAR(20) := 'IDLE_RATE';  
+    DECLARE OUTPUT_KEY_STORAGE_COST VARCHAR(20) := 'STORAGE_COST';   
+    DECLARE OUTPUT_KEY_DWELL_TIME VARCHAR(20) := 'DWELL_TIME';  
+    DECLARE OUTPUT_KEY_IMPORT_EXPORT VARCHAR(20) := 'IMPORT_EXPORT_VOLUME';
+    */      
+    DECLARE OUTPUT_KEY_RATE VARCHAR(20) := 'RATE';
+    DECLARE OUTPUT_KEY_QUANTITY VARCHAR(20) := 'QUANTITY';
+    
+    DECLARE DATA_OBJECT_SUPPLY VARCHAR(50) := 'SUPPLY';
+    DECLARE DATA_OBJECT_DEMAND VARCHAR(50) := 'DEMAND';
+    DECLARE DATA_OBJECT_STOCK VARCHAR(50) := 'STOCK';
+    DECLARE DATA_OBJECT_SUPPLY_DEMAND VARCHAR(50) := 'SUPPLY_DEMAND';
+    DECLARE DATA_OBJECT_STOCK_SUPPLY_DEMAND VARCHAR(50) := 'STOCK_SUPPLY_DEMAND';
+    
+/*    DECLARE DATA_OBJECT_IDLE_RATE VARCHAR(50) := 'IDLE_RATE';
+    DECLARE DATA_OBJECT_STORAGE_COST VARCHAR(50) := 'STORAGE_COST';
+    DECLARE DATA_OBJECT_DWELL_TIME VARCHAR(50) := 'DWELL_TIME';
+    DECLARE DATA_OBJECT_IMPORT_EXPORT VARCHAR(50) := 'IMPORT_EXPORT';
+*/  DECLARE DATA_OBJECT_RATE VARCHAR(50) := 'RATE';
+    DECLARE DATA_OBJECT_QUANTITY VARCHAR(50) := 'QUANTITY';
+    
+    DECLARE TMP_NODE_OUTPUT_KEYS VARCHAR(200);
+    DECLARE TMP_METADATA_NODE_ID VARCHAR(500);   
+    
+    DECLARE CURSOR DISTINCT_NODE_CURSOR FOR
+ /*   select distinct T11.NODE_ID from 
+       (select T2.ID as NODE_ID
+       from "sap.tm.trp.db.pipeline::t_pipeline_model" T1
+       inner join "sap.tm.trp.db.pipeline::t_pipeline_node" T2
+       on (T1.ID = T2.PIPELINE_MODEL_ID and
+           T2.RESULT_VISIBLE = 1 and
+           T1.ID = :PIPELINE_MODEL_ID)
+       )T11;  */
+       
+    select distinct T11.NODE_ID, T11.NODE_OUTPUT_KEYS, T11.METADATA_NODE_ID, T11.PIPELINE_MODEL_ID from 
+		(select T2.ID as NODE_ID, 
+	            T2.METADATA_NODE_ID, 
+	            UPPER(REPLACE(T3.VALUE,' ','')) as NODE_OUTPUT_KEYS,
+	            T1.ID as PIPELINE_MODEL_ID
+	     from "sap.tm.trp.db.pipeline::t_pipeline_model" T1
+         inner join "sap.tm.trp.db.pipeline::t_pipeline_node" T2
+         on (T1.ID = T2.PIPELINE_MODEL_ID and
+            T2.RESULT_VISIBLE = 1 and
+            T1.ID = :PIPELINE_MODEL_ID)
+         inner join "sap.tm.trp.db.pipeline::t_pipeline_node_layout" T3
+         on (T2.ID  = T3.NODE_ID and
+            T3.key = :PIPELINE_NODE_OUTPUT_KEY)
+		)T11;  
+		
+    PIPELINE_NODE_OUTPUT_KEYS_TBL =
+
+		select distinct T11.NODE_ID, T11.NODE_OUTPUT_KEYS, T11.METADATA_NODE_ID from 
+		(select T2.ID as NODE_ID, 
+	            T2.METADATA_NODE_ID, 
+	            UPPER(REPLACE(T3.VALUE,' ','')) as NODE_OUTPUT_KEYS  
+	     from "sap.tm.trp.db.pipeline::t_pipeline_model" T1
+         inner join "sap.tm.trp.db.pipeline::t_pipeline_node" T2
+         on (T1.ID = T2.PIPELINE_MODEL_ID and
+            T2.RESULT_VISIBLE = 1 and
+            T1.ID = :PIPELINE_MODEL_ID)
+         inner join "sap.tm.trp.db.pipeline::t_pipeline_node_layout" T3
+         on (T2.ID  = T3.NODE_ID and
+            T3.key = :PIPELINE_NODE_OUTPUT_KEY)
+		)T11;  
+
+	FOR NODE_OUTPUT_KEYS as DISTINCT_NODE_CURSOR DO
+	    NODE_OUTPUT_KEYS_TBL = select distinct NODE_OUTPUT_KEYS 
+	                           from :PIPELINE_NODE_OUTPUT_KEYS_TBL T1
+	                           where T1.NODE_ID = NODE_OUTPUT_KEYS.NODE_ID;
+	    	
+	    select LOCATE(T1.NODE_OUTPUT_KEYS,:OUTPUT_KEY_SUPPLY) into SUPPLY_FLAG from :NODE_OUTPUT_KEYS_TBL T1;
+	    select LOCATE(T1.NODE_OUTPUT_KEYS,:OUTPUT_KEY_DEMAND) into DEMAND_FLAG from :NODE_OUTPUT_KEYS_TBL T1;
+	    select LOCATE(T1.NODE_OUTPUT_KEYS,:OUTPUT_KEY_STOCK) into STOCK_FLAG from :NODE_OUTPUT_KEYS_TBL T1;
+	    
+	 /*   select LOCATE(T1.NODE_OUTPUT_KEYS,:OUTPUT_KEY_IDLE_RATE) into IDLE_RATE_FLAG from :NODE_OUTPUT_KEYS_TBL T1;
+	    select LOCATE(T1.NODE_OUTPUT_KEYS,:OUTPUT_KEY_STORAGE_COST) into STORAGE_COST_FLAG from :NODE_OUTPUT_KEYS_TBL T1;
+	    select LOCATE(T1.NODE_OUTPUT_KEYS,:OUTPUT_KEY_DWELL_TIME) into DWELL_TIME_FLAG from :NODE_OUTPUT_KEYS_TBL T1;
+	    select LOCATE(T1.NODE_OUTPUT_KEYS,:OUTPUT_KEY_IMPORT_EXPORT) into IMPORT_EXPORT_FLAG from :NODE_OUTPUT_KEYS_TBL T1;
+	  */
+	    select LOCATE(T1.NODE_OUTPUT_KEYS,:OUTPUT_KEY_RATE) into RATE_FLAG from :NODE_OUTPUT_KEYS_TBL T1;
+	    select LOCATE(T1.NODE_OUTPUT_KEYS,:OUTPUT_KEY_QUANTITY) into QUANTITY_FLAG from :NODE_OUTPUT_KEYS_TBL T1;
+	  --  select NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS, NODE_OUTPUT_KEYS.METADATA_NODE_ID from dummy;
+	/*    select T1.NODE_OUTPUT_KEYS into TMP_NODE_OUTPUT_KEYS,T1.METADATA_NODE_ID into TMP_METADATA_NODE_ID
+	    from :PIPELINE_NODE_OUTPUT_KEYS_TBL T1
+	    where T1.NODE_ID = NODE_OUTPUT_KEYS.NODE_ID;
+	   */ 	
+	IF ( :STOCK_FLAG > 0 and :SUPPLY_FLAG > 0 and :DEMAND_FLAG >0 )
+		THEN
+        	select count(*) into EXIST_FLAG
+        	from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" T1
+        	where T1.DATA_OBJECT_FORMAT = :DATA_OBJECT_STOCK_SUPPLY_DEMAND and 
+        	 --     T1.NODE_OUTPUT_KEYS =  NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS and 
+        	      T1.METADATA_NODE_ID = NODE_OUTPUT_KEYS.METADATA_NODE_ID and
+        	      T1.PIPELINE_MODEL_ID = NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID;
+        
+        	IF ( :EXIST_FLAG = 0 )
+        	THEN 
+            	insert into "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" values(2,:DATA_OBJECT_STOCK_SUPPLY_DEMAND, NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS, NODE_OUTPUT_KEYS.METADATA_NODE_ID, NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID);
+        	END IF;
+		ELSEIF ( :SUPPLY_FLAG > 0 and :DEMAND_FLAG >0 )
+		THEN
+        	select count(*) into EXIST_FLAG
+        	from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" T1
+        	where T1.DATA_OBJECT_FORMAT = :DATA_OBJECT_SUPPLY_DEMAND and 
+        	    --  T1.NODE_OUTPUT_KEYS =  NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS and 
+        	      T1.METADATA_NODE_ID = NODE_OUTPUT_KEYS.METADATA_NODE_ID and
+        	      T1.PIPELINE_MODEL_ID = NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID;
+        
+        	IF ( :EXIST_FLAG = 0 )
+        	THEN 
+            	insert into "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" values(5,:DATA_OBJECT_SUPPLY_DEMAND, NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS, NODE_OUTPUT_KEYS.METADATA_NODE_ID, NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID);
+        	END IF;
+		ELSEIF ( :SUPPLY_FLAG > 0 )
+		THEN 
+        	select count(*) into EXIST_FLAG
+        	from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" T1
+        	where T1.DATA_OBJECT_FORMAT = :DATA_OBJECT_SUPPLY and 
+        	  --    T1.NODE_OUTPUT_KEYS =  NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS and 
+        	      T1.METADATA_NODE_ID = NODE_OUTPUT_KEYS.METADATA_NODE_ID and
+        	      T1.PIPELINE_MODEL_ID = NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID;
+        
+        	IF ( :EXIST_FLAG = 0 )
+        	THEN 
+            	insert into "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" values(3,:DATA_OBJECT_SUPPLY, NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS, NODE_OUTPUT_KEYS.METADATA_NODE_ID, NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID);
+        	END IF;          
+		ELSEIF ( :DEMAND_FLAG > 0 )
+		THEN 
+        	select count(*) into EXIST_FLAG
+        	from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" T1
+        	where T1.DATA_OBJECT_FORMAT = :DATA_OBJECT_DEMAND and 
+        	   --   T1.NODE_OUTPUT_KEYS =  NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS and 
+        	      T1.METADATA_NODE_ID = NODE_OUTPUT_KEYS.METADATA_NODE_ID and
+        	      T1.PIPELINE_MODEL_ID = NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID;
+        	      
+        	IF ( :EXIST_FLAG = 0 )
+        	THEN 
+            	insert into "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" values(4,:DATA_OBJECT_DEMAND, NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS, NODE_OUTPUT_KEYS.METADATA_NODE_ID, NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID);
+        	END IF;    
+		ELSEIF ( :STOCK_FLAG  > 0 )
+		THEN
+        	select count(*) into EXIST_FLAG
+        	from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" T1
+        	where T1.DATA_OBJECT_FORMAT = :DATA_OBJECT_STOCK and 
+        	   --   T1.NODE_OUTPUT_KEYS =  NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS and 
+        	      T1.METADATA_NODE_ID = NODE_OUTPUT_KEYS.METADATA_NODE_ID and
+        	      T1.PIPELINE_MODEL_ID = NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID;
+        	      
+        	IF ( :EXIST_FLAG = 0 )
+        	THEN 
+            	insert into "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" values(1,:DATA_OBJECT_STOCK, NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS, NODE_OUTPUT_KEYS.METADATA_NODE_ID, NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID);
+        	END IF;
+ 		ELSEIF ( :RATE_FLAG  > 0 )
+		THEN
+        	select count(*) into EXIST_FLAG
+        	from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" T1
+        	where T1.DATA_OBJECT_FORMAT = :DATA_OBJECT_RATE and 
+        	  --    T1.NODE_OUTPUT_KEYS =  NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS and 
+        	      T1.METADATA_NODE_ID = NODE_OUTPUT_KEYS.METADATA_NODE_ID and
+        	      T1.PIPELINE_MODEL_ID = NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID;
+        	      
+        	IF ( :EXIST_FLAG = 0 )
+        	THEN 
+            	insert into "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" values(6,:DATA_OBJECT_RATE, NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS, NODE_OUTPUT_KEYS.METADATA_NODE_ID, NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID);
+        	END IF;
+   		ELSEIF ( :QUANTITY_FLAG  > 0 )
+		THEN
+        	select count(*) into EXIST_FLAG
+        	from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" T1
+        	where T1.DATA_OBJECT_FORMAT = :DATA_OBJECT_QUANTITY and 
+        	   --   T1.NODE_OUTPUT_KEYS =  NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS and 
+        	      T1.METADATA_NODE_ID = NODE_OUTPUT_KEYS.METADATA_NODE_ID and
+        	      T1.PIPELINE_MODEL_ID = NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID;
+        	      
+        	IF ( :EXIST_FLAG = 0 )
+        	THEN 
+            	insert into "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" values(7,:DATA_OBJECT_QUANTITY, NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS, NODE_OUTPUT_KEYS.METADATA_NODE_ID, NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID);
+        	END IF;
+    	/*ELSEIF ( :DWELL_TIME_FLAG  > 0 )
+		THEN
+        	select count(*) into EXIST_FLAG
+        	from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" T1
+        	where T1.DATA_OBJECT_FORMAT = :DATA_OBJECT_DWELL_TIME and 
+        	   --   T1.NODE_OUTPUT_KEYS =  NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS and 
+        	      T1.METADATA_NODE_ID = NODE_OUTPUT_KEYS.METADATA_NODE_ID and
+        	      T1.PIPELINE_MODEL_ID = NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID;
+        	      
+        	IF ( :EXIST_FLAG = 0 )
+        	THEN 
+            	insert into "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" values(12,:DATA_OBJECT_DWELL_TIME, NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS, NODE_OUTPUT_KEYS.METADATA_NODE_ID, NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID);
+        	END IF;
+   		ELSEIF ( :IMPORT_EXPORT_FLAG  > 0 )
+		THEN
+        	select count(*) into EXIST_FLAG
+        	from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" T1
+        	where T1.DATA_OBJECT_FORMAT = :DATA_OBJECT_IMPORT_EXPORT and 
+        	  --    T1.NODE_OUTPUT_KEYS =  NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS and 
+        	      T1.METADATA_NODE_ID = NODE_OUTPUT_KEYS.METADATA_NODE_ID and
+        	      T1.PIPELINE_MODEL_ID = NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID;
+        	      
+        	IF ( :EXIST_FLAG = 0 )
+        	THEN 
+            	insert into "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_dataObject_map_nodeOutputKeys_metaNodeID" values(13,:DATA_OBJECT_IMPORT_EXPORT, NODE_OUTPUT_KEYS.NODE_OUTPUT_KEYS, NODE_OUTPUT_KEYS.METADATA_NODE_ID, NODE_OUTPUT_KEYS.PIPELINE_MODEL_ID);
+        	END IF;
+*/		ELSE
+		END IF;                       
+	    
+	END FOR;
+   
+END

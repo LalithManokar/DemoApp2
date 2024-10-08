@@ -1,0 +1,31 @@
+schema = "SAP_TM_TRP";
+query = "
+SELECT
+    ALERT_GRP_TBL.ALERT_RULE_GROUP_ID AS ID,
+    ALERT_GRP_TBL.CODE,
+    ALERT_GRP_TBL.NAME,
+    T1.DESC AS DESC,
+    USER_TBL_CREATE.USERNAME AS CREATED_BY,
+    USER_TBL_MODIFY.USERNAME AS MODIFIED_BY,
+    ALERT_GRP_TBL.RESOURCE_CATEGORY as RESOURCE_CATEGORY
+FROM
+    \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group\" AS ALERT_GRP_TBL
+    LEFT OUTER JOIN (SELECT I18N_TEXT_TBL.ID,I18N_TEXT_TBL.DESC AS DESC 
+                     FROM \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_t\" AS I18N_TEXT_TBL
+                     LEFT OUTER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE_TBL
+                     ON I18N_TEXT_TBL.SPRAS = LANGUAGE_TBL.SPRAS) T1
+    ON ALERT_GRP_TBL.ALERT_RULE_GROUP_ID = T1.ID
+    LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS USER_TBL_CREATE
+    ON ALERT_GRP_TBL.CREATE_BY = USER_TBL_CREATE.ID
+    LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS USER_TBL_MODIFY
+    ON ALERT_GRP_TBL.LAST_MODIFIED_BY = USER_TBL_MODIFY.ID
+";
+depends_on_table = [
+    "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group",
+    "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group_t"
+];
+depends_on_view = [
+    "sap.tm.trp.db.semantic.common::v_lang_code",
+    "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"
+]; 
+

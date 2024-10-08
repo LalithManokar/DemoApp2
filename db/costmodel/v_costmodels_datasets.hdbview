@@ -1,0 +1,41 @@
+schema = "SAP_TM_TRP";
+
+query  = "  
+SELECT T0.COST_MODEL_ID,
+           T0.PRIORITY AS RANK,T1.ID AS COST_DATASET_ID,T1.NAME,T1.DESC,
+            T5.DESC AS COST_DATASET_TYPE,RTRIM(T6.CARRIER_IDS,', ') AS CARRIER_IDS,
+            RTRIM(T7.TRANSPORTATION_MODE_CODES,', ') AS TRANSPORTATION_MODE_CODES,
+            RTRIM(T7.TRANSPORTATION_MODE_DESCS,'; ') AS TRANSPORTATION_MODE_DESCS,
+            T1.CURRENCY_CODE,T8.CARRIER_IDS AS COST_DATASET_CARRIER_IDS
+            FROM \"sap.tm.trp.db.costmodel::t_cost_dataset\" T1
+            INNER JOIN \"sap.tm.trp.db.costmodel::t_cost_model_dataset\" T0 ON (T1.ID = T0.COST_DATASET_ID)
+            INNER JOIN \"sap.tm.trp.db.costmodel::v_cost_type\" T5 ON (T1.COST_TYPE_CODE = T5.CODE)
+            LEFT OUTER JOIN (
+	            SELECT COST_MODEL_ID,COST_DATASET_ID,STRING_AGG(CONCAT(CARRIER_ID,', ')) AS CARRIER_IDS
+	            FROM \"sap.tm.trp.db.costmodel::t_cost_model_carrier\"
+	            GROUP BY COST_MODEL_ID,COST_DATASET_ID
+            ) T6 ON (T0.COST_DATASET_ID = T6.COST_DATASET_ID AND T0.COST_MODEL_ID = T6.COST_MODEL_ID)
+            LEFT OUTER JOIN (
+	            SELECT C.COST_MODEL_ID,C.COST_DATASET_ID,
+	            STRING_AGG(CONCAT(C.CODE,', ')) AS TRANSPORTATION_MODE_CODES,
+	            STRING_AGG(CONCAT(C.DESC,'; ')) AS TRANSPORTATION_MODE_DESCS
+	            FROM 
+	              (   SELECT A.COST_MODEL_ID,A.COST_DATASET_ID,B.CODE,B.DESC 
+	                  FROM \"sap.tm.trp.db.costmodel::t_cost_model_transportation_means\" A
+	                  INNER JOIN \"sap.tm.trp.db.semantic.common::v_transportation_means\" B ON (A.TRANSPORTATION_MODE_CODE = B.CODE)
+	              )C
+	            GROUP BY C.COST_MODEL_ID,C.COST_DATASET_ID
+            ) T7 ON (T0.COST_DATASET_ID= T7.COST_DATASET_ID AND T0.COST_MODEL_ID = T7.COST_MODEL_ID)
+            LEFT OUTER JOIN (
+	            SELECT COST_DATASET_ID,STRING_AGG(CONCAT(CARRIER_ID,', ')) AS CARRIER_IDS
+	            FROM \"sap.tm.trp.db.costmodel::t_cost_dataset_carrier\"
+	            GROUP BY COST_DATASET_ID
+            ) T8 ON (T1.ID = T8.COST_DATASET_ID)
+           ";
+          
+   depends_on_table = ["sap.tm.trp.db.costmodel::t_cost_dataset","sap.tm.trp.db.costmodel::t_cost_model_dataset",
+   "sap.tm.trp.db.costmodel::t_cost_model_carrier","sap.tm.trp.db.costmodel::t_cost_model_transportation_means",
+   "sap.tm.trp.db.costmodel::t_cost_dataset_carrier"]; 
+   
+depends_on_view = ["sap.tm.trp.db.costmodel::v_cost_type","sap.tm.trp.db.semantic.common::v_transportation_means"];         
+                 

@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_plan_list_optimized" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_plan_list"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/></viewAttributes>
+      <calculatedViewAttributes/>
+      <definition>  
+ BEGIN 
+    DECLARE NAME VARCHAR(60); 
+    DECLARE HAS_AUTHORIZATION_FLAG TINYINT;
+	DECLARE HAS_AUTH TINYINT := 1;
+	DECLARE NO_AUTH TINYINT := 0;
+	DECLARE VISIBILITY_GLOBAL VARCHAR(10) := 'G';
+	DECLARE VISIBILITY_PERSONAL VARCHAR(10) := 'P';
+
+    SELECT IFNULL(MAX(USERNAME),'') INTO NAME
+		FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+	
+	call &quot;sap.tm.trp.db.systemmanagement::p_check_location_full_authorization&quot; (
+        HAVE_AUTHORIZATION_FLAG =&gt; HAS_AUTHORIZATION_FLAG
+    );  
+
+     sql4 =  SELECT DISTINCT
+                T1.ID,
+                T7.ID AS EQUIPMENT_FILTER_ID,
+                T9.ID AS LOCATION_FILTER_ID,
+                TV.CODE AS VISIBILITY, 
+                T10.USERNAME AS CREATED_BY
+                FROM &quot;sap.tm.trp.db.pipeline::t_plan_model&quot; T1
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.filter::t_filter_equipment_filter&quot; T6 ON T6.FILTER_GROUP_ID = T1.FILTER_GROUP_ID
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.filter::t_equipment_filter&quot; T7 ON T7.ID = T6.EQUIPMENT_FILTER_ID AND T7.RESOURCE_CATEGORY = T6.RESOURCE_CATEGORY
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.filter::t_filter_location_filter&quot; T8 ON T8.FILTER_GROUP_ID = T1.FILTER_GROUP_ID
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.filter::t_location_filter&quot; T9 ON T9.ID = T8.LOCATION_FILTER_ID
+                LEFT OUTER JOIN 
+                (   SELECT TV1.FLAG, TV1.CODE,IFNULL(TV2.DESC,TV1.DESC)AS DESC
+                    FROM &quot;sap.tm.trp.db.systemmanagement::t_visibility_type&quot; TV1
+                    LEFT OUTER JOIN 
+                    ( 
+                      SELECT TV21.ID,TV21.DESC
+                      FROM &quot;sap.tm.trp.db.systemmanagement::t_visibility_type_t&quot; TV21
+                      INNER JOIN &quot;sap.tm.trp.db.semantic.common::v_lang_code&quot; TV22 ON (TV21.SPRAS = TV22.SPRAS)
+                    )TV2 ON TV1.ID =  TV2.ID 
+                )TV ON (TV.FLAG = T1.VISIBILITY_FLAG)
+                LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; T10 ON T10.ID = T1.CREATE_BY;
+                
+     var_out = SELECT                       
+                A.ID
+                FROM :sql4 A
+                WHERE :HAS_AUTHORIZATION_FLAG = :HAS_AUTH
+                UNION ALL
+                SELECT                       
+                A.ID
+                FROM :sql4 A
+                INNER JOIN &quot;sap.tm.trp.db.filter::cv_role_check_location_filter&quot; D 
+                ON (D.ID = A.LOCATION_FILTER_ID)
+                INNER JOIN &quot;sap.tm.trp.db.filter::cv_equipment_filter&quot; E 
+                ON (A.EQUIPMENT_FILTER_ID = E.ID)
+                WHERE :HAS_AUTHORIZATION_FLAG = :NO_AUTH 
+				AND (A.VISIBILITY = :VISIBILITY_GLOBAL OR (A.VISIBILITY = VISIBILITY_PERSONAL AND A.CREATED_BY =:NAME ))
+                ;
+      
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute></attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/></logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

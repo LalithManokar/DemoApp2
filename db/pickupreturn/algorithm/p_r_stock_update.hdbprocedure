@@ -1,0 +1,184 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.algorithm::p_r_stock_update" ( 
+IN t_current_stock  "sap.tm.trp.db.pickupreturn.algorithm::tt_r_stock",
+IN t_shortage  "sap.tm.trp.db.pickupreturn.algorithm::tt_r_stock_shortage",
+IN t_depot_cost "sap.tm.trp.db.pickupreturn.algorithm::tt_depot_cost_trp11",
+IN t_customer_merchant "sap.tm.trp.db.pickupreturn.algorithm::tt_customer",
+IN t_customer_carrier "sap.tm.trp.db.pickupreturn.algorithm::tt_customer",
+IN t_trans_merchant "sap.tm.trp.db.pickupreturn.algorithm::tt_trans_types",
+IN t_trans_carrier "sap.tm.trp.db.pickupreturn.algorithm::tt_trans_types",
+OUT t_fulfill_booking "sap.tm.trp.db.pickupreturn.algorithm::tt_res_haulage",
+OUT t_stage_II_customer_merchant "sap.tm.trp.db.pickupreturn.algorithm::tt_customer",
+OUT t_stage_II_customer_carrier "sap.tm.trp.db.pickupreturn.algorithm::tt_customer",
+OUT t_stage_II_current_stock  "sap.tm.trp.db.pickupreturn.algorithm::tt_r_stock"
+) 
+LANGUAGE SQLSCRIPT 
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN 
+
+t_stage_I_shortage = SELECT A."NODE_ID",
+						   A."LOCATION",
+						   A."CONTAINER_TYPE",
+						   A."SHORTAGE",
+						   IFNULL(B."STORAGE_COSTUNIT",0) AS "STORAGE_COST",
+						   IFNULL(B."HANDLING_COSTUNIT",0) AS "HANDLING_COST"
+					FROM :t_shortage A
+					LEFT JOIN :t_depot_cost B
+					ON A."LOCATION"=B."LOCATION"
+					AND A."CONTAINER_TYPE"=B."CONTAINER_TYPE";
+
+--generate <V,E>
+t_stage_I_node = SELECT "NODE_ID",
+						"QUANTITY" AS "SUPPLY_DEMAND"
+				 FROM :t_customer_merchant
+				 UNION ALL
+				 SELECT "NODE_ID",
+						"QUANTITY" AS "SUPPLY_DEMAND"
+				 FROM :t_customer_carrier
+				 UNION ALL
+				 SELECT "NODE_ID",
+				 	    "SHORTAGE" AS "SUPPLY_DEMAND"
+				 FROM :t_stage_I_shortage;
+			 
+t_stage_I_arc_merchant = SELECT A."NODE_ID" AS "FROM_ID",
+								B."NODE_ID" AS "TO_ID",
+								0 AS "LOWER",
+								1000000 AS "CAPACITY",
+								CASE WHEN C."COST" IS NULL THEN 1
+									 WHEN C."COST"=0 THEN 1
+									 ELSE C."COST" END AS "COST",
+								B."STORAGE_COST",
+								B."HANDLING_COST",
+								A."BOOKING_ID",
+								B."LOCATION" AS "DEPOT_LOCATION",
+								A."CUSTOMER_LOCATION",
+								B."CONTAINER_TYPE",
+								A."START_TIME",
+								A."BOOKING_TIME",
+								0 AS "HAULAGE_TYPE",
+								C."MTR"
+						  FROM :t_trans_merchant C
+						  INNER JOIN :t_customer_merchant A
+						  ON A."CUSTOMER_LOCATION"=C."FROM_LOCATION"
+						  AND A."CONTAINER_TYPE"=C."CONTAINER_TYPE"
+						  INNER JOIN :t_stage_I_shortage B
+						  ON B."LOCATION"=C."TO_LOCATION"
+						  AND B."CONTAINER_TYPE"=C."CONTAINER_TYPE";
+								
+t_stage_I_arc_carrier = SELECT A."NODE_ID" AS "FROM_ID",
+								B."NODE_ID" AS "TO_ID",
+								0 AS "LOWER",
+								1000000 AS "CAPACITY",
+								CASE WHEN C."COST" IS NULL THEN 1
+									 WHEN C."COST"=0 THEN 1
+									 ELSE C."COST" END AS "COST",
+								B."STORAGE_COST",
+								B."HANDLING_COST",
+								A."BOOKING_ID",
+								B."LOCATION" AS "DEPOT_LOCATION",
+								A."CUSTOMER_LOCATION",
+								B."CONTAINER_TYPE",
+								A."START_TIME",
+								A."BOOKING_TIME",
+								1 AS "HAULAGE_TYPE",
+								C."MTR"
+						  FROM :t_trans_carrier C
+						  INNER JOIN :t_customer_carrier A
+						  ON A."CUSTOMER_LOCATION"=C."FROM_LOCATION"
+						  AND A."CONTAINER_TYPE"=C."CONTAINER_TYPE"
+						  INNER JOIN :t_stage_I_shortage B
+						  ON B."LOCATION"=C."TO_LOCATION"
+						  AND B."CONTAINER_TYPE"=C."CONTAINER_TYPE"
+						  AND SECONDS_BETWEEN(A."START_TIME",A."BOOKING_TIME")>= C."DURATION";
+
+/* Consider handling capacity, check the remain handling capacity if available for pickup
+otherwise, need to filter out the TUs which already exceed the remain hanling capacity 
+based on the start time.
+*/
+
+t_stage_I_arc_temp = SELECT * FROM :t_stage_I_arc_merchant
+					 UNION ALL
+					 SELECT * FROM :t_stage_I_arc_carrier;
+
+t_stage_I_arc = SELECT "FROM_ID",
+					   "TO_ID",
+					   "LOWER",
+					   "CAPACITY",
+					   "COST"+"STORAGE_COST"+"HANDLING_COST" AS "COST" 
+				FROM :t_stage_I_arc_temp; 
+				
+
+CALL "_SYS_AFL"."OFL_AREA_NETWORK_SIMPLEX_SOLVE_PROC"(:t_stage_I_node, :t_stage_I_arc, t_stage_I_flow);
+
+t_fulfill_booking = SELECT B."BOOKING_ID",
+						   B."CUSTOMER_LOCATION" AS "FROM_LOCATION",
+						   B."DEPOT_LOCATION" AS "TO_LOCATION",
+						   B."START_TIME" AS "FROM_TIME",
+						   B."BOOKING_TIME" AS "TO_TIME",
+						   B."CONTAINER_TYPE",
+						   A."FLOW" AS "QUANTITY",
+						   B."STORAGE_COST",
+						   B."HANDLING_COST",
+						   B."COST" AS "TRANSPORTATION_COST",
+						   B."COST"+B."STORAGE_COST"+B."HANDLING_COST" AS "TOTAL_COST",
+						   'RETURN' AS "MODE",
+						   B."HAULAGE_TYPE"
+					FROM :t_stage_I_flow A
+					INNER JOIN :t_stage_I_arc_temp B
+					ON A."FROM_ID"=B."FROM_ID"
+					AND A."TO_ID"=B."TO_ID";
+
+--remaining bookings
+t_demand_out = SELECT "FROM_ID",
+					  SUM("FLOW") AS "FLOWOUT"
+			   FROM :t_stage_I_flow
+			   GROUP BY "FROM_ID";
+			   
+t_stage_II_customer_merchant = SELECT A."NODE_ID",
+									  A."BOOKING_ID",
+									  A."START_TIME",
+									  A."BOOKING_TIME",
+									  A."CUSTOMER_LOCATION",
+									  A."CONTAINER_TYPE",
+									  IFNULL(A."QUANTITY"-B."FLOWOUT",A."QUANTITY") AS "QUANTITY",
+									  A."HAULAGE_TYPE"
+								FROM :t_customer_merchant A
+								LEFT JOIN :t_demand_out B
+								ON A."NODE_ID"=B."FROM_ID";
+
+t_stage_II_customer_merchant = SELECT * FROM :t_stage_II_customer_merchant WHERE "QUANTITY">0;
+			   
+t_stage_II_customer_carrier = SELECT A."NODE_ID",
+									  A."BOOKING_ID",
+									  A."START_TIME",
+									  A."BOOKING_TIME",
+									  A."CUSTOMER_LOCATION",
+									  A."CONTAINER_TYPE",
+									  IFNULL(A."QUANTITY"-B."FLOWOUT",A."QUANTITY") AS "QUANTITY",
+									  A."HAULAGE_TYPE"
+								FROM :t_customer_carrier A
+								LEFT JOIN :t_demand_out B
+								ON A."NODE_ID"=B."FROM_ID";
+
+t_stage_II_customer_carrier = SELECT * FROM :t_stage_II_customer_carrier WHERE "QUANTITY">0;
+
+--updated current_stock
+t_supply_in = SELECT "TO_ID", 
+					  SUM("FLOW") AS "FLOWIN"
+			   FROM :t_stage_I_flow 
+			   GROUP BY "TO_ID";
+			    
+t_stage_II_current_stock = SELECT A."NODE_ID",
+                  		  A."LOCATION",
+                  		  A."CONTAINER_TYPE",
+                  		  IFNULL(A."SHORTAGE"+B."FLOWIN",A."SHORTAGE") AS "SHORTAGE",
+                  		  A."MIN_STOCK",
+						  A."MAX_STOCK",
+						  A."MAX_PHY_CAPACITY"
+              		FROM :t_current_stock A
+              		LEFT JOIN :t_supply_in B
+              		ON A."NODE_ID"=B."TO_ID";
+  
+
+END;

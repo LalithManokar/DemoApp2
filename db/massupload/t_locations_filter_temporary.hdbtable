@@ -1,0 +1,20 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+
+	{name = "ROW_NUM"; sqlType = INTEGER;},
+	{name = "LOCATION_FILTER_ID"; sqlType = BIGINT;},    
+    {name = "LOCATION_FILTER_NAME"; sqlType = VARCHAR; length = 20;},
+    {name = "DESCRIPTION"; sqlType = VARCHAR; length = 500;},
+    {name = "LOCATION_FILTER_TYPE"; sqlType = VARCHAR; length = 20;},
+    {name = "VISIBILITY"; sqlType = VARCHAR; length = 20;},
+    {name = "LOCATION_ID";sqlType = VARCHAR; length = 32;},
+    {name = "LOCATION_NAME"; sqlType = VARCHAR; length = 20;},
+    {name = "RESOURCE_CATEGORY"; sqlType = VARCHAR; length = 50; },
+	{name = "USER_ID"; sqlType =  BIGINT;  nullable = false; },
+    {name = "ACTION_TIME"; sqlType = TIMESTAMP; nullable = true; },
+    {name = "CONNECTION_ID"; sqlType = VARCHAR; length = 100; nullable = true; },  
+    {name = "IND_UPD"; sqlType = INTEGER; }
+    
+    
+];

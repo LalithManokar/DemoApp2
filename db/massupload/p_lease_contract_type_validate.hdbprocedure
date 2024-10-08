@@ -1,0 +1,36 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_lease_contract_type_validate" (
+	IN LEASE_CONTRACT_TYPE_INPUT "sap.tm.trp.db.massupload::tt_lease_contract_type_upload",
+    IN ERROR_LIMIT INTEGER,
+    OUT INVALID_ITEMS "sap.tm.trp.db.massupload::tt_massupload_invalid_item"  ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS 
+BEGIN 
+
+	--Declarations
+	DECLARE CNT INT;
+	
+	--Duplicate LESSOR_AGREMENT_REFERENCE from CSV file
+    ITEMS = 
+			SELECT LEASE_CONTRACT_TYPE
+			FROM :LEASE_CONTRACT_TYPE_INPUT GROUP BY LEASE_CONTRACT_TYPE HAVING COUNT(LEASE_CONTRACT_TYPE)>1;
+	
+	
+	--VALIDATE if INPUT have Duplicate LESSOR_AGREMENT_REFERENCE 
+	INVALID_ITEMS =  SELECT   LCT.ROW_INDEX,
+	               		      1 AS COL_INDEX,
+		               		 'DUPLICATE_LEASE_CONTRACT_TYPE 'AS REASON_CODE
+		          			 FROM :ITEMS AS A
+		         	         JOIN :LEASE_CONTRACT_TYPE_INPUT LCT
+		         	         ON LCT.LEASE_CONTRACT_TYPE = A.LEASE_CONTRACT_TYPE;
+	         	         
+	         	         
+	--Check Count less than equal to 'ERROR_LIMIT'
+	SELECT COUNT (*) INTO CNT FROM :INVALID_ITEMS;
+	IF :CNT >= :ERROR_LIMIT THEN
+         INVALID_ITEMS = SELECT * FROM :INVALID_ITEMS limit :ERROR_LIMIT;
+         RETURN;
+	END IF;	
+
+END;

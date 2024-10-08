@@ -1,0 +1,15 @@
+schema="SAP_TM_TRP";
+query="SELECT T1.RESOURCE_ID AS RESID,
+              T1.RESOURCE_NAME AS NAME, 
+              T1.RESOURCE_TYPE_CODE AS EQUISZTP,
+              T1.EQUITYPE,
+              T1.OWNERSHIP_CODE,
+              T1.LEASE_CONTRACT_REF,
+              T1.SPECIAL_INSTRUCTION
+      FROM \"sap.tm.trp.db.semantic.resource::v_resource_master\" T1
+      ";
+      
+depends_on_view = ["sap.tm.trp.db.semantic.resource::v_resource_master"];
+
+  
+

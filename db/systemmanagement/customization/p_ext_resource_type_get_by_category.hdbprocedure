@@ -1,0 +1,16 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.customization::p_ext_resource_type_get_by_category"(
+    IN RESOURCE_GROUPS "sap.tm.trp.db.systemmanagement.customization::tt_resource_category",
+    OUT RESOURCE_TYPES "sap.tm.trp.db.systemmanagement.customization::tt_resource_type"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    RESOURCE_TYPES = SELECT DISTINCT T1.RESOURCE_TYPE_CODE AS RESOURCE_TYPE,
+                            T1.RESOURCE_TYPE_DESC
+                     FROM "sap.tm.trp.db.semantic.resource::v_resource_type" T1
+                     INNER JOIN :RESOURCE_GROUPS T2
+                     ON (T1.EQUI_TYPE = T2.EQUI_TYPE);
+    
+END;

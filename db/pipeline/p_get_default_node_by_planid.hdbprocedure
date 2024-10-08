@@ -1,0 +1,60 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_get_default_node_by_planid" (
+   	IN IN_PLAN_ID BIGINT, --ID of SD/VSD
+   	IN IN_EXECUTION_ID BIGINT,
+   	OUT NODE_ID BIGINT
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+
+   DECLARE SCHEDULED_PLAN INTEGER := 1;
+   DECLARE VIRTUAL_PLAN INTEGER := 3; 
+   DECLARE V_PLAN_TYPE INTEGER;
+   DECLARE V_PIPELINE_MODEL_ID BIGINT;
+   DECLARE V_INSTANT_ENABLED CHAR(1) DEFAULT '';
+   DECLARE V_MAX_EXECUTION_ID BIGINT;
+   DECLARE V_NODE_ID BIGINT;
+   DECLARE V_SD_PLAN BIGINT;
+   
+   SELECT PLAN_MODEL_TYPE_ID, PIPELINE_MODEL_ID INTO V_PLAN_TYPE, V_PIPELINE_MODEL_ID
+     FROM "sap.tm.trp.db.pipeline::t_plan_model" 
+     WHERE ID = :IN_PLAN_ID AND (PLAN_MODEL_TYPE_ID = :SCHEDULED_PLAN OR PLAN_MODEL_TYPE_ID = :VIRTUAL_PLAN);
+    
+   IF V_PLAN_TYPE = :VIRTUAL_PLAN THEN
+   ---get calculation model id of assigned subplan
+       SELECT TOP 1 PERSISTED_PLAN_MODEL_ID INTO V_SD_PLAN
+	   FROM "sap.tm.trp.db.pipeline::t_virtual_plan_persisted_plan" WHERE VIRTUAL_PLAN_MODEL_ID = :IN_PLAN_ID;
+       
+       SELECT PIPELINE_MODEL_ID INTO V_PIPELINE_MODEL_ID
+       FROM "sap.tm.trp.db.pipeline::t_plan_model" WHERE ID = :V_SD_PLAN AND PLAN_MODEL_TYPE_ID = :SCHEDULED_PLAN;
+   ELSE
+       V_SD_PLAN = :IN_PLAN_ID;
+   END IF;
+   
+    IF IN_EXECUTION_ID IS NOT NULL AND IN_EXECUTION_ID <> -1 THEN  
+      CALL "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid"(:IN_EXECUTION_ID,NODE_ID);
+    ELSE
+   ---check if instant plan or not
+     SELECT  IFNULL (INSTANT_ENABLED,'') INTO V_INSTANT_ENABLED 
+	 FROM "sap.tm.trp.db.pipeline::t_pipeline_model" WHERE ID = :V_PIPELINE_MODEL_ID;
+     IF :V_INSTANT_ENABLED = 'X' THEN --instant plan
+       	SELECT COALESCE(max(ID),-1) INTO NODE_ID 
+	    FROM (
+				SELECT T0.DEFAULT_NODE_ID AS ID
+				FROM "sap.tm.trp.db.pipeline::v_pipeline_default_node" T0
+			    WHERE T0.PIPELINE_MODEL_ID = :V_PIPELINE_MODEL_ID
+			);
+
+     ELSE --not instant plan
+  
+	  SELECT IFNULL (MAX(ID),0) INTO V_MAX_EXECUTION_ID
+      FROM "sap.tm.trp.db.pipeline::t_plan_execution" WHERE PLAN_MODEL_ID = :V_SD_PLAN;
+      
+      CALL "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid"(:V_MAX_EXECUTION_ID,NODE_ID);
+     END IF ; 
+	 
+	END IF ;
+
+END;

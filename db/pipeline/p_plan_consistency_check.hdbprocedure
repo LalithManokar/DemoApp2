@@ -1,0 +1,23 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_plan_consistency_check"(
+    IN PLAN_MODEL_ID BIGINT,
+    OUT RECORD_NUM INTEGER
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+    DECLARE USER_ID BIGINT;
+    DECLARE FILTER_GROUP_ID BIGINT;
+    
+    SELECT IFNULL(MAX(ID),-100) INTO USER_ID FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    SELECT FILTER_GROUP_ID INTO FILTER_GROUP_ID
+    FROM "sap.tm.trp.db.pipeline::t_plan_model"
+    WHERE ID = :PLAN_MODEL_ID;
+    
+    SELECT COUNT(*) INTO RECORD_NUM
+      FROM "sap.tm.trp.db.filter::t_filter_group"
+     WHERE ID = :FILTER_GROUP_ID AND USER_ID = :USER_ID;
+END;

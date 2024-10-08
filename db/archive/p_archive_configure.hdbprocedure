@@ -1,0 +1,38 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::p_archive_configure" ( 
+IN CONFIGURATION_TYPE NVARCHAR(100),
+IN ADAPTER_TYPE NVARCHAR(100),
+IN ADAPTER_NAME NVARCHAR(100),
+IN DATASOURCE_NAME NVARCHAR(100),
+IN DATABASE_NAME NVARCHAR(100),
+IN SCHEMA_NAME NVARCHAR(100),
+IN CONFIGURATION_OBJECT NVARCHAR(100),
+OUT STATUS_CODE INTEGER) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	AS
+BEGIN
+
+
+DECLARE EXIT HANDLER FOR SQLEXCEPTION
+BEGIN 
+	STATUS_CODE:=0;
+END;
+
+	
+	IF :CONFIGURATION_TYPE='SDA'
+	THEN 
+		INSERT INTO "sap.tm.trp.db.archive::t_archive_configuration" values('CONFIGURATION_TYPE',:CONFIGURATION_TYPE);
+		INSERT INTO "sap.tm.trp.db.archive::t_archive_configuration" values('ADAPTER_TYPE',:ADAPTER_TYPE);
+		INSERT INTO "sap.tm.trp.db.archive::t_archive_configuration" values('ADAPTER_NAME',:ADAPTER_NAME);
+		INSERT INTO "sap.tm.trp.db.archive::t_archive_configuration" values('DATASOURCE_NAME',:DATASOURCE_NAME);
+		INSERT INTO "sap.tm.trp.db.archive::t_archive_configuration" values('DATABASE_NAME',:DATABASE_NAME);
+		INSERT INTO "sap.tm.trp.db.archive::t_archive_configuration" values('SCHEMA_NAME',:SCHEMA_NAME);		
+		INSERT INTO "sap.tm.trp.db.archive::t_archive_configuration" values('CONFIGURATION_OBJECT',:CONFIGURATION_OBJECT);
+	ELSE
+		INSERT INTO "sap.tm.trp.db.archive::t_archive_configuration" values('CONFIGURATION_TYPE',:CONFIGURATION_TYPE);
+		INSERT INTO "sap.tm.trp.db.archive::t_archive_configuration" values('CONFIGURATION_OBJECT',:CONFIGURATION_OBJECT);
+	END IF;		
+		
+		STATUS_CODE:=1;
+END;

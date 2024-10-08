@@ -1,0 +1,24 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_sd_parameter_filterid_by_instant_rulegroup" (
+	IN PLAN_ID "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_sd_plan_rulegroup",
+	OUT LOCATION_FILTER_ID "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_plan_loc_filter",
+	OUT RESOURCE_FILTER_ID "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_plan_resource_filter"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN
+
+	FILTER_GROUP_ID = SELECT ID,FILTER_GROUP_ID FROM "sap.tm.trp.db.pipeline::t_plan_model" WHERE ID 
+	in (SELECT PLAN_ID FROM :PLAN_ID);
+	
+	LOCATION_FILTER_ID = SELECT T3.ID AS PLAN_ID,T2.ID AS LOCATION_FILTER_ID
+		FROM "sap.tm.trp.db.filter::t_filter_location_filter" T1
+		INNER JOIN "sap.tm.trp.db.filter::t_location_filter" T2 ON (T1.LOCATION_FILTER_ID = T2.ID)
+		INNER JOIN :FILTER_GROUP_ID T3 ON (T1.FILTER_GROUP_ID = T3.FILTER_GROUP_ID );
+     
+    RESOURCE_FILTER_ID = SELECT T3.ID AS PLAN_ID, EQUIPMENT_FILTER_ID AS RESOURCE_FILTER_ID
+		FROM "sap.tm.trp.db.filter::t_filter_equipment_filter" T1
+		INNER JOIN :FILTER_GROUP_ID T3 ON (T1.FILTER_GROUP_ID = T3.FILTER_GROUP_ID );
+		
+END;

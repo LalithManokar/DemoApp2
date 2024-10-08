@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_SD_alerts_for_PersistentPlan_VirtualPlan" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_virtualPlan_alerts_withInputParam"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="IN_VIRTUAL_PLAN_ID" parameter="true">
+      <descriptions defaultDescription="IN_VIRTUAL_PLAN_ID"/>
+      <variableProperties datatype="BIGINT" defaultValue="-1" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_PLAN_EXECUTION_ID" parameter="true">
+      <descriptions defaultDescription="IN_PLAN_EXECUTION_ID"/>
+      <variableProperties datatype="BIGINT" defaultValue="-1" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_METADATA_NODE_ID" parameter="true">
+      <descriptions defaultDescription="IN_METADATA_NODE_ID"/>
+      <variableProperties datatype="VARCHAR" defaultValue="" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_NODE_ID" parameter="true">
+      <descriptions defaultDescription="IN_NODE_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="PLAN_MODEL_ID"/>
+        <viewAttribute datatype="BIGINT" id="NODE_ID"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_ID" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_NAME" length="50"/>
+        <viewAttribute datatype="INTEGER" id="LOCATION_LEVEL"/>
+        <viewAttribute datatype="VARCHAR" id="EQUIP_TYPE_ID" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="EQUIP_TYPE_NAME" length="50"/>
+        <viewAttribute datatype="BIGINT" id="TIME_INTERVAL_ID"/>
+        <viewAttribute datatype="INTEGER" id="SEQUENCE"/>
+        <viewAttribute datatype="TIMESTAMP" id="TIME"/>
+        <viewAttribute datatype="DECIMAL" id="TIME_STEP" length="34"/>
+        <viewAttribute datatype="VARCHAR" id="ROW_ID" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="MESSAGE" length="8"/>
+        <viewAttribute datatype="VARCHAR" id="ALERT_REASON" length="500"/>
+        <viewAttribute datatype="DOUBLE" id="ALERT_SCORE"/>
+        <viewAttribute datatype="NCLOB" id="OWNER"/>
+        <viewAttribute datatype="SMALLINT" id="LOCATION_FILTER_TYPE"/>
+        <viewAttribute datatype="INTEGER" id="FILTER_TYPE"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_VIRTUAL_PLAN_ID</localVariable>
+      <localVariable>#IN_PLAN_EXECUTION_ID</localVariable>
+      <localVariable>#IN_METADATA_NODE_ID</localVariable>
+      <localVariable>#IN_NODE_ID</localVariable>
+      <definition>BEGIN
+
+     DECLARE MESSAGE_ALERT VARCHAR(10) := 'Alert';     
+     DECLARE VAR_DIRECTION_FLAG BIGINT;
+     DECLARE VAR_MAX_NEWEST_EXECUTION_ID BIGINT;  
+     
+     EXECUTION_ID_INPUT = SELECT :IN_PLAN_EXECUTION_ID AS EXECUTION_ID FROM DUMMY;
+     CALL &quot;sap.tm.trp.db.dataprotectionprivacy::p_sd_alert_owner_convert&quot;
+      (:EXECUTION_ID_INPUT,CONVERT_LOCATION_OWNERS);
+     
+     if (:IN_VIRTUAL_PLAN_ID = -1 and :IN_PLAN_EXECUTION_ID != -1 )
+         then 
+         
+         /*  var_out = select distinct 
+                   T12.PLAN_MODEL_ID,
+                   :IN_NODE_ID AS NODE_ID,
+	               T12.LOCATION_ID,
+	               T12.LOCATION_NAME,	
+	               -1 as LOCATION_LEVEL,	        
+	               T12.EQUIP_TYPE_ID,
+	               T12.EQUIP_TYPE_NAME,
+	               T12.TIME_INTERVAL_ID,
+	               T12.SEQUENCE,
+	               T12.START_TIME as TIME,
+	               T12.TIME_STEP,
+	               T12.ROW_ID,
+	               T12.MESSAGE,	               	               
+	               T12.ALERT_REASON,
+	               T12.ALERT_SCORE,
+	               T2.OWNERS AS OWNER,
+	               T12.LOCATION_FILTER_TYPE 
+	               FROM &quot;sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_forUI&quot; T12
+	               LEFT JOIN :CONVERT_LOCATION_OWNERS T2
+	               ON (T12.LOCATION_ID = T2.LOCATION_ID AND T12.FILTER_TYPE = T2.FILTER_TYPE)
+	               WHERE T12.MESSAGE = :MESSAGE_ALERT and 
+	                     T12.PLAN_EXECUTION_ID = :IN_PLAN_EXECUTION_ID
+	                     and T12.NODE_ID = :IN_NODE_ID;
+	    */          
+		   var_out_temp = select distinct 
+		                   T12.PLAN_MODEL_ID,
+		                   :IN_NODE_ID AS NODE_ID,
+			               T12.LOCATION_ID,
+			               T12.FILTER_TYPE,
+			               T12.LOCATION_NAME,	
+			               -1 as LOCATION_LEVEL,	        
+			               T12.EQUIP_TYPE_ID,
+			               T12.EQUIP_TYPE_NAME,
+			               T12.TIME_INTERVAL_ID,
+			               T12.SEQUENCE,
+			               T12.START_TIME as TIME,
+			               T12.TIME_STEP,
+			               T12.ROW_ID,
+			               T12.MESSAGE,	               	               
+			               T12.ALERT_REASON,
+			               T12.ALERT_SCORE,	               
+			               T12.LOCATION_FILTER_TYPE 
+			               FROM &quot;sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_forUI&quot; T12
+			               WHERE T12.MESSAGE = :MESSAGE_ALERT and 
+			                     T12.PLAN_EXECUTION_ID = :IN_PLAN_EXECUTION_ID
+			                     and T12.NODE_ID = :IN_NODE_ID;
+	                     
+			     var_out = select  T12.PLAN_MODEL_ID,
+		                   T12.NODE_ID,
+			               T12.LOCATION_ID,			               
+			               T12.LOCATION_NAME,	
+			               T12.LOCATION_LEVEL,	        
+			               T12.EQUIP_TYPE_ID,
+			               T12.EQUIP_TYPE_NAME,
+			               T12.TIME_INTERVAL_ID,
+			               T12.SEQUENCE,
+			               T12.TIME,
+			               T12.TIME_STEP,
+			               T12.ROW_ID,
+			               T12.MESSAGE,	               	               
+			               T12.ALERT_REASON,
+			               T12.ALERT_SCORE,
+			               T2.OWNERS AS OWNER,
+			               T12.LOCATION_FILTER_TYPE,
+			               T12.FILTER_TYPE 	                
+			               FROM :var_out_temp T12
+			               LEFT JOIN :CONVERT_LOCATION_OWNERS T2
+			               ON (T12.LOCATION_ID = T2.LOCATION_ID AND T12.FILTER_TYPE = T2.FILTER_TYPE);
+			                          
+         
+                       
+     elseif (:IN_PLAN_EXECUTION_ID = -1 and :IN_VIRTUAL_PLAN_ID != -1 )
+         then 
+       
+       -- pass in empty location list will fetch result for all the locations
+       LOCATION_ID_LIST = SELECT NULL AS ID FROM DUMMY WHERE 1 = 0;  
+       
+       CALL &quot;SAP_TM_TRP&quot;.&quot;sap.tm.trp.db.pipeline::p_get_execution_info_for_virtual_plan&quot; (
+       :IN_VIRTUAL_PLAN_ID, 0, :LOCATION_ID_LIST, :IN_METADATA_NODE_ID, HEAD_EXECUTION_NEWEST,
+       DRILL_DOWN_EXECUTION_NEWEST,NO_DATA_PLAN_LIST, VAR_DIRECTION_FLAG,VAR_MAX_NEWEST_EXECUTION_ID); 
+       
+       -- TODO: comment out until drill down issue is clarified
+       --EXE_INFO = SELECT PLAN_EXECUTION_ID,NODE_ID,EQUIP_TYPE_ID, LOCATION_ID, TIME_INTERVAL_ID
+       --           FROM :HEAD_EXECUTION_NEWEST
+       --           UNION 
+       --           SELECT PLAN_EXECUTION_ID,NODE_ID,EQUIP_TYPE_ID, LOCATION_ID, TIME_INTERVAL_ID
+       --           FROM :DRILL_DOWN_EXECUTION_NEWEST;
+                 
+       var_out =SELECT :IN_VIRTUAL_PLAN_ID AS PLAN_MODEL_ID,
+                       -1 AS NODE_ID,
+                       T2.LOCATION_ID,                       
+		               T2.LOCATION_NAME,		               	
+		               T3.LEVEL as LOCATION_LEVEL,	                              
+		               T2.EQUIP_TYPE_ID,
+		               T2.EQUIP_TYPE_NAME,
+		               T2.TIME_INTERVAL_ID,
+		               T2.SEQUENCE,
+		               T2.START_TIME AS TIME,
+		               T2.TIME_STEP,
+	                   T2.ROW_ID,
+		               T2.MESSAGE,	               	               
+		               T2.ALERT_REASON,
+		               T2.ALERT_SCORE,
+		               T4.OWNERS AS OWNER,
+		               T2.LOCATION_FILTER_TYPE,
+		               T2.FILTER_TYPE
+             FROM (SELECT DISTINCT PLAN_EXECUTION_ID,NODE_ID,EQUIP_TYPE_ID,LOCATION_ID,SEQUENCE FROM :HEAD_EXECUTION_NEWEST) T1 
+             --FROM :EXE_INFO T1            
+             INNER JOIN &quot;sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_forUI&quot; T2 ON 
+             ( T1.PLAN_EXECUTION_ID = T2.PLAN_EXECUTION_ID   
+               AND T1.NODE_ID = T2.NODE_ID 
+               AND T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID 
+               AND T1.LOCATION_ID = T2.LOCATION_ID 
+               AND T1.SEQUENCE = T2.SEQUENCE
+               AND T2.MESSAGE = :MESSAGE_ALERT 
+             )
+             INNER JOIN &quot;sap.tm.trp.db.pipeline::t_virtual_tree_location_info&quot; T3 ON
+             (T2.LOCATION_TYPE = T3.LOCATION_TYPE
+              AND T2.LOCATION_ID = T3.LOCATION_ID
+              AND T3.VIRTUAL_PLAN_MODEL_ID = :IN_VIRTUAL_PLAN_ID
+             )
+             LEFT JOIN :CONVERT_LOCATION_OWNERS T4
+	         ON (T2.LOCATION_ID = T4.LOCATION_ID AND T2.FILTER_TYPE = T4.FILTER_TYPE); 
+ 
+    end if;
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="LOCATION_ID" order="3">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_ID"/>
+      </attribute>
+      <attribute id="LOCATION_NAME" order="4">
+        <descriptions defaultDescription="LOCATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_NAME"/>
+      </attribute>
+      <attribute id="LOCATION_LEVEL" order="5">
+        <descriptions defaultDescription="LOCATION_LEVEL"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_LEVEL"/>
+      </attribute>
+      <attribute id="EQUIP_TYPE_ID" order="6">
+        <descriptions defaultDescription="EQUIP_TYPE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_TYPE_ID"/>
+      </attribute>
+      <attribute id="EQUIP_TYPE_NAME" order="7">
+        <descriptions defaultDescription="EQUIP_TYPE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_TYPE_NAME"/>
+      </attribute>
+      <attribute id="TIME_INTERVAL_ID" order="8">
+        <descriptions defaultDescription="TIME_INTERVAL_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_INTERVAL_ID"/>
+      </attribute>
+      <attribute id="TIME" order="10">
+        <descriptions defaultDescription="START_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME"/>
+      </attribute>
+      <attribute id="ROW_ID" order="12">
+        <descriptions defaultDescription="ROW_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ROW_ID"/>
+      </attribute>
+      <attribute id="MESSAGE" order="13">
+        <descriptions defaultDescription="MESSAGE"/>
+        <keyMapping columnObjectName="Script_View" columnName="MESSAGE"/>
+      </attribute>
+      <attribute id="ALERT_REASON" order="14">
+        <descriptions defaultDescription="ALERT_REASON"/>
+        <keyMapping columnObjectName="Script_View" columnName="ALERT_REASON"/>
+      </attribute>
+      <attribute id="OWNER" order="16">
+        <descriptions defaultDescription="OWNER"/>
+        <keyMapping columnObjectName="Script_View" columnName="OWNER"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="PLAN_MODEL_ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="PLAN_MODEL_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="PLAN_MODEL_ID"/>
+      </measure>
+      <measure id="NODE_ID" order="2" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="NODE_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="NODE_ID"/>
+      </measure>
+      <measure id="SEQUENCE" order="9" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="SEQUENCE"/>
+        <measureMapping columnObjectName="Script_View" columnName="SEQUENCE"/>
+      </measure>
+      <measure id="TIME_STEP" order="11" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TIME_STEP"/>
+        <measureMapping columnObjectName="Script_View" columnName="TIME_STEP"/>
+      </measure>
+      <measure id="ALERT_SCORE" order="15" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ALERT_SCORE"/>
+        <measureMapping columnObjectName="Script_View" columnName="ALERT_SCORE"/>
+      </measure>
+      <measure id="LOCATION_FILTER_TYPE" order="17" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LOCATION_FILTER_TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="LOCATION_FILTER_TYPE"/>
+      </measure>
+      <measure id="FILTER_TYPE" order="18" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="FILTER_TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="FILTER_TYPE"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

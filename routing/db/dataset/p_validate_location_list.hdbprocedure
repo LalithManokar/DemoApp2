@@ -1,0 +1,53 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_validate_location_list" (
+    IN location_list "sap.tm.trp.routing.db.common::tt_location_id",
+	OUT return_code TINYINT,
+	OUT message "sap.tm.trp.routing.db.common::tt_message"
+	)
+   LANGUAGE SQLSCRIPT 
+   SQL SECURITY INVOKER
+   --DEFAULT SCHEMA "SAP_TM_ROUTING"
+   READS SQL DATA AS
+BEGIN 
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+	DECLARE count INTEGER = 0;
+	DECLARE msg_param TABLE(PLACEHOLDER INTEGER, VALUE NVARCHAR(100));
+	DECLARE msg_params TABLE(GROUP_ID NVARCHAR(100), PLACEHOLDER INTEGER, VALUE NVARCHAR(100));
+
+	message = SELECT '' AS severity, '' AS message FROM DUMMY WHERE 1 <> 1; 
+	
+	return_code = 0;
+	
+	-- Check location
+    SELECT count(*) INTO count FROM :location_list
+    WHERE location_id IS NULL OR location_id = '';
+    
+    IF count > 0 THEN
+        return_code = 1;
+        msg_param = SELECT 0 AS PLACEHOLDER, '' AS VALUE FROM DUMMY WHERE 1 <> 1;
+	    call "sap.tm.trp.routing.db.common::p_get_text"
+        ('MSG_LOCATION_LIST_LOCATION_MISSING', :msg_param, 'E', :message_tmp);
+        
+        message = SELECT * FROM :message 
+        UNION ALL SELECT * FROM :message_tmp;
+    END IF;
+    
+    location_id = SELECT location_id FROM :location_list
+    WHERE location_id NOT IN (SELECT name FROM "sap.tm.trp.db.semantic.location::v_all_location");
+    
+    SELECT COUNT(*) INTO count FROM :location_id;
+
+    IF count > 0 THEN
+        return_code = 1;
+        msg_params = SELECT location_id AS group_id, 0 AS PLACEHOLDER, 
+        location_id AS VALUE FROM :location_id;
+        
+	    CALL "sap.tm.trp.routing.db.common::p_get_text_batch"
+        ('MSG_LOCATION_LIST_LOCATION_NOT_FOUND', :msg_params, 'E', :message_tmp);
+        
+        message = SELECT * FROM :message 
+        UNION ALL SELECT * FROM :message_tmp;
+    END IF;
+    
+END;

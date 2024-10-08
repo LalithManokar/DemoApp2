@@ -1,0 +1,22 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "used for save alerts for KPI plan";
+table.columns = [
+    {name = "NODE_ID"; sqlType = BIGINT; },
+    {name = "NODE_NAME"; sqlType = VARCHAR; length = 32;},
+    
+    {name = "LOCATION_ID"; sqlType = BIGINT;},
+    {name = "LOCATION_NAME"; sqlType = VARCHAR; length = 50;},
+     
+    {name = "EQUIP_TYPE_ID"; sqlType = BIGINT;},
+    {name = "EQUIP_TYPE_NAME"; sqlType = VARCHAR; length = 50;},
+    
+    {name = "TIME_INTERVAL_ID"; sqlType = BIGINT;},
+    {name = "TIME_FILTER_DESC"; sqlType = VARCHAR; length = 50;},
+    {name = "SEQUENCE"; sqlType = INTEGER;},
+    
+    {name = "START_TIME"; sqlType = TIMESTAMP;},
+    
+    {name = "AVERAGE_IDLE_DAYS"; sqlType = INTEGER;},
+    {name = "STORAGE_COST"; sqlType = DOUBLE;}
+];  

@@ -1,0 +1,29 @@
+schema="SAP_TM_TRP";
+query="
+	SELECT DISTINCT	T2.ID AS ID,
+	        T1.ID AS NETWORK_SETTING_ID,
+			T1.NAME,
+			T1.CODE,
+			T1.DESC,
+			CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+			     WHEN (T2.LOG_USER <> 0 AND T2.LOG_USER IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+			     WHEN T2.LOG_USER = 0 OR T2.LOG_USER IS NULL THEN ''
+			     ELSE '***' END AS USER,
+			T3.DESC AS ACTION,
+			T2.LOG_TIME AS TIMESTAMP
+	FROM \"sap.tm.trp.db.planningcockpit::t_network_setting_group\" T1
+	INNER JOIN \"sap.tm.trp.db.planningcockpit::t_network_setting_change_history\" T2
+	ON (T2.NETWORK_SETTING_GROUP_ID = T1.ID)
+	INNER JOIN \"sap.tm.trp.db.planningcockpit::t_network_setting_change_history_t\" T3 ON T3.ID = T2.ACTION
+	INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" LANG ON LANG.SPRAS = T3.LANGUAGE_CODE
+	LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T4 ON (T4.ID = T2.LOG_USER)
+	LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_unblock_users\" T9 ON (T4.USERNAME = T9.USERNAME)
+	CROSS JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege\" PRIVILEGE";
+
+depends_on_table = ["sap.tm.trp.db.planningcockpit::t_network_setting_group",
+                    "sap.tm.trp.db.planningcockpit::t_network_setting_change_history",
+                    "sap.tm.trp.db.planningcockpit::t_network_setting_change_history_t"];
+depends_on_view = ["sap.tm.trp.db.semantic.common::v_lang_code",
+                    "sap.tm.trp.db.dataprotectionprivacy::v_unblock_users",
+                    "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege",
+                    "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

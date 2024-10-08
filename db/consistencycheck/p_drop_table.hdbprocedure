@@ -1,0 +1,20 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.consistencycheck::p_drop_table" (
+	IN v_schema_name varchar(256),
+	IN v_table_name varchar(256)
+)
+ LANGUAGE SQLSCRIPT
+ SQL SECURITY INVOKER
+ DEFAULT SCHEMA SAP_TM_TRP
+ AS 
+BEGIN
+  DECLARE TABLE_EXIST INTEGER;
+  DECLARE SQL_DROP NVARCHAR(1000);
+  
+  SELECT COUNT(1) INTO TABLE_EXIST FROM "SYS"."TABLES" WHERE SCHEMA_NAME=:v_schema_name AND TABLE_NAME=:v_table_name;
+  IF :TABLE_EXIST <> 0 THEN
+	  EXECUTE IMMEDIATE 'DROP TABLE  "'||escape_double_quotes(:v_table_name)||'"';
+  END IF;
+  
+  
+END
+;

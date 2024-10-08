@@ -1,0 +1,28 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_massupload_execution_history_create" (
+	IN DATA_OBJ VARCHAR(50),
+	OUT NEW_ID BIGINT
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER  
+	DEFAULT SCHEMA SAP_TM_TRP
+	--READS SQL DATA
+AS
+	USER_ID BIGINT;
+BEGIN
+/***************************** 
+	Write your procedure logic 
+ *****************************/
+  	DECLARE STATUS_TYPE_ID_SAVING INTEGER := 2;
+ 
+ 	-- GET CURRENT USER_ID
+	SELECT IFNULL(MAX(ID),0) INTO USER_ID
+	FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+	WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+	
+	SELECT 
+		"sap.tm.trp.db.massupload::s_massupload_execution_history".NEXTVAL INTO NEW_ID
+	FROM DUMMY;
+	
+	INSERT INTO "sap.tm.trp.db.massupload::t_massupload_execution_history"(ID, DATA_OBJ, USER_ID, REC_CRTD, REC_UPD, RECORD_CNT, UPLOAD_TIME, STATUS_TYPE_ID)
+	VALUES(:NEW_ID, :DATA_OBJ, :USER_ID, 0, 0, 0, CURRENT_UTCTIMESTAMP, :STATUS_TYPE_ID_SAVING);
+END;

@@ -1,0 +1,42 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_cost_dataset_delete"(
+   IN COST_DATASET_ID BIGINT,
+   OUT is_dataset_used_by_cost_model SMALLINT
+    
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+   DECLARE ACTION_DELETE_CODE VARCHAR(20) := 'DELETE';
+   DECLARE USER_ID BIGINT;
+   DECLARE I_COUNT INTEGER := 0 ;
+   
+   CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+   
+   
+   is_dataset_used_by_cost_model := 0;
+
+   --According to Harad's email,if the dataset has been used by a cost model, the dataset should not be deleted at Fri 10/16/2015 6:42 PM
+   SELECT COUNT(1) INTO I_COUNT
+   FROM "sap.tm.trp.db.costmodel::t_cost_model_dataset" WHERE COST_DATASET_ID = :COST_DATASET_ID;
+   
+   IF I_COUNT >0 THEN
+     is_dataset_used_by_cost_model := 1;
+     RETURN;
+   END IF;
+  
+   DELETE FROM "sap.tm.trp.db.costmodel::t_cost_dataset" 
+   WHERE ID = :COST_DATASET_ID;
+   
+   DELETE FROM "sap.tm.trp.db.costmodel::t_cost_dataset_carrier" WHERE COST_DATASET_ID = :COST_DATASET_ID;
+   DELETE FROM "sap.tm.trp.db.costmodel::t_location_based_cost" WHERE COST_DATASET_ID = :COST_DATASET_ID;
+   DELETE FROM "sap.tm.trp.db.costmodel::t_distance_based_cost" WHERE COST_DATASET_ID = :COST_DATASET_ID;
+   DELETE FROM "sap.tm.trp.db.costmodel::t_handling_based_cost" WHERE COST_DATASET_ID = :COST_DATASET_ID;
+    DELETE FROM "sap.tm.trp.db.costmodel::t_time_based_storage_cost" WHERE COST_DATASET_ID = :COST_DATASET_ID;
+    DELETE FROM "sap.tm.trp.db.costmodel::t_quantity_based_storage_cost" WHERE COST_DATASET_ID = :COST_DATASET_ID;
+  
+    INSERT INTO "sap.tm.trp.db.costmodel::t_cost_dataset_history"(ID,COST_DATASET_ID,USER_ID,ACTION_CODE,ACTION_TIME)
+	VALUES ("sap.tm.trp.db.costmodel::s_cost_dataset_history".nextVal,:COST_DATASET_ID,:USER_ID,:ACTION_DELETE_CODE,CURRENT_UTCTIMESTAMP);
+   
+END;

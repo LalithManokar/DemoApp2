@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_basic_connection_path_by_location" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_basic_connection_path_by_location"/>
+  <localVariables>
+    <variable id="SIM_PLAN_ID" parameter="true">
+      <descriptions defaultDescription="SIM_PLAN_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="SCENARIO_ID" parameter="true">
+      <descriptions defaultDescription="SCENARIO_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="VIEW_TYPE" parameter="true">
+      <descriptions defaultDescription="VIEW_TYPE"/>
+      <variableProperties datatype="VARCHAR" length="1" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="FROM_LOCATION" parameter="true">
+      <descriptions defaultDescription="FROM_LOCATION"/>
+      <variableProperties datatype="NVARCHAR" length="100" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="TO_LOCATION" parameter="true">
+      <descriptions defaultDescription="TO_LOCATION"/>
+      <variableProperties datatype="NVARCHAR" length="100" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="MTR" parameter="true">
+      <descriptions defaultDescription="MTR"/>
+      <variableProperties datatype="VARCHAR" length="10" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="VARCHAR" id="PATH_TYPE" length="1"/>
+        <viewAttribute datatype="NVARCHAR" id="FROM_LOCATION" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="TO_LOCATION" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="MTR" length="10"/>
+        <viewAttribute datatype="VARCHAR" id="MTR_DESC" length="100"/>
+        <viewAttribute datatype="DOUBLE" id="DISTANCE"/>
+        <viewAttribute datatype="INTEGER" id="DURATION"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#SIM_PLAN_ID</localVariable>
+      <localVariable>#SCENARIO_ID</localVariable>
+      <localVariable>#VIEW_TYPE</localVariable>
+      <localVariable>#FROM_LOCATION</localVariable>
+      <localVariable>#TO_LOCATION</localVariable>
+      <localVariable>#MTR</localVariable>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+BEGIN 
+DECLARE DATASET_ID BIGINT;
+DECLARE NUM_AMOUNT_DECIMAL_POINT INTEGER := 2;
+
+CALL &quot;sap.tm.trp.db.planningcockpit::p_get_dataset_id_by_simulation_scenario_id&quot;(:SIM_PLAN_ID,:SCENARIO_ID,DATASET_ID);
+CALL &quot;sap.tm.trp.routing.db.dataset::p_query_basic_connection&quot;(:DATASET_ID,:VIEW_TYPE,:FROM_LOCATION,:TO_LOCATION,:MTR,BASIC_CONN,BASIC_CONN_CARRIER);
+CALL &quot;sap.tm.trp.routing.db.dataset::p_query_basic_path&quot;(:DATASET_ID,:VIEW_TYPE,:FROM_LOCATION,:TO_LOCATION,:MTR,BASIC_PATH,BASIC_PATH_CONN);
+
+VAR_OUT =
+	SELECT
+		T1.ID
+		,'C' AS PATH_TYPE
+		,T1.FROM_LOCATION
+		,T1.TO_LOCATION
+		,T1.MTR
+		,T2.DESC AS MTR_DESC
+		,ROUND(T1.DISTANCE,:NUM_AMOUNT_DECIMAL_POINT) AS DISTANCE
+		,T1.DURATION
+	FROM :BASIC_CONN T1
+	LEFT JOIN &quot;sap.tm.trp.db.semantic.common::v_transportation_means&quot; T2 ON T2.CODE = T1.MTR
+	UNION
+	SELECT
+		T0.ID
+		,'P' AS PATH_TYPE
+		,T0.FROM_LOCATION
+		,T0.TO_LOCATION
+		,T0.MTR
+		,T2.DESC AS MTR_DESC
+		,ROUND(SUM(T1.DISTANCE),:NUM_AMOUNT_DECIMAL_POINT) AS DISTANCE
+		,SUM(T1.DURATION+T1.STAY_TIME) AS DURATION
+	FROM :BASIC_PATH T0
+	INNER JOIN :BASIC_PATH_CONN T1 ON T1.PATH_ID = T0.ID
+	LEFT JOIN &quot;sap.tm.trp.db.semantic.common::v_transportation_means&quot; T2 ON T2.CODE = T0.MTR
+	GROUP BY T0.ID,T0.FROM_LOCATION,T0.TO_LOCATION,T0.MTR,T2.DESC
+	;
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="PATH_TYPE" order="2">
+        <descriptions defaultDescription="PATH_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="PATH_TYPE"/>
+      </attribute>
+      <attribute id="FROM_LOCATION" order="3">
+        <descriptions defaultDescription="FROM_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="FROM_LOCATION"/>
+      </attribute>
+      <attribute id="TO_LOCATION" order="4">
+        <descriptions defaultDescription="TO_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="TO_LOCATION"/>
+      </attribute>
+      <attribute id="MTR" order="5">
+        <descriptions defaultDescription="MTR"/>
+        <keyMapping columnObjectName="Script_View" columnName="MTR"/>
+      </attribute>
+      <attribute id="MTR_DESC" order="6">
+        <descriptions defaultDescription="MTR_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="MTR_DESC"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="ID"/>
+      </measure>
+      <measure id="DISTANCE" order="7" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DISTANCE"/>
+        <measureMapping columnObjectName="Script_View" columnName="DISTANCE"/>
+      </measure>
+      <measure id="DURATION" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DURATION"/>
+        <measureMapping columnObjectName="Script_View" columnName="DURATION"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

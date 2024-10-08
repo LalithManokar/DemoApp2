@@ -1,0 +1,84 @@
+//To define the HDB view file use the following syntax: 
+//LOCATION_TYPE INTEGER,    1: location;   2: location group;  3: zone; 4: zone group; 5: region; 6: region group
+//EQUIP_CODE_TYPE INTEGER,  1: equip type; 2: equip type group
+//FILTER_TYPE 
+//               Location  zone  region  loc_Group  zone_Group  region_Group
+//Equip_Type           1        2       3       4         5             6
+//Equip_Group          7        8       9       10        11           12
+schema = "SAP_TM_TRP";
+query = "
+select 
+   LOCATION_ID,
+   LOCATION_TYPE,
+   LONGITUDE,
+   LATITUDE,
+   CITY_CODE,
+   STATE_CODE,
+   COUNTRY_CODE
+from 
+(
+select 
+   --to_VARCHAR(T1.ID) AS LOCATION_ID,
+   T1.ID AS LOCATION_ID,
+   1 AS LOCATION_TYPE,
+   IFNULL(T1.XPOS,0) AS LONGITUDE,
+   IFNULL(T1.YPOS,0) AS LATITUDE,
+   IFNULL(T2.CITY_CODE,'') AS CITY_CODE,
+   IFNULL(T2.STATE_CODE,'') AS STATE_CODE,
+   IFNULL(T2.COUNTRY_CODE,'') AS COUNTRY_CODE
+from \"sap.tm.trp.db.semantic.location::v_location\" T1
+INNER JOIN \"sap.tm.trp.db.semantic.location::v_address\" T2 ON (T1.ADDRESS_ID = T2.ID)
+)
+union all 
+(
+select 
+   --to_VARCHAR(T1.ID) AS LOCATION_ID,
+   T1.ID AS LOCATION_ID,
+   3 AS LOCATION_TYPE,
+   IFNULL(T1.XPOS,0) AS LONGITUDE,
+   IFNULL(T1.YPOS,0) AS LATITUDE,
+   '' AS CITY_CODE,
+   '' AS STATE_CODE,
+   '' AS COUNTRY_CODE
+from \"sap.tm.trp.db.systemmanagement.location::v_zone_ui\" T1
+)
+union all 
+(
+select 
+   --to_VARCHAR(T1.REGION_ID) AS LOCATION_ID,
+   T1.REGION_ID AS LOCATION_ID,
+   5 AS LOCATION_TYPE,
+   IFNULL(T1.XPOS,0) AS LONGITUDE,
+   IFNULL(T1.YPOS,0) AS LATITUDE,
+   '' AS CITY_CODE,
+   '' AS STATE_CODE,
+   '' AS COUNTRY_CODE
+from \"sap.tm.trp.db.systemmanagement.location::v_region_coordinate\" T1
+)
+union all 
+(
+select 
+   --to_VARCHAR(T1.GROUP_ID) AS LOCATION_ID,
+   T1.GROUP_ID AS LOCATION_ID,
+   CASE WHEN T1.FILTER_TYPE = 4 
+        THEN 2
+        WHEN T1.FILTER_TYPE = 10
+        THEN 2
+        WHEN T1.FILTER_TYPE = 5
+        THEN 4        
+        WHEN T1.FILTER_TYPE = 11
+        THEN 4            
+        WHEN T1.FILTER_TYPE = 6
+        THEN 6        
+        WHEN T1.FILTER_TYPE = 12
+        THEN 6        
+   END AS LOCATION_TYPE,
+   IFNULL(T1.XPOS,0) AS LONGITUDE,
+   IFNULL(T1.YPOS,0) AS LATITUDE,
+   '' AS CITY_CODE,
+   '' AS STATE_CODE,
+   '' AS COUNTRY_CODE
+from \"sap.tm.trp.db.systemmanagement::v_geo_group_coordinate\" T1
+)
+";
+depends_on_view = ["sap.tm.trp.db.semantic.location::v_location","sap.tm.trp.db.semantic.location::v_address","sap.tm.trp.db.systemmanagement.location::v_zone_ui","sap.tm.trp.db.systemmanagement.location::v_region_coordinate","sap.tm.trp.db.systemmanagement::v_geo_group_coordinate"];

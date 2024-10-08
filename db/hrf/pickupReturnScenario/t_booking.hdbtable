@@ -1,0 +1,12 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "RULE_ID"; sqlType = BIGINT; },
+    {name = "TU_ID"; sqlType = BIGINT; },
+    {name = "EQUIPMENT_ID";sqlType = VARCHAR; length = 32;},
+    {name = "QUANTITY";sqlType = INTEGER;},
+    {name = "LOCATION_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "PLANNED_DATE";sqlType= TIMESTAMP;},
+    {name = "RULE_TYPE"; sqlType = INTEGER; comment="1:pick up  2:return";}
+    ];
+ table.primaryKey.pkcolumns = ["RULE_ID","TU_ID"];    

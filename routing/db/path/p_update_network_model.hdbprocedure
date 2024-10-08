@@ -1,0 +1,38 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_update_network_model"( 
+                IN network_code NVARCHAR(50),
+                IN setting_group_id BIGINT,
+				OUT return_code INTEGER,
+				OUT message "sap.tm.trp.routing.db.common::tt_message",
+				OUT log "sap.tm.trp.routing.db.common::tt_message" 
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   AS
+BEGIN
+DECLARE network_exist INTEGER;
+DECLARE existing_setting_group_id integer;
+DECLARE msg_params TABLE(PLACEHOLDER INTEGER, VALUE NVARCHAR(100));
+		
+		SELECT COUNT(*) INTO network_exist FROM "sap.tm.trp.routing.db.path::t_network_model" WHERE CODE = :network_code;
+	IF :network_exist > 0 THEN
+	   	SELECT SETTING_GROUP_ID INTO existing_setting_group_id FROM "sap.tm.trp.routing.db.path::t_network_model" WHERE CODE = :network_code;
+	   	IF :existing_setting_group_id != :setting_group_id THEN 
+		UPDATE "sap.tm.trp.routing.db.path::t_network_model"SET SETTING_GROUP_ID=:setting_group_id,CHANGED_BY = SESSION_CONTEXT('APPLICATIONUSER'),
+	CHANGED_ON = CURRENT_UTCTIMESTAMP WHERE CODE = :network_code;
+		msg_params = SELECT 0 AS PLACEHOLDER, :network_code AS VALUE FROM DUMMY;
+	    CALL "sap.tm.trp.routing.db.common::p_get_text"('MSG_NETWORK_CODE_UPDATE_SUCCESS', :msg_params, 'E', message);
+	    log = SELECT * FROM :message;
+	    return_code = 0;
+		ELSE
+	msg_params = SELECT 0 AS PLACEHOLDER, :network_code AS VALUE FROM DUMMY;
+	    CALL "sap.tm.trp.routing.db.common::p_get_text"('MSG_NETWORK_CODE_ALREADY_EXIST', :msg_params, 'E', message);
+	    log = SELECT * FROM :message;
+	    return_code = 0;
+		END IF;
+	ELSE
+		msg_params = SELECT 0 AS PLACEHOLDER, :network_code AS VALUE FROM DUMMY;
+	    CALL "sap.tm.trp.routing.db.common::p_get_text"('MSG_NETWORK_CODE_NOT_EXIST', :msg_params, 'E', message);
+	    log = SELECT * FROM :message;
+	    return_code = 0;
+	END IF;
+END;

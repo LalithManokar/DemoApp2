@@ -1,0 +1,32 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT T1.RULE_TYPE_ID AS ID,
+                 T2.DESC AS NAME,
+                 T1.OBJECT_TYPE_ID AS TYPE_ID,
+                 T1.PROCEDURE_CONSTRAINT
+          FROM \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData\" T1
+          LEFT OUTER JOIN 
+          (SELECT T1.ID,T1.DESC 
+           FROM \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData_t\" T1
+           INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" LANGUAGE_T
+           ON (T1.SPRAS = LANGUAGE_T.SPRAS) ) T2
+          ON T1.RULE_TYPE_ID = T2.ID
+          WHERE T1.DATA_OBJECT_ID <> 2
+          UNION
+          SELECT T1.ID AS ID,
+                 T2.DESC AS NAME,
+                 T1.OBJECT_TYPE_ID AS TYPE_ID,
+                 T1.PROCEDURE_CONSTRAINT
+          FROM \"sap.tm.trp.db.pipeline::t_pipeline_model_type\" T1
+          LEFT OUTER JOIN 
+          (SELECT T1.ID,T1.DESC
+           FROM \"sap.tm.trp.db.pipeline::t_pipeline_model_type_t\" T1
+           INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" AS LANGUAGE_T
+           ON T1.SPRAS = LANGUAGE_T.SPRAS) T2
+          ON T1.ID = T2.ID
+          WHERE T1.PARENT_ID IS NULL";
+
+depends_on_table = ["sap.tm.trp.db.pipeline::t_pipeline_model_type_t",
+                    "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData_t",
+                    "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData",
+                    "sap.tm.trp.db.pipeline::t_pipeline_model_type"];
+depends_on_view  = ["sap.tm.trp.db.semantic.common::v_lang_code"];

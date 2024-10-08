@@ -1,0 +1,20 @@
+table.schemaName = "SAP_TM_TRP";
+table.columns = [
+    {name = "CONNECTION_ID"; sqlType = BIGINT; },
+    {name = "FROM_LOCATION_NAME"; sqlType = NVARCHAR; length = 50; },
+    {name = "FROM_LONGITUDE"; sqlType = DOUBLE; },
+    {name = "FROM_LATITUDE"; sqlType = DOUBLE; },    
+    {name = "TO_LOCATION_NAME"; sqlType = NVARCHAR; length = 50; },
+    {name = "TO_LONGITUDE"; sqlType = DOUBLE; },
+    {name = "TO_LATITUDE"; sqlType = DOUBLE; },
+    {name = "MEANS_OF_TRANSPORT"; sqlType = VARCHAR; length=10; },
+    {name = "DISTANCE"; sqlType = DOUBLE;},   
+    {name = "DURATION"; sqlType = INTEGER; },
+    {name = "ACTION"; sqlType = CHAR; length=1; },
+    {name = "SOURCE"; sqlType = CHAR; length=1; },
+    {name = "COST"; sqlType = DOUBLE;},  
+    {name = "CURRENCY"; sqlType = VARCHAR; length=10; },    
+    {name = "CARRIERS"; sqlType = NVARCHAR; length = 500; },
+    {name = "HAS_GPS_INFO"; sqlType = TINYINT; defaultValue = "0"; }   
+
+];

@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_writeback_trq_by_scenario" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_writeback_trq_by_scenario"/>
+  <localVariables>
+    <variable id="SCENARIO_ID" parameter="true">
+      <descriptions defaultDescription="SCENARIO_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="BIGINT" id="ACTIVITY_ID"/>
+        <viewAttribute datatype="VARCHAR" id="STATUS_CODE" length="10"/>
+        <viewAttribute datatype="VARCHAR" id="FINALIZING_STATUS" length="50"/>
+        <viewAttribute datatype="NVARCHAR" id="MESSAGE" length="1000"/>
+        <viewAttribute datatype="NVARCHAR" id="TRQ_ID" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="TRQ_ITEM_ID" length="10"/>
+        <viewAttribute datatype="VARCHAR" id="SOURCE_LOCATION" length="22"/>
+        <viewAttribute datatype="TIMESTAMP" id="REQ_DEPARTURE_TIME"/>
+        <viewAttribute datatype="VARCHAR" id="DESTINATION_LOCATION" length="22"/>
+        <viewAttribute datatype="TIMESTAMP" id="REQ_ARRIVAL_TIME"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_TYPE" length="10"/>
+        <viewAttribute datatype="INTEGER" id="QUANTITY"/>
+        <viewAttribute datatype="VARCHAR" id="TU_GEN_FLAG" length="5"/>
+        <viewAttribute datatype="NVARCHAR" id="TU_ID" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="TU_ITEM_ID" length="10"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#SCENARIO_ID</localVariable>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+ BEGIN 
+ 	 var_out = SELECT T1.ID, T1.ACTIVITY_ID,T1.TM_STATUS AS STATUS_CODE,
+ 	  CASE WHEN T1.TM_STATUS =1 THEN 'Finalized' 
+ 	  WHEN T1.TM_STATUS = 2 THEN 'Finalizing Failed' 
+ 	  ELSE 'Finalizing Unprocessed' END AS FINALIZING_STATUS,T1.MESSAGE,
+ 	  T1.TRQ_ID, T1.TRQ_ITEM_ID, T2.NAME AS SOURCE_LOCATION, 
+ 	           TO_TIMESTAMP(T1.REQ_DEPARTURE_TIME) AS REQ_DEPARTURE_TIME, T3.NAME AS DESTINATION_LOCATION, 
+ 	           TO_TIMESTAMP(T1.REQ_ARRIVAL_TIME) AS REQ_ARRIVAL_TIME, T1.RESOURCE_TYPE, T1.QUANTITY, 
+ 	           CASE WHEN T1.TU_GEN_FLAG = 'X' THEN 'Yes' ELSE 'No' END AS TU_GEN_FLAG,
+ 	           T1.TU_ID, T1.TU_ITEM_ID
+ 	           FROM &quot;sap.tm.trp.db.planningcockpit::t_trq_write_log&quot; T1
+ 	           INNER JOIN 
+ 	           ( 
+	 	           SELECT SCENARIO_ID,ACTIVITY_ID,MAX(T1.MODIFIED_ON) AS MAX_MODIFIED_ON
+	 	           FROM &quot;sap.tm.trp.db.planningcockpit::t_trq_write_log&quot; T1
+	 	           GROUP BY SCENARIO_ID,ACTIVITY_ID
+ 	           ) T0 ON (T1.SCENARIO_ID = T0.SCENARIO_ID AND T1.ACTIVITY_ID = T0.ACTIVITY_ID AND T1.MODIFIED_ON = T0.MAX_MODIFIED_ON)
+ 	           LEFT OUTER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; T2 ON (T1.SOURCE_LOCATION = T2.ID)
+ 	           LEFT OUTER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; T3 ON (T1.DESTINATION_LOCATION = T3.ID)
+ 	          
+ 	            WHERE T1.SCENARIO_ID = :SCENARIO_ID;
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="ACTIVITY_ID" order="2">
+        <descriptions defaultDescription="ACTIVITY_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ACTIVITY_ID"/>
+      </attribute>
+      <attribute id="STATUS_CODE" order="3">
+        <descriptions defaultDescription="TM_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="STATUS_CODE"/>
+      </attribute>
+      <attribute id="FINALIZING_STATUS" order="4">
+        <descriptions defaultDescription="FINALIZING_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="FINALIZING_STATUS"/>
+      </attribute>
+      <attribute id="MESSAGE" order="5">
+        <descriptions defaultDescription="MESSAGE"/>
+        <keyMapping columnObjectName="Script_View" columnName="MESSAGE"/>
+      </attribute>
+      <attribute id="TRQ_ID" order="6">
+        <descriptions defaultDescription="TRQ_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TRQ_ID"/>
+      </attribute>
+      <attribute id="TRQ_ITEM_ID" order="7">
+        <descriptions defaultDescription="TRQ_ITEM_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TRQ_ITEM_ID"/>
+      </attribute>
+      <attribute id="SOURCE_LOCATION" order="8">
+        <descriptions defaultDescription="SOURCE_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="SOURCE_LOCATION"/>
+      </attribute>
+      <attribute id="REQ_DEPARTURE_TIME" order="9">
+        <descriptions defaultDescription="REQ_DEPARTURE_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="REQ_DEPARTURE_TIME"/>
+      </attribute>
+      <attribute id="DESTINATION_LOCATION" order="10">
+        <descriptions defaultDescription="DESTINATION_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESTINATION_LOCATION"/>
+      </attribute>
+      <attribute id="REQ_ARRIVAL_TIME" order="11">
+        <descriptions defaultDescription="REQ_ARRIVAL_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="REQ_ARRIVAL_TIME"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE" order="12">
+        <descriptions defaultDescription="RESOURCE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE"/>
+      </attribute>
+      <attribute id="QUANTITY" order="13">
+        <descriptions defaultDescription="QUANTITY"/>
+        <keyMapping columnObjectName="Script_View" columnName="QUANTITY"/>
+      </attribute>
+      <attribute id="TU_GEN_FLAG" order="14">
+        <descriptions defaultDescription="TU_GEN_FLAG"/>
+        <keyMapping columnObjectName="Script_View" columnName="TU_GEN_FLAG"/>
+      </attribute>
+      <attribute id="TU_ID" order="15">
+        <descriptions defaultDescription="TU_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TU_ID"/>
+      </attribute>
+      <attribute id="TU_ITEM_ID" order="16">
+        <descriptions defaultDescription="TU_ITEM_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TU_ITEM_ID"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

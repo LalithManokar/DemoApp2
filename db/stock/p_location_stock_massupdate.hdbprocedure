@@ -1,0 +1,24 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.stock::p_location_stock_massupdate" ( 
+    IN GEO_TYPE INTEGER,
+  	IN STOCK_THRESHOLDS "sap.tm.trp.db.stock::tt_stock_threshold",
+  	IN RESOURCE_CATEGORY VARCHAR(20),
+  	OUT MSG VARCHAR(100)
+  	)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+
+BEGIN
+/***************************** 
+	Write your procedure logic 
+ *****************************/
+MSG := '';
+GEO_IDs=SELECT DISTINCT ID from "sap.tm.trp.db.systemmanagement.location::cv_get_locations_with_stocksettings"(PLACEHOLDER."$$RESOURCE_CATEGORY$$" => 'CONTAINER');
+
+UPSERT "sap.tm.trp.db.stock::t_stock_config"("LOCATION_ID","LOCATION_TYPE","EQUIP_CODE","EQUIP_CODE_TYPE",
+"MIN_SAFETY","MAX_SAFETY","MAX_CAPACITY","LOCATION_HEAD_FLAG","RESOURCE_CATEGORY")
+SELECT A.ID,:GEO_TYPE, B.RESOURCE_ID,B. RESOURCE_TYPE,B.MIN_SAFETY_STOCK,B.MAX_SAFETY_STOCK,B.MAX_PHYSICAL_STOCK , 0 , :RESOURCE_CATEGORY 
+FROM :GEO_IDs AS A , :STOCK_THRESHOLDS AS B;
+
+END;

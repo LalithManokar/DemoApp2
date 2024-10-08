@@ -1,0 +1,23 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+  {name = "ID"; sqlType = VARCHAR; length = 22; nullable = false;},
+  {name = "DESC"; sqlType = VARCHAR; length = 50; nullable = false;},
+  {name = "CODE";sqlType = NVARCHAR; length = 20; nullable = true;unique = true;},
+  {name = "VISIBLE_FLAG"; sqlType = VARCHAR; length = 3; comment = "'P' for Personal, 'G' for Global";},
+  {name = "CITY_CODE"; sqlType = VARCHAR; length = 50;},
+  {name = "CITY_NAME"; sqlType = VARCHAR; length = 50;},
+  {name = "STATE_CODE"; sqlType = VARCHAR; length = 50;},
+  {name = "STATE_NAME"; sqlType = VARCHAR; length = 50;},
+  {name = "COUNTRY_CODE"; sqlType = VARCHAR; length = 50;},
+  {name = "COUNTRY_NAME"; sqlType = VARCHAR; length = 50;},
+  {name = "PRIME_LOC_ID"; sqlType = VARCHAR; length = 22;},
+  {name = "USER_ID"; sqlType = BIGINT; nullable = false;},
+  {name = "CREATE_AT"; sqlType = TIMESTAMP;},
+  {name = "LAST_MODIFIED_AT"; sqlType = TIMESTAMP;},
+  {name = "LAST_MODIFIED_BY"; sqlType = BIGINT;}
+];
+table.indexes = [
+  {name = "REGION_GROUP_DESC_INDEX_TESTS"; unique = true; indexColumns = ["DESC"];}
+];
+table.primaryKey.pkcolumns = ["ID"];

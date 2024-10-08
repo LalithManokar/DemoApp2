@@ -1,0 +1,91 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_get_system_composite_path_merge_view" (
+	IN network_id BIGINT,
+	IN target VARCHAR(50),
+	OUT accumulate_path_id TABLE(id BIGINT),
+	OUT accumulate_conflict_delta_id TABLE(id BIGINT)
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING
+   READS SQL DATA AS
+BEGIN
+   /*************************************
+       Get the merged view of all composite path within network id and all its corresponding lower layer's network with the specified target
+   *************************************/
+	-- decl_list
+	DECLARE network_chain TABLE(id BIGINT, level INTEGER);
+	DECLARE chainid_arr BIGINT ARRAY;
+	DECLARE chain_iter INTEGER;
+	DECLARE manual_source CONSTANT CHAR = 'M';
+	DECLARE system_source CONSTANT CHAR = 'S';
+	DECLARE accumulate_path TABLE(id BIGINT, network_id BIGINT, hash VARBINARY(32));
+	-- exception_list
+	-- stmt_list
+
+	-- Get a list of network chain id consisting the inheritance relation
+	network_chain = 
+	SELECT 0 AS id, 0 AS level
+	FROM DUMMY
+	WHERE 1 != 1;
+	
+	accumulate_path =
+	SELECT 0 AS id, 0 AS network_id, TO_VARBINARY('') AS hash
+	FROM DUMMY
+	WHERE 1 != 1;
+	
+	accumulate_conflict_delta = 
+	SELECT 0 AS id, 0 AS network_id
+	FROM DUMMY
+	WHERE 1 != 1;
+	
+	CALL "sap.tm.trp.routing.db.path::p_get_network_chain"(:network_id, network_chain);
+
+	path_data = 
+	SELECT * 
+	FROM "sap.tm.trp.routing.db.path::t_path"
+	WHERE network_model_id IN (SELECT id FROM :network_chain);
+
+	chainid_arr = ARRAY_AGG(:network_chain.id);
+
+	-- Merge System Source
+	FOR chain_iter IN REVERSE 1..CARDINALITY(:chainid_arr) DO 
+		DECLARE cur_network_id BIGINT = :chainid_arr[:chain_iter];
+		DECLARE delta_cnt BIGINT;
+
+		-- Always merge system generated non-delta path
+		accumulate_path = 
+		SELECT * FROM :accumulate_path
+		UNION ALL
+		SELECT id, network_model_id AS network_id, hash
+		FROM :path_data
+		WHERE network_model_id = :cur_network_id AND target = :target AND action IS NULL AND source = :system_source;
+        
+		-- Fetch the system generated delta data in current network
+		delta_path = 
+		SELECT id, network_model_id AS network_id, action, hash
+		FROM :path_data
+		WHERE network_model_id = :cur_network_id AND target = :target AND action IS NOT NULL AND source = :system_source;
+        
+		-- check whether delta exist, otherwise continue
+		SELECT COUNT(*) INTO delta_cnt FROM :delta_path;
+		IF :delta_cnt = 0 THEN
+			CONTINUE;
+		END IF;
+
+		-- Apply the delta
+		CALL "sap.tm.trp.routing.db.path::p_apply_composite_delta" (:accumulate_path, :delta_path, accumulate_path, conflict_delta);
+		-- Merge conflict delta
+		accumulate_conflict_delta = 
+		SELECT * FROM :accumulate_conflict_delta
+		UNION ALL 
+		SELECT * FROM :conflict_delta;
+	END FOR;
+
+	accumulate_path_id = 
+	SELECT id 
+	FROM :accumulate_path;
+
+	accumulate_conflict_delta_id = 
+	SELECT id
+	FROM :accumulate_conflict_delta;
+END

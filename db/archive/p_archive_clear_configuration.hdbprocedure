@@ -1,0 +1,20 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::p_archive_clear_configuration" ( ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	AS
+BEGIN
+/***************************** 
+	Write your procedure logic 
+ *****************************/
+ 
+ DELETE FROM "sap.tm.trp.db.archive::t_archive_configuration" WHERE KEY IN (
+'CONFIGURATION_TYPE',
+'DATASOURCE_NAME',
+'SCHEMA_NAME',
+'DATABASE_NAME',
+'ADAPTER_TYPE',
+'ADAPTER_NAME',
+'CONFIGURATION_OBJECT');
+ 
+END;

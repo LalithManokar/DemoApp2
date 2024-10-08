@@ -1,0 +1,20 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_ext_zone_group_delete"(
+    IN ID VARCHAR(22)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DELETE FROM "sap.tm.trp.db.systemmanagement::t_zone_group_item"
+    WHERE ZONE_GROUP_ID = :ID;
+    
+    DELETE FROM "sap.tm.trp.db.systemmanagement::t_zone_group"
+    WHERE ID = :ID;
+    
+    DELETE FROM "sap.tm.trp.db.filter::t_location_filter_zone"
+    WHERE ZONE_GROUP_ID = :ID;
+    
+    CALL "sap.tm.trp.db.stock::p_location_stock_delete"(:ID);
+    
+END;

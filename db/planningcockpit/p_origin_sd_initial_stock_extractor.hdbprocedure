@@ -1,0 +1,182 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_origin_sd_initial_stock_extractor"      
+(
+IN PLAN_ID BIGINT,
+IN EXECUTION_ID BIGINT,
+IN DEFAULT_NODE BIGINT,
+OUT origin_sd "sap.tm.trp.db.planningcockpit::tt_sd_result",
+OUT init_stock "sap.tm.trp.db.planningcockpit::tt_initial_stock" 
+)  
+       LANGUAGE SQLSCRIPT
+       SQL SECURITY INVOKER 
+       DEFAULT SCHEMA "SAP_TM_TRP"
+       READS SQL DATA   
+        AS     
+BEGIN
+  DECLARE TMP_PROV_STOCK_NODE_FLAG INTEGER;
+  
+  --check stock flag
+  SELECT COUNT(*) INTO TMP_PROV_STOCK_NODE_FLAG
+  FROM "sap.tm.trp.db.pipeline::t_plan_model" AS A
+  INNER JOIN "sap.tm.trp.db.pipeline::v_pipeline_node" B
+  ON (A.PIPELINE_MODEL_ID = B.PIPELINE_MODEL_ID AND UPPER (B.NAME) LIKE '%PROVISIONAL_STOCK%')
+  WHERE B.RESULT_VISIBLE = 1 AND A.ID = :PLAN_ID;
+  
+  -- if there is stock node, we need to extract independent SD from the casceded results
+  IF TMP_PROV_STOCK_NODE_FLAG > 0 THEN 
+   
+  -- For pipeline with stock/provisional stock, there would be cascade effect from previous time intervals
+  -- For example, booking 20 containers on time_interval_1, demand of this interval would increase 20
+  -- and it also become negative stock and as a result the demand of next intervals would all increase 20
+  -- Refer to p_cal_provisional_stock and p_get_positive_stock and p_get_negative_stock for  details
+
+  -- This procedure is to extract the original SD data & initial stock from the cascaded results   
+
+  -- The sd plan execution results(with cascade effect) 
+  
+
+  -->>>Edit by ZHENGNING on 04/30/2019
+  --Regenerate those 0 records which not saved to DB 
+  
+  sql1 = SELECT LOCATION_ID, LOCATION_NAME, EQUIP_TYPE_ID, TIME_INTERVAL_ID, START_TIME, END_TIME, OUTPUT_VALUE , OUTPUT_KEY
+           FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"
+           WHERE PLAN_EXECUTION_ID = :EXECUTION_ID AND NODE_ID = :DEFAULT_NODE ;
+           
+  sql2 = SELECT LOCATION_ID, 
+                LOCATION_NAME, 
+                EQUIP_TYPE_ID, 
+                TIME_INTERVAL_ID, 
+                START_TIME, 
+                END_TIME, 
+                0 AS OUTPUT_VALUE,
+                CASE  WHEN OUTPUT_KEY = 'DEMAND' 
+            	      THEN 'SUPPLY' 
+	            ELSE 'DEMAND' 
+	            END  AS OUTPUT_KEY
+           FROM :sql1
+           UNION ALL
+           SELECT LOCATION_ID, 
+                LOCATION_NAME, 
+                EQUIP_TYPE_ID, 
+                TIME_INTERVAL_ID, 
+                START_TIME, 
+                END_TIME, 
+                OUTPUT_VALUE,
+                OUTPUT_KEY
+           FROM :sql1;    
+           
+    sql3 = SELECT LOCATION_ID, 
+                LOCATION_NAME, 
+                EQUIP_TYPE_ID, 
+                TIME_INTERVAL_ID, 
+                START_TIME, 
+                END_TIME, 
+                SUM(OUTPUT_VALUE) AS OUTPUT_VALUE,
+                OUTPUT_KEY
+            FROM :sql2 
+            GROUP BY
+                LOCATION_ID, 
+                LOCATION_NAME, 
+                EQUIP_TYPE_ID, 
+                TIME_INTERVAL_ID, 
+                START_TIME, 
+                END_TIME, 
+                OUTPUT_KEY;
+         
+  sd_res = 
+         SELECT T1.LOCATION_ID, T1.LOCATION_NAME, T1.EQUIP_TYPE_ID, T1.TIME_INTERVAL_ID, T1.START_TIME, T1.END_TIME, T1.SUPPLY, T2.DEMAND FROM
+         (
+           SELECT LOCATION_ID, LOCATION_NAME, EQUIP_TYPE_ID, TIME_INTERVAL_ID, START_TIME, END_TIME, TO_INTEGER(OUTPUT_VALUE) AS SUPPLY 
+           FROM :SQL3
+           WHERE OUTPUT_KEY = 'SUPPLY'
+         ) T1         
+         INNER JOIN 
+         (
+           SELECT LOCATION_ID, LOCATION_NAME, EQUIP_TYPE_ID, TIME_INTERVAL_ID, START_TIME, END_TIME, TO_INTEGER(OUTPUT_VALUE) AS DEMAND 
+           FROM :SQL3
+           WHERE OUTPUT_KEY = 'DEMAND'
+         ) T2 ON (T1.LOCATION_ID = T2.LOCATION_ID AND T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID AND T1.TIME_INTERVAL_ID = T2.TIME_INTERVAL_ID);
+         
+  --<<<End 
+  
+/*Commented by Zhengning on 04/30/2019  
+  sd_res = 
+         SELECT T1.LOCATION_ID, T1.LOCATION_NAME, T1.EQUIP_TYPE_ID, T1.TIME_INTERVAL_ID, T1.START_TIME, T1.END_TIME, T1.SUPPLY, T2.DEMAND FROM
+         (
+           SELECT LOCATION_ID, LOCATION_NAME, EQUIP_TYPE_ID, TIME_INTERVAL_ID, START_TIME, END_TIME, TO_INTEGER(OUTPUT_VALUE) AS SUPPLY 
+           FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"
+           WHERE PLAN_EXECUTION_ID = :EXECUTION_ID AND NODE_ID = :DEFAULT_NODE AND OUTPUT_KEY = 'SUPPLY'
+         ) T1         
+         INNER JOIN 
+         (
+           SELECT LOCATION_ID, LOCATION_NAME, EQUIP_TYPE_ID, TIME_INTERVAL_ID, START_TIME, END_TIME, TO_INTEGER(OUTPUT_VALUE) AS DEMAND 
+           FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"
+           WHERE PLAN_EXECUTION_ID = :EXECUTION_ID AND NODE_ID = :DEFAULT_NODE AND OUTPUT_KEY = 'DEMAND'
+         ) T2 ON (T1.LOCATION_ID = T2.LOCATION_ID AND T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID AND T1.TIME_INTERVAL_ID = T2.TIME_INTERVAL_ID);
+   
+*/--End comment
+
+  -- The initial stock of the plan execution(that depends on one annotations 'nodeType' of the pipeline flowgraph)          
+  tmp_init_stock = SELECT LOCATION_ID, LOCATION_NAME, EQUIP_TYPE_ID, TIME_INTERVAL_ID, START_TIME, END_TIME, TO_INTEGER(OUTPUT_VALUE) AS INIT_STOCK 
+               FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T1
+               INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node_misc_info" T2 ON (T1.NODE_ID = T2.NODE_ID AND T2.KEY = 'nodeType'  AND T2.VALUE = 'INITIAL_STOCK')
+               WHERE T1.PLAN_EXECUTION_ID = :EXECUTION_ID AND T1.OUTPUT_KEY = 'STOCK';
+
+
+  -- The INITIAL stock * POS & NEG of the delta (SUPPLY - DEMAND) of each time interval
+  -- Note the time_interval id plus 1 for delta part as we use this delta for next time interval                 
+  deltas = SELECT LOCATION_ID, LOCATION_NAME, EQUIP_TYPE_ID, TIME_INTERVAL_ID, START_TIME, END_TIME, INIT_STOCK AS POS_DELTA, 0 AS NEG_DELTA
+           FROM :tmp_init_stock
+           UNION
+           SELECT LOCATION_ID, LOCATION_NAME, EQUIP_TYPE_ID, TIME_INTERVAL_ID + 1 AS TIME_INTERVAL_ID, START_TIME, END_TIME,
+                  CASE WHEN DELTA > 0 THEN DELTA ELSE 0 END AS POS_DELTA,
+                  CASE WHEN DELTA < 0 THEN -1 * DELTA ELSE 0 END AS NEG_DELTA
+           FROM 
+           (    
+             SELECT LOCATION_ID, LOCATION_NAME, EQUIP_TYPE_ID, TIME_INTERVAL_ID, START_TIME, END_TIME, SUPPLY - DEMAND AS DELTA
+             FROM :sd_res
+           );  
+    
+  -- Remove the cascade effect 
+  -- Note the first time interval's cascade is caused by initial stock(which is always positive), so the first interval substract initial stock 
+  -- And the other intervals substract deltas 
+                         
+  origin_sd = SELECT IFNULL(T1.LOCATION_ID,T2.LOCATION_ID) AS LOCATION_ID, IFNULL(T1.LOCATION_NAME,T2.LOCATION_NAME) AS LOCATION_NAME, 
+              IFNULL(T1.EQUIP_TYPE_ID,T2.EQUIP_TYPE_ID) AS EQUIP_TYPE_ID, IFNULL(T1.TIME_INTERVAL_ID, T2.TIME_INTERVAL_ID) AS TIME_INTERVAL_ID, 
+              IFNULL(T1.START_TIME, T2.START_TIME) AS START_TIME, IFNULL(T1.END_TIME, T2.END_TIME) AS END_TIME,
+              (IFNULL(SUPPLY, 0) - IFNULL(POS_DELTA, 0)) AS SUPPLY, (IFNULL(DEMAND, 0) - IFNULL(NEG_DELTA, 0)) AS DEMAND
+              FROM :sd_res T1
+              LEFT JOIN :deltas T2 ON (T1.LOCATION_ID = T2.LOCATION_ID AND T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID AND T1.TIME_INTERVAL_ID = T2.TIME_INTERVAL_ID);
+
+  init_stock = SELECT LOCATION_ID, LOCATION_NAME, EQUIP_TYPE_ID AS RESOURCE_TYPE, TIME_INTERVAL_ID, INIT_STOCK 
+               FROM :tmp_init_stock;    
+
+  -- other wise just use the results directly
+  ELSE 
+
+  sd_exe_res = 
+             SELECT TIME_INTERVAL_ID,START_TIME, END_TIME, LOCATION_ID, LOCATION_NAME, EQUIP_TYPE_ID, 
+                    OUTPUT_KEY, TO_BIGINT (OUTPUT_VALUE) AS OUTPUT_VALUE
+             FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset"
+             WHERE PLAN_EXECUTION_ID = :EXECUTION_ID AND NODE_ID = :DEFAULT_NODE;
+
+  origin_sd = SELECT T1.LOCATION_ID, T1.LOCATION_NAME, T1.EQUIP_TYPE_ID, T1.TIME_INTERVAL_ID, T1.START_TIME, T1.END_TIME, 
+              T1.OUTPUT_VALUE AS SUPPLY, T2.OUTPUT_VALUE AS DEMAND FROM 
+              (SELECT * 
+               FROM :sd_exe_res 
+               WHERE OUTPUT_KEY = 'SUPPLY'
+              ) T1
+              INNER JOIN 
+              (SELECT * 
+               FROM :sd_exe_res 
+               WHERE OUTPUT_KEY = 'DEMAND'
+              ) T2 ON (T1.LOCATION_ID = T2.LOCATION_ID AND T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID AND T1.TIME_INTERVAL_ID = T2.TIME_INTERVAL_ID); 
+  
+  init_stock = SELECT LOCATION_ID, LOCATION_NAME, EQUIP_TYPE_ID AS RESOURCE_TYPE, TIME_INTERVAL_ID, TO_INTEGER(OUTPUT_VALUE) AS INIT_STOCK 
+               FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" T1
+               INNER JOIN "sap.tm.trp.db.pipeline::t_pipeline_node_misc_info" T2 ON (T1.NODE_ID = T2.NODE_ID AND T2.KEY = 'nodeType'  AND T2.VALUE = 'INITIAL_STOCK')
+               WHERE T1.PLAN_EXECUTION_ID = :EXECUTION_ID AND T1.OUTPUT_KEY = 'STOCK';                      
+  END IF; 
+  
+ 
+     
+END; 

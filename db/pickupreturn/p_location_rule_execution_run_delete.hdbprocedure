@@ -1,0 +1,74 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_location_rule_execution_run_delete" (
+ 	IN RULE_ID  BIGINT
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN  
+ 
+	DECLARE NUM_EXEC BIGINT;
+	DECLARE SUB_TAB_COUNT INT;
+	DECLARE TABLE_ID BIGINT;
+	DECLARE ARR_TABLE_NAME NVARCHAR(500) ARRAY;
+	DECLARE ARR_IND INT;
+	DECLARE SUB_TAB_NAME NVARCHAR(500);
+	DECLARE SQL_STT NVARCHAR(5000);
+    DECLARE SCHEMA_NAME NVARCHAR(20) DEFAULT 'SAP_TM_TRP';
+    DECLARE PARENT_REF_COL NVARCHAR(500);
+    DECLARE CHILD_REF_COL NVARCHAR(500);
+
+    SELECT KEEP_EXECUTION_RUNS INTO
+	       NUM_EXEC 	  
+	FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+  	WHERE ID = :RULE_ID;
+  	
+    SUB_TAB_COUNT := 0;
+	TABLE_ID := 3;
+  	
+  	IF NUM_EXEC > 0 THEN
+  	
+  	 --check if children table exist' 
+
+	    SELECT COUNT(*) INTO SUB_TAB_COUNT FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE ULTIMATE_PARENT_ID = :TABLE_ID; 
+	    
+	    IF :SUB_TAB_COUNT > 0 THEN
+	    ---archive children tables
+	        SUB_TABS =
+	            SELECT TABLE_NAME FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE ULTIMATE_PARENT_ID = :TABLE_ID;
+	        ARR_TABLE_NAME := ARRAY_AGG(:SUB_TABS.TABLE_NAME);
+	        ARR_IND := 0;
+	        FOR ARR_IND IN 1 .. CARDINALITY(:ARR_TABLE_NAME) DO
+	            SUB_TAB_NAME := :ARR_TABLE_NAME[:ARR_IND];
+	            
+	            --archive child table
+	            SELECT PARENT_REF_COL, CHILD_REF_COL INTO PARENT_REF_COL, CHILD_REF_COL
+	    		FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE TABLE_NAME = :SUB_TAB_NAME;
+	    		
+    	    	SQL_STT := 
+    				'DELETE FROM "' || :SCHEMA_NAME || '"."' || :SUB_TAB_NAME || '" ' || 'WHERE ' || :CHILD_REF_COL || ' IN (SELECT RUN_ID FROM ( SELECT RUN_ID, ROW_NUMBER() 
+    				OVER (PARTITION BY RULE_ID ORDER BY EXECUTION_START_TIME DESC ) AS RANK FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_location_rule_running_log" WHERE RULE_ID = '
+    				|| :RULE_ID || ' ) WHERE RANK > ' || :NUM_EXEC || ') AND TU_ID IN (SELECT DISTINCT TU_ID FROM "' || :SCHEMA_NAME || '"."' || :SUB_TAB_NAME || '" ' || 'WHERE ' || 
+    				:CHILD_REF_COL || ' IN (SELECT RUN_ID FROM ( SELECT RUN_ID, ROW_NUMBER() OVER (PARTITION BY RULE_ID ORDER BY EXECUTION_START_TIME DESC ) AS RANK FROM 
+    				"SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_location_rule_running_log" WHERE RULE_ID = '
+    				|| :RULE_ID || ' ) WHERE RANK <= ' || :NUM_EXEC || ') )';
+    			EXECUTE IMMEDIATE :SQL_STT;
+    				
+    			COMMIT;
+
+	        END FOR;
+	        
+	    END IF;
+	    
+	    DELETE FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_location_rule_running_log"  WHERE ID IN 
+	    	( SELECT ID FROM ( SELECT ID, ROW_NUMBER() OVER (PARTITION BY RULE_ID ORDER BY EXECUTION_START_TIME DESC )
+	    	  AS RANK FROM "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::t_location_rule_running_log" WHERE RULE_ID = :RULE_ID )
+	    	  WHERE RANK > :NUM_EXEC ) AND RUN_ID NOT IN ( SELECT RUN_ID FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assign_result" WHERE RULE_ID = :RULE_ID
+	    	      UNION SELECT RUN_ID FROM "sap.tm.trp.db.pickupreturn::t_location_rule_assign_error" WHERE RULE_ID = :RULE_ID
+	    	  );
+	    	  
+	    COMMIT;
+    	  
+    END IF;
+
+END;

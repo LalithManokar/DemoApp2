@@ -1,0 +1,15 @@
+schema = "SAP_TM_TRP";
+query = "SELECT T1.ZONE_ID AS ZONE_ID,
+                T1.COUNTER AS COUNTER,
+                T1.COUNTRY_CODE AS COUNTRY_CODE,
+                T2.NAME AS COUNTRY_NAME,
+                T1.POSTAL_CODE_FROM AS POSTAL_CODE_FROM,
+                T1.POSTAL_CODE_TO AS POSTAL_CODE_TO
+               
+           FROM \"sap.tm.trp.db.semantic.location::v_zone_postal_gis\" AS T1
+                INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_country_ui\" AS T2
+                ON T1.COUNTRY_CODE = T2.CODE
+                ";
+                
+depends_on_view = ["sap.tm.trp.db.semantic.location::v_zone_postal_gis", 
+                   "sap.tm.trp.db.systemmanagement.location::v_country_ui"];                

@@ -1,0 +1,69 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_get_execution_result_by_plan_id_list_location_resource" (
+    IN PLAN_ID_LIST "sap.tm.trp.db.pipeline::tt_plan_id_list",
+    IN LOCATION_ID_LIST "sap.tm.trp.db.pipeline::tt_geo_id",
+    IN RESOURCE_ID_LIST "sap.tm.trp.db.pipeline::tt_equipment_type_id",
+    OUT RESULTS "sap.tm.trp.db.pipeline::tt_pipeline_output",
+    OUT INTERVALS "sap.tm.trp.db.pipeline::tt_time_interval",
+    OUT PLANS "sap.tm.trp.db.pipeline::tt_plan_pipeline_info",
+    OUT START_TIME TIMESTAMP,
+    OUT END_TIME TIMESTAMP
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+    CALL "sap.tm.trp.db.kpi::p_get_kpi_plan_type"(:PLAN_ID_LIST, NODE_ATTRIBUTES);
+    
+    -- get execution id from plan id
+    PLANS = SELECT a.PLAN_MODEL_ID AS PLAN_ID,
+        c.NAME AS PLAN_NAME,
+        MAX(a.ID) AS EXEC_ID,
+        c.PIPELINE_MODEL_ID AS PIPELINE_ID,
+        d.TYPE AS OUTPUT_NODE_NAME,
+        d.UNIT AS OUTPUT_NODE_UNIT
+    FROM "sap.tm.trp.db.pipeline::t_plan_execution" AS a
+    INNER JOIN :PLAN_ID_LIST AS b
+    ON a.PLAN_MODEL_ID = b.ID
+    LEFT JOIN "sap.tm.trp.db.pipeline::t_plan_model" AS c
+    ON b.ID = c.ID
+    LEFT JOIN :NODE_ATTRIBUTES AS d
+    ON b.ID = d.PLAN_ID
+    GROUP BY a.PLAN_MODEL_ID, c.NAME, c.PIPELINE_MODEL_ID, d.TYPE, d.UNIT;
+    
+    EXEC_IDS = SELECT EXEC_ID AS ID FROM :PLANS;
+
+    -- get the default node id from the execution id
+    CALL "sap.tm.trp.db.pipeline::p_get_default_node_by_executionids"(:EXEC_IDS, NODE_IDS);
+
+    -- get the result from the execution id, node id, resource type id and location id
+    -- the frontend expect the results are ordered
+    RESULTS = SELECT b.PLAN_ID,
+        b.EXEC_ID AS EXECUTION_ID,
+        a.LOCATION_ID AS GEO_ID,
+        a.EQUIP_TYPE_ID AS RESOURCE_TYPE_ID,
+        a.START_TIME,
+        a.END_TIME,
+        a.SEQUENCE,
+        a.OUTPUT_KEY,
+        a.OUTPUT_VALUE,
+        a.TIME_INTERVAL AS INTERVAL
+    FROM "sap.tm.trp.db.pipeline::t_pipeline_output_dataset" AS a
+    INNER JOIN :PLANS AS b
+    ON a.PLAN_EXECUTION_ID = b.EXEC_ID
+    INNER JOIN :LOCATION_ID_LIST AS f
+    ON a.LOCATION_ID = f.ID
+    INNER JOIN :RESOURCE_ID_LIST AS e
+    ON a.EQUIP_TYPE_ID = e.ID
+    INNER JOIN :NODE_IDS AS d
+    ON a.NODE_ID = d.NODE_ID AND a.PLAN_EXECUTION_ID = d.EXECUTION_ID
+    ORDER BY b.PLAN_ID,a.LOCATION_ID,a.EQUIP_TYPE_ID,a.SEQUENCE ASC;
+
+    INTERVALS = SELECT DISTINCT SEQUENCE, START_TIME, END_TIME, INTERVAL
+    FROM :results
+    ORDER BY SEQUENCE ASC, START_TIME;
+
+    SELECT MIN(START_TIME), MAX(END_TIME) INTO START_TIME, END_TIME FROM :INTERVALS;
+
+
+END;

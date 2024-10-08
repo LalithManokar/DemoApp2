@@ -1,0 +1,358 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_load_discharge_freight_order" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_loadDischarge"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="RESOURCE_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="RESOURCE_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="LOCATION_FILTER_ID" parameter="true">
+      <descriptions defaultDescription="LOCATION_FILTER_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="TIME_FILTER_BY" parameter="true">
+      <descriptions defaultDescription="TIME_FILTER_BY"/>
+      <variableProperties datatype="INTEGER" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="START_TIME" parameter="true">
+      <descriptions defaultDescription="START_TIME"/>
+      <variableProperties datatype="TIMESTAMP" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="END_TIME" parameter="true">
+      <descriptions defaultDescription="END_TIME"/>
+      <variableProperties datatype="TIMESTAMP" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="RESOURCE_CATEGORY" parameter="true">
+      <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+      <variableProperties datatype="NVARCHAR" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="LOCATION" length="20"/>
+        <viewAttribute datatype="INTEGER" id="STOP"/>
+        <viewAttribute datatype="NVARCHAR" id="RESOURCE_TYPE" length="10"/>
+        <viewAttribute datatype="NVARCHAR" id="SCHEDULE_ID" length="40"/>
+        <viewAttribute datatype="NVARCHAR" id="VOYAGE_ID" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="TRAIN_ID" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="ACTIVE_RESOURCE_ID" length="35"/>
+        <viewAttribute datatype="NVARCHAR" id="ACTIVE_RESOURCE_TYPE" length="255"/>
+        <viewAttribute datatype="NVARCHAR" id="FREIGHT_BOOKING_ID" length="20"/>
+        <viewAttribute datatype="TIMESTAMP" id="DEPARTURE_TIME_CONSIDERED"/>
+        <viewAttribute datatype="TIMESTAMP" id="DEPARTURE_TIME"/>
+        <viewAttribute datatype="DECIMAL" id="LADEN_LOAD_QUANTITY" length="31" scale="14"/>
+        <viewAttribute datatype="DECIMAL" id="LADEN_DISCHARGE_QUANTITY" length="31" scale="14"/>
+        <viewAttribute datatype="DECIMAL" id="EMPTY_LOAD_QUANTITY" length="31" scale="14"/>
+        <viewAttribute datatype="DECIMAL" id="EMPTY_DISCHARGE_QUANTITY" length="31" scale="14"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#RESOURCE_FILTER_ID</localVariable>
+      <localVariable>#LOCATION_FILTER_ID</localVariable>
+      <localVariable>#TIME_FILTER_BY</localVariable>
+      <localVariable>#START_TIME</localVariable>
+      <localVariable>#END_TIME</localVariable>
+      <localVariable>#RESOURCE_CATEGORY</localVariable>
+      <definition>	  
+	 BEGIN 
+	 
+	  DECLARE AUTH SMALLINT;
+	  DECLARE GEO_FLAG INT;
+	  DECLARE EQUIP_FLAG INT;
+	  DECLARE LOCATION NVARCHAR(22);
+	  DECLARE EQUIPMENT NVARCHAR(22);
+	  DECLARE CUSTOMCONDITION CONDITION FOR SQL_ERROR_CODE 10001;/* Custom Error Code = 10001*/
+	  DECLARE VAL_ITEM_CAT VARCHAR(50);
+	 /*User Defined exception handler */
+	  DECLARE EXIT HANDLER FOR CUSTOMCONDITION RESIGNAL ;  
+	
+
+  SELECT  &quot;VALUE&quot;  INTO  VAL_ITEM_CAT 
+        from  &quot;sap.tm.trp.db.systemmanagement::t_config_cust&quot;  a  
+       where  a.CODE = :RESOURCE_CATEGORY
+         and  a.KEY = 'ITEM_CAT';
+	
+
+	 	
+	LOCATION_FILTER=SELECT :LOCATION_FILTER_ID AS ID FROM DUMMY;
+	
+		CALL &quot;sap.tm.trp.db.systemmanagement::p_check_location_filter_authorization&quot;(
+		:LOCATION_FILTER,
+	  	:AUTH
+		);
+		
+	/*Location authorization */	
+	IF AUTH = 0 THEN
+		/* Signaling Custom error and setting the Custom Error Message */
+		SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'LOCATION FILTER NOT AUTHORIZED';
+	END IF;
+	
+	
+	EQUIPMENT_FILTER=SELECT :RESOURCE_FILTER_ID AS ID FROM DUMMY;
+		CALL &quot;sap.tm.trp.db.systemmanagement::p_check_equipment_filter_authorization&quot;(
+		:EQUIPMENT_FILTER,
+	  	:AUTH
+		);
+	
+	/*Equipment authorization */		
+	IF :AUTH = 0 THEN
+		/* Signaling Custom error and setting the Custom Error Message */
+		SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'EQUIPMENT FILTER NOT AUTHORIZED';
+	END IF;	
+
+    CALL &quot;sap.tm.trp.db.filter::p_get_locations_by_locfilterid&quot;(:LOCATION_FILTER_ID,LOCATION_ID);
+
+    LOCATION_NAME = SELECT DISTINCT T2.NAME AS LOCATION
+                    FROM :LOCATION_ID T1
+                    INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_location&quot; T2 ON (T1.LOCATION_ID = T2.ID);
+                    
+    CALL &quot;sap.tm.trp.db.filter::p_get_equiptypes_by_equip_filter_id&quot;(:RESOURCE_FILTER_ID, EQUIPMENT_NAME);
+    
+    
+     location_filter_list =    select distinct T1.FREIGHT_ORDER_KEY
+                               FROM &quot;sap.tm.trp.db.semantic.order::v_freight_order_stop&quot; T1 
+                               inner join :LOCATION_NAME t2 on  t2.LOCATION = T1.LOCATION_NAME ;
+                       
+                       
+                
+ 
+    distinct_fo_key =  select distinct A.FREIGHT_ORDER_KEY
+                      FROM  &quot;sap.tm.trp.db.semantic.order::v_freight_order_item&quot; A
+	                  inner join :EQUIPMENT_NAME  b on a.RESOURCE_TYPE = b.EQUIPMENT_TYPE
+	                  INNER JOIN  &quot;sap.tm.trp.db.semantic.resource::v_resource_category&quot; t6
+	                  ON (A.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :RESOURCE_CATEGORY)
+	                  where a.ITEM_CAT=:VAL_ITEM_CAT;
+
+
+IF TIME_FILTER_BY=0 THEN
+	--NO FILTER CONDITION
+        
+         MASTER_VIEW =  select DOCUMENT, SCHEDULE_ID,VOYAGE
+                     from &quot;sap.tm.trp.db.movingstock::v_movingstock_tor&quot; t1
+	           inner join :location_filter_list t2 on t1.ROOT_DB_KEY = t2.FREIGHT_ORDER_KEY 
+	           inner join :distinct_fo_key      t3 on t1.ROOT_DB_KEY = t3.FREIGHT_ORDER_KEY ; 
+							
+	ELSE IF (TIME_FILTER_BY=1 ) THEN			
+	--DEPARTURE TIME FILTER
+		MASTER_VIEW = select DOCUMENT, SCHEDULE_ID,VOYAGE
+                     from &quot;sap.tm.trp.db.movingstock::v_movingstock_tor&quot; t1
+	           inner join :location_filter_list t2 on t1.ROOT_DB_KEY = t2.FREIGHT_ORDER_KEY
+	           inner join :distinct_fo_key      t3 on t1.ROOT_DB_KEY = t3.FREIGHT_ORDER_KEY
+	                where t1.DEPARTURE_TIME >= :START_TIME
+	                  and t1.ARRIVAL_TIME &lt;:END_TIME;
+	
+						
+	END IF;
+	END IF;
+
+  
+
+	DISTINCT_FO =  SELECT DISTINCT DOCUMENT AS TOR_ID 
+                     FROM :MASTER_VIEW;
+			
+	CALL &quot;sap.tm.trp.db.movingstock::p_get_moving_stock_detail_freight_order_list&quot;(:DISTINCT_FO,:EQUIPMENT_NAME,:RESOURCE_CATEGORY,RESULTS);
+
+	/*Applying location filter to stored procedure results */
+	FINAL_RESULTS = SELECT   &quot;FreightBookingID&quot;,
+		                     &quot;SequenceNumber&quot;, 
+		                     &quot;Location&quot;,
+		                     &quot;EquipmentSizetype&quot;, 
+		                     ARRIVAL_UTC,
+		                     DEPARTURE_UTC,
+		                     &quot;StockLaden&quot;, 
+		                     &quot;StockEmpty&quot;,
+		                     &quot;LadenDischarge&quot;, 
+		                     &quot;EmptyDischarge&quot;, 
+		                     &quot;LadenLoad&quot;,
+		                     &quot;EmptyLoad&quot;         
+	                  FROM   :RESULTS 
+				     WHERE   &quot;Location&quot; IN (SELECT LOCATION FROM :LOCATION_NAME) ;
+					   	   
+
+	FINAL_OUTPUT= SELECT 
+					&quot;FVR&quot;.&quot;Location&quot; AS &quot;LOCATION&quot;,
+					&quot;FVR&quot;.&quot;SequenceNumber&quot; AS &quot;STOP&quot;,
+					&quot;FVR&quot;.&quot;EquipmentSizetype&quot; AS &quot;RESOURCE_TYPE&quot;,
+					IFNULL(&quot;MSR&quot;.&quot;SCHEDULE_ID&quot;,'') AS &quot;SCHEDULE_ID&quot;,
+					&quot;MSR&quot;.&quot;VOYAGE&quot; AS &quot;VOYAGE_ID&quot;,
+					'' AS &quot;ACTIVE_RESOURCE_ID&quot;,
+					'Rail' as ACTIVE_RESOURCE_TYPE,
+					&quot;FVR&quot;.&quot;FreightBookingID&quot; AS &quot;FREIGHT_BOOKING_ID&quot;,
+					
+					(CASE WHEN &quot;FVR&quot;.&quot;DEPARTURE_UTC&quot;= ''  THEN  
+						TO_TIMESTAMP(&quot;FVR&quot;.&quot;ARRIVAL_UTC&quot;)   
+					ELSE 
+						TO_TIMESTAMP(&quot;FVR&quot;.&quot;DEPARTURE_UTC&quot;) 
+					END ) AS DEPARTURE_TIME_CONSIDERED, 
+					
+					(CASE WHEN &quot;FVR&quot;.&quot;DEPARTURE_UTC&quot;= '' THEN  
+						NULL  
+					ELSE 
+						TO_TIMESTAMP(&quot;FVR&quot;.&quot;DEPARTURE_UTC&quot;) 
+					END )
+					AS &quot;DEPARTURE_TIME&quot;,
+					&quot;FVR&quot;.&quot;LadenLoad&quot; AS &quot;LADEN_LOAD_QUANTITY&quot;,
+					&quot;FVR&quot;.&quot;LadenDischarge&quot; AS  &quot;LADEN_DISCHARGE_QUANTITY&quot;,
+					&quot;FVR&quot;.&quot;EmptyLoad&quot; AS  &quot;EMPTY_LOAD_QUANTITY&quot;,
+					&quot;FVR&quot;.&quot;EmptyDischarge&quot; AS &quot;EMPTY_DISCHARGE_QUANTITY&quot;
+					FROM :MASTER_VIEW MSR
+			  INNER JOIN :FINAL_RESULTS FVR 
+				      ON &quot;MSR&quot;.DOCUMENT   = &quot;FVR&quot;.&quot;FreightBookingID&quot;
+				     ;
+				    
+	IF TIME_FILTER_BY=0 THEN
+		var_out=	SELECT  &quot;LOCATION&quot;,
+	                       	&quot;STOP&quot;,
+					        &quot;RESOURCE_TYPE&quot;,
+					        &quot;SCHEDULE_ID&quot;,
+					        &quot;VOYAGE_ID&quot;,
+					        &quot;VOYAGE_ID&quot; as &quot;TRAIN_ID&quot;,
+					        &quot;ACTIVE_RESOURCE_ID&quot;,
+					        ACTIVE_RESOURCE_TYPE,
+					        &quot;FREIGHT_BOOKING_ID&quot;,				
+					        DEPARTURE_TIME_CONSIDERED, 
+					        &quot;DEPARTURE_TIME&quot;,
+					        &quot;LADEN_LOAD_QUANTITY&quot;,
+					        &quot;LADEN_DISCHARGE_QUANTITY&quot;,
+					        &quot;EMPTY_LOAD_QUANTITY&quot;,
+					        &quot;EMPTY_DISCHARGE_QUANTITY&quot;
+					   FROM :FINAL_OUTPUT ; 
+				    
+	ELSE IF (TIME_FILTER_BY=1 )THEN		
+		var_out=	SELECT  &quot;LOCATION&quot;,
+							&quot;STOP&quot;,	
+					        &quot;RESOURCE_TYPE&quot;,
+					        &quot;SCHEDULE_ID&quot;,
+					        &quot;VOYAGE_ID&quot;, 
+					        &quot;VOYAGE_ID&quot; as &quot;TRAIN_ID&quot;,
+					        &quot;ACTIVE_RESOURCE_ID&quot;,
+					        ACTIVE_RESOURCE_TYPE,
+					        &quot;FREIGHT_BOOKING_ID&quot;,				
+					        DEPARTURE_TIME_CONSIDERED, 
+					        &quot;DEPARTURE_TIME&quot;,
+					        &quot;LADEN_LOAD_QUANTITY&quot;,
+					        &quot;LADEN_DISCHARGE_QUANTITY&quot;,
+					        &quot;EMPTY_LOAD_QUANTITY&quot;,
+					        &quot;EMPTY_DISCHARGE_QUANTITY&quot;
+					  FROM  :FINAL_OUTPUT
+				WHERE DEPARTURE_TIME_CONSIDERED >= :START_TIME   
+				  and DEPARTURE_TIME_CONSIDERED &lt;:END_TIME ;
+	    
+		
+	END IF;					    			 				    
+	END IF;
+	
+	END ;
+ </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="LOCATION" order="1">
+        <descriptions defaultDescription="LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION"/>
+      </attribute>
+      <attribute id="STOP" order="2">
+        <descriptions defaultDescription="STOP"/>
+        <keyMapping columnObjectName="Script_View" columnName="STOP"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE" order="3">
+        <descriptions defaultDescription="EQUIPMENT_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE"/>
+      </attribute>
+      <attribute id="SCHEDULE_ID" order="4">
+        <descriptions defaultDescription="SCHEDULE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="SCHEDULE_ID"/>
+      </attribute>
+      <attribute id="VOYAGE_ID" order="5">
+        <descriptions defaultDescription="VOYAGE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="VOYAGE_ID"/>
+      </attribute>
+      <attribute id="TRAIN_ID" order="6">
+        <descriptions defaultDescription="TRAIN_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="TRAIN_ID"/>
+      </attribute>
+      <attribute id="ACTIVE_RESOURCE_ID" order="7">
+        <descriptions defaultDescription="ACTIVE_RESOURCE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ACTIVE_RESOURCE_ID"/>
+      </attribute>
+      <attribute id="ACTIVE_RESOURCE_TYPE" order="8">
+        <descriptions defaultDescription="ACTIVE_RESOURCE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="ACTIVE_RESOURCE_TYPE"/>
+      </attribute>
+      <attribute id="FREIGHT_BOOKING_ID" order="9">
+        <descriptions defaultDescription="FREIGHT_BOOKING_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="FREIGHT_BOOKING_ID"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="DEPARTURE_TIME_CONSIDERED" order="10" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="DEPARTURE_TIME_CONSIDERED"/>
+        <measureMapping columnObjectName="Script_View" columnName="DEPARTURE_TIME_CONSIDERED"/>
+      </measure>
+      <measure id="DEPARTURE_TIME" order="11" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="DEPARTURE_TIME"/>
+      </measure>
+      <measure id="LADEN_LOAD_QUANTITY" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="QUANTITY_EMPTY"/>
+        <measureMapping columnObjectName="Script_View" columnName="LADEN_LOAD_QUANTITY"/>
+      </measure>
+      <measure id="LADEN_DISCHARGE_QUANTITY" order="13" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="QUANTITY_LADEN"/>
+        <measureMapping columnObjectName="Script_View" columnName="LADEN_DISCHARGE_QUANTITY"/>
+      </measure>
+      <measure id="EMPTY_LOAD_QUANTITY" order="14" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="EMPTY_LOAD_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="EMPTY_LOAD_QUANTITY"/>
+      </measure>
+      <measure id="EMPTY_DISCHARGE_QUANTITY" order="15" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="EMPTY_DISCHARGE_QUANTITY"/>
+        <measureMapping columnObjectName="Script_View" columnName="EMPTY_DISCHARGE_QUANTITY"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

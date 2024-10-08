@@ -1,0 +1,309 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_query_storage_cost_info"(
+   IN COST_MODEL_ID BIGINT,
+   IN WINDOW_START TIMESTAMP,
+   IN WINDOW_END TIMESTAMP,
+   IN LOCATION_EQUIP_INFO "sap.tm.trp.db.costmodel::tt_location_equip_info",
+   OUT TIMEBASE_COST_RATING  "sap.tm.trp.db.costmodel::tt_query_storage_cost_rating",
+   OUT QUABASE_COST_RATING "sap.tm.trp.db.costmodel::tt_query_storage_cost_rating",
+   OUT REFRESH_DATE_LIST "sap.tm.trp.db.costmodel::tt_refresh_dates" 
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"  
+    READS SQL DATA 
+    AS  
+BEGIN
+
+     DECLARE max_timebased_days DOUBLE := 365 * 20;
+     DECLARE max_quabased_teudays DOUBLE := 999999999;
+     DECLARE RESOURCE_CATEGORY_TYPE VARCHAR(10); 
+     DECLARE THRESHOLD_TO INTEGER;    
+     
+     RESOURCE_TYPE = SELECT DISTINCT T1.RESOURCE_TYPE_CODE,T3.TEU_COUNT
+                     FROM "sap.tm.trp.db.semantic.resource::v_resource_type_with_category" T1
+                     INNER JOIN "sap.tm.trp.db.costmodel::v_cost_model" T2	
+                     ON (T1.RESOURCE_CATEGORY = T2.RESOURCE_CATEGORY)
+                     INNER JOIN "sap.tm.trp.db.semantic.resource::v_resource_type" T3
+                     ON (T1.RESOURCE_TYPE_CODE = T3.RESOURCE_TYPE_CODE)
+                     WHERE T2.ID = :COST_MODEL_ID;
+     
+     SELECT B.RESOURCE_CATEGORY_TYPE INTO   RESOURCE_CATEGORY_TYPE
+       FROM "sap.tm.trp.db.costmodel::t_cost_model_new"  A
+ INNER JOIN "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings" B
+         ON A.RESOURCE_CATEGORY= B.CODE
+      WHERE A.ID =:COST_MODEL_ID;
+      
+
+    -- determine which cost config are used for location&equip type, based on the priority and wild_start_count
+    -- one location can only have one cost config                    
+   /* tmp_cost_list =       
+      SELECT COST_DATASET_ID, LOCATION_NAME, RESOURCE_TYPE, FREE_POOL_TYPE, START_AT, START_TIME, THRESHOLD_FROM, THRESHOLD_TO,
+      PER_DIEM_COST, FLAG,UOM_CODE FROM 
+      (
+        SELECT COST_DATASET_ID, LOCATION_NAME, RESOURCE_TYPE, FREE_POOL_TYPE, START_AT, START_TIME, THRESHOLD_FROM, THRESHOLD_TO, 
+        PER_DIEM_COST, FLAG,UOM_CODE, RANK() OVER (PARTITION BY LOCATION_NAME, RESOURCE_TYPE ORDER BY PRIORITY,WILD_STAR_COUNT) AS RANK 
+        FROM 
+        (
+          ( SELECT T1.PRIORITY, T2.COST_DATASET_ID, T4.LOCATION_NAME, T4.RESOURCE_TYPE, NULL AS FREE_POOL_TYPE, NULL AS START_AT,
+            NULL AS START_TIME, T2.THRESHOLD_FROM, T2.THRESHOLD_TO, T2.PER_DIEM_COST, T2.WILD_STAR_COUNT, 1 AS FLAG,UOM_CODE
+            FROM "sap.tm.trp.db.costmodel::t_cost_model_dataset" T1
+            --INNER JOIN "sap.tm.trp.db.costmodel::t_time_based_storage_cost" T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID)
+            INNER JOIN "sap.tm.trp.db.costmodel::cv_time_cost_model_resource_type_explode"(PLACEHOLDER."$$IP_COST_DATASET_ID$$"=>0,PLACEHOLDER."$$IP_COST_MODEL_ID$$"=>:COST_MODEL_ID) T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID)            
+            INNER JOIN :LOCATION_EQUIP_INFO T4 ON (T2.LOCATION_NAME = T4.LOCATION_NAME AND T2.RESOURCE_TYPE = T4.RESOURCE_TYPE 
+            OR (T2.RESOURCE_TYPE = '*'  AND T2.LOCATION_NAME = '*') OR (T2.LOCATION_NAME = T4.LOCATION_NAME AND T2.RESOURCE_TYPE = '*')
+            OR (T2.RESOURCE_TYPE = T4.RESOURCE_TYPE AND T2.LOCATION_NAME = '*'))           
+            WHERE T1.COST_MODEL_ID = :COST_MODEL_ID 
+          )
+          UNION ALL
+          ( SELECT T1.PRIORITY, T2.COST_DATASET_ID, T4.LOCATION_NAME,T4.RESOURCE_TYPE, T2.FREE_POOL_TYPE, T2.START_AT,
+            T2.START_TIME, T2.THRESHOLD_FROM, T2.THRESHOLD_TO, T2.PER_DIEM_COST,T2.WILD_STAR_COUNT, 2 AS FLAG,UOM_CODE
+            FROM "sap.tm.trp.db.costmodel::t_cost_model_dataset" T1
+            --INNER JOIN "sap.tm.trp.db.costmodel::t_quantity_based_storage_cost" T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID)
+            INNER JOIN "sap.tm.trp.db.costmodel::cv_quantity_cost_model_resource_type_explode"(PLACEHOLDER."$$IP_COST_DATASET_ID$$"=>0,PLACEHOLDER."$$IP_COST_MODEL_ID$$"=>:COST_MODEL_ID)  T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID)            
+            INNER JOIN :LOCATION_EQUIP_INFO T4 ON (T2.LOCATION_NAME = T4.LOCATION_NAME AND T2.RESOURCE_TYPE = T4.RESOURCE_TYPE 
+            OR (T2.RESOURCE_TYPE = '*'  AND T2.LOCATION_NAME = '*') OR (T2.LOCATION_NAME = T4.LOCATION_NAME AND T2.RESOURCE_TYPE = '*')
+            OR (T2.RESOURCE_TYPE = T4.RESOURCE_TYPE AND T2.LOCATION_NAME = '*'))               
+            WHERE T1.COST_MODEL_ID = :COST_MODEL_ID
+          ) 
+        )
+      ) WHERE RANK = 1; */
+      
+      --Newly Added Code starts--  
+    R1=SELECT T1.PRIORITY, T2.COST_DATASET_ID, NULL AS FREE_POOL_TYPE, NULL AS START_AT,
+            NULL AS START_TIME, T2.THRESHOLD_FROM, T2.THRESHOLD_TO, T2.PER_DIEM_COST, T2.WILD_STAR_COUNT, 1 AS FLAG,UOM_CODE,
+            T2.LOCATION_NAME, T2.RESOURCE_TYPE, T1.COST_MODEL_ID
+            FROM "sap.tm.trp.db.costmodel::t_cost_model_dataset" T1
+            --INNER JOIN "sap.tm.trp.db.costmodel::t_time_based_storage_cost" T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID)
+            INNER JOIN "sap.tm.trp.db.costmodel::cv_time_cost_model_resource_type_explode"(PLACEHOLDER."$$IP_COST_DATASET_ID$$"=>0,
+            PLACEHOLDER."$$IP_COST_MODEL_ID$$"=>:COST_MODEL_ID) T2 
+            ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID);
+            
+        R2=SELECT R1.PRIORITY, R1.COST_DATASET_ID, T4.LOCATION_NAME, T4.RESOURCE_TYPE, R1.FREE_POOL_TYPE, R1.START_AT, R1.START_TIME, R1.THRESHOLD_FROM, R1.THRESHOLD_TO, R1.PER_DIEM_COST, R1.WILD_STAR_COUNT, R1.FLAG,UOM_CODE FROM :R1 AS R1
+            INNER JOIN :LOCATION_EQUIP_INFO T4 
+            ON R1.LOCATION_NAME = T4.LOCATION_NAME AND R1.RESOURCE_TYPE = T4.RESOURCE_TYPE
+            WHERE R1.COST_MODEL_ID = :COST_MODEL_ID
+            UNION ALL 
+        SELECT R1.PRIORITY, R1.COST_DATASET_ID, T4.LOCATION_NAME, T4.RESOURCE_TYPE, R1.FREE_POOL_TYPE, R1.START_AT,R1.START_TIME, R1.THRESHOLD_FROM, R1.THRESHOLD_TO, R1.PER_DIEM_COST, R1.WILD_STAR_COUNT, R1.FLAG,UOM_CODE FROM :R1 AS R1
+            INNER JOIN :LOCATION_EQUIP_INFO T4 
+            ON (R1.RESOURCE_TYPE = '*'  AND R1.LOCATION_NAME = '*') 
+            WHERE R1.COST_MODEL_ID = :COST_MODEL_ID
+            UNION ALL 
+        SELECT R1.PRIORITY, R1.COST_DATASET_ID, T4.LOCATION_NAME, T4.RESOURCE_TYPE, R1.FREE_POOL_TYPE, R1.START_AT, R1.START_TIME, R1.THRESHOLD_FROM, R1.THRESHOLD_TO, R1.PER_DIEM_COST, R1.WILD_STAR_COUNT, R1.FLAG,UOM_CODE FROM :R1 AS R1
+            INNER JOIN :LOCATION_EQUIP_INFO T4 
+            ON (R1.LOCATION_NAME = T4.LOCATION_NAME AND R1.RESOURCE_TYPE = '*')
+            WHERE R1.COST_MODEL_ID = :COST_MODEL_ID
+            UNION ALL 
+        SELECT R1.PRIORITY, R1.COST_DATASET_ID, T4.LOCATION_NAME, T4.RESOURCE_TYPE, R1.FREE_POOL_TYPE, R1.START_AT, R1.START_TIME, R1.THRESHOLD_FROM, R1.THRESHOLD_TO, R1.PER_DIEM_COST, R1.WILD_STAR_COUNT, R1.FLAG,UOM_CODE FROM :R1 AS R1
+            INNER JOIN :LOCATION_EQUIP_INFO T4 
+            ON (R1.RESOURCE_TYPE = T4.RESOURCE_TYPE AND R1.LOCATION_NAME = '*')        
+			WHERE R1.COST_MODEL_ID = :COST_MODEL_ID;
+            
+    R3=SELECT T1.PRIORITY, T2.COST_DATASET_ID, T2.FREE_POOL_TYPE, T2.START_AT,
+            T2.START_TIME, T2.THRESHOLD_FROM, T2.THRESHOLD_TO, T2.PER_DIEM_COST,T2.WILD_STAR_COUNT, 2 AS FLAG,UOM_CODE,
+            T2.LOCATION_NAME, T2.RESOURCE_TYPE, T1.COST_MODEL_ID
+            FROM "sap.tm.trp.db.costmodel::t_cost_model_dataset" T1
+            --INNER JOIN "sap.tm.trp.db.costmodel::t_time_based_storage_cost" T2 ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID)
+            INNER JOIN "sap.tm.trp.db.costmodel::cv_quantity_cost_model_resource_type_explode"(PLACEHOLDER."$$IP_COST_DATASET_ID$$"=>0,
+            PLACEHOLDER."$$IP_COST_MODEL_ID$$"=>:COST_MODEL_ID)  T2 
+            ON (T1.COST_DATASET_ID = T2.COST_DATASET_ID);
+            
+        R4=SELECT R1.PRIORITY, R1.COST_DATASET_ID, T4.LOCATION_NAME, T4.RESOURCE_TYPE, R1.FREE_POOL_TYPE, R1.START_AT, R1.START_TIME, R1.THRESHOLD_FROM, R1.THRESHOLD_TO, R1.PER_DIEM_COST, R1.WILD_STAR_COUNT, R1.FLAG,UOM_CODE 
+            FROM :R3 AS R1
+            INNER JOIN :LOCATION_EQUIP_INFO T4 
+            ON R1.LOCATION_NAME = T4.LOCATION_NAME AND R1.RESOURCE_TYPE = T4.RESOURCE_TYPE
+            WHERE R1.COST_MODEL_ID = :COST_MODEL_ID
+            UNION ALL 
+        SELECT R1.PRIORITY, R1.COST_DATASET_ID, T4.LOCATION_NAME, T4.RESOURCE_TYPE, R1.FREE_POOL_TYPE, R1.START_AT,R1.START_TIME, R1.THRESHOLD_FROM, R1.THRESHOLD_TO, R1.PER_DIEM_COST, R1.WILD_STAR_COUNT, R1.FLAG,UOM_CODE 
+            FROM :R3 AS R1
+            INNER JOIN :LOCATION_EQUIP_INFO T4 
+            ON (R1.RESOURCE_TYPE = '*'  AND R1.LOCATION_NAME = '*') 
+            WHERE R1.COST_MODEL_ID = :COST_MODEL_ID
+            UNION ALL 
+        SELECT R1.PRIORITY, R1.COST_DATASET_ID, T4.LOCATION_NAME, T4.RESOURCE_TYPE, R1.FREE_POOL_TYPE, R1.START_AT, R1.START_TIME, R1.THRESHOLD_FROM, R1.THRESHOLD_TO, R1.PER_DIEM_COST, R1.WILD_STAR_COUNT, R1.FLAG,UOM_CODE
+            FROM :R3 AS R1
+            INNER JOIN :LOCATION_EQUIP_INFO T4 
+            ON (R1.LOCATION_NAME = T4.LOCATION_NAME AND R1.RESOURCE_TYPE = '*')
+            WHERE R1.COST_MODEL_ID = :COST_MODEL_ID
+            UNION ALL 
+        SELECT R1.PRIORITY, R1.COST_DATASET_ID, T4.LOCATION_NAME, T4.RESOURCE_TYPE, R1.FREE_POOL_TYPE, R1.START_AT, R1.START_TIME, R1.THRESHOLD_FROM, R1.THRESHOLD_TO, R1.PER_DIEM_COST, R1.WILD_STAR_COUNT, R1.FLAG,UOM_CODE 
+            FROM :R3 AS R1
+            INNER JOIN :LOCATION_EQUIP_INFO T4 
+            ON (R1.RESOURCE_TYPE = T4.RESOURCE_TYPE AND R1.LOCATION_NAME = '*')        
+			WHERE R1.COST_MODEL_ID = :COST_MODEL_ID;
+ 
+      tmp_cost_list =       
+      SELECT DISTINCT COST_DATASET_ID, LOCATION_NAME, RESOURCE_TYPE, FREE_POOL_TYPE, START_AT, START_TIME, THRESHOLD_FROM, THRESHOLD_TO,
+      PER_DIEM_COST, FLAG,UOM_CODE FROM 
+      (
+        SELECT COST_DATASET_ID, LOCATION_NAME, RESOURCE_TYPE, FREE_POOL_TYPE, START_AT, START_TIME, THRESHOLD_FROM, THRESHOLD_TO, 
+        PER_DIEM_COST, FLAG,UOM_CODE, RANK() OVER (PARTITION BY LOCATION_NAME, RESOURCE_TYPE ORDER BY PRIORITY,WILD_STAR_COUNT) AS RANK 
+        FROM 
+        (
+          ( SELECT * FROM :R2)
+          UNION ALL
+          ( SELECT * FROM :R4) 
+        )
+      ) WHERE RANK = 1; 
+     --Newly Added Code ends--
+ 
+ 
+    -- Time based rating table
+ /*    TIMEBASE_COST_RATING = 
+         SELECT * FROM  
+         (
+           SELECT t3.LOCATION_NAME, t3.RESOURCE_TYPE, t4.ID AS SEQ, t3.PER_DIEM_COST FROM  
+           (
+	           
+	           SELECT A.LOCATION_NAME, 
+			          A.RESOURCE_TYPE, 
+			          A.THRESHOLD_FROM, 
+			          A.THRESHOLD_TO, 
+			          CASE WHEN :RESOURCE_CATEGORY_TYPE='CN' THEN  A.PER_DIEM_COST * TEU_COUNT ELSE A.PER_DIEM_COST END AS PER_DIEM_COST 
+	             FROM
+			            (SELECT LOCATION_NAME, 
+			                    RESOURCE_TYPE, 
+			                    THRESHOLD_FROM,   
+			                    IFNULL(THRESHOLD_TO, :max_timebased_days) AS THRESHOLD_TO, 
+			                    CASE WHEN UPPER(UOM_CODE)='TEU' THEN  PER_DIEM_COST * TEU_COUNT ELSE PER_DIEM_COST END AS PER_DIEM_COST      
+			              FROM  :tmp_cost_list 
+			        INNER JOIN  :RESOURCE_TYPE
+			                ON  RESOURCE_TYPE = RESOURCE_TYPE_CODE
+			             WHERE FLAG = 1 ) A
+		  INNER JOIN  :RESOURCE_TYPE B
+			      ON  A.RESOURCE_TYPE = B.RESOURCE_TYPE_CODE        
+           ) t3 
+           INNER JOIN "sap.tm.trp.db.planningcockpit::t_sequence" t4 ON (t4.ID BETWEEN t3.THRESHOLD_FROM AND t3.THRESHOLD_TO)
+         )  
+         UNION ALL
+         (
+           SELECT DISTINCT LOCATION_NAME, RESOURCE_TYPE, 0 AS SEQ, 0 PER_DIEM_COST                    
+           FROM :tmp_cost_list 
+           WHERE FLAG = 1 
+         );        
+*/
+
+--Below code is as part of POC
+        A=SELECT LOCATION_NAME, 
+                 RESOURCE_TYPE, 
+                 THRESHOLD_FROM,   
+                 IFNULL(THRESHOLD_TO, :max_timebased_days) AS THRESHOLD_TO, 
+                 CASE WHEN UPPER(UOM_CODE)='TEU' THEN  PER_DIEM_COST * TEU_COUNT ELSE PER_DIEM_COST END AS PER_DIEM_COST      
+            FROM  :tmp_cost_list 
+            INNER JOIN  :RESOURCE_TYPE
+            ON  RESOURCE_TYPE = RESOURCE_TYPE_CODE
+            WHERE FLAG = 1;
+                
+        T3=SELECT A.LOCATION_NAME, 
+                  A.RESOURCE_TYPE, 
+                  A.THRESHOLD_FROM, 
+                  A.THRESHOLD_TO, 
+                  CASE WHEN :RESOURCE_CATEGORY_TYPE='CN' THEN  A.PER_DIEM_COST * TEU_COUNT ELSE A.PER_DIEM_COST END AS PER_DIEM_COST 
+            FROM :A AS A
+            INNER JOIN  :RESOURCE_TYPE B
+            ON  A.RESOURCE_TYPE = B.RESOURCE_TYPE_CODE;
+                                                               
+            SELECT max(THRESHOLD_TO) INTO THRESHOLD_TO FROM :T3;
+        T_SEQ=SELECT * FROM "sap.tm.trp.db.planningcockpit::t_sequence" WHERE ID<=THRESHOLD_TO;
+                               
+        T4=SELECT T3.LOCATION_NAME, T3.RESOURCE_TYPE, T4.ID AS SEQ, T3.PER_DIEM_COST FROM :T_SEQ AS t4 , :T3 AS T3
+         WHERE t4.ID BETWEEN  T3.THRESHOLD_FROM AND  T3.THRESHOLD_TO;
+         
+        TIMEBASE_COST_RATING=SELECT * FROM :T4        
+                              UNION ALL
+                            (SELECT DISTINCT LOCATION_NAME, RESOURCE_TYPE, 0 AS SEQ, 0 PER_DIEM_COST                    
+                                FROM :tmp_cost_list WHERE FLAG = 1);
+    -- POC CODE ENDS HERE.
+       
+    -- Quantity based cost config info      
+    QUABASE_COST_CONFIG = 
+         
+         SELECT  A.LOCATION_NAME,
+                 A.RESOURCE_TYPE,
+                 A.FREE_POOL_TYPE,
+                 A.START_AT, 
+			     A.START_TIME,
+			     CASE WHEN :RESOURCE_CATEGORY_TYPE='CN' THEN  A.THRESHOLD_FROM*B.TEU_COUNT ELSE A.THRESHOLD_FROM END  AS THRESHOLD_FROM,
+			     CASE WHEN :RESOURCE_CATEGORY_TYPE='CN' THEN  IFNULL(A.THRESHOLD_TO*B.TEU_COUNT,:max_quabased_teudays) ELSE IFNULL(A.THRESHOLD_TO,:max_quabased_teudays) END AS THRESHOLD_TO,
+			     CASE WHEN :RESOURCE_CATEGORY_TYPE='CN' THEN  A.PER_DIEM_COST / B.TEU_COUNT ELSE A.PER_DIEM_COST END AS PER_DIEM_COST
+           FROM
+			        (SELECT  LOCATION_NAME, RESOURCE_TYPE,
+			                 FREE_POOL_TYPE, 
+			                 START_AT, 
+			                 START_TIME, 
+			                 CASE WHEN UPPER(T1.UOM_CODE)='TEU' THEN  THRESHOLD_FROM/T2.TEU_COUNT ELSE THRESHOLD_FROM END  AS THRESHOLD_FROM, 
+			                 CASE WHEN UPPER(T1.UOM_CODE)='TEU' THEN  IFNULL(THRESHOLD_TO/T2.TEU_COUNT,:max_quabased_teudays) ELSE IFNULL(THRESHOLD_TO,:max_quabased_teudays) END AS THRESHOLD_TO,
+			                 CASE WHEN UPPER(T1.UOM_CODE)='TEU' THEN  T1.PER_DIEM_COST * T2.TEU_COUNT ELSE T1.PER_DIEM_COST END AS PER_DIEM_COST
+			           FROM  :tmp_cost_list T1
+			     INNER JOIN  :RESOURCE_TYPE T2
+			             ON  T1.RESOURCE_TYPE = T2.RESOURCE_TYPE_CODE
+			          WHERE FLAG = 2) A
+     INNER JOIN  :RESOURCE_TYPE B   
+             ON  A.RESOURCE_TYPE = B.RESOURCE_TYPE_CODE;      
+    
+    QUABASE_POOL_CONFIG = 
+         SELECT DISTINCT LOCATION_NAME, RESOURCE_TYPE, FREE_POOL_TYPE, START_AT, START_TIME
+         FROM :QUABASE_COST_CONFIG;
+         
+    -- Quantity based rating table      
+    QUABASE_COST_RATING =
+         SELECT * FROM 
+         (
+           SELECT T1.LOCATION_NAME, T1.RESOURCE_TYPE, T2.ID AS SEQ , T1.PER_DIEM_COST 
+           FROM :QUABASE_COST_CONFIG T1
+           INNER JOIN "sap.tm.trp.db.planningcockpit::t_sequence" T2 ON (T2.ID BETWEEN T1.THRESHOLD_FROM AND T1.THRESHOLD_TO)
+         )  
+         UNION ALL
+         (
+           SELECT DISTINCT LOCATION_NAME, RESOURCE_TYPE, 0 AS SEQ , 0 PER_DIEM_COST 
+           FROM :QUABASE_COST_CONFIG
+         );  
+ 
+     -- First try to get the refresh date table from the quantity cost config table
+     -- Treat different free pool type seperately due to the different handling of them and union them up at last  
+     
+     --Get the refresh date list of monthly between start time and end time:
+     MONTHLY_REFRESH_DATE_INFO =
+         SELECT  T1.LOCATION_NAME,T1.RESOURCE_TYPE, T0.DATETIMESTAMP AS REFRESH_DATE  
+         FROM :QUABASE_POOL_CONFIG T1, "_SYS_BI"."M_TIME_DIMENSION" T0
+         WHERE T1.FREE_POOL_TYPE = 'MONTHLY' AND (T0.DATETIMESTAMP BETWEEN :WINDOW_START AND :WINDOW_END) AND T1.START_AT = T0.DAY_INT; 
+   
+     --Get the refresh date list of weekly between start time and end time:
+     WEEKLY_REFRESH_DATE_INFO = 
+         SELECT  T1.LOCATION_NAME,T1.RESOURCE_TYPE, T0.DATETIMESTAMP AS REFRESH_DATE   
+         FROM :QUABASE_POOL_CONFIG T1,  "_SYS_BI"."M_TIME_DIMENSION" T0      
+         WHERE T1.FREE_POOL_TYPE = 'WEEKLY' AND (T0.DATETIMESTAMP BETWEEN :WINDOW_START AND :WINDOW_END) AND T1.START_AT = T0.DAY_OF_WEEK_INT + 1;
+       
+     --Get the refresh date list of daily between start time and end time:
+     DAILY_REFRESH_DATE_INFO = 
+         SELECT  T1.LOCATION_NAME,T1.RESOURCE_TYPE, T0.DATETIMESTAMP AS REFRESH_DATE   
+         FROM :QUABASE_POOL_CONFIG T1,  "_SYS_BI"."M_TIME_DIMENSION" T0      
+         WHERE T1.FREE_POOL_TYPE = 'DAILY' AND T0.DATETIMESTAMP BETWEEN :WINDOW_START AND :WINDOW_END;      
+   
+     -- The free pool time table, need to append the previous refresh date before the window start
+     REFRESH_DATE_LIST =
+         SELECT * FROM :MONTHLY_REFRESH_DATE_INFO
+         UNION 
+         SELECT * FROM :WEEKLY_REFRESH_DATE_INFO                    
+         UNION 
+         SELECT * FROM :DAILY_REFRESH_DATE_INFO
+         UNION                     
+         SELECT LOCATION_NAME, RESOURCE_TYPE, ADD_MONTHS(FIRST_REFRESH_DATE, -1) AS REFRESH_DATE FROM  
+         ( SELECT LOCATION_NAME, RESOURCE_TYPE, MIN(REFRESH_DATE) AS FIRST_REFRESH_DATE
+           FROM :MONTHLY_REFRESH_DATE_INFO
+           GROUP BY LOCATION_NAME, RESOURCE_TYPE  
+         )
+         UNION                     
+         SELECT LOCATION_NAME, RESOURCE_TYPE, ADD_DAYS(FIRST_REFRESH_DATE, -7) AS REFRESH_DATE FROM  
+         ( SELECT LOCATION_NAME, RESOURCE_TYPE, MIN(REFRESH_DATE) AS FIRST_REFRESH_DATE
+           FROM :WEEKLY_REFRESH_DATE_INFO
+           GROUP BY LOCATION_NAME, RESOURCE_TYPE  
+         )
+         UNION                     
+         SELECT LOCATION_NAME, RESOURCE_TYPE, ADD_DAYS(FIRST_REFRESH_DATE, -1) AS REFRESH_DATE FROM  
+         ( SELECT LOCATION_NAME, RESOURCE_TYPE, MIN(REFRESH_DATE) AS FIRST_REFRESH_DATE
+           FROM :DAILY_REFRESH_DATE_INFO
+           GROUP BY LOCATION_NAME, RESOURCE_TYPE  
+         ) ;            
+
+   
+END;

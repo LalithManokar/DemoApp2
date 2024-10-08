@@ -1,0 +1,20 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.tests.pickupreturn::_CompareCapacity" (
+    IN LOCATION_ID VARCHAR(22),
+    IN LOCATION_RULE_ID  BIGINT,
+    IN SELECTEDTUS "sap.tm.trp.db.pickupreturn::tt_selected_tu",
+    OUT VALID_STATUS "sap.tm.trp.db.pickupreturn::tt_tu_assign_status"
+   ) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+          
+    VALID_STATUS = SELECT 1 AS RULE_ID,
+                          '' AS TU_ID,
+                          1 AS QUANTITY,
+                          1 AS ASSIGN_STATUS,
+                          'MSG_SUCCESS' AS MESSAGE_KEY
+                     FROM DUMMY;
+                                            
+END;

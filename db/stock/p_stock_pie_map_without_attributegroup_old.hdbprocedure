@@ -1,0 +1,568 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.stock::p_stock_pie_map_without_attributegroup_old" (
+    IN EQUIPMENT_FILTER_ID BIGINT,
+    IN LOCATION_FILTER_ID BIGINT,
+    IN XMIN DOUBLE,
+    IN XMAX DOUBLE,
+    IN YMIN DOUBLE,
+    IN YMAX DOUBLE,
+    IN HIERARCHY_LEVEL INT,
+    OUT out_stock_pie_map "sap.tm.trp.db.stock::tt_stock_pie_map_info",
+    OUT TOO_MUCH_LOCATION_FLAG SMALLINT,
+    OUT GIS_TYPE VARCHAR(10)) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+GEO_FLAG INT;
+EQUIP_FLAG INT;
+IN_POLYGON CLOB;
+SQL_STR CLOB;
+BEGIN
+ 
+	 DECLARE LOCATION_TYPE_LOCATION SMALLINT := 1;
+	 DECLARE LOCATION_TYPE_LOCATIONGROUP SMALLINT :=2;
+	 DECLARE LOCATION_TYPE_REGION SMALLINT :=5;
+	 DECLARE LOCATION_TYPE_REGIONGROUP SMALLINT := 6;
+	 DECLARE EQUIPMENT_TYPE_EQUIPMENT SMALLINT :=1;
+	 DECLARE EQUIPMENT_TYPE_EQUIPMENTGROUP SMALLINT :=2;
+	 DECLARE MAX_LOCATION_NUM_ON_MAP INTEGER :=2000;
+	 DECLARE I_COUNT INTEGER := 0;
+	 DECLARE LOCATION_TYPE VARCHAR(30);
+	 DECLARE GIS_TYPE_POINT VARCHAR(30) := 'POINT';
+	 DECLARE GIS_TYPE_POLYGON VARCHAR(30) := 'POLYGON';
+	 DECLARE MAX_LEVEL INTEGER := 0;
+	 DECLARE RESOURCE_CATEGORY NVARCHAR(3);
+	 TOO_MUCH_LOCATION_FLAG :=0; 
+ 
+	SQL_RESOURCE_TYPE = 
+		SELECT FILTER_TYPE, RESOURCE_CATEGORY 
+		FROM "sap.tm.trp.db.filter::t_equipment_filter" T1
+		WHERE ID = :EQUIPMENT_FILTER_ID
+		;
+   
+   SELECT COUNT(1) INTO I_COUNT FROM :SQL_RESOURCE_TYPE;
+   IF I_COUNT = 0 THEN
+     RETURN;
+   END IF;
+   
+   SQL_LOCATION_TYPE = SELECT LOCATION_TYPE FROM "sap.tm.trp.db.filter::t_location_filter" WHERE ID = :LOCATION_FILTER_ID;
+   
+    SELECT COUNT(1) INTO I_COUNT FROM :SQL_LOCATION_TYPE;
+   IF I_COUNT = 0 THEN
+     RETURN;
+   END IF;
+   
+   
+	SELECT TOP 1 FILTER_TYPE,RESOURCE_CATEGORY INTO EQUIP_FLAG,RESOURCE_CATEGORY FROM :SQL_RESOURCE_TYPE;
+	SELECT TOP 1 LOCATION_TYPE INTO GEO_FLAG FROM :SQL_LOCATION_TYPE;
+
+	IN_POLYGON := 'Polygon(('||:xMin||' '||:yMax||','||:xMax||' '||:yMax||','||:xMax||' '||:ymin||','||:xMin||' '||:yMin||','||:xMin||' '||:yMax||'))';
+
+
+	IF :GEO_FLAG = :LOCATION_TYPE_LOCATION THEN
+	    GIS_TYPE := :GIS_TYPE_POINT;
+	    LOCATION_TYPE := :LOCATION_TYPE_LOCATION;
+	    TOTAL_LOCATION =  SELECT T0.LOC_ID  AS LOCATION_ID, T0.NAME AS LOCATION_NAME
+					    ,T0.XPOS,T0.YPOS
+					    FROM    (    SELECT A.ID AS LOC_ID, A.NAME,A.XPOS,A.YPOS
+					               FROM "sap.tm.trp.db.semantic.location::v_location" A
+					               INNER JOIN ( SELECT LOCATION_ID AS ID 
+					                            FROM "sap.tm.trp.db.filter::t_location_filter_location" 
+					                            WHERE LOCATION_FILTER_ID = :LOCATION_FILTER_ID
+					                          ) B ON B.ID = A.ID
+					               WHERE A.XPOS BETWEEN :XMIN AND :XMAX AND A.YPOS BETWEEN :YMIN AND :YMAX
+					           ) AS T0;
+		   SELECT COUNT(1) INTO I_COUNT FROM :TOTAL_LOCATION;
+	       IF :I_COUNT > :MAX_LOCATION_NUM_ON_MAP THEN
+	         out_stock_pie_map =  SELECT NULL AS LOCATION_ID,NULL AS LOCATION_NAME,NULL AS LATITUDE,NULL AS LONGITUDE,NULL AS BOUNDARY,
+	                             NULL AS EQUIP_STATUS_CATEGORY,NULL AS CURRENT_STOCK
+	                     FROM DUMMY;
+	         TOO_MUCH_LOCATION_FLAG := 1;
+	         RETURN;
+	       END IF;
+	    
+		IF :EQUIP_FLAG = :EQUIPMENT_TYPE_EQUIPMENT THEN
+			SQL_LOCATION_EQUIPMENT_STORAGE_INFO = 
+			 SELECT T2.LOCATION_ID,T2.LOCATION_NAME,T2.XPOS AS LATITUDE,T2.YPOS AS LONGITUDE,NULL AS BOUNDARY,
+			 T12.EQUIP_STATUS_CATEGORY,IFNULL(T12.CURRENT_STOCK_WITH_STATUS,0) AS CURRENT_STOCK 
+				FROM
+				(
+				    SELECT T0.LOCATION_ID, T0.LOCATION_NAME
+				    ,T0.XPOS,T0.YPOS
+				    FROM   :TOTAL_LOCATION T0
+				)T2
+				LEFT JOIN 
+				(
+				   SELECT T11.LOCATION_ID,T11.EQUIP_STATUS_CATEGORY,T11.CURRENT_STOCK_WITH_STATUS
+				   FROM  
+				   (     
+					   SELECT T7.LOCATION_ID,
+					   T6.STOCK_STATUS_DESC AS EQUIP_STATUS_CATEGORY,COUNT(T6.RESOURCE_ID) AS CURRENT_STOCK_WITH_STATUS
+					   FROM "sap.tm.trp.db.semantic.resource::v_stock_resource_last_status" T6 
+					   INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t8
+					   ON (t6.RESOURCE_CATEGORY = t8.MAPPING_CODE AND t8.CODE = :RESOURCE_CATEGORY)
+					   INNER JOIN "sap.tm.trp.db.filter::t_location_filter_location"  T7 ON (T7.LOCATION_ID = T6.LOCATION_ID)					   
+					   INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T9 ON (T9.EQUI_CODE = T6.RESOURCE_TYPE) 					   
+					   WHERE T7.LOCATION_FILTER_ID = :LOCATION_FILTER_ID AND T9.EQUIPMENT_FILTER_ID = :EQUIPMENT_FILTER_ID 
+					   GROUP BY  T7.LOCATION_ID,T6.STOCK_STATUS_DESC
+				   )T11
+				)T12 ON (T2.LOCATION_ID = T12.LOCATION_ID);
+			
+		
+		ELSEIF  :EQUIP_FLAG = :EQUIPMENT_TYPE_EQUIPMENTGROUP THEN
+				SQL_LOCATION_EQUIPMENT_STORAGE_INFO = 
+			    SELECT T2.LOCATION_ID,T2.LOCATION_NAME,T2.XPOS AS LATITUDE,T2.YPOS AS LONGITUDE,NULL AS BOUNDARY,
+			    T12.EQUIP_STATUS_CATEGORY,IFNULL(T12.CURRENT_STOCK_WITH_STATUS,0) AS CURRENT_STOCK
+				FROM
+				(
+				    SELECT T0.LOCATION_ID, T0.LOCATION_NAME,
+				    T0.XPOS,T0.YPOS
+				    FROM    :TOTAL_LOCATION T0
+				           
+				)T2
+				LEFT JOIN 
+				(
+				   SELECT T11.LOCATION_ID,T11.EQUIP_STATUS_CATEGORY,T11.CURRENT_STOCK_WITH_STATUS 
+				   FROM  
+				   (     
+					   SELECT T7.LOCATION_ID,
+					   T6.STOCK_STATUS_DESC AS EQUIP_STATUS_CATEGORY,COUNT(T6.RESOURCE_ID) AS CURRENT_STOCK_WITH_STATUS
+					   FROM "sap.tm.trp.db.semantic.resource::v_stock_resource_last_status" T6 
+					   INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t8
+					   ON (t6.RESOURCE_CATEGORY = t8.MAPPING_CODE AND t8.CODE = :RESOURCE_CATEGORY)					  
+					   INNER JOIN "sap.tm.trp.db.filter::t_location_filter_location"  T7 ON (T6.LOCATION_ID = T7.LOCATION_ID)					   
+					   INNER JOIN "sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth" T92 ON (T92.EQUI_CODE = T6.RESOURCE_TYPE)
+					   INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T9 ON (
+					   T9.EQUIPMENT_GROUP_ID = T92.EQUIPMENT_GROUP_ID AND T9.RESOURCE_CATEGORY = T92.RESOURCE_CATEGORY)
+					   WHERE T7.LOCATION_FILTER_ID = :LOCATION_FILTER_ID AND T9.EQUIPMENT_FILTER_ID = :EQUIPMENT_FILTER_ID 
+					   GROUP BY T7.LOCATION_ID,T6.STOCK_STATUS_DESC 
+				   )T11
+				)T12 ON (T2.LOCATION_ID = T12.LOCATION_ID );
+		END IF;
+	                       
+	ELSEIF :GEO_FLAG = :LOCATION_TYPE_LOCATIONGROUP THEN
+	   GIS_TYPE := :GIS_TYPE_POINT;
+	   LOCATION_TYPE := :LOCATION_TYPE_LOCATIONGROUP;
+	    TOTAL_LOCATION = SELECT T0.LOC_GROUP_ID  AS LOCATION_ID, T0.LOCATION_GROUP_NAME AS LOCATION_NAME,
+				    T0.XPOS,T0.YPOS
+				    FROM    (  SELECT C.ID AS LOC_GROUP_ID, C.DESC AS LOCATION_GROUP_NAME,AVG(A.XPOS) AS XPOS, AVG(A.YPOS) AS YPOS
+				               FROM "sap.tm.trp.db.semantic.location::v_location" A
+				               INNER JOIN "sap.tm.trp.db.systemmanagement::t_location_group_item" B ON B.LOCATION_ID = A.ID
+				               INNER JOIN "sap.tm.trp.db.systemmanagement::t_location_group" C ON C.ID = B.LOCATION_GROUP_ID
+				               INNER JOIN ( SELECT LOCATION_GROUP_ID AS ID 
+				                             FROM "sap.tm.trp.db.filter::t_location_filter_location" 
+					                         WHERE LOCATION_FILTER_ID = :LOCATION_FILTER_ID
+					                      ) D ON D.ID = A.ID
+					           GROUP BY C.ID,C.DESC
+					           HAVING AVG(A.XPOS) BETWEEN :XMIN AND :XMAX AND AVG(A.YPOS) BETWEEN :YMIN AND :YMAX
+				           ) AS T0;
+				           
+		   SELECT COUNT(1) INTO I_COUNT FROM :TOTAL_LOCATION;
+	       IF :I_COUNT > :MAX_LOCATION_NUM_ON_MAP THEN
+	         out_stock_pie_map =  SELECT NULL AS LOCATION_ID,NULL AS LOCATION_NAME,NULL AS LATITUDE,NULL AS LONGITUDE,NULL AS BOUNDARY,
+	                              NULL AS EQUIP_STATUS_CATEGORY,NULL AS CURRENT_STOCK
+	                     FROM DUMMY;
+	         TOO_MUCH_LOCATION_FLAG := 1;
+	         RETURN;
+	       END IF;
+	       
+		IF :EQUIP_FLAG = :EQUIPMENT_TYPE_EQUIPMENT THEN
+				SQL_LOCATION_EQUIPMENT_STORAGE_INFO = 
+			  SELECT T2.LOCATION_ID,T2.LOCATION_NAME,T2.XPOS AS LATITUDE,T2.YPOS AS LONGITUDE,NULL AS BOUNDARY,
+			  T12.EQUIP_STATUS_CATEGORY,IFNULL(T12.CURRENT_STOCK_WITH_STATUS,0) AS CURRENT_STOCK
+				FROM
+				(
+				    SELECT T0.LOCATION_ID, T0.LOCATION_NAME,
+				    T0.XPOS,T0.YPOS
+				    FROM   :TOTAL_LOCATION AS T0
+				)T2
+				LEFT JOIN 
+				(
+				   SELECT T11.LOCATION_GROUP_ID AS LOCATION_ID,T11.EQUIP_STATUS_CATEGORY,T11.CURRENT_STOCK_WITH_STATUS 
+				   FROM  
+				   (     
+					   SELECT T7.LOCATION_GROUP_ID,
+					   T6.STOCK_STATUS_DESC AS EQUIP_STATUS_CATEGORY,COUNT(T6.RESOURCE_ID) AS CURRENT_STOCK_WITH_STATUS
+					   FROM "sap.tm.trp.db.semantic.resource::v_stock_resource_last_status" T6 
+					   INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t8
+					   ON (t6.RESOURCE_CATEGORY = t8.MAPPING_CODE AND t8.CODE = :RESOURCE_CATEGORY)
+					   INNER JOIN "sap.tm.trp.db.systemmanagement::t_location_group_item" T72 ON (T6.LOCATION_ID = T72.LOCATION_ID)
+					   INNER JOIN "sap.tm.trp.db.filter::t_location_filter_location"  T7 ON (T72.LOCATION_GROUP_ID = T7.LOCATION_GROUP_ID)					  
+					   INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T9 ON (T9.EQUI_CODE = T6.RESOURCE_TYPE) 					   
+					   WHERE T7.LOCATION_FILTER_ID = :LOCATION_FILTER_ID AND T9.EQUIPMENT_FILTER_ID = :EQUIPMENT_FILTER_ID 
+					   GROUP BY T7.LOCATION_GROUP_ID,T6.STOCK_STATUS_DESC 
+				   )T11
+				)T12 ON (T2.LOCATION_ID = T12.LOCATION_ID );
+				
+		ELSEIF  :EQUIP_FLAG = :EQUIPMENT_TYPE_EQUIPMENTGROUP THEN
+			SQL_LOCATION_EQUIPMENT_STORAGE_INFO = 
+			 SELECT T2.LOCATION_ID,T2.LOCATION_NAME,T2.XPOS AS LATITUDE,T2.YPOS AS LONGITUDE, NULL AS BOUNDARY,
+			  T12.EQUIP_STATUS_CATEGORY,IFNULL(T12.CURRENT_STOCK_WITH_STATUS,0) AS CURRENT_STOCK
+				FROM
+				(
+				    SELECT T0.LOCATION_ID, T0.LOCATION_NAME, T0.XPOS,T0.YPOS
+				    FROM   :TOTAL_LOCATION AS T0
+				)T2
+				LEFT JOIN 
+				(
+				   SELECT T11.LOCATION_GROUP_ID AS LOCATION_ID,T11.EQUIP_STATUS_CATEGORY,T11.CURRENT_STOCK_WITH_STATUS 
+				   FROM  
+				   (     
+					   SELECT T7.LOCATION_GROUP_ID,T6.STOCK_STATUS_DESC AS EQUIP_STATUS_CATEGORY,COUNT(T6.RESOURCE_ID) AS CURRENT_STOCK_WITH_STATUS
+					   FROM "sap.tm.trp.db.semantic.resource::v_stock_resource_last_status" T6 
+					   INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t8
+					   ON (t6.RESOURCE_CATEGORY = t8.MAPPING_CODE AND t8.CODE = :RESOURCE_CATEGORY)
+					   INNER JOIN "sap.tm.trp.db.systemmanagement::t_location_group_item" T72 ON (T6.LOCATION_ID = T72.LOCATION_ID)
+					   INNER JOIN "sap.tm.trp.db.filter::t_location_filter_location"  T7 ON (T72.LOCATION_GROUP_ID = T7.LOCATION_GROUP_ID)					   
+					   INNER JOIN "sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth" T92 ON (T92.EQUI_CODE = T6.RESOURCE_TYPE) 					   
+					   INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T9 ON (T9.EQUIPMENT_GROUP_ID = T92.EQUIPMENT_GROUP_ID 
+					   AND T9.RESOURCE_CATEGORY = T92.RESOURCE_CATEGORY)
+					   WHERE T7.LOCATION_FILTER_ID = :LOCATION_FILTER_ID AND T9.EQUIPMENT_FILTER_ID = :EQUIPMENT_FILTER_ID 
+					   GROUP BY T7.LOCATION_GROUP_ID,T6.STOCK_STATUS_DESC 
+				   )T11
+				)T12 ON (T2.LOCATION_ID = T12.LOCATION_ID );
+		
+		END IF;
+	
+	ELSEIF :GEO_FLAG = :LOCATION_TYPE_REGION THEN
+	      --Get the level of the region:
+		SELECT IFNULL(MAX(A2.LEVEL),0) AS MAX_LEVEL INTO MAX_LEVEL
+		FROM "sap.tm.trp.db.filter::t_location_filter_region" A
+		INNER JOIN "sap.tm.trp.db.systemmanagement.location::t_region_item" A2 ON (A.ZONE_ID = A2.ROOT_ID)
+		WHERE LOCATION_FILTER_ID = :LOCATION_FILTER_ID AND A2.LEVEL = :HIERARCHY_LEVEL;
+		
+		IF(:HIERARCHY_LEVEL > :MAX_LEVEL) THEN --It should be the location if the input level > max level of the region
+		
+		   GIS_TYPE := :GIS_TYPE_POINT;
+			LOCATION_TYPE := :LOCATION_TYPE_LOCATION;
+			
+			LOCATIONS_OF_THE_REGION_FILTER = SELECT T2.LOCATION_ID
+			FROM "sap.tm.trp.db.filter::t_location_filter_region" T1
+			INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T2 ON (T1.ZONE_ID = T2.ZONE_ID)
+			WHERE T1.LOCATION_FILTER_ID = :LOCATION_FILTER_ID;
+			
+			
+		    TOTAL_LOCATION =  SELECT T0.LOC_ID  AS LOCATION_ID, T0.NAME AS LOCATION_NAME
+						    ,T0.XPOS,T0.YPOS
+						    FROM    (    SELECT A.ID AS LOC_ID, A.NAME,A.XPOS,A.YPOS
+						               FROM "sap.tm.trp.db.semantic.location::v_location" A
+						               INNER JOIN ( SELECT LOCATION_ID AS ID 
+						                            FROM :LOCATIONS_OF_THE_REGION_FILTER 
+						                          ) B ON B.ID = A.ID
+						               WHERE A.XPOS BETWEEN :XMIN AND :XMAX AND A.YPOS BETWEEN :YMIN AND :YMAX
+						           ) AS T0;
+			   SELECT COUNT(1) INTO I_COUNT FROM :TOTAL_LOCATION;
+		       IF :I_COUNT > :MAX_LOCATION_NUM_ON_MAP THEN
+		         out_stock_pie_map =  SELECT NULL AS LOCATION_ID,NULL AS LOCATION_NAME,NULL AS LATITUDE,NULL AS LONGITUDE,NULL AS BOUNDARY,
+		                             NULL AS EQUIP_STATUS_CATEGORY,NULL AS CURRENT_STOCK
+		                     FROM DUMMY;
+		         TOO_MUCH_LOCATION_FLAG := 1;
+		         RETURN;
+		       END IF;
+		    
+			IF :EQUIP_FLAG = :EQUIPMENT_TYPE_EQUIPMENT THEN
+				SQL_LOCATION_EQUIPMENT_STORAGE_INFO = 
+				 SELECT T2.LOCATION_ID,T2.LOCATION_NAME,T2.XPOS AS LATITUDE,T2.YPOS AS LONGITUDE,NULL AS BOUNDARY,
+				 T12.EQUIP_STATUS_CATEGORY,IFNULL(T12.CURRENT_STOCK_WITH_STATUS,0) AS CURRENT_STOCK 
+					FROM
+					(
+					    SELECT T0.LOCATION_ID, T0.LOCATION_NAME
+					    ,T0.XPOS,T0.YPOS
+					    FROM   :TOTAL_LOCATION T0
+					)T2
+					LEFT JOIN 
+					(
+					   SELECT T11.LOCATION_ID,T11.EQUIP_STATUS_CATEGORY,T11.CURRENT_STOCK_WITH_STATUS
+					   FROM  
+					   (     
+						   SELECT T7.LOCATION_ID,
+						   T6.STOCK_STATUS_DESC AS EQUIP_STATUS_CATEGORY,COUNT(T6.RESOURCE_ID) AS CURRENT_STOCK_WITH_STATUS
+						   FROM "sap.tm.trp.db.semantic.resource::v_stock_resource_last_status" T6  
+						   INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t8
+					       ON (t6.RESOURCE_CATEGORY = t8.MAPPING_CODE AND t8.CODE = :RESOURCE_CATEGORY)
+						   INNER JOIN :LOCATIONS_OF_THE_REGION_FILTER T7 ON (T6.LOCATION_ID = T7.LOCATION_ID)						   
+						   INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T9 ON (T9.EQUI_CODE = T6.RESOURCE_TYPE) 
+						   WHERE --T7.LOCATION_FILTER_ID = :LOCATION_FILTER_ID AND 
+						   T9.EQUIPMENT_FILTER_ID = :EQUIPMENT_FILTER_ID 
+						   GROUP BY  T7.LOCATION_ID,T6.STOCK_STATUS_DESC
+					   )T11
+					)T12 ON (T2.LOCATION_ID = T12.LOCATION_ID);
+				
+			
+			ELSEIF  :EQUIP_FLAG = :EQUIPMENT_TYPE_EQUIPMENTGROUP THEN
+					SQL_LOCATION_EQUIPMENT_STORAGE_INFO = 
+				    SELECT T2.LOCATION_ID,T2.LOCATION_NAME,T2.XPOS AS LATITUDE,T2.YPOS AS LONGITUDE,NULL AS BOUNDARY,
+				    T12.EQUIP_STATUS_CATEGORY,IFNULL(T12.CURRENT_STOCK_WITH_STATUS,0) AS CURRENT_STOCK
+					FROM
+					(
+					    SELECT T0.LOCATION_ID, T0.LOCATION_NAME,
+					    T0.XPOS,T0.YPOS
+					    FROM    :TOTAL_LOCATION T0
+					           
+					)T2
+					LEFT JOIN 
+					(
+					   SELECT T11.LOCATION_ID,T11.EQUIP_STATUS_CATEGORY,T11.CURRENT_STOCK_WITH_STATUS 
+					   FROM  
+					   (     
+						   SELECT T7.LOCATION_ID,
+						   T6.STOCK_STATUS_DESC AS EQUIP_STATUS_CATEGORY,COUNT(T6.RESOURCE_ID) AS CURRENT_STOCK_WITH_STATUS
+						   FROM "sap.tm.trp.db.semantic.resource::v_stock_resource_last_status" T6 
+						   INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t8
+					       ON (t6.RESOURCE_CATEGORY = t8.MAPPING_CODE AND t8.CODE = :RESOURCE_CATEGORY)
+						   INNER JOIN :LOCATIONS_OF_THE_REGION_FILTER  T7 ON (T6.LOCATION_ID = T7.LOCATION_ID)						   
+						   INNER JOIN "sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth" T92 ON (T92.EQUI_CODE = T6.RESOURCE_TYPE)
+						   INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T9 ON (T9.EQUIPMENT_GROUP_ID = T92.EQUIPMENT_GROUP_ID 
+						   AND T9.RESOURCE_CATEGORY = T92.RESOURCE_CATEGORY)
+						   WHERE -- T7.LOCATION_FILTER_ID = :LOCATION_FILTER_ID AND 
+						   T9.EQUIPMENT_FILTER_ID = :EQUIPMENT_FILTER_ID 
+						   GROUP BY T7.LOCATION_ID,T6.STOCK_STATUS_DESC 
+					   )T11
+					)T12 ON (T2.LOCATION_ID = T12.LOCATION_ID );
+			END IF;
+			
+			
+		ELSE 
+		
+		    GIS_TYPE := :GIS_TYPE_POLYGON;
+		    LOCATION_TYPE := :LOCATION_TYPE_REGION;
+		    --Get the polygon of the regions of the region filter:
+				BOUNDARY_GEO_INFO= 
+				                SELECT E.ZONE_ID,E.ZONE_NAME,NEW ST_MultiPoint(TO_VARCHAR(E.GEOTEXT) ).ST_CONVEXHULL().ST_ASTEXT() AS BOUNDARY 
+				                FROM
+					            (
+						            SELECT ZONE_ID, ZONE_NAME,
+									CONCAT(CONCAT('MultiPoint(',SUBSTRING(STRING_AGG(
+						                     			',(' || XPOS || ' ' || YPOS || ')')
+						          	,2, 22000000)),')') AS GEOTEXT
+						          	FROM
+						          	(   SELECT DISTINCT B.ID AS ZONE_ID,B.NAME AS ZONE_NAME,D.XPOS,D.YPOS
+							          	FROM "sap.tm.trp.db.filter::t_location_filter_region" A
+							          	INNER JOIN "sap.tm.trp.db.systemmanagement.location::t_region_item" A2 ON (A.ZONE_ID = A2.ROOT_ID)
+							          	--LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_zone" B ON (A.ZONE_ID = B.ID)
+							          	INNER JOIN "sap.tm.trp.db.semantic.location::v_zone" B ON (A2.ZONE_ID = B.ID)
+							          	INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" C ON (B.ID = C.ZONE_ID)
+							          	LEFT OUTER JOIN  "sap.tm.trp.db.semantic.location::v_location" D ON (C.LOCATION_ID = D.ID)
+							          	WHERE LOCATION_FILTER_ID = :LOCATION_FILTER_ID AND A2.LEVEL = :HIERARCHY_LEVEL
+						          	)
+						          	GROUP BY ZONE_ID,ZONE_NAME
+						          	
+					          	)E
+					          	WHERE NEW ST_POLYGON(:IN_POLYGON).ST_INTERSECTS(NEW ST_MultiPoint(TO_VARCHAR(E.GEOTEXT) ) )= 1;  
+					           
+			   SELECT COUNT(1) INTO I_COUNT FROM :BOUNDARY_GEO_INFO;
+		       IF :I_COUNT > :MAX_LOCATION_NUM_ON_MAP THEN
+		         out_stock_pie_map =  SELECT NULL AS LOCATION_ID,NULL AS LOCATION_NAME,NULL AS LATITUDE,NULL AS LONGITUDE,NULL AS BOUNDARY,
+		                              NULL AS EQUIP_STATUS_CATEGORY,NULL AS CURRENT_STOCK
+		                     FROM DUMMY;
+		         TOO_MUCH_LOCATION_FLAG := 1;
+		         RETURN;
+		       END IF;
+		       
+			IF :EQUIP_FLAG = :EQUIPMENT_TYPE_EQUIPMENT THEN
+				SQL_LOCATION_EQUIPMENT_STORAGE_INFO = 
+					 SELECT T2.LOCATION_ID,T2.LOCATION_NAME,NULL AS LATITUDE,NULL AS LONGITUDE,T2.BOUNDARY,
+					 T12.EQUIP_STATUS_CATEGORY,IFNULL(T12.CURRENT_STOCK_WITH_STATUS,0) AS CURRENT_STOCK
+					
+						FROM
+						(
+						    SELECT T0.ZONE_ID  AS LOCATION_ID, T0.ZONE_NAME AS LOCATION_NAME, T0.BOUNDARY
+						    FROM    (  
+						               SELECT A.ZONE_ID,A.ZONE_NAME,A.BOUNDARY
+						               FROM :BOUNDARY_GEO_INFO A
+						           ) AS T0
+						)T2
+						LEFT JOIN 
+						(
+						   SELECT T11.ZONE_ID AS LOCATION_ID,T11.EQUIP_STATUS_CATEGORY,T11.CURRENT_STOCK_WITH_STATUS 
+						   FROM  
+						   (     
+							   SELECT T7.ZONE_ID, T6.STOCK_STATUS_DESC AS EQUIP_STATUS_CATEGORY,COUNT(T6.RESOURCE_ID) AS CURRENT_STOCK_WITH_STATUS
+							   FROM "sap.tm.trp.db.semantic.resource::v_stock_resource_last_status" T6
+							   INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t8
+					           ON (t6.RESOURCE_CATEGORY = t8.MAPPING_CODE AND t8.CODE = :RESOURCE_CATEGORY)
+							   INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T72 ON (T6.LOCATION_ID = T72.LOCATION_ID)
+							   INNER JOIN "sap.tm.trp.db.filter::t_location_filter_region"  T7 ON (T72.ZONE_ID = T7.ZONE_ID)
+							   INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T9 ON (T9.EQUI_CODE = T6.RESOURCE_TYPE)							   
+							   WHERE T7.LOCATION_FILTER_ID = :LOCATION_FILTER_ID AND T9.EQUIPMENT_FILTER_ID = :EQUIPMENT_FILTER_ID
+							   GROUP BY T7.ZONE_ID,T6.STOCK_STATUS_DESC 
+						   )T11
+						)T12 ON (T2.LOCATION_ID = T12.LOCATION_ID);
+			ELSEIF  :EQUIP_FLAG = :EQUIPMENT_TYPE_EQUIPMENTGROUP THEN
+				   
+					SQL_LOCATION_EQUIPMENT_STORAGE_INFO = 
+						 SELECT T2.LOCATION_ID,T2.LOCATION_NAME,NULL AS LATITUDE,NULL AS LONGITUDE,T2.BOUNDARY,
+						 T12.EQUIP_STATUS_CATEGORY,IFNULL(T12.CURRENT_STOCK_WITH_STATUS,0) AS CURRENT_STOCK
+							FROM
+							(
+							    SELECT T0.ZONE_ID  AS LOCATION_ID, T0.ZONE_NAME AS LOCATION_NAME, T0.BOUNDARY
+							    FROM    (  
+							               SELECT A.ZONE_ID,A.ZONE_NAME,A.BOUNDARY
+							               FROM :BOUNDARY_GEO_INFO A
+							           ) AS T0
+							)T2
+							LEFT JOIN 
+							(
+							   SELECT T11.ZONE_ID AS LOCATION_ID,T11.EQUIP_STATUS_CATEGORY,T11.CURRENT_STOCK_WITH_STATUS 
+							   FROM  
+							   (     
+								   SELECT T7.ZONE_ID,T6.STOCK_STATUS_DESC AS EQUIP_STATUS_CATEGORY,COUNT(T6.RESOURCE_ID) AS CURRENT_STOCK_WITH_STATUS
+								   FROM "sap.tm.trp.db.semantic.resource::v_stock_resource_last_status" T6 
+								   INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t8
+					               ON (t6.RESOURCE_CATEGORY = t8.MAPPING_CODE AND t8.CODE = :RESOURCE_CATEGORY)
+								   INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T72 ON (T6.LOCATION_ID = T72.LOCATION_ID)
+								   INNER JOIN "sap.tm.trp.db.filter::t_location_filter_region"  T7 ON (T72.ZONE_ID = T7.ZONE_ID)
+								   INNER JOIN "sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth" T92 ON (T92.EQUI_CODE = T6.RESOURCE_TYPE)								  
+						           INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T9 ON (T9.EQUIPMENT_GROUP_ID = T92.EQUIPMENT_GROUP_ID
+						            AND T9.RESOURCE_CATEGORY = T92.RESOURCE_CATEGORY)
+								   WHERE T7.LOCATION_FILTER_ID = :LOCATION_FILTER_ID AND T9.EQUIPMENT_FILTER_ID = :EQUIPMENT_FILTER_ID 
+								   GROUP BY T7.ZONE_ID,T6.STOCK_STATUS_DESC 
+							   )T11
+							)T12 ON (T2.LOCATION_ID = T12.LOCATION_ID );
+							
+			END IF;
+		END IF;
+	
+	    
+		
+	ELSEIF :GEO_FLAG = :LOCATION_TYPE_REGIONGROUP THEN
+	    GIS_TYPE := :GIS_TYPE_POLYGON;
+	    LOCATION_TYPE := :LOCATION_TYPE_REGIONGROUP;
+	    --Get the polygon of the regions of the region filter:
+	     /*BOUNDARY_GEO_INFO= 
+			                SELECT F.REGION_GROUP_ID AS ZONE_ID,F.REGION_GROUP_NAME AS ZONE_NAME,NEW ST_MultiPoint(TO_VARCHAR(F.GEOTEXT) ).ST_CONVEXHULL().ST_ASTEXT() AS BOUNDARY 
+			                FROM
+				            (
+					            SELECT A.REGION_GROUP_ID, B2.DESC AS REGION_GROUP_NAME,
+								CONCAT(CONCAT('MultiPoint(',SUBSTRING(STRING_AGG(CASE WHEN E.XPOS = 0 AND E.YPOS =0 THEN ''
+					                     			ELSE ',(' || E.XPOS || ' ' || E.YPOS || ')' END)
+					          	,2, 22000000)),')') AS GEOTEXT
+					          	FROM "sap.tm.trp.db.filter::t_location_filter_region" A
+					          	INNER JOIN "sap.tm.trp.db.systemmanagement.location::t_region_item" A2 ON (A.ZONE_ID = A2.ROOT_ID)
+					          	INNER JOIN "sap.tm.trp.db.systemmanagement::t_region_group_item" B ON A.REGION_GROUP_ID = B.REGION_GROUP_ID
+					          	LEFT OUTER JOIN "sap.tm.trp.db.systemmanagement::t_region_group" B2 ON (A.REGION_GROUP_ID = B2.ID)
+					          	LEFT OUTER JOIN "sap.tm.trp.db.semantic.location::v_zone" C ON (B.ZONE_ID = C.ID)
+					          	INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" D ON (C.ID = D.ZONE_ID)
+					          	LEFT OUTER JOIN  "sap.tm.trp.db.semantic.location::v_location" E ON (D.LOCATION_ID = E.ID)
+					          	WHERE A.LOCATION_FILTER_ID = :LOCATION_FILTER_ID AND A2.LEVEL = :HIERARCHY_LEVEL
+					          	GROUP BY A.REGION_GROUP_ID,B2.DESC
+				          	)F
+				          	WHERE NEW ST_POLYGON(:IN_POLYGON).ST_INTERSECTS(NEW ST_MultiPoint(TO_VARCHAR(F.GEOTEXT) ) )= 1;
+				*/
+				
+				 BOUNDARY_GEO_INFO= 
+				                SELECT F.REGION_GROUP_ID AS ZONE_ID,F.REGION_GROUP_NAME AS ZONE_NAME,NEW ST_MultiPoint(TO_VARCHAR(F.GEOTEXT) ).ST_CONVEXHULL().ST_ASTEXT() AS BOUNDARY 
+				                FROM
+					            (
+						            SELECT REGION_GROUP_ID,  REGION_GROUP_NAME,
+									CONCAT(CONCAT('MultiPoint(',SUBSTRING(STRING_AGG(',(' || XPOS || ' ' || YPOS || ')' )
+						          	,2, 22000000)),')') AS GEOTEXT
+						          	FROM
+						          	(   SELECT DISTINCT B2.ID AS REGION_GROUP_ID,B2.DESC AS REGION_GROUP_NAME,E.XPOS,E.YPOS
+							          	FROM "sap.tm.trp.db.filter::t_location_filter_region" A
+							          	INNER JOIN "sap.tm.trp.db.systemmanagement::t_region_group_item" B ON A.REGION_GROUP_ID = B.REGION_GROUP_ID
+							          	INNER JOIN "sap.tm.trp.db.systemmanagement::t_region_group" B2 ON (A.REGION_GROUP_ID = B2.ID)
+							          	INNER JOIN "sap.tm.trp.db.systemmanagement.location::t_region_item" A2 ON (B.ZONE_ID  = A2.ROOT_ID)
+							          	INNER JOIN "sap.tm.trp.db.semantic.location::v_zone" C ON (A2.ZONE_ID = C.ID)
+							          	INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" D ON (C.ID = D.ZONE_ID)
+							          	LEFT OUTER JOIN  "sap.tm.trp.db.semantic.location::v_location" E ON (D.LOCATION_ID = E.ID)
+							          	WHERE A.LOCATION_FILTER_ID = :LOCATION_FILTER_ID AND A2.LEVEL = :HIERARCHY_LEVEL
+						          	)
+						          	GROUP BY REGION_GROUP_ID,REGION_GROUP_NAME
+					          	)F
+					          	WHERE NEW ST_POLYGON(:IN_POLYGON).ST_INTERSECTS(NEW ST_MultiPoint(TO_VARCHAR(F.GEOTEXT) ) )= 1;	
+		
+				
+				           
+		   SELECT COUNT(1) INTO I_COUNT FROM :BOUNDARY_GEO_INFO;
+	       IF :I_COUNT > :MAX_LOCATION_NUM_ON_MAP THEN
+	         out_stock_pie_map =  SELECT NULL AS LOCATION_ID,NULL AS LOCATION_NAME,NULL AS LATITUDE,NULL AS LONGITUDE,NULL AS BOUNDARY,
+	                              NULL AS EQUIP_STATUS_CATEGORY,NULL AS CURRENT_STOCK
+	                     FROM DUMMY;
+	         TOO_MUCH_LOCATION_FLAG := 1;
+	         RETURN;
+	       END IF;
+	       
+		IF :EQUIP_FLAG = :EQUIPMENT_TYPE_EQUIPMENT THEN
+			   
+				SQL_LOCATION_EQUIPMENT_STORAGE_INFO = 
+					 SELECT T2.LOCATION_ID,T2.LOCATION_NAME,NULL AS LATITUDE, NULL AS LONGITUDE,T2.BOUNDARY,
+					 T12.EQUIP_STATUS_CATEGORY,IFNULL(T12.CURRENT_STOCK_WITH_STATUS,0) AS CURRENT_STOCK
+						FROM
+						(
+						    SELECT T0.ZONE_ID  AS LOCATION_ID, T0.ZONE_NAME AS LOCATION_NAME, T0.BOUNDARY
+						    FROM    (  
+						               SELECT A.ZONE_ID,A.ZONE_NAME,A.BOUNDARY
+						               FROM :BOUNDARY_GEO_INFO A
+						           ) AS T0,
+						           (
+							            SELECT EQUI_CODE AS ID,EQUI_CODE AS DESC
+							            FROM "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T1
+							            WHERE EQUIPMENT_FILTER_ID = :EQUIPMENT_FILTER_ID
+						           ) AS T1
+						)T2
+						LEFT JOIN 
+						(
+						   SELECT T11.REGION_GROUP_ID AS LOCATION_ID,T11.EQUIP_STATUS_CATEGORY,T11.CURRENT_STOCK_WITH_STATUS 
+						   FROM  
+						   (     
+							   SELECT T7.REGION_GROUP_ID, T6.STOCK_STATUS_DESC AS EQUIP_STATUS_CATEGORY,COUNT(T6.RESOURCE_ID) AS CURRENT_STOCK_WITH_STATUS
+							   FROM "sap.tm.trp.db.semantic.resource::v_stock_resource_last_status" T6 
+							   INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t8
+					           ON (t6.RESOURCE_CATEGORY = t8.MAPPING_CODE AND t8.CODE = :RESOURCE_CATEGORY)
+							   INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T72 ON (T6.LOCATION_ID = T72.LOCATION_ID)
+							   INNER JOIN "sap.tm.trp.db.systemmanagement::t_region_group_item" T73 ON (T72.ZONE_ID = T73.ZONE_ID)
+					           INNER JOIN "sap.tm.trp.db.filter::t_location_filter_region"  T7 ON (T73.REGION_GROUP_ID = T7.REGION_GROUP_ID)
+							   INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T9 ON (T9.EQUI_CODE = T6.RESOURCE_TYPE) 							   
+							   WHERE T7.LOCATION_FILTER_ID = :LOCATION_FILTER_ID AND T9.EQUIPMENT_FILTER_ID = :EQUIPMENT_FILTER_ID 
+							   GROUP BY T7.REGION_GROUP_ID,T6.STOCK_STATUS_DESC 
+						   )T11
+						)T12 ON (T2.LOCATION_ID = T12.LOCATION_ID);
+		ELSEIF  :EQUIP_FLAG = :EQUIPMENT_TYPE_EQUIPMENTGROUP THEN
+			
+					SQL_LOCATION_EQUIPMENT_STORAGE_INFO = 
+						 SELECT T2.LOCATION_ID,T2.LOCATION_NAME,NULL AS LATITUDE, NULL AS LONGITUDE, T2.BOUNDARY,
+						T12.EQUIP_STATUS_CATEGORY,IFNULL(T12.CURRENT_STOCK_WITH_STATUS,0) AS CURRENT_STOCK
+							FROM
+							(
+							    SELECT T0.ZONE_ID  AS LOCATION_ID, T0.ZONE_NAME AS LOCATION_NAME,T0.BOUNDARY
+							    FROM    (  
+							               SELECT A.ZONE_ID,A.ZONE_NAME,A.BOUNDARY
+							               FROM :BOUNDARY_GEO_INFO A
+							           ) AS T0
+							)T2
+							LEFT JOIN 
+							(
+							   SELECT T11.REGION_GROUP_ID AS LOCATION_ID,T11.EQUIP_STATUS_CATEGORY,T11.CURRENT_STOCK_WITH_STATUS 
+							   FROM  
+							   (     
+								   SELECT T7.REGION_GROUP_ID,T6.STOCK_STATUS_DESC AS EQUIP_STATUS_CATEGORY,COUNT(T6.RESOURCE_ID) AS CURRENT_STOCK_WITH_STATUS
+								   FROM "sap.tm.trp.db.semantic.resource::v_stock_resource_last_status" T6  
+								   INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T72 ON (T6.LOCATION_ID = T72.LOCATION_ID)
+								   INNER JOIN "sap.tm.trp.db.systemmanagement::t_region_group_item" T73 ON (T72.ZONE_ID = T73.ZONE_ID)
+						           INNER JOIN "sap.tm.trp.db.filter::t_location_filter_region"  T7 ON (T73.REGION_GROUP_ID = T7.REGION_GROUP_ID)								   
+								   INNER JOIN "sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth" T92 ON (T92.EQUI_CODE = T6.RESOURCE_TYPE) 								   
+					               INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T9 ON (T9.EQUIPMENT_GROUP_ID = T92.EQUIPMENT_GROUP_ID 
+					               AND T9.RESOURCE_CATEGORY = T92.RESOURCE_CATEGORY)
+								   WHERE T7.LOCATION_FILTER_ID = :LOCATION_FILTER_ID AND T9.EQUIPMENT_FILTER_ID = :EQUIPMENT_FILTER_ID 
+								   GROUP BY T7.REGION_GROUP_ID,T6.STOCK_STATUS_DESC 
+							   )T11
+							)T12 ON (T2.LOCATION_ID = T12.LOCATION_ID);
+							
+		END IF;
+	
+	ELSE 
+	    SQL_LOCATION_EQUIPMENT_STORAGE_INFO = SELECT NULL AS LOCATION_ID,NULL AS LOCATION_NAME,NULL AS LATITUDE,NULL AS LONGITUDE,NULL AS BOUNDARY,
+	                                          NULL AS EQUIP_STATUS_CATEGORY, NULL AS CURRENT_STOCK
+	                                          FROM DUMMY;
+	END IF;
+	
+	out_stock_pie_map =  SELECT LOCATION_ID,LOCATION_NAME,LATITUDE,LONGITUDE,BOUNDARY,EQUIP_STATUS_CATEGORY,CURRENT_STOCK
+	                     FROM :SQL_LOCATION_EQUIPMENT_STORAGE_INFO;
+	
+
+END;
+
+
+
+

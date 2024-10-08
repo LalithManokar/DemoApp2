@@ -1,0 +1,67 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_attribute_group_filter_generate_dynamic" (
+	IN ATTRIBUTE_GROUP_ID BIGINT,
+	IN NODE_ID_LIST "sap.tm.trp.db.filter::tt_attribute_group_dynamic_item_node_list",
+	OUT FILTER CLOB
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA 
+AS
+NODE_CNT INT;
+BEGIN
+ 
+DECLARE LV_CATEGORY CHAR(1);
+
+-- GET COUNT OF NODE_LIST
+SELECT COUNT(1) INTO NODE_CNT FROM :NODE_ID_LIST;
+IF NODE_CNT = 0
+THEN
+	NODE_ID_LIST =
+		SELECT ID AS NODE_ID FROM "sap.tm.trp.db.filter::t_attribute_group_item_node";
+END IF;
+
+SELECT CATEGORY INTO LV_CATEGORY FROM "sap.tm.trp.db.filter::t_attribute_group" WHERE ID = :ATTRIBUTE_GROUP_ID;
+IF LV_CATEGORY = '2' THEN
+	LT_ATTRIBUTES = SELECT * FROM "sap.tm.trp.db.filter::v_attribute_group_sd_attribute";
+ELSE
+	LT_ATTRIBUTES = SELECT * FROM "sap.tm.trp.db.filter::v_attribute_group_attribute";
+END IF ;
+
+SELECT
+	TO_CLOB(TRIM(TRAILING ' AND ' FROM STRING_AGG(FILTER||' AND '))) INTO FILTER
+FROM (
+	SELECT
+		ID,
+		CASE WHEN OPERATOR_CODE = 'EQ' THEN ATTRIBUTE_CODE||' IN ('||TRIM(TRAILING ',' FROM STRING_AGG(VALUE||','))||')'
+			 WHEN OPERATOR_CODE = 'NE' THEN ATTRIBUTE_CODE||' NOT IN ('||TRIM(TRAILING ',' FROM STRING_AGG(VALUE||','))||')'
+		  	 WHEN OPERATOR_CODE = 'BT' THEN ATTRIBUTE_CODE||' BETWEEN '||TRIM(TRAILING ' AND ' FROM STRING_AGG(VALUE||' AND '))
+		  	 WHEN OPERATOR_CODE = 'WILDCARD' THEN ATTRIBUTE_CODE||' LIKE ''%'||TRIM(LEADING '''' FROM TRIM(TRAILING '''' FROM STRING_AGG(VALUE)))||'%'''
+		  	 ELSE ATTRIBUTE_CODE||' '||OPERATOR||' '||STRING_AGG(VALUE)
+		 END AS FILTER
+	FROM (
+		SELECT
+			:ATTRIBUTE_GROUP_ID AS ID,
+			T3.CODE AS ATTRIBUTE_CODE,
+			T5.CODE AS OPERATOR_CODE,
+			T5.DATABASE_OPERATOR AS OPERATOR,
+			CASE WHEN T3.VALUE_TYPE = 'String' THEN ''''||T6.VALUE||''''
+				 WHEN T3.VALUE_TYPE = 'Number' THEN T6.VALUE
+				 WHEN T3.VALUE_TYPE = 'Date' THEN ''''||T6.VALUE||''''
+				 WHEN T3.VALUE_TYPE = 'Timestamp' THEN ''''||T6.VALUE||''''
+				 WHEN T3.VALUE_TYPE = 'Boolean' THEN T6.VALUE
+				 WHEN T3.VALUE_TYPE = 'FixedValues' THEN T6.VALUE
+			END AS VALUE
+		FROM :NODE_ID_LIST T1 
+		LEFT JOIN "sap.tm.trp.db.filter::t_attribute_group_item_node" T2 ON T2.GROUP_ID = :ATTRIBUTE_GROUP_ID AND T2.ID = T1.NODE_ID 
+		LEFT JOIN :LT_ATTRIBUTES T3 ON T3.ID = T2.ATTRIBUTE_ID 
+		LEFT JOIN "sap.tm.trp.db.filter::t_attribute_group_attribute_category" T4 ON T4.ID = T3.CATEGORY_ID 
+		LEFT JOIN "sap.tm.trp.db.filter::t_attribute_group_attribute_operator" T5 ON T5.ID = T2.OPERATOR_ID 
+		LEFT JOIN "sap.tm.trp.db.filter::t_attribute_group_item_node_values" T6 ON T6.NODE_ID = T1.NODE_ID AND T6.GROUP_ID = :ATTRIBUTE_GROUP_ID
+		WHERE T2.ID IS NOT NULL
+	)
+	GROUP BY ID,ATTRIBUTE_CODE,OPERATOR,OPERATOR_CODE
+)
+
+;
+END;

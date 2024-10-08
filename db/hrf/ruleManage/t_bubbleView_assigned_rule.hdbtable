@@ -1,0 +1,12 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "BUBBLE_VIEW_ID"; sqlType = INTEGER; nullable = false;},
+    {name = "RULE_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "CREATE_BY"; sqlType = BIGINT;},
+    {name = "CREATE_ON"; sqlType = TIMESTAMP;},
+    {name = "LAST_MODIFIED_BY"; sqlType = BIGINT;},
+    {name = "LAST_MODIFIED_ON"; sqlType = TIMESTAMP;}
+    
+    ];
+ table.primaryKey.pkcolumns = ["BUBBLE_VIEW_ID"];    

@@ -1,0 +1,46 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_invalidate_network_by_setting_group" (
+    IN id_list "sap.tm.trp.routing.db.common::tt_id",
+    IN reason_code VARCHAR(10), -- C for cost, P for parameters
+    OUT return_code TINYINT,
+    OUT message "sap.tm.trp.routing.db.common::tt_message",
+    OUT log "sap.tm.trp.routing.db.common::tt_message"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING"
+   AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+    DECLARE REASON_DELTA_CHANGE VARCHAR(10) := 'D';
+	DECLARE CURSOR c_network FOR SELECT DISTINCT m.id, invalidated, invalidation_reason_code
+	FROM "sap.tm.trp.routing.db.path::t_network_model" AS m
+	INNER JOIN :id_list AS i
+	ON i.id = m.setting_group_id;
+	
+	return_code = 0;
+	
+	message = SELECT '' AS severity, '' AS message FROM DUMMY WHERE 1 <> 1;
+	log = SELECT '' AS severity, '' AS message FROM DUMMY WHERE 1 <> 1;
+	
+	FOR row AS c_network DO
+	    IF row.invalidated <> 'X' OR row.invalidated IS NULL 
+            OR (row.invalidation_reason_code = :REASON_DELTA_CHANGE
+            AND :reason_code <> :REASON_DELTA_CHANGE) THEN
+        	CALL "sap.tm.trp.routing.db.path::p_invalidate_network" 
+            (row.id, :reason_code, :return_code, :message_tmp, :log_tmp);
+            
+            IF :return_code <> 0 THEN
+                message = SELECT * FROM :message_tmp;
+                log = SELECT * FROM :log_tmp;
+                RETURN;
+            END IF;
+            
+            message = SELECT * FROM :message 
+            UNION ALL SELECT * FROM :message_tmp;
+            log = SELECT * FROM :log 
+            UNION ALL SELECT * FROM :log_tmp;
+        END IF;
+	END FOR;
+END

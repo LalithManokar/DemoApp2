@@ -1,0 +1,46 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_set_location_filter_need_check"(
+    IN IN_CODE VARCHAR(50)
+    ,IN IN_TYPE VARCHAR(50)
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    --READS SQL DATA
+AS
+BEGIN
+    DECLARE PLAN_MODEL_TYPE_TEMPLATE TINYINT := 2;
+    UPDATE "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    SET STATUS = 1
+    WHERE CODE IN (
+        SELECT CODE FROM "sap.tm.trp.db.whereusedlist::cv_get_used_list"(placeholder."$$IN_CODE$$"=>:IN_CODE,placeholder."$$TYPE$$"=>:IN_TYPE)
+        WHERE CATEGORY = 'Location Rule'
+    );
+    
+    UPDATE "sap.tm.trp.db.pipeline::t_plan_model"
+    SET STATUS = 1
+    WHERE CODE IN (
+        SELECT CODE FROM "sap.tm.trp.db.whereusedlist::cv_get_used_list"(placeholder."$$IN_CODE$$"=>:IN_CODE,placeholder."$$TYPE$$"=>:IN_TYPE)
+        WHERE CATEGORY = 'Plan Model'
+    )
+    AND PLAN_MODEL_TYPE_ID <> :PLAN_MODEL_TYPE_TEMPLATE;
+    
+    UPDATE "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    SET STATUS = 1
+    WHERE SD_PLAN_ID IN (
+        SELECT ID FROM "sap.tm.trp.db.pipeline::t_plan_model"
+        WHERE CODE IN (
+            SELECT CODE FROM "sap.tm.trp.db.whereusedlist::cv_get_used_list"(placeholder."$$IN_CODE$$"=>:IN_CODE,placeholder."$$TYPE$$"=>:IN_TYPE)
+            WHERE CATEGORY = 'Plan Model'
+        )
+    );
+    
+    UPDATE "sap.tm.trp.db.planningcockpit::t_simulation_plan"
+    SET STATUS = 1
+    WHERE SD_PLAN_ID IN (
+        SELECT ID FROM "sap.tm.trp.db.pipeline::t_plan_model"
+        WHERE CODE IN (
+            SELECT CODE FROM "sap.tm.trp.db.whereusedlist::cv_get_used_list"(placeholder."$$IN_CODE$$"=>:IN_CODE,placeholder."$$TYPE$$"=>:IN_TYPE)
+            WHERE CATEGORY = 'Plan Model'
+        )
+    );
+END;

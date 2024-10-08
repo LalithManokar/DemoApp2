@@ -1,0 +1,20 @@
+schema = "SAP_TM_TRP";
+query = " SELECT DISTINCT T1.ID AS GROUP_ID,
+                 T3.RESOURCE_TYPE_CODE AS EQUI_CODE,
+                 T3.RESOURCE_TYPE_DESC AS NAME,
+                 T3.RESOURCE_TYPE_CODE || ' (' || T3.RESOURCE_TYPE_DESC || ')' AS DISPLAY_NAME,
+                 T1.FILTER_TYPE AS EQUIPMENT_FILTER_TYPE,
+                 T1.RESOURCE_CATEGORY AS RESOURCE_CATEGORY
+            FROM \"sap.tm.trp.db.filter::v_equipment_filter_info_sdui\" as T1
+ LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth\" AS T2
+              ON T1.ID = T2.EQUIPMENT_GROUP_ID 
+             AND T1.RESOURCE_CATEGORY = T2.RESOURCE_CATEGORY 
+ LEFT OUTER JOIN (
+       SELECT DISTINCT RESOURCE_TYPE_CODE, RESOURCE_TYPE_DESC, RESOURCE_CATEGORY
+       FROM \"sap.tm.trp.db.semantic.resource::v_resource_type_with_category\") AS T3
+ ON (T2.EQUI_CODE = T3.RESOURCE_TYPE_CODE AND T1.RESOURCE_CATEGORY = T3.RESOURCE_CATEGORY)
+ WHERE T1.FILTER_TYPE = 2";
+                
+depends_on_table = ["sap.tm.trp.db.systemmanagement::v_equipment_group_item_auth"];
+depends_on_view  = ["sap.tm.trp.db.filter::v_equipment_filter_info_sdui",
+                    "sap.tm.trp.db.semantic.resource::v_resource_type_with_category"];

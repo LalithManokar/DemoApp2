@@ -1,0 +1,43 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_ext_get_tu_for_location_assignment_rulegroup" (
+    IN RULE_GROUP_ID BIGINT,
+    IN EXECUTION_ID VARCHAR(200)
+)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+
+BEGIN
+
+    DECLARE V_CNT INTEGER; 
+    DECLARE V_RULE_TYPE INTEGER;
+
+
+    SELECT RULESET_TYPE INTO V_RULE_TYPE FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group"
+    WHERE ID = :RULE_GROUP_ID;  
+    
+         -- rule for pick up
+     IF  :V_RULE_TYPE = 1   THEN
+
+    
+    CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_main_get_tu_for_pickup_opt_rulegroup" (
+        	 :RULE_GROUP_ID,
+        	 :EXECUTION_ID
+            ); 
+            
+
+
+        -- rule for return
+    ELSE
+
+	 
+	       
+	CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_main_get_tu_for_return_opt_rulegroup" (
+        	 :RULE_GROUP_ID,
+        	 :EXECUTION_ID 
+            );
+            
+    END IF;
+
+
+END;

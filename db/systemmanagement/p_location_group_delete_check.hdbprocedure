@@ -1,0 +1,31 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_location_group_delete_check" (
+   IN ID  BIGINT,
+   OUT WHEREUSED "sap.tm.trp.db.whereusedlist::v_used_location_group" 
+   ) 
+	LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+ 
+
+
+  
+  --DECLARE OBJECT_CODE VARCHAR(20);
+  
+  --get code by id
+  LOCATION_CODE = SELECT CODE 
+                  FROM "sap.tm.trp.db.systemmanagement::t_location_group"
+                  WHERE ID = :ID
+                  UNION ALL
+                  SELECT CODE 
+                  FROM "sap.tm.trp.db.systemmanagement::t_region_group"
+                  WHERE ID = :ID;
+  
+  --get used list by code
+  WHEREUSED = SELECT * 
+              FROM "sap.tm.trp.db.whereusedlist::v_used_location_group"
+              WHERE OBJECT_CODE = (SELECT CODE FROM :LOCATION_CODE);
+  
+  
+END;

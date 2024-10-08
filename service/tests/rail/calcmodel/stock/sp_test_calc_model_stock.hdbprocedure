@@ -1,0 +1,71 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.service.tests.rail.calcmodel.stock::sp_test_calc_model_stock" (
+   	OUT OUTPUT "sap.tm.trp.service.tests.rail.calcmodel.stock::tt_test_calc_model_stock_output1"
+	) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+/***************************** 
+	Write your procedure logic 
+ *****************************/
+   -- TODO: remove carrier view impact
+  DELETE FROM "sap.tm.trp.db.pipeline::t_pipeline_datasrc_input_params" WHERE CONN_ID = CURRENT_CONNECTION;
+  INSERT INTO "sap.tm.trp.db.pipeline::t_pipeline_datasrc_input_params" VALUES ('In_RESOURCE_CATEGORY', 'CN', CURRENT_CONNECTION);
+  
+  --PREPARE EQUIPMENT
+  TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::t_equipinfo_for_pipeline_GlobalTemp";
+  INSERT INTO  "sap.tm.trp.db.pipeline::t_equipinfo_for_pipeline_GlobalTemp" VALUES('20ST','20ST','20ST',1);
+  INSERT INTO  "sap.tm.trp.db.pipeline::t_equipinfo_for_pipeline_GlobalTemp" VALUES('45HC','45HC','45HC',1);
+  INSERT INTO  "sap.tm.trp.db.pipeline::t_equipinfo_for_pipeline_GlobalTemp" VALUES('40HC','40HC','40HC',1);
+  INSERT INTO  "sap.tm.trp.db.pipeline::t_equipinfo_for_pipeline_GlobalTemp" VALUES('40ST','40ST','40ST',1);
+  
+  --TIME FILTER
+  TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::t_timefilterinfo_for_pipeline_GlobalTemp";
+  INSERT INTO "sap.tm.trp.db.pipeline::t_timefilterinfo_for_pipeline_GlobalTemp" VALUES (194, 1, '2015-04-29 6:00:01', '2015-04-30 12:00:00', 64798);
+  INSERT INTO "sap.tm.trp.db.pipeline::t_timefilterinfo_for_pipeline_GlobalTemp" values (195, 2, '2015-04-30 12:00:00', '2015-05-01 12:00:00', 86400);
+  INSERT INTO "sap.tm.trp.db.pipeline::t_timefilterinfo_for_pipeline_GlobalTemp" values (196, 3, '2015-05-01 12:00:00', '2015-05-02 12:00:00', 86400);
+   
+  
+  --LOCATION
+  TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::t_locationinfo_for_pipeline_GlobalTemp";
+  INSERT INTO "sap.tm.trp.db.pipeline::t_locationinfo_for_pipeline_GlobalTemp" VALUES('RAwBT8cq7jIXpPfsLrisvG','RAwBT8cq7jIXpPfsLrisvG',1,'RAwBT8cq7jIXpPfsLrisvG','loc_henry');
+  INSERT INTO "sap.tm.trp.db.pipeline::t_locationinfo_for_pipeline_GlobalTemp" VALUES('RAwBT8cq7jIXpuBG{HKQdG','RAwBT8cq7jIXpuBG{HKQdG',1,'RAwBT8cq7jIXpuBG{HKQdG','loc_jiali');
+        
+ 
+  OUTPUT =  (SELECT * FROM "_SYS_BIC"."sap.tm.trp.db.stock/cv_pipeline_stock_damaged" 
+            MINUS
+            SELECT * FROM "_SYS_BIC"."sap.tm.trp.db.stock/cv_pipeline_stock_damaged")
+            
+            UNION
+            
+            (
+            SELECT * FROM "_SYS_BIC"."sap.tm.trp.db.stock/cv_pipeline_stock_empty_and_available" 
+            MINUS
+            SELECT * FROM "_SYS_BIC"."sap.tm.trp.db.stock/cv_pipeline_stock_empty_and_available")
+            
+            UNION
+            
+            (SELECT * FROM "_SYS_BIC"."sap.tm.trp.db.stock/cv_pipeline_stock_others"
+            MINUS
+            SELECT * FROM "_SYS_BIC"."sap.tm.trp.db.stock/cv_pipeline_stock_others")
+            
+            UNION
+            
+            (SELECT * FROM "_SYS_BIC"."sap.tm.trp.db.stock/cv_pipeline_stock_out_of_fleet"
+            MINUS
+            SELECT * FROM "_SYS_BIC"."sap.tm.trp.db.stock/cv_pipeline_stock_out_of_fleet")
+            
+            UNION
+            
+            (SELECT * FROM "_SYS_BIC"."sap.tm.trp.db.stock/cv_pipeline_stock_subleased"
+            MINUS
+            SELECT * FROM "_SYS_BIC"."sap.tm.trp.db.stock/cv_pipeline_stock_subleased")
+            
+            UNION
+            
+            (SELECT * FROM "_SYS_BIC"."sap.tm.trp.db.stock/cv_pipeline_stock_reserved"
+            MINUS
+            SELECT * FROM "_SYS_BIC"."sap.tm.trp.db.stock/cv_pipeline_stock_reserved");
+  
+END;

@@ -1,0 +1,39 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_scheduling_trace_create" (
+    IN RUN_ID VARCHAR(200),
+    IN RULE_ID BIGINT,
+    IN EXEC_START_TIME TIMESTAMP,
+    IN EXEC_END_TIME TIMESTAMP,
+    IN EXEC_STATUS INTEGER,
+    IN ERROR_MSG VARCHAR(2000)
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+    LOCATION_FILTER_ID BIGINT;
+BEGIN
+
+SELECT IFNULL (MAX (LOCATION_FILTER_ID),0) INTO LOCATION_FILTER_ID 
+FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" WHERE ID=:RULE_ID;
+
+INSERT INTO "sap.tm.trp.db.pickupreturn::t_location_rule_running_log" (
+    ID,
+    RUN_ID,
+    RULE_ID,
+    EXECUTION_STATUS,
+    ERROR_MSG,
+    EXECUTION_START_TIME,
+    EXECUTION_END_TIME,
+    LOCATION_FILTER_ID
+) VALUES (
+    "sap.tm.trp.db.pickupreturn::s_location_rule_running_log".NEXTVAL,
+    :RUN_ID,
+    :RULE_ID,
+    :EXEC_STATUS,
+    :ERROR_MSG,
+    IFNULL(:EXEC_START_TIME, CURRENT_UTCTIMESTAMP),
+    IFNULL(:EXEC_END_TIME, CURRENT_UTCTIMESTAMP),
+    :LOCATION_FILTER_ID
+);
+
+END;

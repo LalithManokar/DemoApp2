@@ -1,0 +1,13 @@
+schema = "SAP_TM_TRP";
+
+query  = "  SELECT T2.CODE,IFNULL(A.DESC,T2.DESC) AS DESC 
+            FROM \"sap.tm.trp.db.costmodel::t_cost_type\" T2
+            LEFT OUTER JOIN 
+            ( SELECT T3.COST_TYPE_CODE,T3.DESC
+              FROM  \"sap.tm.trp.db.costmodel::t_cost_type_t\" T3 
+              INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" T4 ON (T3.LANG_CODE = T4.SPRAS)
+             )A ON (T2.CODE = A.COST_TYPE_CODE)
+             ";
+                 
+depends_on_table = ["sap.tm.trp.db.costmodel::t_cost_type","sap.tm.trp.db.costmodel::t_cost_type_t"];
+depends_on_view = ["sap.tm.trp.db.semantic.common::v_lang_code"]; 

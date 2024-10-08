@@ -1,0 +1,17 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.settings::p_get_location_pair_group" (
+    OUT ACTIVATION_STATUS CHAR(1),
+    OUT GROUP_FIELD_NAME1 VARCHAR(200),
+    OUT GROUP_FIELD_NAME2 VARCHAR(200)
+ ) 
+	LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+    
+BEGIN
+
+	CALL "sap.tm.trp.db.systemmanagement.customization::p_get_general_parameter"('PICKUP_RETURN_LOCATION_PAIR_GROUP_ACTIVATION',ACTIVATION_STATUS);
+	CALL "sap.tm.trp.db.systemmanagement.customization::p_get_general_parameter"('PICKUP_RETURN_LOCATION_PAIR_GROUP_FIELD_NAME_1',GROUP_FIELD_NAME1); 
+	CALL "sap.tm.trp.db.systemmanagement.customization::p_get_general_parameter"('PICKUP_RETURN_LOCATION_PAIR_GROUP_FIELD_NAME_2',GROUP_FIELD_NAME2); 
+	
+END;

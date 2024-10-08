@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.2" id="cv_get_detail_by_executionid_nodeid" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_drilldown_by_executionid_nodeid"/>
+  <localVariables>
+    <variable id="IN_EXECUTION_ID" parameter="true">
+      <descriptions defaultDescription="EXECUTION_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_NODE_ID" parameter="true">
+      <descriptions defaultDescription="NODE_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_ID" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="EQUIP_TYPE_ID" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="OUTPUT_KEY" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="OUTPUT_VALUE" length="300"/>
+        <viewAttribute datatype="BIGINT" id="TIME_INTERVAL_ID"/>
+        <viewAttribute datatype="VARCHAR" id="UNIT" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="DRILLDOWN_OUTPUT_KEY" length="32"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_EXECUTION_ID</localVariable>
+      <localVariable>#IN_NODE_ID</localVariable>
+      <definition> 
+  
+ BEGIN
+ 	DECLARE HAS_BREAKDOWN INTEGER;
+ 	
+ 	/*
+	DECLARE NODE_ID BIGINT;
+	DECLARE NON_EXISTS_NODE_ID BIGINT;
+	NON_EXISTS_NODE_ID := '-1';
+	
+	--get the node id of the execution
+	IF :IN_NODE_ID = :NON_EXISTS_NODE_ID THEN
+	  CALL &quot;sap.tm.trp.db.pipeline::p_get_last_node_by_executionid&quot; (:IN_EXECUTION_ID, NODE_ID);
+	ELSE 
+	  NODE_ID := :IN_NODE_ID;
+	END IF;   
+ 	*/
+	-- first check whether the given node has breakdown
+	SELECT count(*) INTO HAS_BREAKDOWN 
+	FROM &quot;sap.tm.trp.db.pipeline::t_pipeline_node_logical_hierarchy&quot;
+	WHERE NODE_ID = :IN_NODE_ID;
+	-- if yes, return the breakdown nodes data as details
+	IF (HAS_BREAKDOWN > 0) THEN
+	 var_out = 
+	 		SELECT T1.LOCATION_ID, T1.EQUIP_TYPE_ID, T1.OUTPUT_KEY, SUM(TO_DOUBLE(T1.OUTPUT_VALUE)) AS OUTPUT_VALUE, T1.TIME_INTERVAL_ID, T1.UNIT, T10.METADATA_NODE_ID AS DRILLDOWN_OUTPUT_KEY
+	        FROM &quot;sap.tm.trp.db.pipeline::t_pipeline_output_dataset&quot; T1
+	        INNER JOIN &quot;sap.tm.trp.db.pipeline::t_pipeline_node_logical_hierarchy&quot; T2 ON (T1.NODE_ID = T2.PARENT_NODE_ID AND T1.OUTPUT_KEY = T2.OUTPUT_KEY) -- get breakdown nodes
+	   		INNER JOIN &quot;sap.tm.trp.db.pipeline::t_pipeline_node&quot; T10 on T10.ID = T1.NODE_ID -- get the DRILLDOWN_OUTPUT_KEY
+	   		WHERE T1.PLAN_EXECUTION_ID = :IN_EXECUTION_ID AND T2.NODE_ID = :IN_NODE_ID -- filter by the input parameters
+	       	GROUP BY  T1.LOCATION_ID, T1.EQUIP_TYPE_ID, T1.OUTPUT_KEY,T1.TIME_INTERVAL_ID, T1.UNIT, T10.METADATA_NODE_ID;
+	
+	-- if not, then return its own data
+	ELSE
+		var_out = 
+			SELECT T1.LOCATION_ID, T1.EQUIP_TYPE_ID, T1.OUTPUT_KEY, SUM(TO_DOUBLE(T1.OUTPUT_VALUE)) AS OUTPUT_VALUE, T1.TIME_INTERVAL_ID, T1.UNIT, T10.METADATA_NODE_ID AS DRILLDOWN_OUTPUT_KEY
+	        FROM &quot;sap.tm.trp.db.pipeline::t_pipeline_output_dataset&quot; T1
+	        INNER JOIN &quot;sap.tm.trp.db.pipeline::t_pipeline_node&quot; T10 on T10.ID = T1.NODE_ID -- get the DRILLDOWN_OUTPUT_KEY
+	        WHERE T1.PLAN_EXECUTION_ID = :IN_EXECUTION_ID AND T1.NODE_ID = :IN_NODE_ID -- filter by the input parameters
+	       	GROUP BY  T1.LOCATION_ID, T1.EQUIP_TYPE_ID, T1.OUTPUT_KEY,T1.TIME_INTERVAL_ID, T1.UNIT, T10.METADATA_NODE_ID;
+	END IF;
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <attributes>
+      <attribute id="LOCATION_ID" order="1">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_ID"/>
+      </attribute>
+      <attribute id="EQUIP_TYPE_ID" order="2">
+        <descriptions defaultDescription="EQUIP_TYPE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_TYPE_ID"/>
+      </attribute>
+      <attribute id="OUTPUT_KEY" order="3">
+        <descriptions defaultDescription="OUTPUT_KEY"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUTPUT_KEY"/>
+      </attribute>
+      <attribute id="OUTPUT_VALUE" order="4">
+        <descriptions defaultDescription="OUTPUT_VALUE"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUTPUT_VALUE"/>
+      </attribute>
+      <attribute id="UNIT" order="6">
+        <descriptions defaultDescription="UNIT"/>
+        <keyMapping columnObjectName="Script_View" columnName="UNIT"/>
+      </attribute>
+      <attribute id="DRILLDOWN_OUTPUT_KEY" order="7">
+        <descriptions defaultDescription="DRILLDOWN_OUTPUT_KEY"/>
+        <keyMapping columnObjectName="Script_View" columnName="DRILLDOWN_OUTPUT_KEY"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="TIME_INTERVAL_ID" order="5" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TIME_INTERVAL_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="TIME_INTERVAL_ID"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

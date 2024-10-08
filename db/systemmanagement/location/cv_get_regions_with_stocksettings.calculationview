@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_regions_with_stocksettings" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="get active regions with stocksetting info"/>
+  <localVariables>
+    <variable id="RESOURCE_CATEGORY" parameter="true">
+      <descriptions defaultDescription="RESOURCE CATEGORY CODE"/>
+      <variableProperties datatype="NVARCHAR" defaultValue="" length="50" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="ID" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="NAME" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="DESC" length="40"/>
+        <viewAttribute datatype="TIMESTAMP" id="CREATED_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="MODIFIED_TIME"/>
+        <viewAttribute datatype="INTEGER" id="MIN_SAFETY_STOCK"/>
+        <viewAttribute datatype="INTEGER" id="MAX_SAFETY_STOCK"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#RESOURCE_CATEGORY</localVariable>
+      <definition>  /********* Begin Procedure Script ************/ 
+ BEGIN 
+ 	 var_out = SELECT T1.&quot;ID&quot;,
+		T1.&quot;NAME&quot;, 
+		T1.&quot;DESC&quot;,  
+		T1.&quot;CREATED_TIME&quot;, 
+		T1.&quot;MODIFIED_TIME&quot;, 
+		T2.&quot;MIN_SAFETY_STOCK&quot;,
+		T2.&quot;MAX_SAFETY_STOCK&quot;
+	FROM &quot;sap.tm.trp.db.systemmanagement.location::cv_role_check_region_ui&quot; AS T1
+	LEFT JOIN &quot;sap.tm.trp.db.stock::v_location_stock_header_region&quot; AS T2
+	ON T2.&quot;ID&quot; = T1.&quot;ID&quot;
+	AND T2.&quot;RESOURCE_CATEGORY&quot; = :RESOURCE_CATEGORY;
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="NAME" order="2">
+        <descriptions defaultDescription="NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="DESC" order="3">
+        <descriptions defaultDescription="DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="CREATED_TIME" order="4" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="CREATED_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="CREATED_TIME"/>
+      </measure>
+      <measure id="MODIFIED_TIME" order="5" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="MODIFIED_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="MODIFIED_TIME"/>
+      </measure>
+      <measure id="MIN_SAFETY_STOCK" order="6" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MIN_SAFETY_STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="MIN_SAFETY_STOCK"/>
+      </measure>
+      <measure id="MAX_SAFETY_STOCK" order="7" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MAX_SAFETY_STOCK"/>
+        <measureMapping columnObjectName="Script_View" columnName="MAX_SAFETY_STOCK"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

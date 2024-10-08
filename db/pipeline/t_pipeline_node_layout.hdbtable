@@ -1,0 +1,8 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "NODE_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "KEY"; sqlType = VARCHAR; length = 32;},
+    {name = "VALUE"; sqlType = VARCHAR; length = 32;}
+    ];
+table.primaryKey.pkcolumns = ["NODE_ID", "KEY", "VALUE"];

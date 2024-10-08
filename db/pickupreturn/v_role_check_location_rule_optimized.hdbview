@@ -1,0 +1,22 @@
+schema = "SAP_TM_TRP";
+query = "SELECT DISTINCT ID,
+                RULE_NAME,
+                DESCRIPTION,
+                RULE_TYPE,
+                SD_PLAN_ID,
+                SUPPLY_DEMAND_PLAN,
+                TIME_RANGE_INTERVAL,
+                TIME_RANGE_UNIT,
+                NETWORK_SETTING_GROUP_ID,
+                NETWORK_SETTING_GROUP,
+                CURRENCY,
+                LOCATION_DETERMIN_ID,
+                LOCATION_DETERMINATION_RULE,
+				OP_SETTING_TYPE,
+                OPTIMIZATION,
+                SCHEDULE_TIME_TYPE,
+                RESOURCE_CATEGORY
+           FROM \"sap.tm.trp.db.pickupreturn::cv_role_check_location_rule_optimized\"
+         ";
+        
+depends_on_view = ["sap.tm.trp.db.pickupreturn::cv_role_check_location_rule_optimized"];

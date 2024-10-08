@@ -1,0 +1,42 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_archive_archive_create_temp_tab" ( ) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    AS
+BEGIN
+
+    DECLARE ARR_TAB_NAMES NVARCHAR(500) ARRAY;
+    DECLARE ARR_IND INT;
+    DECLARE HOT_TEMP_TAB_NAME NVARCHAR(500);
+    DECLARE WARM_TEMP_TAB_NAME NVARCHAR(500);
+    DECLARE WARM_TAB_NAME NVARCHAR(500);
+    DECLARE SQL_STT NVARCHAR(1000);
+    DECLARE SCHEMA_NAME NVARCHAR(20) DEFAULT 'SAP_TM_TRP';
+
+--create warm and hot temp table
+    TABLE_NAMES =
+    SELECT TABLE_NAME FROM "sap.tm.trp.db.archive::t_archive_metadata";
+    ARR_TAB_NAMES := ARRAY_AGG(:TABLE_NAMES.TABLE_NAME);
+    ARR_IND := 1;
+    FOR ARR_IND IN 1 .. CARDINALITY(:ARR_TAB_NAMES) DO
+    
+        --create warm temp table
+        WARM_TAB_NAME := :ARR_TAB_NAMES[:ARR_IND] || '_warm';
+        SELECT REPLACE(REPLACE(:ARR_TAB_NAMES[:ARR_IND],'.','_'),'::','_') || '_warm_temp' INTO WARM_TEMP_TAB_NAME FROM DUMMY;
+        SQL_STT :=
+        'CREATE TABLE "' || :SCHEMA_NAME || '"."' || :WARM_TEMP_TAB_NAME || '" LIKE "' || :SCHEMA_NAME || '"."' || :WARM_TAB_NAME || '"';
+        EXECUTE IMMEDIATE :SQL_STT;
+        --create hot temp table
+        SELECT REPLACE(REPLACE(:ARR_TAB_NAMES[:ARR_IND],'.','_'),'::','_') || '_hot_temp' INTO HOT_TEMP_TAB_NAME FROM DUMMY;
+        SQL_STT :=
+        'CREATE TABLE "' || :SCHEMA_NAME || '"."' || :HOT_TEMP_TAB_NAME || '" LIKE "' || :SCHEMA_NAME || '"."' || :ARR_TAB_NAMES[:ARR_IND] || '"';
+        EXECUTE IMMEDIATE :SQL_STT;        
+        
+    END FOR;
+
+
+
+
+
+
+END;

@@ -1,0 +1,29 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "NAME"; sqlType = VARCHAR; length = 200; unique = true;},
+    {name = "FILTER_GROUP_ID"; sqlType = BIGINT; },
+    {name = "PIPELINE_MODEL_ID"; sqlType = BIGINT;},
+    {name = "CREATE_BY"; sqlType = BIGINT;},
+    {name = "CREATE_ON"; sqlType = TIMESTAMP;},
+    {name = "LAST_MODIFIED_BY"; sqlType = BIGINT;},
+    {name = "LAST_MODIFIED_ON"; sqlType = TIMESTAMP;},
+    {name = "PLAN_MODEL_TYPE_ID"; sqlType = INTEGER;},
+    {name = "PLAN_MODEL_CATEGORY_ID"; sqlType = INTEGER;comment = "Deprecated column. Refer to pipeline model type.";},
+    {name = "DESC"; sqlType = VARCHAR; length = 500;},
+    {name = "CODE";sqlType = NVARCHAR; length = 20; nullable = true; unique = true;},
+    {name = "VISIBILITY_FLAG"; sqlType = SMALLINT;comment = "1 for Global; 0 for Personal";},
+    {name = "ALERT_RULE_GROUP_ID"; sqlType = BIGINT;},
+    {name = "EXPIRY_TIME"; sqlType = TIMESTAMP;},
+    {name = "ATTRIBUTE_GROUP_ID"; sqlType = BIGINT;},
+    {name = "STATUS"; sqlType = SMALLINT;comment = "0 OK; 1 Plan Changed; 2 Invalid Plan(only virtual plan have this status); 3: Not Executed;4:Execution Failed";},
+    {name = "CALMODEL_MODIFIED_ON"; sqlType = TIMESTAMP;},
+    {name = "KEEP_EXECUTION_RUNS"; sqlType = BIGINT; nullable = true; },
+    {name = "USAGE"; sqlType = VARCHAR; length = 1; nullable = true; comment = "X for Back-end usage; null for Front-end usage"; },
+    {name = "USAGE_CODE"; sqlType = VARCHAR; length = 4; nullable = true;},
+    {name = "ASSIGNED_TO_VIRTUAL"; sqlType = VARCHAR; length = 1; nullable = true;}
+    
+];
+
+table.primaryKey.pkcolumns = ["ID"];

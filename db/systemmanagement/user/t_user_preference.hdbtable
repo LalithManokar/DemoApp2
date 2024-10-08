@@ -1,0 +1,18 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+
+table.columns =
+[
+    {name = "USERNAME"; sqlType = VARCHAR; length = 100; nullable = false;},
+    {name = "DATA_ID"; sqlType = NVARCHAR; length = 1000; nullable = false;},
+    {name = "VALUE"; sqlType = TEXT;},
+    {name = "LAST_MODIFIED_ON"; sqlType = TIMESTAMP;}
+];
+
+
+table.indexes = 
+[
+	{name = "IDX_PREFERENCE_USERNAME"; indexColumns = ["USERNAME"];}
+];	
+	
+table.primaryKey.pkcolumns = ["USERNAME", "DATA_ID"];

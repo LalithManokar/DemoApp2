@@ -1,0 +1,23 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_region_delete_check" (
+   IN ID VARCHAR(22),
+   OUT WHEREUSED "sap.tm.trp.db.whereusedlist::v_used_region" 
+   ) 
+	LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+  
+  --get code by id
+  LOCATION_CODE = SELECT NAME AS CODE 
+                  FROM "sap.tm.trp.db.semantic.location::v_zone"
+                  WHERE ID = :ID
+                  ;
+  
+  --get used list by code
+  WHEREUSED = SELECT * 
+              FROM "sap.tm.trp.db.whereusedlist::v_used_region"
+              WHERE OBJECT_CODE = (SELECT CODE FROM :LOCATION_CODE);
+  
+  
+END;

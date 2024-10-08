@@ -1,0 +1,14 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+   {name = "USERNAME"; unique = true; sqlType = VARCHAR; length = 60; nullable = false;comment = "User ID";},
+   {name = "VALID_FROM"; sqlType = TIMESTAMP; nullable = false;comment = "Consent valid from time";},
+   {name = "VALID_TO"; sqlType = TIMESTAMP; nullable = false;comment = "Consent valid to time";},
+   {name = "CREATE_ON"; sqlType = TIMESTAMP;comment = "Create time";},
+   {name = "LAST_MODIFIED_ON"; sqlType = TIMESTAMP;comment = "Last changed time";},
+   {name = "CONSENT_STATEMENT"; sqlType = NVARCHAR; length = 1000; nullable = true;  comment = "Consent statement description";},
+   {name = "ENABLED_FLAG"; sqlType = TINYINT; nullable = false; comment = "0 - Disable, 1 - Enable";},
+   {name = "VERSION"; sqlType = BIGINT; nullable = false; comment = "Version";}
+	
+];
+table.primaryKey.pkcolumns = ["USERNAME"]; 

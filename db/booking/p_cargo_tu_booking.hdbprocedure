@@ -1,0 +1,586 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.booking::p_cargo_tu_booking" (
+    IN ITEM_CAT NVARCHAR(50),
+    IN BOOKING_TYPE NVARCHAR(2),
+    IN FROM_DATE TIMESTAMP,
+    IN TO_DATE TIMESTAMP,
+    IN LOCATION_ID "sap.tm.trp.db.booking::tt_location_list",
+    IN FILTER_ON TINYINT,
+    OUT CARGO_TU_BOOKING "sap.tm.trp.db.booking::tt_cargo_tu_booking",
+    OUT CARGO_TU_BOOKING_S4 "sap.tm.trp.db.booking::tt_cargo_tu_booking"
+    
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_TRP"
+   READS SQL DATA AS
+BEGIN
+
+    DECLARE ITEM_CAT_ADD VARCHAR(10);
+
+  --  IF :ITEM_CAT = 'PVR'    
+  --  THEN  ITEM_CAT_ADD:='PRD';
+  --  ELSE ITEM_CAT_ADD:=:ITEM_CAT;
+  --  END IF; 
+     ITEM_CAT_ADD := 'PRD';
+    
+    IF :FILTER_ON = 1 THEN
+        IF :FROM_DATE <> '' AND :TO_DATE <> '' THEN 
+            TIME_RANGE = SELECT ADD_DAYS(:FROM_DATE,IFNULL(MAX(DATE_OFFSET),0)) AS START_TIMESTAMP,
+                                ADD_DAYS(:TO_DATE,IFNULL(MAX(DATE_OFFSET),0)) AS END_TIMESTAMP
+                         FROM "sap.tm.trp.db.stock::t_start_time_for_user" 
+                         WHERE USER = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+        END IF;
+
+      --MAIN CARGO: 
+      --IF IT DOESN'T HAVE 'RELATED' ER AND EP, TAKE THIS MAIN CARGO AS 'MOVING ASSET' FROM SUPPLY AND DEMAND POINT OF VIEW
+ /*       CARGO_TU_BOOKING = SELECT DISTINCT t1.DB_KEY AS ID,t1.TOR_ID, 
+                                   t1.MOVEMENT_CAT, 
+                                   t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, 
+                                   t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+                                   t3.LOCATION_ID AS SOURCE_LOCATION_ID, 
+                                   t3.LOCATION_NAME AS SOURCE_LOCATION_NAME,
+                                   TO_TIMESTAMP(t3.SEL_TIME) AS PLANNED_DEPARTURE_TIME,
+                                   t4.LOCATION_ID AS DESTINATION_LOCATION_ID, 
+                                   t4.LOCATION_NAME AS DESTINATION_LOCATION_NAME, 
+                                   TO_TIMESTAMP(t4.SEL_TIME) AS PLANNED_ARRIVAL_TIME,
+                                   t3.DEPARTURED, 
+                                   t4.UNLOADED,
+                                   '' AS PICKUP_LOCATION_ID, 
+                                   '' AS PICKUP_LOCATION_NAME,
+                                   NULL AS PICKUP_DATE,
+                                   '' AS RETURN_LOCATION_ID, 
+                                   '' AS RETURN_LOCATION_NAME,
+                                   NULL AS RETURN_DATE,
+                                   CUSTOMER.SHIPPER, 
+                                   CUSTOMER.CONSIGNEE,
+                                   CUSTOMER.CUSTOMER_NAME AS CUSTOMER_NAME,
+                                   CUSTOMER.ORDER_DATE AS BOOKING_DATE,
+                                   CUSTOMER.TRQ_ID                                               
+                            FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                            ON (t3.TU_KEY = t1.DB_KEY AND (T3.STOP_ROLE = 'TF' OR T3.STOP_ROLE = 'FP'))         
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                            ON (t4.TU_KEY = t1.DB_KEY AND (t4.STOP_ROLE = 'TL' OR T4.STOP_ROLE = 'FD'))
+                            INNER JOIN :LOCATION_ID FL 
+                            ON (t4.LOCATION_ID=FL.LOCATION_ID OR t3.LOCATION_ID=FL.LOCATION_ID)
+                            INNER JOIN (
+                            	SELECT TOI.TU_KEY, TRQITM.TRQ_KEY
+                            	FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_item" TOI
+    	                    	INNER JOIN "sap.tm.trp.db.semantic.order::v_customer_order_item" TRQITM
+    	    					ON (TRQITM.DB_KEY = TOI.REF_TRQ_ITEM_KEY 
+    	    					AND TOI.ITEM_CAT IN ( :ITEM_CAT,:ITEM_CAT_ADD) 
+    	    					AND TRQITM.LEADING_ITEM_KEY = '00000000000000000000000000000000'
+    	    					--AND NOT (TRQITM.PROVISION_REQ = 'X' AND TRQITM.EMPTY_RETURN_REQ = 'X')
+    	    					) 
+    	                    ) t5 ON (t5.TU_KEY = t1.DB_KEY)
+                            LEFT JOIN "sap.tm.trp.db.semantic.order::v_customer_order" CUSTOMER ON t5.TRQ_KEY=CUSTOMER.DB_KEY
+                            INNER JOIN "sap.tm.trp.db.systemmanagement::t_trq_category" CAT  -- tu related trq category type
+                            ON (t1.TRQ_CAT = CAT.TRQ_TYPE AND CAT.ACTIVE = 1)
+                            CROSS JOIN :TIME_RANGE TIME_RANGE
+                            WHERE t1.TOR_CAT = 'TU' 
+                            AND (t1.MOVEMENT_CAT = '' AND :BOOKING_TYPE = '')                         
+                            AND (t3.SEL_TIME BETWEEN TIME_RANGE.START_TIMESTAMP AND TIME_RANGE.END_TIMESTAMP OR
+                            t4.SEL_TIME BETWEEN TIME_RANGE.START_TIMESTAMP AND TIME_RANGE.END_TIMESTAMP);
+          */
+          CARGO_TU_BOOKING = (SELECT DISTINCT t1.DB_KEY AS ID,t1.TOR_ID, 
+                                   t1.MOVEMENT_CAT, 
+                                   t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, 
+                                   t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+                                   t3.LOCATION_ID AS SOURCE_LOCATION_ID, 
+                                   t3.LOCATION_NAME AS SOURCE_LOCATION_NAME,
+                                   TO_TIMESTAMP(t3.SEL_TIME) AS PLANNED_DEPARTURE_TIME,
+                                   t4.LOCATION_ID AS DESTINATION_LOCATION_ID, 
+                                   t4.LOCATION_NAME AS DESTINATION_LOCATION_NAME, 
+                                   TO_TIMESTAMP(t4.SEL_TIME) AS PLANNED_ARRIVAL_TIME,
+                                   t3.DEPARTURED, 
+                                   t4.UNLOADED,
+                                   '' AS PICKUP_LOCATION_ID, 
+                                   '' AS PICKUP_LOCATION_NAME,
+                                   NULL AS PICKUP_DATE,
+                                   '' AS RETURN_LOCATION_ID, 
+                                   '' AS RETURN_LOCATION_NAME,
+                                   NULL AS RETURN_DATE,
+                                   CUSTOMER.SHIPPER, 
+                                   CUSTOMER.CONSIGNEE,
+                                   CUSTOMER.CUSTOMER_NAME AS CUSTOMER_NAME,
+                                   CUSTOMER.ORDER_DATE AS BOOKING_DATE,
+                                   CUSTOMER.TRQ_ID                                               
+                            FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                            ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')         
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                            ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')
+                            INNER JOIN :LOCATION_ID FL 
+                            ON t4.LOCATION_ID=FL.LOCATION_ID
+                            INNER JOIN (
+                            	SELECT TOI.TU_KEY, TRQITM.TRQ_KEY
+                            	FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_item" TOI
+    	                    	INNER JOIN "sap.tm.trp.db.semantic.order::v_customer_order_item" TRQITM
+    	    					ON (TRQITM.DB_KEY = TOI.REF_TRQ_ITEM_KEY 
+    	    					AND TOI.ITEM_CAT IN ( :ITEM_CAT,:ITEM_CAT_ADD) 
+    	    					AND TRQITM.LEADING_ITEM_KEY = '00000000000000000000000000000000'
+    	    					--AND NOT (TRQITM.PROVISION_REQ = 'X' AND TRQITM.EMPTY_RETURN_REQ = 'X')
+    	    					) 
+    	                    ) t5 ON (t5.TU_KEY = t1.DB_KEY)
+                            LEFT JOIN "sap.tm.trp.db.semantic.order::v_customer_order" CUSTOMER ON t5.TRQ_KEY=CUSTOMER.DB_KEY
+                            INNER JOIN "sap.tm.trp.db.systemmanagement::t_trq_category" CAT  -- tu related trq category type
+                            ON (t1.TRQ_CAT = CAT.TRQ_TYPE AND CAT.ACTIVE = 1)
+                            CROSS JOIN :TIME_RANGE TIME_RANGE
+                            WHERE t1.TOR_CAT = 'TU' 
+                            AND (t1.MOVEMENT_CAT = '' AND :BOOKING_TYPE = '')                         
+                            AND (t3.SEL_TIME BETWEEN TIME_RANGE.START_TIMESTAMP AND TIME_RANGE.END_TIMESTAMP OR
+                            t4.SEL_TIME BETWEEN TIME_RANGE.START_TIMESTAMP AND TIME_RANGE.END_TIMESTAMP))
+				UNION ALL
+					(SELECT DISTINCT t1.DB_KEY AS ID,t1.TOR_ID, 
+                                   t1.MOVEMENT_CAT, 
+                                   t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, 
+                                   t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+                                   t3.LOCATION_ID AS SOURCE_LOCATION_ID, 
+                                   t3.LOCATION_NAME AS SOURCE_LOCATION_NAME,
+                                   TO_TIMESTAMP(t3.SEL_TIME) AS PLANNED_DEPARTURE_TIME,
+                                   t4.LOCATION_ID AS DESTINATION_LOCATION_ID, 
+                                   t4.LOCATION_NAME AS DESTINATION_LOCATION_NAME, 
+                                   TO_TIMESTAMP(t4.SEL_TIME) AS PLANNED_ARRIVAL_TIME,
+                                   t3.DEPARTURED, 
+                                   t4.UNLOADED,
+                                   '' AS PICKUP_LOCATION_ID, 
+                                   '' AS PICKUP_LOCATION_NAME,
+                                   NULL AS PICKUP_DATE,
+                                   '' AS RETURN_LOCATION_ID, 
+                                   '' AS RETURN_LOCATION_NAME,
+                                   NULL AS RETURN_DATE,
+                                   CUSTOMER.SHIPPER, 
+                                   CUSTOMER.CONSIGNEE,
+                                   CUSTOMER.CUSTOMER_NAME AS CUSTOMER_NAME,
+                                   CUSTOMER.ORDER_DATE AS BOOKING_DATE,
+                                   CUSTOMER.TRQ_ID                                               
+                            FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                            ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'FP')       
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                            ON (t4.TU_KEY = t1.DB_KEY AND T4.STOP_ROLE = 'FD')
+                            INNER JOIN :LOCATION_ID FL 
+                            ON (t3.LOCATION_ID=FL.LOCATION_ID)
+                            INNER JOIN (
+                            	SELECT TOI.TU_KEY, TRQITM.TRQ_KEY
+                            	FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_item" TOI
+    	                    	INNER JOIN "sap.tm.trp.db.semantic.order::v_customer_order_item" TRQITM
+    	    					ON (TRQITM.DB_KEY = TOI.REF_TRQ_ITEM_KEY 
+    	    					AND TOI.ITEM_CAT IN ( :ITEM_CAT,:ITEM_CAT_ADD) 
+    	    					AND TRQITM.LEADING_ITEM_KEY = '00000000000000000000000000000000'
+    	    					--AND NOT (TRQITM.PROVISION_REQ = 'X' AND TRQITM.EMPTY_RETURN_REQ = 'X')
+    	    					) 
+    	                    ) t5 ON (t5.TU_KEY = t1.DB_KEY)
+                            LEFT JOIN "sap.tm.trp.db.semantic.order::v_customer_order" CUSTOMER ON t5.TRQ_KEY=CUSTOMER.DB_KEY
+                            INNER JOIN "sap.tm.trp.db.systemmanagement::t_trq_category" CAT  -- tu related trq category type
+                            ON (t1.TRQ_CAT = CAT.TRQ_TYPE AND CAT.ACTIVE = 1)
+                            CROSS JOIN :TIME_RANGE TIME_RANGE
+                            WHERE t1.TOR_CAT = 'TU' 
+                            AND (t1.MOVEMENT_CAT = '' AND :BOOKING_TYPE = '')                         
+                            AND (t3.SEL_TIME BETWEEN TIME_RANGE.START_TIMESTAMP AND TIME_RANGE.END_TIMESTAMP OR
+                            t4.SEL_TIME BETWEEN TIME_RANGE.START_TIMESTAMP AND TIME_RANGE.END_TIMESTAMP));
+        ---fetch main cargo in S4 TM                   
+/*        CARGO_TU_BOOKING_S4 =  SELECT DISTINCT t1.DB_KEY AS ID,t1.TOR_ID, t1.MOVEMENT_CAT, 
+                                      t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, 
+                                      t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+                                   t3.LOCATION_ID AS SOURCE_LOCATION_ID, 
+                                   t3.LOCATION_NAME AS SOURCE_LOCATION_NAME,
+                                   TO_TIMESTAMP(t3.SEL_TIME) AS PLANNED_DEPARTURE_TIME,
+                                   t4.LOCATION_ID AS DESTINATION_LOCATION_ID, 
+                                   t4.LOCATION_NAME AS DESTINATION_LOCATION_NAME, 
+                                   TO_TIMESTAMP(t4.SEL_TIME) AS PLANNED_ARRIVAL_TIME,
+                                   t3.DEPARTURED, 
+                                   t4.UNLOADED,
+                                   '' AS PICKUP_LOCATION_ID, 
+                                   '' AS PICKUP_LOCATION_NAME,
+                                   NULL AS PICKUP_DATE,
+                                   '' AS RETURN_LOCATION_ID, 
+                                   '' AS RETURN_LOCATION_NAME,
+                                   NULL AS RETURN_DATE,
+                                   SHP.NAME AS SHIPPER,
+					               COS.NAME AS CONSIGNEE,
+					               CUSTM.CUSTOMER_NAME,
+					               TO_DATE(t1.CREATED_ON) AS BOOKING_DATE,   
+					               t5.BASE_BTD_ID AS TRQ_ID                                             
+                            FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                            ON (t3.TU_KEY = t1.DB_KEY AND (T3.STOP_ROLE = 'TF' OR T3.STOP_ROLE = 'FP'))         
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                            ON (t4.TU_KEY = t1.DB_KEY AND (t4.STOP_ROLE = 'TL' OR T4.STOP_ROLE = 'FD'))
+                            INNER JOIN :LOCATION_ID FL 
+                            ON (t4.LOCATION_ID=FL.LOCATION_ID OR t3.LOCATION_ID=FL.LOCATION_ID)
+                            INNER JOIN (
+                            	SELECT TOI.TU_KEY, TOI.BASE_BTD_ID
+                            	FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_item" TOI
+    	                    	WHERE TOI.ITEM_CAT IN ( :ITEM_CAT,:ITEM_CAT_ADD)
+    	                    	  AND (TOI.BASE_BTD_ID <> '' AND BASE_BTD_ID IS NOT NULL) 
+    	                    	  AND TOI.BASE_BTD_TCO IN ( SELECT TYPE FROM "sap.tm.trp.db.systemmanagement::t_document_type")    	    					
+    	                    ) t5 ON (t5.TU_KEY = t1.DB_KEY)
+    	                    LEFT JOIN (SELECT DISTINCT ID,NAME FROM "sap.tm.trp.db.semantic.common::v_partner") SHP ON t1.SHIPPERID = SHP.ID
+        					LEFT JOIN (SELECT DISTINCT ID,NAME FROM "sap.tm.trp.db.semantic.common::v_partner") COS ON t1.CONSIGNEEID  = COS.ID  
+        					LEFT JOIN (SELECT DISTINCT TOR_ID,CUSTOMER_NAME FROM "sap.tm.trp.db.semantic.order::v_transportation_order_party"
+        					              WHERE PARTY_RCO = 'AG'
+        					          ) CUSTM ON t1.DB_KEY = CUSTM.TOR_ID
+                            CROSS JOIN :TIME_RANGE TIME_RANGE
+                            WHERE (t1.MOVEMENT_CAT = '' AND :BOOKING_TYPE = '')                                          
+                            AND (t3.SEL_TIME BETWEEN TIME_RANGE.START_TIMESTAMP AND TIME_RANGE.END_TIMESTAMP OR
+                                 t4.SEL_TIME BETWEEN TIME_RANGE.START_TIMESTAMP AND TIME_RANGE.END_TIMESTAMP); 
+         */
+         CARGO_TU_BOOKING_S4 =  (SELECT DISTINCT t1.DB_KEY AS ID,t1.TOR_ID, t1.MOVEMENT_CAT, 
+                                      t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, 
+                                      t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+                                   t3.LOCATION_ID AS SOURCE_LOCATION_ID, 
+                                   t3.LOCATION_NAME AS SOURCE_LOCATION_NAME,
+                                   TO_TIMESTAMP(t3.SEL_TIME) AS PLANNED_DEPARTURE_TIME,
+                                   t4.LOCATION_ID AS DESTINATION_LOCATION_ID, 
+                                   t4.LOCATION_NAME AS DESTINATION_LOCATION_NAME, 
+                                   TO_TIMESTAMP(t4.SEL_TIME) AS PLANNED_ARRIVAL_TIME,
+                                   t3.DEPARTURED, 
+                                   t4.UNLOADED,
+                                   '' AS PICKUP_LOCATION_ID, 
+                                   '' AS PICKUP_LOCATION_NAME,
+                                   NULL AS PICKUP_DATE,
+                                   '' AS RETURN_LOCATION_ID, 
+                                   '' AS RETURN_LOCATION_NAME,
+                                   NULL AS RETURN_DATE,
+                                   SHP.NAME AS SHIPPER,
+					               COS.NAME AS CONSIGNEE,
+					               CUSTM.CUSTOMER_NAME,
+					               TO_DATE(t1.CREATED_ON) AS BOOKING_DATE,   
+					               t5.BASE_BTD_ID AS TRQ_ID                                             
+                            FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                            ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')         
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                            ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')
+                            INNER JOIN :LOCATION_ID FL 
+                            ON (t4.LOCATION_ID=FL.LOCATION_ID)
+                            INNER JOIN (
+                            	SELECT TOI.TU_KEY, TOI.BASE_BTD_ID
+                            	FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_item" TOI
+    	                    	WHERE TOI.ITEM_CAT IN ( :ITEM_CAT,:ITEM_CAT_ADD)
+    	                    	  AND (TOI.BASE_BTD_ID <> '' AND BASE_BTD_ID IS NOT NULL) 
+    	                    	  AND TOI.BASE_BTD_TCO IN ( SELECT TYPE FROM "sap.tm.trp.db.systemmanagement::t_document_type")    	    					
+    	                    ) t5 ON (t5.TU_KEY = t1.DB_KEY)
+    	                    LEFT JOIN (SELECT DISTINCT ID,NAME FROM "sap.tm.trp.db.semantic.common::v_partner") SHP ON t1.SHIPPERID = SHP.ID
+        					LEFT JOIN (SELECT DISTINCT ID,NAME FROM "sap.tm.trp.db.semantic.common::v_partner") COS ON t1.CONSIGNEEID  = COS.ID  
+        					LEFT JOIN (SELECT DISTINCT TOR_ID,CUSTOMER_NAME FROM "sap.tm.trp.db.semantic.order::v_transportation_order_party"
+        					              WHERE PARTY_RCO = 'AG'
+        					          ) CUSTM ON t1.DB_KEY = CUSTM.TOR_ID
+                            CROSS JOIN :TIME_RANGE TIME_RANGE
+                            WHERE (t1.MOVEMENT_CAT = '' AND :BOOKING_TYPE = '')                                          
+                            AND (t3.SEL_TIME BETWEEN TIME_RANGE.START_TIMESTAMP AND TIME_RANGE.END_TIMESTAMP OR
+                                 t4.SEL_TIME BETWEEN TIME_RANGE.START_TIMESTAMP AND TIME_RANGE.END_TIMESTAMP))
+					UNION ALL
+					(SELECT DISTINCT t1.DB_KEY AS ID,t1.TOR_ID, t1.MOVEMENT_CAT, 
+                                      t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, 
+                                      t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+                                   t3.LOCATION_ID AS SOURCE_LOCATION_ID, 
+                                   t3.LOCATION_NAME AS SOURCE_LOCATION_NAME,
+                                   TO_TIMESTAMP(t3.SEL_TIME) AS PLANNED_DEPARTURE_TIME,
+                                   t4.LOCATION_ID AS DESTINATION_LOCATION_ID, 
+                                   t4.LOCATION_NAME AS DESTINATION_LOCATION_NAME, 
+                                   TO_TIMESTAMP(t4.SEL_TIME) AS PLANNED_ARRIVAL_TIME,
+                                   t3.DEPARTURED, 
+                                   t4.UNLOADED,
+                                   '' AS PICKUP_LOCATION_ID, 
+                                   '' AS PICKUP_LOCATION_NAME,
+                                   NULL AS PICKUP_DATE,
+                                   '' AS RETURN_LOCATION_ID, 
+                                   '' AS RETURN_LOCATION_NAME,
+                                   NULL AS RETURN_DATE,
+                                   SHP.NAME AS SHIPPER,
+					               COS.NAME AS CONSIGNEE,
+					               CUSTM.CUSTOMER_NAME,
+					               TO_DATE(t1.CREATED_ON) AS BOOKING_DATE,   
+					               t5.BASE_BTD_ID AS TRQ_ID                                             
+                            FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                            ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'FP')         
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                            ON (t4.TU_KEY = t1.DB_KEY AND T4.STOP_ROLE = 'FD')
+                            INNER JOIN :LOCATION_ID FL 
+                            ON (t3.LOCATION_ID=FL.LOCATION_ID)
+                            INNER JOIN (
+                            	SELECT TOI.TU_KEY, TOI.BASE_BTD_ID
+                            	FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_item" TOI
+    	                    	WHERE TOI.ITEM_CAT IN ( :ITEM_CAT,:ITEM_CAT_ADD)
+    	                    	  AND (TOI.BASE_BTD_ID <> '' AND BASE_BTD_ID IS NOT NULL) 
+    	                    	  AND TOI.BASE_BTD_TCO IN ( SELECT TYPE FROM "sap.tm.trp.db.systemmanagement::t_document_type")    	    					
+    	                    ) t5 ON (t5.TU_KEY = t1.DB_KEY)
+    	                    LEFT JOIN (SELECT DISTINCT ID,NAME FROM "sap.tm.trp.db.semantic.common::v_partner") SHP ON t1.SHIPPERID = SHP.ID
+        					LEFT JOIN (SELECT DISTINCT ID,NAME FROM "sap.tm.trp.db.semantic.common::v_partner") COS ON t1.CONSIGNEEID  = COS.ID  
+        					LEFT JOIN (SELECT DISTINCT TOR_ID,CUSTOMER_NAME FROM "sap.tm.trp.db.semantic.order::v_transportation_order_party"
+        					              WHERE PARTY_RCO = 'AG'
+        					          ) CUSTM ON t1.DB_KEY = CUSTM.TOR_ID
+                            CROSS JOIN :TIME_RANGE TIME_RANGE
+                            WHERE (t1.MOVEMENT_CAT = '' AND :BOOKING_TYPE = '')                                          
+                            AND (t3.SEL_TIME BETWEEN TIME_RANGE.START_TIMESTAMP AND TIME_RANGE.END_TIMESTAMP OR
+                                 t4.SEL_TIME BETWEEN TIME_RANGE.START_TIMESTAMP AND TIME_RANGE.END_TIMESTAMP));
+                       
+  ELSE
+ /*       CARGO_TU_BOOKING = SELECT DISTINCT t1.DB_KEY AS ID,t1.TOR_ID, t1.MOVEMENT_CAT, 
+                                      t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, 
+                                      t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+                                   t3.LOCATION_ID AS SOURCE_LOCATION_ID, 
+                                   t3.LOCATION_NAME AS SOURCE_LOCATION_NAME,
+                                   TO_TIMESTAMP(t3.SEL_TIME) AS PLANNED_DEPARTURE_TIME,
+                                   t4.LOCATION_ID AS DESTINATION_LOCATION_ID, 
+                                   t4.LOCATION_NAME AS DESTINATION_LOCATION_NAME, 
+                                   TO_TIMESTAMP(t4.SEL_TIME) AS PLANNED_ARRIVAL_TIME,
+                                   t3.DEPARTURED, 
+                                   t4.UNLOADED,
+                                   '' AS PICKUP_LOCATION_ID, 
+                                   '' AS PICKUP_LOCATION_NAME,
+                                   NULL AS PICKUP_DATE,
+                                   '' AS RETURN_LOCATION_ID, 
+                                   '' AS RETURN_LOCATION_NAME,
+                                   NULL AS RETURN_DATE,
+                                   CUSTOMER.SHIPPER, 
+                                   CUSTOMER.CONSIGNEE,
+                                   CUSTOMER.CUSTOMER_NAME AS CUSTOMER_NAME,
+                                   CUSTOMER.ORDER_DATE AS BOOKING_DATE,
+                                   CUSTOMER.TRQ_ID                                               
+                            FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                            ON (t3.TU_KEY = t1.DB_KEY AND (T3.STOP_ROLE = 'TF' OR T3.STOP_ROLE = 'FP'))         
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                            ON (t4.TU_KEY = t1.DB_KEY AND (t4.STOP_ROLE = 'TL' OR T4.STOP_ROLE = 'FD'))
+                            INNER JOIN :LOCATION_ID FL 
+                            ON (t4.LOCATION_ID=FL.LOCATION_ID OR t3.LOCATION_ID=FL.LOCATION_ID)
+                            INNER JOIN (
+                            	SELECT TOI.TU_KEY, TRQITM.TRQ_KEY
+                            	FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_item" TOI
+    	                    	INNER JOIN "sap.tm.trp.db.semantic.order::v_customer_order_item" TRQITM
+    	    					ON (TRQITM.DB_KEY = TOI.REF_TRQ_ITEM_KEY 
+    	    					AND TOI.ITEM_CAT IN ( :ITEM_CAT,:ITEM_CAT_ADD) 
+    	    					AND TRQITM.LEADING_ITEM_KEY = '00000000000000000000000000000000'
+    	    					--AND NOT (TRQITM.PROVISION_REQ = 'X' AND TRQITM.EMPTY_RETURN_REQ = 'X')
+    	    					) 
+    	                    ) t5 ON (t5.TU_KEY = t1.DB_KEY)
+                            LEFT JOIN "sap.tm.trp.db.semantic.order::v_customer_order" CUSTOMER ON t5.TRQ_KEY=CUSTOMER.DB_KEY
+                            INNER JOIN "sap.tm.trp.db.systemmanagement::t_trq_category" CAT  -- tu related trq category type
+                            ON (t1.TRQ_CAT = CAT.TRQ_TYPE AND CAT.ACTIVE = 1)
+                            WHERE (t1.MOVEMENT_CAT = '' AND :BOOKING_TYPE = '');
+        */
+        CARGO_TU_BOOKING = (SELECT DISTINCT t1.DB_KEY AS ID,t1.TOR_ID, t1.MOVEMENT_CAT, 
+                                      t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, 
+                                      t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+                                   t3.LOCATION_ID AS SOURCE_LOCATION_ID, 
+                                   t3.LOCATION_NAME AS SOURCE_LOCATION_NAME,
+                                   TO_TIMESTAMP(t3.SEL_TIME) AS PLANNED_DEPARTURE_TIME,
+                                   t4.LOCATION_ID AS DESTINATION_LOCATION_ID, 
+                                   t4.LOCATION_NAME AS DESTINATION_LOCATION_NAME, 
+                                   TO_TIMESTAMP(t4.SEL_TIME) AS PLANNED_ARRIVAL_TIME,
+                                   t3.DEPARTURED, 
+                                   t4.UNLOADED,
+                                   '' AS PICKUP_LOCATION_ID, 
+                                   '' AS PICKUP_LOCATION_NAME,
+                                   NULL AS PICKUP_DATE,
+                                   '' AS RETURN_LOCATION_ID, 
+                                   '' AS RETURN_LOCATION_NAME,
+                                   NULL AS RETURN_DATE,
+                                   CUSTOMER.SHIPPER, 
+                                   CUSTOMER.CONSIGNEE,
+                                   CUSTOMER.CUSTOMER_NAME AS CUSTOMER_NAME,
+                                   CUSTOMER.ORDER_DATE AS BOOKING_DATE,
+                                   CUSTOMER.TRQ_ID                                               
+                            FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                            ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')         
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                            ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')
+                            INNER JOIN :LOCATION_ID FL 
+                            ON (t4.LOCATION_ID=FL.LOCATION_ID)
+                            INNER JOIN (
+                            	SELECT TOI.TU_KEY, TRQITM.TRQ_KEY
+                            	FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_item" TOI
+    	                    	INNER JOIN "sap.tm.trp.db.semantic.order::v_customer_order_item" TRQITM
+    	    					ON (TRQITM.DB_KEY = TOI.REF_TRQ_ITEM_KEY 
+    	    					AND TOI.ITEM_CAT IN ( :ITEM_CAT,:ITEM_CAT_ADD) 
+    	    					AND TRQITM.LEADING_ITEM_KEY = '00000000000000000000000000000000'
+    	    					--AND NOT (TRQITM.PROVISION_REQ = 'X' AND TRQITM.EMPTY_RETURN_REQ = 'X')
+    	    					) 
+    	                    ) t5 ON (t5.TU_KEY = t1.DB_KEY)
+                            LEFT JOIN "sap.tm.trp.db.semantic.order::v_customer_order" CUSTOMER ON t5.TRQ_KEY=CUSTOMER.DB_KEY
+                            INNER JOIN "sap.tm.trp.db.systemmanagement::t_trq_category" CAT  -- tu related trq category type
+                            ON (t1.TRQ_CAT = CAT.TRQ_TYPE AND CAT.ACTIVE = 1)
+                            WHERE (t1.MOVEMENT_CAT = '' AND :BOOKING_TYPE = ''))
+				UNION ALL
+				(SELECT DISTINCT t1.DB_KEY AS ID,t1.TOR_ID, t1.MOVEMENT_CAT, 
+                                      t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, 
+                                      t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+                                   t3.LOCATION_ID AS SOURCE_LOCATION_ID, 
+                                   t3.LOCATION_NAME AS SOURCE_LOCATION_NAME,
+                                   TO_TIMESTAMP(t3.SEL_TIME) AS PLANNED_DEPARTURE_TIME,
+                                   t4.LOCATION_ID AS DESTINATION_LOCATION_ID, 
+                                   t4.LOCATION_NAME AS DESTINATION_LOCATION_NAME, 
+                                   TO_TIMESTAMP(t4.SEL_TIME) AS PLANNED_ARRIVAL_TIME,
+                                   t3.DEPARTURED, 
+                                   t4.UNLOADED,
+                                   '' AS PICKUP_LOCATION_ID, 
+                                   '' AS PICKUP_LOCATION_NAME,
+                                   NULL AS PICKUP_DATE,
+                                   '' AS RETURN_LOCATION_ID, 
+                                   '' AS RETURN_LOCATION_NAME,
+                                   NULL AS RETURN_DATE,
+                                   CUSTOMER.SHIPPER, 
+                                   CUSTOMER.CONSIGNEE,
+                                   CUSTOMER.CUSTOMER_NAME AS CUSTOMER_NAME,
+                                   CUSTOMER.ORDER_DATE AS BOOKING_DATE,
+                                   CUSTOMER.TRQ_ID                                               
+                            FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                            ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'FP')         
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                            ON (t4.TU_KEY = t1.DB_KEY AND T4.STOP_ROLE = 'FD')
+                            INNER JOIN :LOCATION_ID FL 
+                            ON (t3.LOCATION_ID=FL.LOCATION_ID)
+                            INNER JOIN (
+                            	SELECT TOI.TU_KEY, TRQITM.TRQ_KEY
+                            	FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_item" TOI
+    	                    	INNER JOIN "sap.tm.trp.db.semantic.order::v_customer_order_item" TRQITM
+    	    					ON (TRQITM.DB_KEY = TOI.REF_TRQ_ITEM_KEY 
+    	    					AND TOI.ITEM_CAT IN ( :ITEM_CAT,:ITEM_CAT_ADD) 
+    	    					AND TRQITM.LEADING_ITEM_KEY = '00000000000000000000000000000000'
+    	    					--AND NOT (TRQITM.PROVISION_REQ = 'X' AND TRQITM.EMPTY_RETURN_REQ = 'X')
+    	    					) 
+    	                    ) t5 ON (t5.TU_KEY = t1.DB_KEY)
+                            LEFT JOIN "sap.tm.trp.db.semantic.order::v_customer_order" CUSTOMER ON t5.TRQ_KEY=CUSTOMER.DB_KEY
+                            INNER JOIN "sap.tm.trp.db.systemmanagement::t_trq_category" CAT  -- tu related trq category type
+                            ON (t1.TRQ_CAT = CAT.TRQ_TYPE AND CAT.ACTIVE = 1)
+                            WHERE (t1.MOVEMENT_CAT = '' AND :BOOKING_TYPE = '')); 
+      --fetch main cargo in S4 TM                           
+ /*      CARGO_TU_BOOKING_S4 = SELECT DISTINCT t1.DB_KEY AS ID,t1.TOR_ID, t1.MOVEMENT_CAT, 
+                                      t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, 
+                                      t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+                                   t3.LOCATION_ID AS SOURCE_LOCATION_ID, 
+                                   t3.LOCATION_NAME AS SOURCE_LOCATION_NAME,
+                                   TO_TIMESTAMP(t3.SEL_TIME) AS PLANNED_DEPARTURE_TIME,
+                                   t4.LOCATION_ID AS DESTINATION_LOCATION_ID, 
+                                   t4.LOCATION_NAME AS DESTINATION_LOCATION_NAME, 
+                                   TO_TIMESTAMP(t4.SEL_TIME) AS PLANNED_ARRIVAL_TIME,
+                                   t3.DEPARTURED, 
+                                   t4.UNLOADED,
+                                   '' AS PICKUP_LOCATION_ID, 
+                                   '' AS PICKUP_LOCATION_NAME,
+                                   NULL AS PICKUP_DATE,
+                                   '' AS RETURN_LOCATION_ID, 
+                                   '' AS RETURN_LOCATION_NAME,
+                                   NULL AS RETURN_DATE,
+                                   SHP.NAME AS SHIPPER,
+					               COS.NAME AS CONSIGNEE,
+					               CUSTM.CUSTOMER_NAME,
+					               TO_DATE(t1.CREATED_ON) AS BOOKING_DATE,   
+					               t5.BASE_BTD_ID AS TRQ_ID                                             
+                            FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                            ON (t3.TU_KEY = t1.DB_KEY AND (T3.STOP_ROLE = 'TF' OR T3.STOP_ROLE = 'FP'))         
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                            ON (t4.TU_KEY = t1.DB_KEY AND (t4.STOP_ROLE = 'TL' OR T4.STOP_ROLE = 'FD'))
+                            INNER JOIN :LOCATION_ID FL 
+                            ON (t4.LOCATION_ID=FL.LOCATION_ID OR t3.LOCATION_ID=FL.LOCATION_ID)
+                            INNER JOIN (
+                            	SELECT TOI.TU_KEY, TOI.BASE_BTD_ID
+                            	FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_item" TOI
+    	                    	WHERE TOI.ITEM_CAT IN ( :ITEM_CAT,:ITEM_CAT_ADD) 
+    	                    	  AND (TOI.BASE_BTD_ID <> '' AND BASE_BTD_ID IS NOT NULL) 
+    	                    	  AND TOI.BASE_BTD_TCO IN ( SELECT TYPE FROM "sap.tm.trp.db.systemmanagement::t_document_type")    	    					
+    	                    ) t5 ON (t5.TU_KEY = t1.DB_KEY)
+    	                    LEFT JOIN (SELECT DISTINCT ID,NAME FROM "sap.tm.trp.db.semantic.common::v_partner") SHP ON t1.SHIPPERID = SHP.ID
+        					LEFT JOIN (SELECT DISTINCT ID,NAME FROM "sap.tm.trp.db.semantic.common::v_partner") COS ON t1.CONSIGNEEID  = COS.ID  
+        					LEFT JOIN (SELECT DISTINCT TOR_ID,CUSTOMER_NAME FROM "sap.tm.trp.db.semantic.order::v_transportation_order_party"
+        					            WHERE PARTY_RCO = 'AG'
+        					          ) CUSTM ON t1.DB_KEY = CUSTM.TOR_ID
+                            WHERE (t1.MOVEMENT_CAT = '' AND :BOOKING_TYPE = ''); 
+       */
+       CARGO_TU_BOOKING_S4 = (SELECT DISTINCT t1.DB_KEY AS ID,t1.TOR_ID, t1.MOVEMENT_CAT, 
+                                      t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, 
+                                      t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+                                   t3.LOCATION_ID AS SOURCE_LOCATION_ID, 
+                                   t3.LOCATION_NAME AS SOURCE_LOCATION_NAME,
+                                   TO_TIMESTAMP(t3.SEL_TIME) AS PLANNED_DEPARTURE_TIME,
+                                   t4.LOCATION_ID AS DESTINATION_LOCATION_ID, 
+                                   t4.LOCATION_NAME AS DESTINATION_LOCATION_NAME, 
+                                   TO_TIMESTAMP(t4.SEL_TIME) AS PLANNED_ARRIVAL_TIME,
+                                   t3.DEPARTURED, 
+                                   t4.UNLOADED,
+                                   '' AS PICKUP_LOCATION_ID, 
+                                   '' AS PICKUP_LOCATION_NAME,
+                                   NULL AS PICKUP_DATE,
+                                   '' AS RETURN_LOCATION_ID, 
+                                   '' AS RETURN_LOCATION_NAME,
+                                   NULL AS RETURN_DATE,
+                                   SHP.NAME AS SHIPPER,
+					               COS.NAME AS CONSIGNEE,
+					               CUSTM.CUSTOMER_NAME,
+					               TO_DATE(t1.CREATED_ON) AS BOOKING_DATE,   
+					               t5.BASE_BTD_ID AS TRQ_ID                                             
+                            FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                            ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'TF')         
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                            ON (t4.TU_KEY = t1.DB_KEY AND t4.STOP_ROLE = 'TL')
+                            INNER JOIN :LOCATION_ID FL 
+                            ON (t4.LOCATION_ID=FL.LOCATION_ID)
+                            INNER JOIN (
+                            	SELECT TOI.TU_KEY, TOI.BASE_BTD_ID
+                            	FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_item" TOI
+    	                    	WHERE TOI.ITEM_CAT IN ( :ITEM_CAT,:ITEM_CAT_ADD) 
+    	                    	  AND (TOI.BASE_BTD_ID <> '' AND BASE_BTD_ID IS NOT NULL) 
+    	                    	  AND TOI.BASE_BTD_TCO IN ( SELECT TYPE FROM "sap.tm.trp.db.systemmanagement::t_document_type")    	    					
+    	                    ) t5 ON (t5.TU_KEY = t1.DB_KEY)
+    	                    LEFT JOIN (SELECT DISTINCT ID,NAME FROM "sap.tm.trp.db.semantic.common::v_partner") SHP ON t1.SHIPPERID = SHP.ID
+        					LEFT JOIN (SELECT DISTINCT ID,NAME FROM "sap.tm.trp.db.semantic.common::v_partner") COS ON t1.CONSIGNEEID  = COS.ID  
+        					LEFT JOIN (SELECT DISTINCT TOR_ID,CUSTOMER_NAME FROM "sap.tm.trp.db.semantic.order::v_transportation_order_party"
+        					            WHERE PARTY_RCO = 'AG'
+        					          ) CUSTM ON t1.DB_KEY = CUSTM.TOR_ID
+                            WHERE (t1.MOVEMENT_CAT = '' AND :BOOKING_TYPE = ''))
+				UNION ALL
+				(SELECT DISTINCT t1.DB_KEY AS ID,t1.TOR_ID, t1.MOVEMENT_CAT, 
+                                      t1.EXECUTION_STATUS,t1.EXECUTION_STATUS_TEXT, 
+                                      t1.LIFECYCLE,t1.LIFECYCLE_TEXT,
+                                   t3.LOCATION_ID AS SOURCE_LOCATION_ID, 
+                                   t3.LOCATION_NAME AS SOURCE_LOCATION_NAME,
+                                   TO_TIMESTAMP(t3.SEL_TIME) AS PLANNED_DEPARTURE_TIME,
+                                   t4.LOCATION_ID AS DESTINATION_LOCATION_ID, 
+                                   t4.LOCATION_NAME AS DESTINATION_LOCATION_NAME, 
+                                   TO_TIMESTAMP(t4.SEL_TIME) AS PLANNED_ARRIVAL_TIME,
+                                   t3.DEPARTURED, 
+                                   t4.UNLOADED,
+                                   '' AS PICKUP_LOCATION_ID, 
+                                   '' AS PICKUP_LOCATION_NAME,
+                                   NULL AS PICKUP_DATE,
+                                   '' AS RETURN_LOCATION_ID, 
+                                   '' AS RETURN_LOCATION_NAME,
+                                   NULL AS RETURN_DATE,
+                                   SHP.NAME AS SHIPPER,
+					               COS.NAME AS CONSIGNEE,
+					               CUSTM.CUSTOMER_NAME,
+					               TO_DATE(t1.CREATED_ON) AS BOOKING_DATE,   
+					               t5.BASE_BTD_ID AS TRQ_ID                                             
+                            FROM "sap.tm.trp.db.semantic.order::v_transportation_unit" t1
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t3 
+                            ON (t3.TU_KEY = t1.DB_KEY AND T3.STOP_ROLE = 'FP')         
+                            INNER JOIN "sap.tm.trp.db.semantic.order::v_transportation_unit_stop" t4 
+                            ON (t4.TU_KEY = t1.DB_KEY AND T4.STOP_ROLE = 'FD')
+                            INNER JOIN :LOCATION_ID FL 
+                            ON (t3.LOCATION_ID=FL.LOCATION_ID)
+                            INNER JOIN (
+                            	SELECT TOI.TU_KEY, TOI.BASE_BTD_ID
+                            	FROM "sap.tm.trp.db.semantic.order::v_transportation_unit_item" TOI
+    	                    	WHERE TOI.ITEM_CAT IN ( :ITEM_CAT,:ITEM_CAT_ADD) 
+    	                    	  AND (TOI.BASE_BTD_ID <> '' AND BASE_BTD_ID IS NOT NULL) 
+    	                    	  AND TOI.BASE_BTD_TCO IN ( SELECT TYPE FROM "sap.tm.trp.db.systemmanagement::t_document_type")    	    					
+    	                    ) t5 ON (t5.TU_KEY = t1.DB_KEY)
+    	                    LEFT JOIN (SELECT DISTINCT ID,NAME FROM "sap.tm.trp.db.semantic.common::v_partner") SHP ON t1.SHIPPERID = SHP.ID
+        					LEFT JOIN (SELECT DISTINCT ID,NAME FROM "sap.tm.trp.db.semantic.common::v_partner") COS ON t1.CONSIGNEEID  = COS.ID  
+        					LEFT JOIN (SELECT DISTINCT TOR_ID,CUSTOMER_NAME FROM "sap.tm.trp.db.semantic.order::v_transportation_order_party"
+        					            WHERE PARTY_RCO = 'AG'
+        					          ) CUSTM ON t1.DB_KEY = CUSTM.TOR_ID
+                            WHERE (t1.MOVEMENT_CAT = '' AND :BOOKING_TYPE = '')); 
+                       
+  END IF;
+  
+ 
+END

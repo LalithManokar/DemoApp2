@@ -1,0 +1,13 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_plan_model_schedule_job_create" (
+IN SCHEDULE_ID BIGINT,
+IN PLAN_ID BIGINT,
+OUT CREATED INTEGER) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	 AS
+BEGIN
+	
+	INSERT INTO "sap.tm.trp.db.pipeline::t_plan_model_job" VALUES( :SCHEDULE_ID, :PLAN_ID);
+	SELECT COUNT(1) INTO CREATED FROM "sap.tm.trp.db.pipeline::t_plan_model_job" WHERE PLAN_MODEL_ID = :PLAN_ID AND JOB_SCHEDULER_ID = :SCHEDULE_ID;
+END;

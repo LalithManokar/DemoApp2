@@ -1,0 +1,51 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_get_locations_by_geo_name" (
+	IN GEO_NAME VARCHAR(50),
+	IN GEO_FLAG INTEGER,
+	OUT LOCATIONS "sap.tm.trp.db.filter::tt_location_ids" 
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA 
+AS
+BEGIN
+ 
+
+
+    
+IF :GEO_FLAG = 1 THEN
+--LOCATION
+  LOCATIONS = SELECT ID AS LOCATION_ID
+              FROM "sap.tm.trp.db.semantic.location::v_location"
+              WHERE NAME = :GEO_NAME;
+
+ELSEIF :GEO_FLAG = 2 THEN
+--LOCATION GROUP
+   
+   LOCATIONS = SELECT T2.LOCATION_ID
+			   FROM  "sap.tm.trp.db.systemmanagement::t_location_group" T1			   
+			   INNER JOIN "sap.tm.trp.db.systemmanagement::t_location_group_item" T2 ON (T2.LOCATION_GROUP_ID = T1.ID)
+			   WHERE T1.DESC = :GEO_NAME;
+
+
+ELSEIF :GEO_FLAG = 5 THEN
+-- REGION
+       
+   LOCATIONS = SELECT T2.LOCATION_ID
+		       FROM "sap.tm.trp.db.semantic.location::v_zone" T1
+		       INNER JOIN  "sap.tm.trp.db.systemmanagement.location::v_region_location_all" T2 ON (T2.ROOT_ID = T1.ID)
+		       WHERE T1.NAME = :GEO_NAME;
+
+
+ELSEIF :GEO_FLAG = 6 THEN
+-- REGION GROUP
+
+   LOCATIONS = SELECT T3.LOCATION_ID
+			   FROM "sap.tm.trp.db.systemmanagement::t_region_group" T1			  
+		       INNER JOIN "sap.tm.trp.db.systemmanagement::t_region_group_item" T2 ON (T2.REGION_GROUP_ID = T1.ID)
+    	       INNER JOIN  "sap.tm.trp.db.systemmanagement.location::v_region_location_all" T3 ON (T3.ROOT_ID = T2.ZONE_ID)
+		       WHERE T1.DESC = :GEO_NAME;
+
+END IF;	      
+
+END;

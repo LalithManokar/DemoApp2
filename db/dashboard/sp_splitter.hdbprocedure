@@ -1,0 +1,51 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.dashboard::sp_splitter" (
+    IN iv_input NVARCHAR(4096), 
+    IN iv_delimiter NVARCHAR(1), 
+    OUT ot_split "sap.tm.trp.db.dashboard::tt_string"
+    ) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA SAP_TM_TRP
+    READS SQL DATA AS
+BEGIN
+    declare lv_len smallint;
+
+    -- determine length of input
+    select length(iv_input) into lv_len from dummy;
+    
+    if lv_len < 1 then
+        return;
+    end if;
+
+    -- create a table of indices ranging from 1 to lv_len
+    lt_iterator = select i from ( 
+           select 1+d0+d1+d2+d3+d4+d5+d6+d7+d8+d9+da+db as i
+           from 
+               (select 0 as d0 from dummy union all select    1 as d0 from dummy where    1 < lv_len),
+               (select 0 as d1 from dummy union all select    2 as d1 from dummy where    2 < lv_len),
+               (select 0 as d2 from dummy union all select    4 as d2 from dummy where    4 < lv_len),
+               (select 0 as d3 from dummy union all select    8 as d3 from dummy where    8 < lv_len),
+               (select 0 as d4 from dummy union all select   16 as d4 from dummy where   16 < lv_len),
+               (select 0 as d5 from dummy union all select   32 as d5 from dummy where   32 < lv_len),
+               (select 0 as d6 from dummy union all select   64 as d6 from dummy where   64 < lv_len),
+               (select 0 as d7 from dummy union all select  128 as d7 from dummy where  128 < lv_len),
+               (select 0 as d8 from dummy union all select  256 as d8 from dummy where  256 < lv_len),
+               (select 0 as d9 from dummy union all select  512 as d9 from dummy where  512 < lv_len),
+               (select 0 as da from dummy union all select 1024 as da from dummy where 1024 < lv_len),
+               (select 0 as db from dummy union all select 2048 as db from dummy where 2048 < lv_len)
+            )
+            where i <= lv_len;
+        
+     -- determine which of the indices hit the separator        
+     lt_split_iterator = select i from :lt_iterator where substring(iv_input, i, 1) = iv_delimiter
+         union all select 0 as i from dummy
+         union all select :lv_len+1 as i from dummy;
+          
+     -- determine tuples of string begin index and succeeding separator index 
+     lt_split_tuple = select i+1 as i0, lead(i) over (partition by dummy order by i) as i1 from 
+         (select i, 0 as dummy from :lt_split_iterator);         
+                  
+     -- use the tuples to extract the desired substrings              
+     ot_split = select substring(iv_input, i0, i1-i0) as string from :lt_split_tuple where i1 is not null;     
+
+END;

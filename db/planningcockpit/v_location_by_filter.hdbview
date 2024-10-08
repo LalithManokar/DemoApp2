@@ -1,0 +1,10 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT LOCATION_FILTER_ID, T1.ID AS LOCATION_ID, T2.NAME AS LOCATION_NAME, T2.XPOS, T2.YPOS
+            FROM (SELECT LOCATION_FILTER_ID, LOCATION_ID AS ID
+                  FROM \"sap.tm.trp.db.filter::t_location_filter_location\") AS T1
+                 INNER JOIN \"sap.tm.trp.db.semantic.location::v_all_location\" AS T2
+                 ON T1.ID = T2.ID
+           ";
+
+depends_on_table = ["sap.tm.trp.db.filter::t_location_filter_location"];
+depends_on_view  = ["sap.tm.trp.db.semantic.location::v_all_location"];

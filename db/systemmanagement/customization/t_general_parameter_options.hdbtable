@@ -1,0 +1,14 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+
+table.columns =
+ [
+    {name = "NAME"; sqlType = VARCHAR; length = 50; nullable = false;},
+    {name = "DESC"; sqlType = VARCHAR; length = 500;},
+    {name = "TYPE"; sqlType = VARCHAR; length = 50;},
+    {name = "DEFAULT"; sqlType = VARCHAR; length = 500;},
+    {name = "FROM"; sqlType = BIGINT;},
+    {name = "TO"; sqlType = BIGINT;}
+];
+
+table.primaryKey.pkcolumns = ["NAME"];

@@ -1,0 +1,85 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_ext_location_group_update"(
+    IN ID VARCHAR(22),
+    IN NAME VARCHAR(50),
+    IN DESC VARCHAR(500),
+    IN ITEMS "sap.tm.trp.db.pipeline::tt_geo_id",
+    IN PRIME_LOC_ID VARCHAR(22),
+    IN VISIBLE_FLAG VARCHAR(3)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    AS
+BEGIN
+	DECLARE PRIME_LOC VARCHAR(22);
+    DECLARE CITY_ID VARCHAR(50);
+    DECLARE CITY_NAME VARCHAR(50);
+    DECLARE STATE_CODE VARCHAR(50);
+    DECLARE STATE_NAME VARCHAR(50);
+    DECLARE COUNTRY_CODE VARCHAR(50);
+    DECLARE COUNTRY_NAME VARCHAR(50);
+    DECLARE USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE CODE VARCHAR(20);
+    
+    SELECT IFNULL(MAX(ID),-100) INTO USER_ID FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    SELECT SPRAS INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+    
+    DELETE FROM "sap.tm.trp.db.systemmanagement::t_location_group_item"
+    WHERE LOCATION_GROUP_ID = :ID;
+    
+    INSERT INTO "sap.tm.trp.db.systemmanagement::t_location_group_item"(LOCATION_ID, LOCATION_GROUP_ID)
+    SELECT ID, :ID FROM :ITEMS;
+    
+	SELECT MAX(T1.ID), MAX(CITY_ID), MAX(CITY_NAME), MAX(REGION_CODE), MAX(STATE_NAME), MAX(COUNTRY_CODE), MAX(COUNTRY_NAME)
+	INTO PRIME_LOC, CITY_ID, CITY_NAME, STATE_CODE, STATE_NAME, COUNTRY_CODE, COUNTRY_NAME
+	FROM "sap.tm.trp.db.systemmanagement.location::v_location_ui" T1
+	INNER JOIN :ITEMS T2 ON T2.ID = T1.ID
+	WHERE T1.ID = :PRIME_LOC_ID
+	;
+    
+    UPDATE "sap.tm.trp.db.systemmanagement::t_location_group"
+    SET DESC = :NAME,
+        LAST_MODIFIED_AT = CURRENT_UTCTIMESTAMP,
+        PRIME_LOC_ID = :PRIME_LOC,
+        CITY_CODE = :CITY_ID,
+        CITY_NAME = :CITY_NAME,
+        STATE_CODE = :STATE_CODE,
+        STATE_NAME = :STATE_NAME,
+        COUNTRY_CODE = :COUNTRY_CODE,
+        COUNTRY_NAME = :COUNTRY_NAME,
+        VISIBLE_FLAG = :VISIBLE_FLAG,
+        LAST_MODIFIED_BY = :USER_ID
+    WHERE ID = :ID;
+    
+    UPDATE "sap.tm.trp.db.systemmanagement::t_location_group_t"
+    SET DESC = :DESC,
+        SPRAS = :SPRAS
+    WHERE ID = :ID;
+    
+    LOCATION_FILTER_ID_LIST = SELECT DISTINCT T1.LOCATION_FILTER_ID 
+                                FROM "sap.tm.trp.db.filter::t_filter_location_filter" AS T1
+                                     INNER JOIN "sap.tm.trp.db.filter::t_location_filter_location" AS T2
+                                     ON T1.LOCATION_FILTER_ID = T2.LOCATION_FILTER_ID
+                               WHERE T2.LOCATION_GROUP_ID = :ID;
+    
+    UPDATE "sap.tm.trp.db.filter::t_location_filter"
+    SET LAST_MODIFIED_AT = CURRENT_UTCTIMESTAMP
+    WHERE ID IN (SELECT * FROM :LOCATION_FILTER_ID_LIST);
+    
+    PLAN_MODEL_ID_LIST = SELECT DISTINCT T1.ID 
+                           FROM "sap.tm.trp.db.pipeline::t_plan_model" AS T1
+                                INNER JOIN "sap.tm.trp.db.filter::t_filter_location_filter" AS T2
+                                ON T1.FILTER_GROUP_ID = T2.FILTER_GROUP_ID
+                          WHERE T2.LOCATION_FILTER_ID IN (SELECT * FROM :LOCATION_FILTER_ID_LIST);
+    
+    UPDATE "sap.tm.trp.db.pipeline::t_plan_model"
+    SET LAST_MODIFIED_ON = CURRENT_UTCTIMESTAMP
+    WHERE ID IN (SELECT * FROM :PLAN_MODEL_ID_LIST);
+    
+    SELECT IFNULL(MAX(CODE), '') INTO CODE FROM "sap.tm.trp.db.systemmanagement::t_location_group"
+    WHERE ID = :ID;
+    
+    CALL "sap.tm.trp.db.systemmanagement::p_set_location_group_need_check"(:CODE, 'LOCATION_GROUP');
+END;

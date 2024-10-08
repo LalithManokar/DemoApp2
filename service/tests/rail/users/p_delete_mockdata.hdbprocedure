@@ -1,0 +1,9 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.service.tests.rail.users::p_delete_mockdata" ( )
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   --DEFAULT SCHEMA <default_schema_name>
+   AS
+BEGIN
+   delete from "sap.tm.trp.db.systemmanagement.user::t_role" where ID = 99998;
+   delete from "sap.tm.trp.db.systemmanagement.user::t_user_role" where ROLE_ID = 99998;
+END

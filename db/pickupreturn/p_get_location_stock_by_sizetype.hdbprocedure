@@ -1,0 +1,24 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_get_location_stock_by_sizetype" (
+    IN LOCATION_ID VARCHAR(22),
+    IN RESOURCE_CATEGORY VARCHAR(20),
+    IN RESOURCETYPES "sap.tm.trp.db.pickupreturn::tt_str_list",
+    OUT LOCATION_STOCK_BY_SIZETYPE "sap.tm.trp.db.pickupreturn::tt_location_stock_list"
+   )
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    AS
+BEGIN
+
+    LOCATION_STOCK_BY_SIZETYPE = 
+                  SELECT T3.*, T2.UNIT_CODE AS UOM FROM
+                  (SELECT :LOCATION_ID AS LOCATION_ID, T1.RESOURCE_TYPE, COUNT(1) AS STOCK 
+                   FROM "sap.tm.trp.db.semantic.resource::v_stock_resource_last_status" T1
+                   INNER JOIN :RESOURCETYPES E ON (T1.RESOURCE_TYPE = E.STR)
+                   INNER JOIN  "sap.tm.trp.db.semantic.resource::v_resource_category" t6
+                   ON (t1.RESOURCE_CATEGORY = t6.MAPPING_CODE AND t6.CODE = :RESOURCE_CATEGORY)
+                   WHERE T1.LOCATION_ID = :LOCATION_ID
+                   GROUP BY T1.RESOURCE_TYPE
+                  ) T3
+                  CROSS JOIN "sap.tm.trp.db.systemmanagement::v_unit" T2;    
+ 
+END;

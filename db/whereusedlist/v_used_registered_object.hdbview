@@ -1,0 +1,40 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT T1.RESOURCE_CATEGORY
+                 ,T1.OBJECT_CODE
+                 ,T1.USED_OBJECT_ID
+                 ,T1.NAME
+                 ,T1.CODE
+                 ,T1.CATEGORY
+                 ,T1.DESC
+				 ,T1.VISIBILITY
+                 ,T1.CREATED_BY
+                 ,T1.MODIFIED_BY
+                 ,T1.MODIFIED_TIME
+            FROM \"sap.tm.trp.db.whereusedlist::v_used_registered_object_in_woc\" T1
+            UNION
+          SELECT T1.RESOURCE_CATEGORY
+                 ,T1.OBJECT_CODE
+                 ,0 AS USED_OBJECT_ID
+                 ,'' AS NAME
+                 ,'' AS CODE
+                 ,'' AS CATEGORY
+                 ,'' AS DESC
+    			 ,'' AS VISIBILITY
+                 ,'' AS CREATED_BY
+                 ,'' AS MODIFIED_BY
+                 ,'' AS MODIFIED_TIME
+            FROM (SELECT DISTINCT T1.RESOURCE_CATEGORY,T1.REGISTERED_OBJECTS AS OBJECT_CODE
+                  FROM (SELECT DISTINCT T3.CODE AS RESOURCE_CATEGORY,T2.CODE AS REGISTERED_OBJECTS 
+                        FROM \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_object_registration\" T1
+                        INNER JOIN \"sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings\" T3
+                        ON (T1.RESOURCE_CATEGORY_ID = T3.ID)
+                        INNER JOIN \"sap.tm.trp.db.objectregistration::v_registered_object_ui\" T2
+                        ON (T1.OBJECT_ID = T2.ID)) T1
+                  LEFT JOIN \"sap.tm.trp.db.whereusedlist::v_used_registered_object_in_woc\" T2
+                  ON (T1.RESOURCE_CATEGORY = T2.RESOURCE_CATEGORY AND T1.REGISTERED_OBJECTS = T2.OBJECT_CODE)
+                  WHERE T2.RESOURCE_CATEGORY IS NULL) T1";
+
+depends_on_table = ["sap.tm.trp.db.systemmanagement.customization::t_resource_category_object_registration",
+                    "sap.tm.trp.db.systemmanagement.customization::t_resource_category_settings"];
+depends_on_view  = ["sap.tm.trp.db.whereusedlist::v_used_registered_object_in_woc",
+                    "sap.tm.trp.db.objectregistration::v_registered_object_ui"];

@@ -1,0 +1,21 @@
+//To define the HDB view file use the following syntax: 
+schema = "SAP_TM_TRP";
+query = "
+    SELECT T1.ID AS LOCATION_RULE_ID,
+           T2.LOCATION_ID as ID,
+           T3.NAME AS NAME,
+           T3.DESC AS DESC,
+           T3.POSTAL_CODE,
+           T3.CITY_NAME AS CITY_NAME,
+           T3.STATE_NAME AS STATE_NAME,
+           T3.COUNTRY_NAME AS COUNTRY_NAME
+    FROM \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group\" T1
+    INNER JOIN \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group_item\" T2
+    ON T1.ID = T2.LOCATION_RULE_ID
+    INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_location_ui\" T3
+    ON T2.LOCATION_ID = T3.ID
+ ";
+ 
+ depends_on_table = ["sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group",
+                     "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group_item"];
+ depends_on_view  = ["sap.tm.trp.db.systemmanagement.location::v_location_ui"];

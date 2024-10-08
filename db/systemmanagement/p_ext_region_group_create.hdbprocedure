@@ -1,0 +1,55 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_ext_region_group_create"(
+    IN NAME VARCHAR(50),
+    IN DESC VARCHAR(500),
+    IN ITEMS "sap.tm.trp.db.pipeline::tt_geo_id",
+    IN PRIME_LOC_ID VARCHAR(22),
+    IN VISIBLE_FLAG VARCHAR(3),
+    IN RESOURCE_CATEGORY NVARCHAR(50),
+    OUT GROUP_ID VARCHAR(22)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+	DECLARE PRIME_LOC VARCHAR(22);
+    DECLARE ID VARCHAR(22);
+    DECLARE CURRENT_USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE CITY_ID VARCHAR(50);
+    DECLARE CITY_NAME VARCHAR(50);
+    DECLARE STATE_CODE VARCHAR(50);
+    DECLARE STATE_NAME VARCHAR(50);
+    DECLARE COUNTRY_CODE VARCHAR(50);
+    DECLARE COUNTRY_NAME VARCHAR(50);
+    
+    SELECT "sap.tm.trp.db.systemmanagement::s_location_group".NEXTVAL INTO ID FROM DUMMY;
+    
+    SELECT IFNULL(MAX(ID),-100) INTO CURRENT_USER_ID FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    SELECT IFNULL(MAX(SPRAS),'E') INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+    	
+    SELECT MAX(T0.ID), MAX(T0.CITY_ID), MAX(T0.CITY_NAME), MAX(T0.REGION_CODE), MAX(T0.STATE_NAME), MAX(T0.COUNTRY_CODE), MAX(T0.COUNTRY_NAME)
+	INTO PRIME_LOC, CITY_ID, CITY_NAME, STATE_CODE, STATE_NAME, COUNTRY_CODE, COUNTRY_NAME
+	FROM "sap.tm.trp.db.systemmanagement.location::v_location_ui" T0
+	INNER JOIN "sap.tm.trp.db.systemmanagement.location::v_region_location_ui" T1 ON T1.LOCATION_ID = T0.ID
+	INNER JOIN :ITEMS T2 ON T2.ID = T1.ROOT_ID
+	WHERE T0.ID = :PRIME_LOC_ID
+	;
+    
+	INSERT INTO "sap.tm.trp.db.systemmanagement::t_region_group"
+		(ID, DESC, USER_ID, CREATE_AT, PRIME_LOC_ID, CITY_CODE, CITY_NAME, STATE_CODE, STATE_NAME, COUNTRY_CODE, COUNTRY_NAME, VISIBLE_FLAG, CODE, LAST_MODIFIED_BY, LAST_MODIFIED_AT, RESOURCE_CATEGORY)
+    VALUES
+    	(:ID, :NAME, :CURRENT_USER_ID, CURRENT_UTCTIMESTAMP, :PRIME_LOC, :CITY_ID, :CITY_NAME, :STATE_CODE, :STATE_NAME, :COUNTRY_CODE, :COUNTRY_NAME, :VISIBLE_FLAG, UPPER(:NAME), :CURRENT_USER_ID, CURRENT_UTCTIMESTAMP, :RESOURCE_CATEGORY)
+    ;
+    
+    
+    INSERT INTO "sap.tm.trp.db.systemmanagement::t_region_group_t"(ID, SPRAS, DESC)
+    VALUES(:ID, :SPRAS, :DESC);
+    
+    INSERT INTO "sap.tm.trp.db.systemmanagement::t_region_group_item"(ZONE_ID, REGION_GROUP_ID)
+    SELECT ID, :ID FROM :ITEMS;
+    
+    GROUP_ID := :ID;
+END;

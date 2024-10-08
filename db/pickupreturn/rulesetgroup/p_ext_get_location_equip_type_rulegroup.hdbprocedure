@@ -1,0 +1,73 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_ext_get_location_equip_type_rulegroup" (
+	IN RULE_GROUP_ID BIGINT,
+	OUT FROM_LOCATION_LIST "sap.tm.trp.db.pickupreturn::tt_location_list",
+	OUT TO_LOCATION_LIST "sap.tm.trp.db.pickupreturn::tt_location_list",
+	OUT EXECUTION_LIST "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_execution_id_rulegroup"
+ ) 
+	LANGUAGE SQLSCRIPT
+  SQL SECURITY INVOKER
+  DEFAULT SCHEMA SAP_TM_TRP 
+	READS SQL DATA AS
+BEGIN
+	DECLARE V_RULE_TYPE INTEGER;
+	
+	SELECT RULESET_TYPE INTO V_RULE_TYPE FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group"
+    WHERE ID = :RULE_GROUP_ID;
+    
+--rule sd plan mapping--
+    RULE_PLAN_ID = SELECT SD_PLAN_ID,ID FROM "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    WHERE ID in (SELECT RULE_ID from "sap.tm.trp.db.pickupreturn.rulesetgroup::t_ruleset_schedule_group_item" where RULE_GROUP_ID = :RULE_GROUP_ID);
+   
+--Get SD plans of Rules in Rulegroup
+    PLAN_ID_GROUP = SELECT DISTINCT SD_PLAN_ID AS PLAN_ID FROM :RULE_PLAN_ID;
+    
+--sd plan location mapping--
+    CALL "sap.tm.trp.db.pickupreturn.rulesetgroup::p_get_locations_sdplan_rulegroup" (:PLAN_ID_GROUP,LOCATIONS,RESOURCES);
+
+    RULE_PLAN_LOC = SELECT T1.ID AS RULE_ID, T2.PLAN_ID, T2.LOCATION_ID,T3.RESOURCE_ID
+                    FROM :RULE_PLAN_ID T1 
+                    INNER JOIN :LOCATIONS T2 ON (T1.SD_PLAN_ID = T2.PLAN_ID)
+                    INNER JOIN :RESOURCES T3 ON (T1.SD_PLAN_ID = T3.PLAN_ID);     
+
+    IF :V_RULE_TYPE = 1 THEN
+    
+    TU_INFO = SELECT EXECUTION_ID, SOURCE_LOCATION, DESTINATION_LOCATION, POL_NAME, POD_NAME FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_tu_pickup_list_rulegroup"
+              WHERE RULE_ID IN (SELECT DISTINCT RULE_ID FROM :RULE_PLAN_LOC);
+    
+    ELSE
+    
+    TU_INFO = SELECT EXECUTION_ID, SOURCE_LOCATION, DESTINATION_LOCATION, POL_NAME, POD_NAME FROM "sap.tm.trp.db.pickupreturn.rulesetgroup::t_tu_return_list_rulegroup"
+              WHERE RULE_ID IN (SELECT DISTINCT RULE_ID FROM :RULE_PLAN_LOC);
+    
+    END IF;
+    
+    SD_PLAN_LOCATION_LIST = SELECT DISTINCT C.RULE_ID,B.NAME AS LOCATION
+                            FROM :LOCATIONS AS A
+                            INNER JOIN :RULE_PLAN_LOC C
+                            ON (C.PLAN_ID = A.PLAN_ID)
+                            INNER JOIN "sap.tm.trp.db.semantic.location::v_location" AS B
+                            ON (A.LOCATION_ID = B.ID);
+                            
+                            
+    IF :V_RULE_TYPE=2 THEN
+    
+      from_location_list = SELECT DISTINCT (CASE IFNULL(SOURCE_LOCATION, '') 
+                                              WHEN '' THEN POD_NAME ELSE SOURCE_LOCATION END) AS LOCATION
+                                              
+                           FROM :TU_INFO;
+                                   
+      to_location_list = SELECT DISTINCT LOCATION  FROM :SD_PLAN_LOCATION_LIST;
+      
+    ELSE 
+         
+      to_location_list = SELECT DISTINCT (CASE IFNULL(DESTINATION_LOCATION, '') 
+                                              WHEN '' THEN POL_NAME ELSE DESTINATION_LOCATION END) AS LOCATION
+                         FROM :TU_INFO;
+                                   
+      from_location_list = SELECT DISTINCT LOCATION FROM :SD_PLAN_LOCATION_LIST;
+         
+    END IF;
+
+	EXECUTION_LIST = SELECT DISTINCT EXECUTION_ID from :TU_INFO;
+	
+END;

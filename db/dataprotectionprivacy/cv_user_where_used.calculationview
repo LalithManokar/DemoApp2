@@ -1,0 +1,449 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_user_where_used" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_user_roels"/>
+  <localVariables>
+    <variable id="USER_NAME" parameter="true">
+      <descriptions defaultDescription="user name"/>
+      <variableProperties datatype="NVARCHAR" defaultValue="" length="60" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="USERNAME" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_CATEGORY" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="WORK_CENTER" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="VIEW_NAME" length="100"/>
+        <viewAttribute datatype="NVARCHAR" id="OBJECT_NAME" length="50"/>
+        <viewAttribute datatype="NVARCHAR" id="OBJECT_DESCRIPTION" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="CREATED_BY" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="LAST_CHANGED_BY" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="EXECUTED_BY" length="60"/>
+        <viewAttribute datatype="NVARCHAR" id="NAVIGATE_PATH" length="200"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#USER_NAME</localVariable>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+ BEGIN 
+
+ 	 var_out = 	SELECT :USER_NAME AS USERNAME,
+ 	                   RESOURCE_CATEGORY,
+ 	                   'PICK-UP AND RETURN' AS WORK_CENTER,
+ 	                   'Pick-Up/Return Rulesets' AS VIEW_NAME,
+ 	                   RULE_NAME AS OBJECT_NAME,
+ 	                   DESCRIPTION AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN CREATED_BY = :USER_NAME THEN CREATED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN MODIFIED_BY = :USER_NAME THEN MODIFIED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'pickupReturnLocationRule' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.pickupreturn::v_location_rule&quot;
+ 	             WHERE CREATED_BY = :USER_NAME OR MODIFIED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   RESOURCE_CATEGORY,
+ 	                   'PICK-UP AND RETURN' AS WORK_CENTER,
+ 	                   'Rulesets Execution History' AS VIEW_NAME,
+ 	                   RULE_NAME AS OBJECT_NAME,
+ 	                   RULE_NAME AS OBJECT_DESCRIPTION,
+ 	                   '' AS CREATED_BY,
+ 	                   '' AS LAST_CHANGED_BY,
+ 	                   CASE WHEN USER = :USER_NAME THEN USER
+ 	                     ELSE '' END AS EXECUTED_BY,
+ 	                   'pickupReturnSchedulingTrace' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.pickupreturn::v_location_rule_assignment_log&quot;
+ 	             WHERE USER = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   RESOURCE_CATEGORY,
+ 	                   'PLANS' AS WORK_CENTER,
+ 	                   'Plan Configuration' AS VIEW_NAME,
+ 	                   NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN CREATED_BY = :USER_NAME THEN CREATED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN MODIFIED_BY = :USER_NAME THEN MODIFIED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'plan' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.pipeline::cv_get_plan_list&quot;
+ 	             WHERE CREATED_BY = :USER_NAME OR MODIFIED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   T1.RESOURCE_CATEGORY,
+ 	                   'LOCATION SETTINGS' AS WORK_CENTER,
+ 	                   'Location Groups' AS VIEW_NAME,
+ 	                   T1.NAME AS OBJECT_NAME,
+ 	                   T1.DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN T1.CREATE_BY = :USER_NAME THEN T1.CREATE_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN T2.USERNAME = :USER_NAME THEN T2.USERNAME
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'locationGroup' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.systemmanagement::v_geo_group_header&quot; T1
+ 	             LEFT JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; T2
+ 	             ON (T1.LAST_MODIFIED_BY = T2.ID)
+ 	             WHERE T1.CREATE_BY = :USER_NAME OR T2.USERNAME = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   RESOURCE_CATEGORY,
+ 	                   'LOCATION SETTINGS' AS WORK_CENTER,
+ 	                   'Location Filters' AS VIEW_NAME,
+ 	                   NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN CREATED_BY = :USER_NAME THEN CREATED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN LAST_CHANGED_BY = :USER_NAME THEN LAST_CHANGED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'locationFilter' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.filter::v_location_filter&quot;
+ 	             WHERE CREATED_BY = :USER_NAME OR LAST_CHANGED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   RESOURCE_CATEGORY,
+ 	                   'RESOURCE SETTINGS' AS WORK_CENTER,
+ 	                   'Resource Groups' AS VIEW_NAME,
+ 	                   NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN CREATED_BY = :USER_NAME THEN CREATED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN LAST_CHANGED_BY = :USER_NAME THEN LAST_CHANGED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'resourceGroup' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.dataprotectionprivacy::v_resource_group&quot;
+ 	             WHERE CREATED_BY = :USER_NAME OR LAST_CHANGED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   RESOURCE_CATEGORY,
+ 	                   'RESOURCE SETTINGS' AS WORK_CENTER,
+ 	                   'Resource Filters' AS VIEW_NAME,
+ 	                   NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN CREATED_BY = :USER_NAME THEN CREATED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN LAST_CHANGED_BY = :USER_NAME THEN LAST_CHANGED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'resourceFilter' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.dataprotectionprivacy::v_resource_filter&quot;
+ 	             WHERE CREATED_BY = :USER_NAME OR LAST_CHANGED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   RESOURCE_CATEGORY,
+ 	                   'RESOURCE SETTINGS' AS WORK_CENTER,
+ 	                   'Multi-Attribute Filters' AS VIEW_NAME,
+ 	                   NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN CREATED_BY = :USER_NAME THEN CREATED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN MODIFIED_BY = :USER_NAME THEN MODIFIED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'attributeFilter' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.dataprotectionprivacy::v_multi_attribute_group&quot;
+ 	             WHERE CREATED_BY = :USER_NAME OR MODIFIED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   t1.RESOURCE_CATEGORY,
+ 	                   'RESOURCE SETTINGS' AS WORK_CENTER,
+ 	                   'Stock Settings for Location Group' AS VIEW_NAME,
+ 	                   t1.NAME AS OBJECT_NAME,
+ 	                   t1.DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN t1.CREATE_BY = :USER_NAME THEN t1.CREATE_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN t2.USERNAME = :USER_NAME THEN t2.USERNAME
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'viewLocationGroupStockSettings' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.systemmanagement::v_geo_group_header&quot; t1
+ 	             INNER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; t2
+ 	             ON (t1.LAST_MODIFIED_BY = t2.ID)
+ 	             WHERE t1.CREATE_BY = :USER_NAME OR t2.USERNAME = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   '' AS RESOURCE_CATEGORY,
+ 	                   'PLANS' AS WORK_CENTER,
+ 	                   'Time Filter' AS VIEW_NAME,
+ 	                   NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN CREATED_BY = :USER_NAME THEN CREATED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN MODIFIED_BY = :USER_NAME THEN MODIFIED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'timeFilter' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.filter::v_time_filter&quot;
+ 	             WHERE CREATED_BY = :USER_NAME OR MODIFIED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   RESOURCE_CATEGORY,
+ 	                   'PLANS' AS WORK_CENTER,
+ 	                   'Alert Rule Groups' AS VIEW_NAME,
+ 	                   NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN CREATED_BY = :USER_NAME THEN CREATED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN MODIFIED_BY = :USER_NAME THEN MODIFIED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'alertRuleGroup' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.dataprotectionprivacy::v_alert_rule_group_all&quot;
+ 	             WHERE CREATED_BY = :USER_NAME OR MODIFIED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   RESOURCE_CATEGORY,
+ 	                   'PLANS' AS WORK_CENTER,
+ 	                   'Caculation Models' AS VIEW_NAME,
+ 	                   NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN CREATED_BY = :USER_NAME THEN CREATED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN MODIFIED_BY = :USER_NAME THEN MODIFIED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'objectRegistration' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.dataprotectionprivacy::v_calculation_model_all&quot;
+ 	             WHERE CREATED_BY = :USER_NAME OR MODIFIED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   RESOURCE_CATEGORY,
+ 	                   'PLANS' AS WORK_CENTER,
+ 	                   'Cost Models' AS VIEW_NAME,
+ 	                   NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN CREATED_BY = :USER_NAME THEN CREATED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN LAST_MODIFIED_BY = :USER_NAME THEN LAST_MODIFIED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'costModel' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.dataprotectionprivacy::v_cost_model_all&quot;
+ 	             WHERE CREATED_BY = :USER_NAME OR LAST_MODIFIED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   RESOURCE_CATEGORY,
+ 	                   'PLANS' AS WORK_CENTER,
+ 	                   'Cost Datasets' AS VIEW_NAME,
+ 	                   NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN CREATED_BY = :USER_NAME THEN CREATED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN LAST_MODIFIED_BY = :USER_NAME THEN LAST_MODIFIED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'costDataset' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.dataprotectionprivacy::v_cost_dataset_all&quot;
+ 	             WHERE CREATED_BY = :USER_NAME OR LAST_MODIFIED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   RESOURCE_CATEGORY,
+ 	                   'PLANS' AS WORK_CENTER,
+ 	                   'Network Setting Groups' AS VIEW_NAME,
+ 	                   NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN CREATED_BY = :USER_NAME THEN CREATED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN MODIFIED_BY = :USER_NAME THEN MODIFIED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'networkSettingGroup' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.dataprotectionprivacy::v_network_setting_group_all&quot;
+ 	             WHERE CREATED_BY = :USER_NAME OR MODIFIED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   '' AS RESOURCE_CATEGORY,
+ 	                   'ADMINISTRATION' AS WORK_CENTER,
+ 	                   'General Settings' AS VIEW_NAME,
+ 	                   NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   '' AS CREATED_BY,
+ 	                   LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'viewLogisticsSystemSettings' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.dataprotectionprivacy::v_config_all&quot;
+ 	             WHERE LAST_CHANGED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   '' AS RESOURCE_CATEGORY,
+ 	                   'ADMINISTRATION' AS WORK_CENTER,
+ 	                   'Map Providers' AS VIEW_NAME,
+ 	                   NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN CREATED_BY = :USER_NAME THEN CREATED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN LAST_CHANGED_BY = :USER_NAME THEN LAST_CHANGED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'mapProvider' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.dataprotectionprivacy::v_map_provider_all&quot;
+ 	             WHERE CREATED_BY = :USER_NAME OR LAST_CHANGED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   '' AS RESOURCE_CATEGORY,
+ 	                   'ADMINISTRATION' AS WORK_CENTER,
+ 	                   'Extended Columns' AS VIEW_NAME,
+ 	                   DISPLAY_NAME AS OBJECT_NAME,
+ 	                   DESCRIPTION AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN ADDED_BY = :USER_NAME THEN ADDED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN EDITED_BY = :USER_NAME THEN EDITED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'extendedColumn' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.dataprotectionprivacy::v_ext_fields_all&quot;
+ 	             WHERE ADDED_BY = :USER_NAME OR EDITED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   '' AS RESOURCE_CATEGORY,
+ 	                   'ADMINISTRATION' AS WORK_CENTER,
+ 	                   'Object Registration' AS VIEW_NAME,
+ 	                   NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN CREATED_BY = :USER_NAME THEN CREATED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN MODIFIED_BY = :USER_NAME THEN MODIFIED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'objectRegistration' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.dataprotectionprivacy::v_registered_objects&quot;
+ 	             WHERE CREATED_BY = :USER_NAME OR MODIFIED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   '' AS RESOURCE_CATEGORY,
+ 	                   'ADMINISTRATION' AS WORK_CENTER,
+ 	                   'Resource Categories' AS VIEW_NAME,
+ 	                   NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN CREATED_BY = :USER_NAME THEN CREATED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN LAST_CHANGED_BY = :USER_NAME THEN LAST_CHANGED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'resourceCategory' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.dataprotectionprivacy::v_resource_category_all&quot;
+ 	             WHERE CREATED_BY = :USER_NAME OR LAST_CHANGED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   '' AS RESOURCE_CATEGORY,
+ 	                   'ADMINISTRATION' AS WORK_CENTER,
+ 	                   'Roles' AS VIEW_NAME,
+ 	                   NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN CREATED_BY = :USER_NAME THEN CREATED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN MODIFIED_BY = :USER_NAME THEN MODIFIED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'role' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.dataprotectionprivacy::v_role_all&quot;
+ 	             WHERE CREATED_BY = :USER_NAME OR MODIFIED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   '' AS RESOURCE_CATEGORY,
+ 	                   'ARCHIVE' AS WORK_CENTER,
+ 	                   'Rules' AS VIEW_NAME,
+ 	                   NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   CASE WHEN CREATED_BY = :USER_NAME THEN CREATED_BY
+ 	                     ELSE '' END AS CREATED_BY,
+ 	                   CASE WHEN MODIFIED_BY = :USER_NAME THEN MODIFIED_BY
+ 	                     ELSE '' END AS LAST_CHANGED_BY,
+ 	                   '' AS EXECUTED_BY,
+ 	                   'archiveRule' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.dataprotectionprivacy::v_archive_rule&quot;
+ 	             WHERE CREATED_BY = :USER_NAME OR MODIFIED_BY = :USER_NAME
+ 	             UNION ALL
+ 	             SELECT :USER_NAME AS USERNAME,
+ 	                   '' AS RESOURCE_CATEGORY,
+ 	                   'ARCHIVE' AS WORK_CENTER,
+ 	                   'Execution History' AS VIEW_NAME,
+ 	                   RULE_NAME AS OBJECT_NAME,
+ 	                   DESC AS OBJECT_DESCRIPTION,
+ 	                   '' AS CREATED_BY,
+ 	                   '' AS LAST_CHANGED_BY,
+ 	                   EXECUTED_BY_NAME AS EXECUTED_BY,
+ 	                   'archiveHistory' AS NAVIGATE_PATH
+ 	             FROM &quot;sap.tm.trp.db.dataprotectionprivacy::v_archive_history&quot;
+ 	             WHERE EXECUTED_BY_NAME = :USER_NAME;
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="USERNAME" order="1">
+        <descriptions defaultDescription="USERNAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="USERNAME"/>
+      </attribute>
+      <attribute id="RESOURCE_CATEGORY" order="2">
+        <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_CATEGORY"/>
+      </attribute>
+      <attribute id="VIEW_NAME" order="4">
+        <descriptions defaultDescription="VALID_FROM"/>
+        <keyMapping columnObjectName="Script_View" columnName="VIEW_NAME"/>
+      </attribute>
+      <attribute id="OBJECT_NAME" order="5">
+        <descriptions defaultDescription="VALID_TO"/>
+        <keyMapping columnObjectName="Script_View" columnName="OBJECT_NAME"/>
+      </attribute>
+      <attribute id="OBJECT_DESCRIPTION" order="6">
+        <descriptions defaultDescription="OBJECT_DESCRIPTION"/>
+        <keyMapping columnObjectName="Script_View" columnName="OBJECT_DESCRIPTION"/>
+      </attribute>
+      <attribute id="CREATED_BY" order="7">
+        <descriptions defaultDescription="CREATED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATED_BY"/>
+      </attribute>
+      <attribute id="LAST_CHANGED_BY" order="8">
+        <descriptions defaultDescription="LAST_CHANGED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="LAST_CHANGED_BY"/>
+      </attribute>
+      <attribute id="EXECUTED_BY" order="9">
+        <descriptions defaultDescription="EXECUTED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="EXECUTED_BY"/>
+      </attribute>
+      <attribute id="NAVIGATE_PATH" order="10">
+        <descriptions defaultDescription="NAVIGATE_PATH"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAVIGATE_PATH"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="WORK_CENTER" order="3" aggregationType="max" measureType="simple">
+        <descriptions defaultDescription="USERNAME"/>
+        <measureMapping columnObjectName="Script_View" columnName="WORK_CENTER"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

@@ -1,0 +1,17 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_currenty_of_simulation_plan"
+   (IN SIM_PLAN_ID BIGINT,
+    OUT CURRENCY VARCHAR(50)
+    ) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+   
+   SELECT IFNULL(MAX(T2.CURRENCY_CODE),'EURO') INTO CURRENCY 
+   FROM "sap.tm.trp.db.planningcockpit::t_simulation_plan" T1 
+   INNER JOIN "sap.tm.trp.db.planningcockpit::v_network_setting_group" T2 ON (T1.NETWORK_SETTING_GROUP_ID = T2.ID)
+   WHERE T1.ID = :SIM_PLAN_ID
+   ;
+
+END;

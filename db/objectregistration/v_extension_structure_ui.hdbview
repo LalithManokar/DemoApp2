@@ -1,0 +1,10 @@
+schema = "SAP_TM_TRP";
+query  = " select 
+            t1.schema_name,
+            t1.procedure_name,
+            t1.table_type_name
+            from \"PROCEDURE_PARAMETERS\" as t1
+            where data_type_name = 'TABLE_TYPE'
+            and parameter_type = 'OUT' ";
+            
+            

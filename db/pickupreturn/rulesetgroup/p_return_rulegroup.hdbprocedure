@@ -1,0 +1,348 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.rulesetgroup::p_return_rulegroup" (
+IN v_mode NVARCHAR(50),
+IN handling_capa INTEGER,
+IN t_trans "sap.tm.trp.db.pickupreturn.algorithm::tt_trans_types",
+IN name_value_conf "sap.tm.trp.db.planningcockpit.reposition::tt_name_value_conf",
+IN t_supply_demand "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_supply_demand_range_rulegroup",
+IN t_booking "sap.tm.trp.db.pickupreturn.rulesetgroup::tt_booking_haulage_rulegroup",
+IN t_stock_conf "sap.tm.trp.db.pickupreturn.algorithm::tt_stock_configure",
+IN t_depot_cost "sap.tm.trp.db.pickupreturn.algorithm::tt_depot_cost_trp11",
+IN t_handling_capacity "sap.tm.trp.db.planningcockpit::tt_location_handling_capacity",
+OUT t_fulfill_booking "sap.tm.trp.db.pickupreturn.algorithm::tt_res_haulage"
+ )
+LANGUAGE SQLSCRIPT 
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN 
+
+
+DECLARE v_customer_node INT;
+DECLARE v_stock_node INT;
+
+
+booking_valid_locations = SELECT DISTINCT T2.BOOKING_ID, T1.LOCATION FROM :t_supply_demand T1
+                        INNER JOIN :t_booking T2
+                        ON ( T1.PLAN_ID = T2.PLAN_ID);
+
+t_unique_loc_type = SELECT DISTINCT "LOCATION",
+                                    "LOCATION_ID",
+									"CONTAINER_TYPE" 
+					FROM :t_supply_demand;
+
+t_stock_conf = SELECT A."LOCATION",
+					  A."CONTAINER_TYPE",
+					  IFNULL(B."CURRENT_STOCK",0) AS "CURRENT_STOCK",
+					  IFNULL(C."MIN_SAFETY_STOCK",0) AS "MIN_STOCK",
+					  IFNULL(C."MAX_SAFETY_STOCK",1000000) AS "MAX_STOCK",
+					  IFNULL(C."MAX_PHYSICAL_STOCK",1000000) AS "MAX_PHY_CAPACITY"
+				FROM :t_unique_loc_type A
+				LEFT JOIN :t_stock_conf B ON A."LOCATION"=B."LOCATION" AND A."CONTAINER_TYPE"=B."CONTAINER_TYPE"
+				LEFT JOIN "sap.tm.trp.db.stock::v_location_stock_location" C
+                                ON (A.LOCATION_ID = C.ID AND A.CONTAINER_TYPE = C.RESOURCE_ID);
+
+t_depot_cost = SELECT "LOCATION",
+					  "CONTAINER_TYPE",
+					  100*"STORAGE_COSTUNIT" AS "STORAGE_COSTUNIT",
+					  100*"HANDLING_COSTUNIT" AS "HANDLING_COSTUNIT"
+				FROM :t_depot_cost;				
+				
+t_trans = SELECT "FROM_LOCATION",
+				 "TO_LOCATION",
+				 "MTR",
+				 "DURATION",
+				 (CASE 
+				 WHEN "COST" IS NULL THEN 1
+				 WHEN "COST"=0 THEN 1
+				 ELSE
+				 100*"COST"
+				 END) AS "COST",
+				 "CONTAINER_TYPE" 
+		  FROM :t_trans 
+		  WHERE "CONTAINER_TYPE" IN (SELECT "CONTAINER_TYPE" FROM :t_booking);
+		  
+t_trans_merchant = SELECT "FROM_LOCATION",
+				 "TO_LOCATION",
+				 "MTR",
+				 "DURATION",
+				 "COST",
+				 "CONTAINER_TYPE"
+		   FROM :t_trans;
+		   
+t_trans_carrier = SELECT "FROM_LOCATION",
+				 "TO_LOCATION",
+				 "MTR",
+				 "DURATION",
+				 "COST",
+				 "CONTAINER_TYPE"
+		   FROM :t_trans;
+
+
+t_customer = SELECT ROW_NUMBER() OVER() AS "NODE_ID",
+					"BOOKING_ID",
+					"START_TIME",
+					"BOOKING_TIME",
+					"CUSTOMER_LOCATION",
+					"CONTAINER_TYPE",
+					"QUANTITY",
+					IFNULL("HAULAGE_TYPE",0) AS "HAULAGE_TYPE"
+			 FROM :t_booking WHERE "MODE"='RETURN';
+
+t_customer_merchant = SELECT * FROM :t_customer WHERE "HAULAGE_TYPE"=0;
+t_customer_carrier  = SELECT * FROM :t_customer WHERE "HAULAGE_TYPE"=1;
+			 
+SELECT COUNT(*) INTO v_customer_node FROM :t_customer;	
+
+t_current_stock = SELECT ROW_NUMBER() OVER()+:v_customer_node+1 AS "NODE_ID",
+						 "LOCATION",
+						 "CONTAINER_TYPE",
+						 "CURRENT_STOCK"-"MAX_PHY_CAPACITY" AS "SHORTAGE",
+						 "MIN_STOCK",
+						 "MAX_STOCK",
+						 "MAX_PHY_CAPACITY"
+				   FROM :t_stock_conf
+				   WHERE "CURRENT_STOCK"-"MAX_PHY_CAPACITY"<0;		 
+
+SELECT COUNT(*) INTO v_stock_node FROM :t_current_stock;
+
+t_depot_temp = SELECT A."START_TIME",
+				  	  A."END_TIME",
+                  	  A."LOCATION",
+                  	  A."CONTAINER_TYPE",
+                  	  A."SUPPLY",
+                  	  A."DEMAND",
+                  	  A."SUPPLY"-A."DEMAND"AS "SHORTAGE",
+                  	  A."SUPPLY"+A."DEMAND" AS "HANDLING_QUAN",  --Patch8 for consider handling capacity
+                  	  B."MIN_STOCK",
+                  	  B."MAX_STOCK",
+                  	  B."MAX_PHY_CAPACITY"
+           FROM :t_supply_demand A
+           INNER JOIN :t_stock_conf B
+           ON A."LOCATION"=B."LOCATION"
+           AND A."CONTAINER_TYPE"=B."CONTAINER_TYPE"
+           AND A."SUPPLY"-A."DEMAND"<0;
+
+t_depot = SELECT ROW_NUMBER() OVER()+:v_customer_node+:v_stock_node+1 AS "NODE_ID",
+				"START_TIME",
+				"END_TIME",
+				"LOCATION",
+				"CONTAINER_TYPE",
+				"SUPPLY",
+				"DEMAND",
+				"SHORTAGE",
+				"HANDLING_QUAN",
+				"MIN_STOCK",
+				"MAX_STOCK",
+				"MAX_PHY_CAPACITY"
+		  FROM :t_depot_temp;
+					  
+IF (:v_mode='COST') THEN
+    t_stage_1_shortage_temp = SELECT "NODE_ID",
+						   		 "START_TIME",
+						   		 "END_TIME",
+						   		 "LOCATION",
+						  		 "CONTAINER_TYPE",
+						   		 "SHORTAGE"-"MIN_STOCK" AS "SHORTAGE", --"SHORTAGE" AS "SHORTAGE"  //Commented as 0~Min-safety stock should be returned
+						   		 0 AS "PRIORITY"
+							FROM :t_depot 
+							WHERE "SHORTAGE"-"MIN_STOCK"<0;           --"SHORTAGE"<0;         //Commented as 0~Min-safety stock should be returned
+
+    CALL "sap.tm.trp.db.pickupreturn.algorithm::p_r_depot_update" ( 
+    :t_depot,
+    :t_stage_1_shortage_temp ,
+    :t_depot_cost,
+    :t_customer_merchant,
+    :t_customer_carrier,
+    :t_trans_merchant,
+    :t_trans_carrier,
+    t_fulfill_booking,
+    t_stage_2_customer_merchant,
+    t_stage_2_customer_carrier,
+    t_stage_2_depot
+    ); 
+    
+    t_stage_2_shortage_temp = SELECT "NODE_ID",
+    						   		 "LOCATION",
+    						  		 "CONTAINER_TYPE",
+    						   		 "SHORTAGE"-"MIN_STOCK" AS "SHORTAGE" --"SHORTAGE" AS "SHORTAGE"  //Commented as 0~Min-safety stock should be returned
+    							FROM :t_current_stock 
+    							WHERE "SHORTAGE"-"MIN_STOCK"<0;           --"SHORTAGE"<0;         //Commented as 0~Min-safety stock should be returned
+    
+    CALL "sap.tm.trp.db.pickupreturn.algorithm::p_r_stock_update" ( 
+    :t_current_stock,
+    :t_stage_2_shortage_temp ,
+    :t_depot_cost,
+    :t_stage_2_customer_merchant,
+    :t_stage_2_customer_carrier,
+    :t_trans_merchant,
+    :t_trans_carrier,
+    t_fulfill_booking2,
+    t_stage_3_customer_merchant,
+    t_stage_3_customer_carrier,
+    t_stage_3_current_stock
+    ); 
+    
+    t_fulfill_booking = SELECT * FROM :t_fulfill_booking
+    					UNION ALL
+    					SELECT * FROM :t_fulfill_booking2;
+    					
+    t_fulfill_booking = SELECT * FROM :t_fulfill_booking 
+    	                    where (BOOKING_ID,TO_LOCATION) IN (SELECT BOOKING_ID,LOCATION FROM :booking_valid_locations);
+				
+ELSE
+
+    --stage I consider stock (0,minstock)
+    t_stage_I_shortage_temp = SELECT "NODE_ID",
+    						   		 "LOCATION",
+    						  		 "CONTAINER_TYPE",
+    						   		 "SHORTAGE"+"MAX_PHY_CAPACITY"-"MIN_STOCK" AS "SHORTAGE"
+    							FROM :t_current_stock 
+    							WHERE "SHORTAGE"+"MAX_PHY_CAPACITY"-"MIN_STOCK"<0;
+    
+    CALL "sap.tm.trp.db.pickupreturn.algorithm::p_r_stock_update" ( 
+    :t_current_stock,
+    :t_stage_I_shortage_temp ,
+    :t_depot_cost,
+    :t_customer_merchant,
+    :t_customer_carrier,
+    :t_trans_merchant,
+    :t_trans_carrier,
+    t_fulfill_booking,
+    t_stage_II_customer_merchant,
+    t_stage_II_customer_carrier,
+    t_stage_II_current_stock
+    ); 
+      
+    		
+     --stage II graph [minstock,maxstock)
+    t_stage_II_shortage_temp = SELECT "NODE_ID",
+    							"LOCATION",
+    							"CONTAINER_TYPE",
+    							"SHORTAGE"+"MAX_PHY_CAPACITY"-"MAX_STOCK" AS "SHORTAGE"
+    					 FROM :t_stage_II_current_stock
+    					 WHERE "SHORTAGE"+"MAX_PHY_CAPACITY"-"MAX_STOCK"<0;
+    
+    CALL "sap.tm.trp.db.pickupreturn.algorithm::p_r_stock_update" ( 
+    :t_stage_II_current_stock,
+    :t_stage_II_shortage_temp ,
+    :t_depot_cost,
+    :t_stage_II_customer_merchant,
+    :t_stage_II_customer_carrier,
+    :t_trans_merchant,
+    :t_trans_carrier,
+    t_fulfill_booking2,
+    t_stage_00_customer_merchant,
+    t_stage_00_customer_carrier,
+    t_stage_III_current_stock
+    ); 
+    
+    t_fulfill_booking = SELECT * FROM :t_fulfill_booking
+    					UNION ALL
+    					SELECT * FROM :t_fulfill_booking2;
+    					
+    --stage 00 shortage
+    t_stage_00_shortage_temp = SELECT "NODE_ID",
+    						   		 "START_TIME",
+    						   		 "END_TIME",
+    						   		 "LOCATION",
+    						  		 "CONTAINER_TYPE",
+    						   		 "SHORTAGE" AS "SHORTAGE",
+    						   		 0 AS "PRIORITY"
+    							FROM :t_depot 
+    							WHERE "SHORTAGE"<0;    							
+    
+    CALL "sap.tm.trp.db.pickupreturn.algorithm::p_r_depot_update" ( 
+    :t_depot,
+    :t_stage_00_shortage_temp ,
+    :t_depot_cost,
+    :t_stage_00_customer_merchant,
+    :t_stage_00_customer_carrier,
+    :t_trans_merchant,
+    :t_trans_carrier,
+    t_fulfill_booking2,
+    t_stage_III_customer_merchant,
+    t_stage_III_customer_carrier,
+    t_stage_01_depot
+    ); 
+    
+    t_fulfill_booking = SELECT * FROM :t_fulfill_booking
+    					UNION ALL
+    					SELECT * FROM :t_fulfill_booking2;
+    
+ 	t_fulfill_booking = SELECT * FROM :t_fulfill_booking where (BOOKING_ID,TO_LOCATION)
+ 	                    IN (SELECT BOOKING_ID,LOCATION FROM :booking_valid_locations);
+ 	                    
+END IF;
+
+t_fulfill_booking = SELECT "BOOKING_ID",
+						   "FROM_LOCATION",
+						   "TO_LOCATION",	
+					       "FROM_TIME",
+						   "TO_TIME",
+						   "CONTAINER_TYPE",
+						   SUM("QUANTITY") AS "QUANTITY",
+						   "STORAGE_COST"/100.0 AS "STORAGE_COST",
+						   "HANDLING_COST"/100.0 AS "HANDLING_COST",
+						   "TRANSPORTATION_COST"/100.0 AS "TRANSPORTATION_COST",
+						   "TOTAL_COST"/100.0 AS "TOTAL_COST",
+						   "MODE",
+						   "HAULAGE_TYPE"
+					FROM :t_fulfill_booking
+					GROUP BY "BOOKING_ID",
+						     "FROM_LOCATION",
+						     "TO_LOCATION",	
+					         "FROM_TIME",
+						     "TO_TIME",
+						     "CONTAINER_TYPE",
+						     "STORAGE_COST",
+						     "HANDLING_COST",
+						     "TRANSPORTATION_COST",
+						     "TOTAL_COST",
+						     "MODE",
+						     "HAULAGE_TYPE";
+
+						     
+t_max_booking = SELECT "BOOKING_ID",
+                       MAX("QUANTITY") AS QUANTITY
+                FROM :t_fulfill_booking
+                GROUP BY "BOOKING_ID";
+                
+t_fulfill_booking = SELECT A."BOOKING_ID",
+						   A."FROM_LOCATION",
+						   A."TO_LOCATION",	
+					       A."FROM_TIME",
+						   A."TO_TIME",
+						   A."CONTAINER_TYPE",
+						   A."QUANTITY",
+						   A."STORAGE_COST",
+						   A."HANDLING_COST",
+						   A."TRANSPORTATION_COST",
+						   A."TOTAL_COST",
+						   A."MODE",
+						   A."HAULAGE_TYPE"
+					FROM :t_fulfill_booking A
+					INNER JOIN :t_max_booking B
+					ON A."BOOKING_ID"=B."BOOKING_ID"
+					AND A."QUANTITY"=B."QUANTITY";
+							 
+t_key_booking = SELECT ROW_NUMBER() OVER() AS "KEY",* FROM :t_fulfill_booking;
+t_filter_booking = SELECT MAX("KEY") AS "KEY" FROM :t_key_booking GROUP BY "BOOKING_ID";
+
+t_fulfill_booking = SELECT A."BOOKING_ID",
+						   A."FROM_LOCATION",
+						   A."TO_LOCATION",	
+					       A."FROM_TIME",
+						   A."TO_TIME",
+						   A."CONTAINER_TYPE",
+						   A."QUANTITY",
+						   A."STORAGE_COST",
+						   A."HANDLING_COST",
+						   A."TRANSPORTATION_COST",
+						   A."TOTAL_COST",
+						   A."MODE",
+						   A."HAULAGE_TYPE"
+					FROM :t_key_booking A
+					INNER JOIN :t_filter_booking B
+					ON A."KEY"=B."KEY";
+
+END;

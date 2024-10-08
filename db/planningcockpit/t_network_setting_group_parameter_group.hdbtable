@@ -1,0 +1,8 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "NETWORK_SETTING_GROUP_ID"; sqlType = BIGINT; nullable = false;},
+    {name = "PARAMETER_ID"; sqlType = BIGINT;},
+    {name = "OPERATOR_CODE"; sqlType = VARCHAR; length = 20;}
+];
+table.primaryKey.pkcolumns = ["NETWORK_SETTING_GROUP_ID","PARAMETER_ID"];

@@ -1,0 +1,23 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "CODE"; sqlType = NVARCHAR; length = 500; nullable = false;},
+    {name = "NAME"; sqlType = VARCHAR; length = 500; nullable = false; unique = true;},
+    {name = "ACTIVITY_STATUS"; sqlType = INTEGER;  nullable = true;comment = "The activity status of the scenario. 0: OK, 1:Activity Time Invalid,2:Activity Location Invalid,Both Time and Location of the Activity are Invalid";},
+    {name = "STATUS"; sqlType = INTEGER;  nullable = true;comment = "Scenario status. 0: draft, 1: finalized";},    
+    {name = "ACTIVITY_COST"; sqlType = DECIMAL; nullable = true; precision = 13; scale = 3;},
+    {name = "BALANCING_COST"; sqlType = DECIMAL; nullable = true; precision = 13; scale = 3;},
+    {name = "CURRENCY"; sqlType = VARCHAR; length = 5; nullable = true;},        
+    {name = "REL_SM_PLAN_ID"; sqlType = BIGINT; nullable = true;},
+    {name = "FRESH_FLAG"; sqlType = INTEGER; nullable = true; comment = "whether need to regenerate results 0:NO -1:YES";},
+    {name = "CREATED_BY"; sqlType = BIGINT; nullable = true;},
+    {name = "MODIFIED_BY"; sqlType = BIGINT; nullable = true;},
+    {name = "CREATED_ON"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "MODIFIED_ON"; sqlType = TIMESTAMP; nullable = true;},
+    {name = "STORAGE_COST"; sqlType = DECIMAL; nullable = true; precision = 13; scale = 3;},
+    {name = "SYNC_FLAG"; sqlType = INTEGER; nullable = true; comment = "fetch results from original or regenerated 0:original 1:regenerated";},
+    {name = "CAL_BALCOST_MEG"; sqlType = VARCHAR; length = 50; nullable = true; },
+    {name = "ALERT_NUM"; sqlType = INTEGER; nullable = true; }    
+];
+table.primaryKey.pkcolumns = ["ID"];

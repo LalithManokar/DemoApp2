@@ -1,0 +1,9 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "ALERT_RULE_GROUP_ID"; sqlType = BIGINT;},
+    {name = "ALERT_RULE_GROUP_NAME"; sqlType = VARCHAR; length = 50;},
+    {name = "PIPELINE_MODEL_ID"; sqlType = BIGINT;},
+    {name = "PIPELINE_MODEL_NAME"; sqlType = VARCHAR; length = 200;}
+    ];
+table.primaryKey.pkcolumns = ["ALERT_RULE_GROUP_ID","PIPELINE_MODEL_ID"];

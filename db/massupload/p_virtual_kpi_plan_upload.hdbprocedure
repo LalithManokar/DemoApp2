@@ -1,0 +1,36 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_virtual_kpi_plan_upload"(
+    IN VIRTUAL_KPI_PLAN "sap.tm.trp.db.massupload::tt_virtual_kpi_plan_upload",
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),  
+    IN CONNECTION_ID VARCHAR(100) 
+)
+ LANGUAGE SQLSCRIPT
+ SQL SECURITY INVOKER 
+ DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+
+  DECLARE V_USER_ID BIGINT;
+  DECLARE V_TIMESTAMP_START  DATETIME  := CURRENT_UTCTIMESTAMP;
+  
+ --Delete the records in temporary table in case there're already some uploaded data with same db connection
+   DELETE FROM "sap.tm.trp.db.massupload::t_virtual_kpi_plan_temporary" 
+    WHERE CONNECTION_ID = :CONNECTION_ID;
+
+  SELECT IFNULL(MAX(ID),0) INTO V_USER_ID
+  FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+   WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+  
+  INSERT INTO "sap.tm.trp.db.massupload::t_virtual_kpi_plan_temporary"(
+    USER_ID, ACTION_TIME,CONNECTION_ID,VKPIPLAN_NAME,DESCRIPTION,
+    TYPE_NAME,VISIBILITY,LOCATION_FILTER_NAME,RESOURCE_FILTER_NAME,
+    SKPIPLAN_NAME, RESOURCE_CATEGORY
+  )
+  SELECT :V_USER_ID, :V_TIMESTAMP_START, :CONNECTION_ID,
+    UPPER(VKPIPLAN_NAME) AS VKPIPLAN_NAME,DESCRIPTION,
+    UPPER(TYPE_NAME) AS TYPE_NAME,UPPER(VISIBILITY) AS VISIBILITY,
+    UPPER(LOCATION_FILTER_NAME) AS LOCATION_FILTER_NAME,
+    UPPER(RESOURCE_FILTER_NAME) AS RESOURCE_FILTER_NAME,
+    UPPER(SKPIPLAN_NAME) AS SKPIPLAN_NAME, :RESOURCE_CATEGORY_ID
+  FROM :VIRTUAL_KPI_PLAN;
+  
+END;

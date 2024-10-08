@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_archive_history" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_archive_histroy"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="BIGINT" id="RULE_ID"/>
+        <viewAttribute datatype="NVARCHAR" id="RULE_NAME" length="100"/>
+        <viewAttribute datatype="TINYINT" id="TYPE"/>
+        <viewAttribute datatype="NVARCHAR" id="TYPE_DESC" length="50"/>
+        <viewAttribute datatype="TIMESTAMP" id="DATE_FROM"/>
+        <viewAttribute datatype="TIMESTAMP" id="DATE_TO"/>
+        <viewAttribute datatype="INTEGER" id="RECORD_COUNT"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_TIME"/>
+        <viewAttribute datatype="NVARCHAR" id="EXECUTED_BY_NAME" length="100"/>
+        <viewAttribute datatype="TINYINT" id="STATUS"/>
+        <viewAttribute datatype="NVARCHAR" id="STATUS_DESC" length="50"/>
+        <viewAttribute datatype="NVARCHAR" id="MESSAGE" length="1000"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> 
+ /********* Begin Procedure Script ************/ 
+ BEGIN
+
+    DECLARE AUTH SMALLINT;
+  DECLARE CUSTOMCONDITION CONDITION FOR SQL_ERROR_CODE 10001;/* Custom Error Code = 10001*/
+  
+  /*User Defined exception handler */
+  
+  DECLARE EXIT HANDLER FOR CUSTOMCONDITION RESIGNAL ;
+
+  CALL &quot;sap.tm.trp.db.archive::p_check_archive_authorization&quot;(
+      :AUTH
+    );
+    
+
+  IF AUTH = 0 THEN
+    /* Signaling Custom error and setting the Custom Error Message */
+    SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'USER DOES NOT HAVE READ ACCESS';
+  END IF;
+  
+  VAR_OUT=
+  SELECT  T2.ID,
+        T1.ID AS RULE_ID,
+        T1.NAME AS RULE_NAME,
+      T1.TYPE,
+      T1.TYPE_DESC,
+      T1.DATE_FROM,
+      T1.DATE_TO,
+      T2.RECORD_COUNT,
+      T2.START_TIME,
+      T2.END_TIME,
+      CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG &lt;> 1 THEN '***'
+           WHEN (T2.EXECUTED_BY &lt;> 0 AND T2.EXECUTED_BY IS NOT NULL) AND T9.USERNAME IS NOT NULL THEN T9.USERNAME
+		   WHEN T2.EXECUTED_BY = 0 OR T2.EXECUTED_BY IS NULL THEN ''
+		   ELSE '***' END AS EXECUTED_BY_NAME,
+      T2.STATUS,
+      T3.STATUS_DESC,
+      T2.MESSAGE 
+      FROM
+      &quot;_SYS_BIC&quot;.&quot;sap.tm.trp.db.archive/cv_archive_rule&quot; T1
+      INNER JOIN  
+      &quot;sap.tm.trp.db.archive::t_archive_execution_detail&quot; T2
+      ON T1.ID = T2.RULE_ID
+      INNER JOIN 
+      &quot;sap.tm.trp.db.archive::t_archive_status&quot; T3
+      ON T2.STATUS = T3.STATUS
+      LEFT JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_for_join&quot; T4
+      ON T2.EXECUTED_BY = T4.ID
+      LEFT OUTER JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_unblock_users&quot;  T9  ON T4.USERNAME = T9.USERNAME
+      CROSS JOIN &quot;sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege&quot; PRIVILEGE;
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="RULE_NAME" order="3">
+        <descriptions defaultDescription="RULE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="RULE_NAME"/>
+      </attribute>
+      <attribute id="TYPE" order="4">
+        <descriptions defaultDescription="TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="TYPE"/>
+      </attribute>
+      <attribute id="TYPE_DESC" order="5">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="TYPE_DESC"/>
+      </attribute>
+      <attribute id="DATE_FROM" order="6">
+        <descriptions defaultDescription="DATE_FROM"/>
+        <keyMapping columnObjectName="Script_View" columnName="DATE_FROM"/>
+      </attribute>
+      <attribute id="DATE_TO" order="7">
+        <descriptions defaultDescription="DATE_TO"/>
+        <keyMapping columnObjectName="Script_View" columnName="DATE_TO"/>
+      </attribute>
+      <attribute id="START_TIME" order="9">
+        <descriptions defaultDescription="EXECUTED_ON"/>
+        <keyMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </attribute>
+      <attribute id="END_TIME" order="10">
+        <descriptions defaultDescription="END_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="END_TIME"/>
+      </attribute>
+      <attribute id="EXECUTED_BY_NAME" order="11">
+        <descriptions defaultDescription="EXECUTED_BY_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="EXECUTED_BY_NAME"/>
+      </attribute>
+      <attribute id="STATUS" order="12">
+        <descriptions defaultDescription="STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="STATUS"/>
+      </attribute>
+      <attribute id="STATUS_DESC" order="13">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="STATUS_DESC"/>
+      </attribute>
+      <attribute id="MESSAGE" order="14">
+        <descriptions defaultDescription="MESSAGE"/>
+        <keyMapping columnObjectName="Script_View" columnName="MESSAGE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions/>
+        <measureMapping columnObjectName="Script_View" columnName="ID"/>
+      </measure>
+      <measure id="RULE_ID" order="2" aggregationType="sum" measureType="simple">
+        <descriptions/>
+        <measureMapping columnObjectName="Script_View" columnName="RULE_ID"/>
+      </measure>
+      <measure id="RECORD_COUNT" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="RECORD_COUNT"/>
+        <measureMapping columnObjectName="Script_View" columnName="RECORD_COUNT"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

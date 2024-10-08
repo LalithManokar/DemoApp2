@@ -1,0 +1,26 @@
+table.schemaName = "SAP_TM_TRP";
+table.temporary = true;
+table.tableType = COLUMNSTORE;
+table.columns = [ 
+    {name = "HRF_RESULT_ID"; sqlType = CHAR; length = 32; nullable = false;}, 
+    {name = "RULE_ID"; sqlType = CHAR; length = 32; nullable = false;}, 
+    {name = "RULE_NAME"; sqlType = NVARCHAR; length = 256; nullable = false;}, 
+    {name = "RULE_PACKAGE"; sqlType = NVARCHAR; length = 256; nullable = false;},
+    {name = "RULE_TEMPLATE_NAME"; sqlType = NVARCHAR; length = 256; }, 
+    {name = "RULE_TEMPLATE_PACKAGE"; sqlType = NVARCHAR; length = 256;},
+      
+    {name = "TU_ID"; sqlType = BIGINT;},
+    {name = "EQUIPMENT_ID";sqlType = VARCHAR; length = 32;},
+    {name = "LOCATION_ID"; sqlType = VARCHAR; length = 32;},
+    {name = "PLANNED_DATE"; sqlType = TIMESTAMP; },  
+    {name = "RULE_TYPE"; sqlType = INTEGER; comment="1:pick up  2:return";},
+    {name = "PLAN_EXECUTION_ID"; sqlType = BIGINT; },
+    {name = "NODE_ID"; sqlType = BIGINT; },
+    {name = "DEPOT_ID"; sqlType = VARCHAR; length = 32;},  
+    
+    {name = "COST_MODEL_ID"; sqlType = BIGINT;},      
+    {name = "ROW_ID"; sqlType = CHAR; length = 32;},  
+    {name = "LOCATION_RANK"; sqlType = DOUBLE;}
+    ];
+    
+    

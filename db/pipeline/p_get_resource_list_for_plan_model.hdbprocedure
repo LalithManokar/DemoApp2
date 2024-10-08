@@ -1,0 +1,27 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_get_resource_list_for_plan_model"(
+    IN IN_PLAN_MODEL_ID BIGINT,
+    OUT out_resource_list "sap.tm.trp.db.pipeline::tt_resource_list"
+)
+
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+ out_resource_list = SELECT DISTINCT T3.EQUI_CODE AS RESOURCE_TYPE_ID,T3.EQUI_CODE AS RESOURCE_TYPE_NAME
+ FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+ INNER JOIN "sap.tm.trp.db.filter::t_filter_equipment_filter" T2 ON (T1.FILTER_GROUP_ID = T2.FILTER_GROUP_ID)
+ INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T3 ON (T2.EQUIPMENT_FILTER_ID = T3.EQUIPMENT_FILTER_ID AND T3.RESOURCE_CATEGORY = T2.RESOURCE_CATEGORY)
+ WHERE T1.ID = :IN_PLAN_MODEL_ID AND T3.EQUIPMENT_GROUP_ID IS NULL
+ UNION ALL
+ SELECT DISTINCT T3.EQUIPMENT_GROUP_ID AS RESOURCE_TYPE_ID,T4.DESC AS RESOURCE_TYPE_NAME
+ FROM "sap.tm.trp.db.pipeline::t_plan_model" T1
+ INNER JOIN "sap.tm.trp.db.filter::t_filter_equipment_filter" T2 ON (T1.FILTER_GROUP_ID = T2.FILTER_GROUP_ID)
+ INNER JOIN "sap.tm.trp.db.filter::v_equipment_filter_equipment_auth" T3 ON (T2.EQUIPMENT_FILTER_ID = T3.EQUIPMENT_GROUP_ID AND T3.RESOURCE_CATEGORY = T2.RESOURCE_CATEGORY)
+ INNER JOIN "sap.tm.trp.db.systemmanagement::t_equipment_group"  T4 ON T4.ID = T3.EQUIPMENT_GROUP_ID  AND T4.RESOURCE_CATEGORY = T3.RESOURCE_CATEGORY
+ WHERE T1.ID = :IN_PLAN_MODEL_ID AND T3.EQUI_CODE IS NULL;
+ 
+   
+   
+END;

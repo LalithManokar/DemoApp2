@@ -1,0 +1,16 @@
+schema = "SAP_TM_TRP";
+
+query  = "  
+		SELECT T1.ID,T1.NAME,T1.DESC,
+		T2.USERNAME AS CREATED_BY,
+		T3.USERNAME AS LAST_MODIFIED_BY,
+		T1.RESOURCE_CATEGORY AS RESOURCE_CATEGORY
+		FROM \"sap.tm.trp.db.costmodel::t_cost_model_new\" T1
+		LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS T2
+		                 ON T1.CREATED_BY = T2.ID
+		LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS T3
+		                 ON T1.LAST_MODIFIED_BY = T3.ID              
+        ";
+                 
+depends_on_table = ["sap.tm.trp.db.costmodel::t_cost_model_new"];
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

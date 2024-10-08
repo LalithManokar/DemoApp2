@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_app_log_details" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_app_log_details"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="HEADER_ID"/>
+        <viewAttribute datatype="BIGINT" id="ITEM_ID"/>
+        <viewAttribute datatype="BIGINT" id="MODEL_ID"/>
+        <viewAttribute datatype="VARCHAR" id="RULE_NAME" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="SCHEDULE_TYPE" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="MESSAGE_BUNDLE" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="MESSAGE_KEY" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="USER_NAME" length="100"/>
+        <viewAttribute datatype="TIMESTAMP" id="CREATE_DATETIME"/>
+        <viewAttribute datatype="INTEGER" id="SEVERITY_CODE"/>
+        <viewAttribute datatype="VARCHAR" id="SEVERITY_DESCRIPTION" length="100"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition>BEGIN 
+job_log = SELECT 
+               A.SCHEDULE_TYPE ,
+               A.SCHEDULE_ID,
+               A.MODEL_ID,
+               A.SCHEDULE_FLAG
+        FROM &quot;sap.tm.trp.db.job::t_job_schedule&quot; A 
+        INNER JOIN &quot;_SYS_XS&quot;.&quot;JOB_LOG&quot; B 
+        ON A.SCHEDULE_ID = B.ID
+        WHERE A.SCHEDULE_FLAG=1;
+        
+plan_model_id= 
+                        SELECT DISTINCT A.MODEL_ID, C.NAME , A.SCHEDULE_ID, &quot;ParameterValue.Integer&quot;,&quot;_Header.ID&quot;, A.SCHEDULE_TYPE
+                        FROM :job_log AS A 
+                        INNER JOIN &quot;sap.tm.trp.db.pipeline::t_plan_model&quot; C
+                        on A.MODEL_ID = C.ID
+                        inner join &quot;sap.tm.trp.applog.db::AppLogItemMsgParam&quot;  params
+                        on A.MODEL_ID=&quot;ParameterValue.Integer&quot;
+                        WHERE A.SCHEDULE_TYPE = 'PLAN';
+                        
+loc_rule_model_id= 
+                        SELECT DISTINCT A.MODEL_ID, C.RULE_NAME , A.SCHEDULE_ID, &quot;ParameterValue.Integer&quot;,&quot;_Header.ID&quot;, A.SCHEDULE_TYPE
+                        FROM :job_log AS A 
+                        INNER JOIN &quot;sap.tm.trp.db.pickupreturn::t_location_assignment_rule&quot; C
+                        on A.MODEL_ID = C.ID
+                        inner join &quot;sap.tm.trp.applog.db::AppLogItemMsgParam&quot;  params
+                        on A.MODEL_ID=&quot;ParameterValue.Integer&quot;
+                        WHERE A.SCHEDULE_TYPE = 'LOCATION_RULE';
+                        
+app_log_plan=SELECT distinct 
+                               item.&quot;_Header.ID&quot; as HEADER_ID,
+                               item.&quot;_ID&quot; as ITEM_ID,
+                               params.MODEL_ID,
+                               params.NAME  as RULE_NAME,
+                               params.SCHEDULE_TYPE,
+                               item.&quot;Message.Bundle&quot; as MESSAGE_BUNDLE,
+                               item.&quot;Message.Key&quot; as MESSAGE_KEY,
+                               item.&quot;SystemAdministrativeData.CreationUserName&quot; as USER_NAME,
+                               item.&quot;SystemAdministrativeData.CreationDateTime&quot; as CREATE_DATETIME,
+                               item.&quot;Message.SeverityCode&quot;  as SEVERITY_CODE,
+                               severity.&quot;Description&quot; as &quot;SEVERITY_DESCRIPTION&quot;
+FROM  &quot;SAP_TM_TRP&quot;.&quot;sap.tm.trp.applog.db::AppLogHeader&quot; AS head 
+INNER JOIN &quot;SAP_TM_TRP&quot;.&quot;sap.tm.trp.applog.db::AppLogItem&quot; AS item
+        ON head.&quot;LogHandle.ID&quot;=item.&quot;_Header.ID&quot;
+INNER JOIN :plan_model_id  AS params ON item.&quot;_Header.ID&quot; = params.&quot;_Header.ID&quot;
+LEFT JOIN &quot;HCO_BC_APPLOG&quot;.&quot;sap.bc.applog.db.code::MessageSeverityCode&quot; as severity
+        ON item.&quot;Message.SeverityCode&quot; = severity.&quot;Code&quot;;
+
+app_log_loc_rule=SELECT distinct 
+                               item.&quot;_Header.ID&quot; AS HEADER_ID,
+                               item.&quot;_ID&quot; as ITEM_ID,
+                               params.MODEL_ID,
+                               params.RULE_NAME,
+                               params.SCHEDULE_TYPE,
+                               item.&quot;Message.Bundle&quot; AS MESSAGE_BUNDLE,
+                               item.&quot;Message.Key&quot; AS MESSAGE_KEY,
+                               item.&quot;SystemAdministrativeData.CreationUserName&quot; AS USER_NAME,
+                               item.&quot;SystemAdministrativeData.CreationDateTime&quot; AS CREATE_DATETIME,
+                               item.&quot;Message.SeverityCode&quot; AS SEVERITY_CODE,
+                               severity.&quot;Description&quot; as &quot;SEVERITY_DESCRIPTION&quot;
+FROM  &quot;SAP_TM_TRP&quot;.&quot;sap.tm.trp.applog.db::AppLogHeader&quot; AS head 
+INNER JOIN &quot;SAP_TM_TRP&quot;.&quot;sap.tm.trp.applog.db::AppLogItem&quot; AS item
+        ON head.&quot;LogHandle.ID&quot;=item.&quot;_Header.ID&quot;
+INNER JOIN :loc_rule_model_id  AS params ON item.&quot;_Header.ID&quot; = params.&quot;_Header.ID&quot;
+LEFT JOIN &quot;HCO_BC_APPLOG&quot;.&quot;sap.bc.applog.db.code::MessageSeverityCode&quot; as severity
+        ON item.&quot;Message.SeverityCode&quot; = severity.&quot;Code&quot;;
+
+var_out = select * from :app_log_plan
+union 
+select * from :app_log_loc_rule
+order by HEADER_ID desc;
+
+END /********** End Procedure Script *************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="RULE_NAME" order="4">
+        <descriptions defaultDescription="RULE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="RULE_NAME"/>
+      </attribute>
+      <attribute id="SCHEDULE_TYPE" order="5">
+        <descriptions defaultDescription="SCHEDULE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SCHEDULE_TYPE"/>
+      </attribute>
+      <attribute id="MESSAGE_BUNDLE" order="6">
+        <descriptions defaultDescription="MESSAGE_BUNDLE"/>
+        <keyMapping columnObjectName="Script_View" columnName="MESSAGE_BUNDLE"/>
+      </attribute>
+      <attribute id="MESSAGE_KEY" order="7">
+        <descriptions defaultDescription="MESSAGE_KEY"/>
+        <keyMapping columnObjectName="Script_View" columnName="MESSAGE_KEY"/>
+      </attribute>
+      <attribute id="USER_NAME" order="8">
+        <descriptions defaultDescription="USER_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="USER_NAME"/>
+      </attribute>
+      <attribute id="CREATE_DATETIME" order="9">
+        <descriptions defaultDescription="CREATE_DATETIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATE_DATETIME"/>
+      </attribute>
+      <attribute id="SEVERITY_DESCRIPTION" order="11">
+        <descriptions defaultDescription="SEVERITY_DESCRIPTION"/>
+        <keyMapping columnObjectName="Script_View" columnName="SEVERITY_DESCRIPTION"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="HEADER_ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="HEADER_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="HEADER_ID"/>
+      </measure>
+      <measure id="ITEM_ID" order="2" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ITEM_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="ITEM_ID"/>
+      </measure>
+      <measure id="MODEL_ID" order="3" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MODEL_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="MODEL_ID"/>
+      </measure>
+      <measure id="SEVERITY_CODE" order="10" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="SEVERITY_CODE"/>
+        <measureMapping columnObjectName="Script_View" columnName="SEVERITY_CODE"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

@@ -1,0 +1,45 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.leasecontract::sp_lease_contract_hire_term_materialized_delta"  
+( OUT OUT_VALUE INT)  
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+	ACTION_TYPE INTEGER;
+	V_COUNT INTEGER;   
+	V_MIN INTEGER;
+	V_MAX INTEGER;
+	V_ACTION_TYPE_CNT_1 INT;
+	V_ACTION_TYPE_CNT_2 INT;
+BEGIN
+
+	UPDATE "sap.tm.trp.db.leasecontract::t_lease_object_change_track" 
+	SET STATUS = 3, START_TIME = CURRENT_UTCTIMESTAMP  
+	WHERE STATUS =2 AND OBJECT_TYPE <> -1; 
+	
+	SELECT COUNT(DISTINCT ACTION_TYPE) INTO V_ACTION_TYPE_CNT_1 FROM "sap.tm.trp.db.leasecontract::t_lease_object_change_track" WHERE STATUS = 3 AND ACTION_TYPE = 1;
+	SELECT COUNT(DISTINCT ACTION_TYPE) INTO V_ACTION_TYPE_CNT_2 FROM "sap.tm.trp.db.leasecontract::t_lease_object_change_track" WHERE STATUS = 3 AND ACTION_TYPE = 2;
+	
+	IF V_ACTION_TYPE_CNT_1 > 0
+	THEN
+		CALL "sap.tm.trp.db.leasecontract::sp_lease_contract_hire_term_materialized_delta_delete"(1, CHANGE_TRACK);
+		CALL "sap.tm.trp.db.leasecontract::sp_lease_contract_hire_term_materialized"(0,:CHANGE_TRACK);
+	END IF;
+	
+	IF V_ACTION_TYPE_CNT_2 > 0
+	THEN 
+		CALL "sap.tm.trp.db.leasecontract::sp_lease_contract_hire_term_materialized_delta_delete"(2, CHANGE_TRACK);
+	END IF;
+	
+	IF V_ACTION_TYPE_CNT_1 > 0 OR V_ACTION_TYPE_CNT_2 > 0
+	THEN
+		UPDATE "sap.tm.trp.db.leasecontract::t_lease_object_change_track"
+		SET STATUS = 4, END_TIME = CURRENT_UTCTIMESTAMP  
+		WHERE STATUS = 3
+		AND OBJECT_TYPE <> -1
+		;
+	END IF;
+	
+	OUT_VALUE := 1;
+	
+
+END;

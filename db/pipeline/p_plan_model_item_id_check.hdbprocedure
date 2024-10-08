@@ -1,0 +1,47 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_plan_model_item_id_check"(
+    IN EQUIPMENT_FILTER_ID BIGINT,
+    IN ALERT_GROUP_ID BIGINT,
+    IN TIME_FILTER_ID BIGINT,
+    IN LOCATION_FILTER_ID BIGINT,
+    IN PIPELINE_MODEL_ID BIGINT,
+    OUT COUNT_NUM INTEGER
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE NUM INTEGER;
+    COUNT_NUM := 0;
+    
+    SELECT COUNT(*) INTO NUM
+    FROM "sap.tm.trp.db.filter::t_equipment_filter" T1
+    WHERE ID = :EQUIPMENT_FILTER_ID
+    ;
+    
+    COUNT_NUM := :COUNT_NUM + :NUM;
+    
+    SELECT COUNT(*) INTO NUM
+    FROM "sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group"
+    WHERE ALERT_RULE_GROUP_ID = :ALERT_GROUP_ID;
+    
+    COUNT_NUM := :COUNT_NUM + :NUM;
+    
+    SELECT COUNT(*) INTO NUM
+    FROM "sap.tm.trp.db.filter::t_time_filter"
+    WHERE ID = :TIME_FILTER_ID;
+    
+    COUNT_NUM := :COUNT_NUM + :NUM;
+    
+    SELECT COUNT(*) INTO NUM
+    FROM "sap.tm.trp.db.filter::t_location_filter"
+    WHERE ID = :LOCATION_FILTER_ID;
+    
+    COUNT_NUM := :COUNT_NUM + :NUM;
+    
+    SELECT COUNT(*) INTO NUM
+    FROM "sap.tm.trp.db.pipeline::t_pipeline_model"
+    WHERE ID = :PIPELINE_MODEL_ID;
+    
+    COUNT_NUM := :COUNT_NUM + :NUM;
+END;

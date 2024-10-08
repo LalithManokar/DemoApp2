@@ -1,0 +1,119 @@
+schema="SAP_TM_TRP";
+query= "SELECT DISTINCT
+    t2.ID,
+    t2.USER_TYPE_ID,
+    T3.DESC AS USER_TYPE_DESC,
+    t2.USERNAME,
+    --t2.FIRST_NAME,
+    --t2.MIDDLE_NAME,
+    --t2.LAST_NAME,
+    t1.CREATE_TIME AS CREATED_TIME,
+    t2.LAST_MODIFIED_DATE AS MODIFIED_TIME,
+    t1.VALID_FROM AS START_TIME,
+    t1.VALID_UNTIL AS END_TIME,
+    
+    t2.DECIMAL_NOTATION_ID,
+    t10.CODE AS DECIMAL_NOTATION_CODE,
+    T10.FORMAT AS DECIMAL_NOTATION_PATTERN,
+    IFNULL(T11.DESC,T10.DESC) AS DECIMAL_NOTATION_DESC,
+     
+    T2.DATE_FORMAT_ID,
+    T20.CODE AS DATE_FORMAT_CODE,
+    T20.FORMAT AS DATE_FORMAT_PATTERN,
+    IFNULL(T21.DESC,T20.DESC ) AS DATE_FORMAT_DESC,
+    
+    
+    t2.TIME_FORMAT_ID,
+    T30.CODE AS TIME_FORMAT_CODE,
+    t30.FORMAT AS TIME_FORMAT_PATTERN,
+    IFNULL(t31.DESC,T30.DESC) AS TIME_FORMAT_DESC,
+    
+    t2.TIME_ZONE_CODE,
+    T40.OFFSET AS TIME_ZONE_OFFSET,
+    IFNULL(t41.DESC,T40.DESC) AS TIME_ZONE_DESC,
+    
+      
+    t2.WEIGHT_UNIT_CODE,
+    IFNULL(t51.DESC,T50.DESC) AS WEIGHT_UNIT_DESC,
+    t50.NOTATION AS WEIGHT_UNIT_NOTATION,
+    
+    t2.DISTANCE_CODE,
+    IFNULL(T61.DESC,T60.DESC) AS DISTANCE_DESC,
+    t60.NOTATION AS DISTANCE_NOTATION,
+    
+     T2.VOLUMN_UNIT_CODE AS VOLUME_UNIT_CODE,
+    IFNULL(T71.DESC,T70.DESC) AS VOLUME_UNIT_DESC,
+    t70.NOTATION AS VOLUME_UNIT_NOTATION,
+       
+    t2.TEMPERATURE_UNIT_CODE,
+    IFNULL(t81.DESC,T80.DESC)  AS TEMPERATURE_UNIT_DESC,
+    t80.NOTATION AS TEMPERATURE_UNIT_NOTATION,
+    
+    TO_VARCHAR(t90.VALUE) AS DEFAULT_LOCATION_FILTER,
+    T91.USER_DATA_PRIVILEGE_FLAG
+      
+FROM SYS.USERS t1
+INNER JOIN \"sap.tm.trp.db.systemmanagement.user::t_user\" AS t2
+ON t1.USER_NAME = t2.USERNAME
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_user_type_t\" T3 
+ON T3.ID = T2.USER_TYPE_ID AND T3.SPRAS IN (SELECT SPRAS FROM \"sap.tm.trp.db.semantic.common::v_lang_code\")
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_decimal_notation\" AS t10 
+ON (t10.ID = t2.DECIMAL_NOTATION_ID)
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_date_format\" t20 
+ON (t20.ID = t2.DATE_FORMAT_ID)
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_time_format\" t30 
+ON (t30.ID = t2.TIME_FORMAT_ID)
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_time_zone\" t40 
+ON (t40.CODE = t2.TIME_ZONE_CODE )
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_weight_unit\" t50 
+ON (t2.WEIGHT_UNIT_CODE = t50.CODE )
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_distance\" t60 
+ON (t2.DISTANCE_CODE = t60.CODE )
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_volume\" t70 
+ON (t2.VOLUMN_UNIT_CODE = t70.CODE )
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_temperature_unit\" t80 
+ON (t2.TEMPERATURE_UNIT_CODE = t80.CODE )
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_user_preference\" t90 
+ON (t2.USERNAME = t90.USERNAME ) and (t90.DATA_ID = 'RESOURCE|LAST_USED_LOCATION_FILTER')
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_decimal_notation_t\" AS t11 
+ON (t11.DECIMAL_NOTATION_ID = t2.DECIMAL_NOTATION_ID AND T2.LANG_CODE = T11.LANG_CODE)
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_date_format_t\" t21 
+ON (t21.DATE_FORMAT_ID = t2.DATE_FORMAT_ID AND T2.LANG_CODE = T21.LANG_CODE)
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_time_format_t\" t31 
+ON (t31.TIME_FORMAT_ID = t2.TIME_FORMAT_ID AND T2.LANG_CODE = T31.LANG_CODE)
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_time_zone_t\" t41 
+ON (t41.TIME_ZONE_CODE = t2.TIME_ZONE_CODE AND T2.LANG_CODE = T41.LANG_CODE)
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_weight_unit_t\" t51 
+ON (t51.WEIGHT_UNIT_CODE = t2.WEIGHT_UNIT_CODE AND T51.LANG_CODE = T2.LANG_CODE )
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_distance_t\" t61 
+ON (t2.DISTANCE_CODE = t61.DISTANCE_CODE AND T2.LANG_CODE = T61.LANG_CODE )
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_volume_t\" t71 
+ON (t2.VOLUMN_UNIT_CODE = t71.VOLUME_CODE AND T2.LANG_CODE = T71.LANG_CODE )
+LEFT OUTER JOIN \"sap.tm.trp.db.systemmanagement.user::t_temperature_unit_t\" t81 
+ON (t2.TEMPERATURE_UNIT_CODE = t81.TEMPERATURE_UNIT_CODE AND T2.LANG_CODE = T81.LANG_CODE)
+LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::t_user_data_privilege\" t91 
+ON (t2.USERNAME = t91.USERNAME)
+";
+
+
+depends_on_table = ["sap.tm.trp.db.systemmanagement.user::t_user",
+"sap.tm.trp.db.systemmanagement.user::t_user_type_t",
+"sap.tm.trp.db.systemmanagement.user::t_decimal_notation",
+"sap.tm.trp.db.systemmanagement.user::t_date_format",
+"sap.tm.trp.db.systemmanagement.user::t_time_format",
+"sap.tm.trp.db.systemmanagement.user::t_time_zone",
+"sap.tm.trp.db.systemmanagement.user::t_weight_unit",
+"sap.tm.trp.db.systemmanagement.user::t_distance",
+"sap.tm.trp.db.systemmanagement.user::t_volume",
+"sap.tm.trp.db.systemmanagement.user::t_temperature_unit",
+"sap.tm.trp.db.systemmanagement.user::t_decimal_notation_t",
+"sap.tm.trp.db.systemmanagement.user::t_date_format_t",
+"sap.tm.trp.db.systemmanagement.user::t_time_format_t",
+"sap.tm.trp.db.systemmanagement.user::t_time_zone_t",
+"sap.tm.trp.db.systemmanagement.user::t_weight_unit_t",
+"sap.tm.trp.db.systemmanagement.user::t_distance_t",
+"sap.tm.trp.db.systemmanagement.user::t_volume_t",
+"sap.tm.trp.db.systemmanagement.user::t_temperature_unit_t",
+"sap.tm.trp.db.systemmanagement.user::t_user_preference",
+"sap.tm.trp.db.dataprotectionprivacy::t_user_data_privilege"];
+depends_on_view = ["sap.tm.trp.db.semantic.common::v_lang_code"];

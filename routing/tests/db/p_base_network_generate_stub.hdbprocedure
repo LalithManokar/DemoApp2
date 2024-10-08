@@ -1,0 +1,35 @@
+PROCEDURE "SAP_TM_ROUTING_TEST"."sap.tm.trp.routing.tests.db::p_base_network_generate_stub" (
+    IN P1 "sap.tm.trp.routing.tests.db::tt_path_generate_proc_p1",
+    IN P2 "sap.tm.trp.routing.tests.db::tt_path_generate_proc_p2",
+    IN P3 "sap.tm.trp.routing.tests.db::tt_path_generate_proc_p3",
+    IN P4 "sap.tm.trp.routing.tests.db::tt_path_generate_proc_p4",
+    IN P5 "sap.tm.trp.routing.tests.db::tt_path_generate_proc_p5",
+    OUT P6 "sap.tm.trp.routing.tests.db::tt_path_generate_proc_p6",
+    OUT P7 "sap.tm.trp.routing.tests.db::tt_path_generate_proc_p7",
+    OUT P8 "sap.tm.trp.routing.tests.db::tt_path_generate_proc_p8",
+    OUT P9 "sap.tm.trp.routing.tests.db::tt_path_generate_proc_p9"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING_TEST
+   READS SQL DATA AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+   P6 = 
+   SELECT PATHID, START_LOC, DESTINATION_LOC, TOTAL_DISTANCE, TOTAL_COST, TOTAL_DURATION
+   FROM "sap.tm.trp.routing.tests.db::t_generate_network_output_p6";
+   
+   P7 = 
+   SELECT PATHID, SEQUENCE, LOCATION, PRE_BP_SEQUENCE, NEXT_BP_SEQUENCE, MTR, CATEGORY, DISTANCE, TRANSPORT_DURATION, HANDLING_DURATION, TRANSPORT_COST, HANDLING_COST, ACT_TYPE, BASIC_PATH_NAME 
+   FROM "sap.tm.trp.routing.tests.db::t_generate_network_output_p7";
+
+   P8 = 
+   SELECT SEVERITY, MESSAGE_ID, VAR0, VAR1, VAR2, VAR3
+   FROM "sap.tm.trp.routing.tests.db::t_generate_network_output_p8";
+   
+   P9 = 
+   SELECT RETURN_CODE
+   FROM "sap.tm.trp.routing.tests.db::t_generate_network_output_p9";
+END

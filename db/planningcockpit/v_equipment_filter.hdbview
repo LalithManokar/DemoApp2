@@ -1,0 +1,17 @@
+schema="SAP_TM_TRP";
+query= "SELECT A.ID,
+               A.DESC AS NAME, 
+               A.DESC AS DESC,
+               A.VISIBLE_FLAG,
+               A.FILTER_TYPE,
+               A.RESOURCE_CATEGORY,
+               A.CREATE_BY AS USER_ID,
+               C.USERNAME AS CREATE_BY,
+               A.CREATE_AT AS CREATE_TIME,
+               IFNULL(A.LAST_MODIFIED_AT, A.CREATE_AT) AS LAST_MODIFIED_TIME
+          FROM \"sap.tm.trp.db.filter::t_equipment_filter\" AS A
+          LEFT OUTER JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" AS C ON A.CREATE_BY = C.ID
+          "; 
+               
+depends_on_table = ["sap.tm.trp.db.filter::t_equipment_filter"];
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];

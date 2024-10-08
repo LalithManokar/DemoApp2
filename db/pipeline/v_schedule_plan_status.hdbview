@@ -1,0 +1,12 @@
+schema = "SAP_TM_TRP";
+query  ="SELECT T3.ID,
+                T1.MODEL_ID AS PLAN_MODEL_ID,
+                T4.NAME,
+                IFNULL(T3.PLANNED_TIME,T1.CREATE_DATE) AS EXECUTION_TIME,
+                T3.STATUS AS EXECUTION_STATUS
+                FROM \"sap.tm.trp.db.job::t_job_schedule\" T1
+                LEFT JOIN \"_SYS_XS\".\"JOB_LOG\" T3 ON T3.ID = T1.SCHEDULE_ID
+                INNER JOIN \"sap.tm.trp.db.pipeline::t_plan_model\" T4 on T1.MODEL_ID = T4.ID
+                WHERE T3.STATUS IN ('SUCCESS', 'ERROR') AND T1.SCHEDULE_TYPE = 'PLAN'
+                ";
+depends_on_table = ["sap.tm.trp.db.job::t_job_schedule", "sap.tm.trp.db.pipeline::t_plan_model"];

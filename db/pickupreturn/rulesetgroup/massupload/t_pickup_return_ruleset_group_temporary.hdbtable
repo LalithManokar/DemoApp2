@@ -1,0 +1,24 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+
+table.columns =
+ [
+    {name = "USER_ID"; sqlType =  BIGINT;  nullable = false;},
+    {name = "ACTION_TIME"; sqlType = TIMESTAMP; nullable = false;},
+    {name = "CONNECTION_ID"; sqlType = VARCHAR; length = 100; nullable = false;},
+	{name = "RULE_GROUP_NAME"; sqlType = VARCHAR; length = 200; },
+    {name = "DESC"; sqlType = VARCHAR; length = 500;},
+    {name = "RULE_TYPE_NAME"; sqlType = VARCHAR; length = 200;},
+    {name = "TIMEZONES"; sqlType = VARCHAR; length = 40;},
+    {name = "EXECUTE_INTERVAL_NAME"; sqlType = VARCHAR; length = 100;},
+    {name = "EXECUTE_TIME_UNIT_NAME"; sqlType = VARCHAR; length = 100;},
+    {name = "START_DATE_TIME"; sqlType = VARCHAR; length = 30;},
+    {name = "END_DATE_TIME"; sqlType = VARCHAR; length = 30;},
+    {name = "RESOURCE_CATEGORY";  sqlType = VARCHAR; length = 50;},
+    {name = "EXECUTE_IN_WORKING_HOUR"; sqlType = VARCHAR; length = 1;},
+    {name = "START_WORKING_TIME"; sqlType = VARCHAR; length = 8;},
+    {name = "END_WORKING_TIME"; sqlType = VARCHAR; length = 8;},
+    {name = "RULE_NAME"; sqlType = VARCHAR; length = 200; }
+];
+
+table.primaryKey.pkcolumns = ["USER_ID","ACTION_TIME","CONNECTION_ID","RULE_GROUP_NAME","RULE_NAME"];

@@ -1,0 +1,51 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.dataprotectionprivacy::p_ext_user_delete_by_invalid_consent"(
+
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE EXIST_FLAG INTEGER;
+    
+   /*USER_NAME = SELECT DISTINCT ID,USERNAME FROM
+                (
+                  SELECT ID,USERNAME FROM
+                  "sap.tm.trp.db.systemmanagement.user::t_user"
+                  WHERE USERNAME NOT IN(SELECT DISTINCT USERNAME FROM "sap.tm.trp.db.dataprotectionprivacy::t_user_consent")
+                  OR USERNAME NOT IN(SELECT DISTINCT USER_NAME FROM SYS.USERS)
+                  UNION ALL
+                  SELECT T1.ID,T1.USERNAME FROM
+                  "sap.tm.trp.db.systemmanagement.user::t_user" T1
+                  INNER JOIN "sap.tm.trp.db.dataprotectionprivacy::t_user_consent" T2
+                  ON (T1.USERNAME = T2.USERNAME AND T2.ENABLED_FLAG = 0) OR
+                  (T1.USERNAME = T2.USERNAME AND (T2.VALID_TO < CURRENT_UTCTIMESTAMP OR T2.VALID_FROM > CURRENT_UTCTIMESTAMP))
+                 );*/
+    --Refactored code start
+    USER_NAME = SELECT DISTINCT ID,USERNAME FROM
+                (
+                  SELECT ID,USERNAME FROM
+                  "sap.tm.trp.db.systemmanagement.user::t_user"
+                  WHERE USERNAME NOT IN(SELECT DISTINCT USERNAME FROM "sap.tm.trp.db.dataprotectionprivacy::t_user_consent")
+                  OR USERNAME NOT IN(SELECT DISTINCT USER_NAME FROM SYS.USERS)
+                  UNION ALL
+                  (SELECT  T1.ID,T1.USERNAME FROM
+                  "sap.tm.trp.db.systemmanagement.user::t_user" T1
+                  INNER JOIN "sap.tm.trp.db.dataprotectionprivacy::t_user_consent" T2
+                  ON (T1.USERNAME = T2.USERNAME AND T2.ENABLED_FLAG = 0)
+                  UNION
+                  (SELECT T1.ID,T1.USERNAME FROM
+                  "sap.tm.trp.db.systemmanagement.user::t_user" T1
+                  INNER JOIN "sap.tm.trp.db.dataprotectionprivacy::t_user_consent" T2
+                  ON T1.USERNAME = T2.USERNAME AND T2.VALID_TO < CURRENT_UTCTIMESTAMP
+                  UNION ALL
+                  SELECT T1.ID,T1.USERNAME FROM
+                  "sap.tm.trp.db.systemmanagement.user::t_user" T1
+                  INNER JOIN "sap.tm.trp.db.dataprotectionprivacy::t_user_consent" T2
+                  ON T1.USERNAME = T2.USERNAME AND T2.VALID_FROM > CURRENT_UTCTIMESTAMP)
+                 ));
+    --Refactored code end
+   DELETE FROM "sap.tm.trp.db.systemmanagement.user::t_user_role" WHERE USER_ID IN (SELECT ID FROM :USER_NAME);
+   DELETE FROM "sap.tm.trp.db.dataprotectionprivacy::t_user_data_privilege" WHERE USERNAME IN (SELECT USERNAME FROM :USER_NAME);
+   DELETE FROM "sap.tm.trp.db.systemmanagement.user::t_user" WHERE USERNAME IN (SELECT USERNAME FROM :USER_NAME);
+END;

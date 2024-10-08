@@ -1,0 +1,20 @@
+//To define the HDB view file use the following syntax: 
+schema = "SAP_TM_TRP";
+query = "
+    SELECT T1.RULE_TYPE_ID,
+           T2.DESC AS RULE_TYPE_DESC,
+           T1.OBJECT_TYPE_ID,
+           T1.PROCEDURE_CONSTRAINT
+    FROM \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData\" T1
+    LEFT OUTER JOIN 
+    (SELECT T1.ID,T1.DESC 
+     FROM \"sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData_t\" T1
+     INNER JOIN \"sap.tm.trp.db.semantic.common::v_lang_code\" LANGUAGE_T
+     ON (T1.SPRAS = LANGUAGE_T.SPRAS) ) T2
+    ON T1.RULE_TYPE_ID = T2.ID
+    WHERE T1.RULE_TYPE_ID <> 2
+ ";
+ 
+ depends_on_table = ["sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData",
+                     "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_ruleType_map_node_metaData_t"];
+ depends_on_view  = ["sap.tm.trp.db.semantic.common::v_lang_code"];

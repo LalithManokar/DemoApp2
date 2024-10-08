@@ -1,0 +1,516 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_role_check_location_rule" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_role_check_location_rule"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="VARCHAR" id="RULE_NAME" length="200"/>
+        <viewAttribute datatype="VARCHAR" id="DESCRIPTION" length="500"/>
+        <viewAttribute datatype="INTEGER" id="RULE_TYPE"/>
+        <viewAttribute datatype="BIGINT" id="SD_PLAN_ID"/>
+        <viewAttribute datatype="VARCHAR" id="SUPPLY_DEMAND_PLAN" length="200"/>
+        <viewAttribute datatype="INTEGER" id="TIME_RANGE"/>
+        <viewAttribute datatype="DECIMAL" id="TIME_RANGE_INTERVAL" length="21" scale="11"/>
+        <viewAttribute datatype="INTEGER" id="TIME_RANGE_UNIT"/>
+        <viewAttribute datatype="BIGINT" id="RESOURCE_FILTER_ID"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_FILTER_DESC" length="50"/>
+        <viewAttribute datatype="BIGINT" id="LOCATION_FILTER_ID"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_FILTER_DESC" length="50"/>
+        <viewAttribute datatype="BIGINT" id="NETWORK_SETTING_GROUP_ID"/>
+        <viewAttribute datatype="VARCHAR" id="NETWORK_SETTING_GROUP" length="500"/>
+        <viewAttribute datatype="BIGINT" id="LOCATION_DETERMIN_ID"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_DETERMINATION_RULE" length="500"/>
+        <viewAttribute datatype="INTEGER" id="SCHEDULE_TIME_TYPE"/>
+        <viewAttribute datatype="DECIMAL" id="RECURRENCE_INTERVAL" length="21" scale="11"/>
+        <viewAttribute datatype="VARCHAR" id="RECURRENCE_TYPE" length="50"/>
+        <viewAttribute datatype="INTEGER" id="RECURRENCE_DAY"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_DATETIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_DATETIME"/>
+        <viewAttribute datatype="INTEGER" id="OP_SETTING_TYPE"/>
+        <viewAttribute datatype="INTEGER" id="OPTIMIZATION"/>
+        <viewAttribute datatype="VARCHAR" id="CREATED_BY" length="60"/>
+        <viewAttribute datatype="TIMESTAMP" id="CREATED_ON"/>
+        <viewAttribute datatype="VARCHAR" id="MODIFIED_BY" length="60"/>
+        <viewAttribute datatype="TIMESTAMP" id="MODIFIED_ON"/>
+        <viewAttribute datatype="TIMESTAMP" id="LAST_EXECUTION_TIME"/>
+        <viewAttribute datatype="INTEGER" id="LAST_EXECUTION_STATUS"/>
+        <viewAttribute datatype="TIMESTAMP" id="NEXT_EXECUTION_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="LAST_MODIFIED_TIME"/>
+        <viewAttribute datatype="VARCHAR" id="VISIBILITY" length="3"/>
+        <viewAttribute datatype="VARCHAR" id="CURRENCY" length="10"/>
+        <viewAttribute datatype="SMALLINT" id="FILTER_EXECUTION"/>
+        <viewAttribute datatype="BIGINT" id="EXCLUSIVE_RULE_ID"/>
+        <viewAttribute datatype="VARCHAR" id="EXCLUSIVE_RULE" length="20"/>
+        <viewAttribute datatype="BIGINT" id="TIME_WINDOW"/>
+        <viewAttribute datatype="INTEGER" id="RANK_NUMBER"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_CATEGORY" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="SELECTION_DATE" length="200"/>
+        <viewAttribute datatype="BIGINT" id="KEEP_EXECUTION_RUNS"/>
+        <viewAttribute datatype="VARCHAR" id="EXECUTE_WORKING_HOUR" length="1"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_WORKING_HOUR_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_WORKING_HOUR_TIME"/>
+
+        <viewAttribute id="TIMEZONES" datatype="VARCHAR" length="40"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition>
+ BEGIN
+
+     DECLARE USER_NAME VARCHAR(60);
+     DECLARE USERTYPE INTEGER;
+
+     SELECT IFNULL (MAX (USERNAME),'') INTO USER_NAME
+     FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+
+     SELECT IFNULL (MAX (USER_TYPE_ID),0) INTO USERTYPE FROM &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot;
+     WHERE USERNAME = :USER_NAME;
+
+     IF :USERTYPE = 99 THEN
+
+     var_out = select ID,
+                      RULE_NAME,
+                      DESCRIPTION,
+                      RULE_TYPE,
+                      SD_PLAN_ID,
+                      SUPPLY_DEMAND_PLAN,
+                      TIME_RANGE,
+                      TIME_RANGE_INTERVAL,
+                      TIME_RANGE_UNIT,
+                      RESOURCE_FILTER_ID,
+                      RESOURCE_FILTER_DESC,
+                      LOCATION_FILTER_ID,
+                      LOCATION_FILTER_DESC,
+                      NETWORK_SETTING_GROUP_ID,
+                      NETWORK_SETTING_GROUP,
+                      LOCATION_DETERMIN_ID,
+                      LOCATION_DETERMINATION_RULE,
+                      SCHEDULE_TIME_TYPE,
+                      RECURRENCE_INTERVAL,
+                      RECURRENCE_TYPE,
+                      RECURRENCE_DAY,
+                      START_DATETIME,
+                      END_DATETIME,
+                      OP_SETTING_TYPE,
+                      OPTIMIZATION,
+                      CREATED_BY,
+                      CREATED_ON,
+                      MODIFIED_BY,
+                      MODIFIED_ON,
+                      LAST_EXECUTION_TIME,
+                      LAST_EXECUTION_STATUS,
+                      NEXT_EXECUTION_TIME,
+                      LAST_MODIFIED_TIME,
+                      VISIBILITY,
+                      CURRENCY,
+                      FILTER_EXECUTION,
+                      EXCLUSIVE_RULE_ID,
+                      EXCLUSIVE_RULE,
+                      TIME_WINDOW,
+                      RANK_NUMBER,
+                      RESOURCE_CATEGORY,
+                      SELECTION_DATE,
+                      KEEP_EXECUTION_RUNS,
+                      EXECUTE_WORKING_HOUR,
+                      START_WORKING_HOUR_TIME,
+                      END_WORKING_HOUR_TIME,
+                      TIMEZONES
+                 FROM &quot;sap.tm.trp.db.pickupreturn::v_location_rule&quot;;
+
+     ELSE
+
+     lt_location_rule = SELECT T1.ID,
+			                      T1.RULE_NAME,
+			                      T1.DESCRIPTION,
+			                      T1.RULE_TYPE,
+			                      T1.SD_PLAN_ID,
+			                      T1.SUPPLY_DEMAND_PLAN,
+			                      T1.TIME_RANGE,
+			                      T1.TIME_RANGE_INTERVAL,
+			                      T1.TIME_RANGE_UNIT,
+			                      T1.RESOURCE_FILTER_ID,
+			                      T1.RESOURCE_FILTER_DESC,
+			                      T1.LOCATION_FILTER_ID,
+			                      T1.LOCATION_FILTER_DESC,
+			                      T1.NETWORK_SETTING_GROUP_ID,
+			                      T1.NETWORK_SETTING_GROUP,
+			                      T1.LOCATION_DETERMIN_ID,
+			                      T1.LOCATION_DETERMINATION_RULE,
+			                      T1.SCHEDULE_TIME_TYPE,
+			                      T1.RECURRENCE_INTERVAL,
+			                      T1.RECURRENCE_TYPE,
+			                      T1.RECURRENCE_DAY,
+			                      T1.START_DATETIME,
+			                      T1.END_DATETIME,
+			                      T1.OP_SETTING_TYPE,
+			                      T1.OPTIMIZATION,
+			                      T1.CREATED_BY,
+			                      T1.CREATED_ON,
+			                      T1.MODIFIED_BY,
+			                      T1.MODIFIED_ON,
+			                      T1.LAST_EXECUTION_TIME,
+			                      T1.LAST_EXECUTION_STATUS,
+			                      T1.NEXT_EXECUTION_TIME,
+			                      T1.LAST_MODIFIED_TIME,
+			                      T1.VISIBILITY,
+			                      T1.CURRENCY,
+			                      T1.FILTER_EXECUTION,
+			                      T1.EXCLUSIVE_RULE_ID,
+			                      T1.EXCLUSIVE_RULE,
+			                      T1.TIME_WINDOW,
+                      			  T1.RANK_NUMBER,
+			                      T1.RESOURCE_CATEGORY,
+			                      T1.SELECTION_DATE,
+			                      T1.KEEP_EXECUTION_RUNS,
+			                      T1.EXECUTE_WORKING_HOUR,
+                                  T1.START_WORKING_HOUR_TIME,
+                                  T1.END_WORKING_HOUR_TIME,
+                                  T1.TIMEZONES
+                           FROM &quot;sap.tm.trp.db.pickupreturn::v_location_rule&quot; T1
+                           INNER JOIN &quot;sap.tm.trp.db.filter::cv_role_check_location_filter&quot; T3
+                           ON (T3.ID = T1.LOCATION_FILTER_ID)
+                           INNER JOIN &quot;sap.tm.trp.db.pipeline::cv_get_plan_list_optimized&quot; AS T4
+                           ON T1.SD_PLAN_ID = T4.ID
+                           WHERE (T1.VISIBILITY = 'G' OR (T1.VISIBILITY = 'P' AND T1.CREATED_BY = :USER_NAME));
+
+                 var_out = SELECT T1.ID,
+			                      T1.RULE_NAME,
+			                      T1.DESCRIPTION,
+			                      T1.RULE_TYPE,
+			                      T1.SD_PLAN_ID,
+			                      T1.SUPPLY_DEMAND_PLAN,
+			                      T1.TIME_RANGE,
+			                      T1.TIME_RANGE_INTERVAL,
+			                      T1.TIME_RANGE_UNIT,
+			                      T1.RESOURCE_FILTER_ID,
+			                      T1.RESOURCE_FILTER_DESC,
+			                      T1.LOCATION_FILTER_ID,
+			                      T1.LOCATION_FILTER_DESC,
+			                      T1.NETWORK_SETTING_GROUP_ID,
+			                      T1.NETWORK_SETTING_GROUP,
+			                      T1.LOCATION_DETERMIN_ID,
+			                      T1.LOCATION_DETERMINATION_RULE,
+			                      T1.SCHEDULE_TIME_TYPE,
+			                      T1.RECURRENCE_INTERVAL,
+			                      T1.RECURRENCE_TYPE,
+			                      T1.RECURRENCE_DAY,
+			                      T1.START_DATETIME,
+			                      T1.END_DATETIME,
+			                      T1.OP_SETTING_TYPE,
+			                      T1.OPTIMIZATION,
+			                      T1.CREATED_BY,
+			                      T1.CREATED_ON,
+			                      T1.MODIFIED_BY,
+			                      T1.MODIFIED_ON,
+			                      T1.LAST_EXECUTION_TIME,
+			                      T1.LAST_EXECUTION_STATUS,
+			                      T1.NEXT_EXECUTION_TIME,
+			                      T1.LAST_MODIFIED_TIME,
+			                      T1.VISIBILITY,
+			                      T1.CURRENCY,
+			                      T1.FILTER_EXECUTION,
+			                      T1.EXCLUSIVE_RULE_ID,
+			                      T1.EXCLUSIVE_RULE,
+			                      T1.TIME_WINDOW,
+                      			  T1.RANK_NUMBER,
+			                      T1.RESOURCE_CATEGORY,
+			                      T1.SELECTION_DATE,
+			                      T1.KEEP_EXECUTION_RUNS,
+			                      T1.EXECUTE_WORKING_HOUR,
+                                  T1.START_WORKING_HOUR_TIME,
+                                  T1.END_WORKING_HOUR_TIME,
+                                  T1.TIMEZONES
+                           FROM :lt_location_rule T1
+                         /*  INNER JOIN &quot;sap.tm.trp.db.filter::cv_role_check_location_filter&quot; T3
+                           ON (T3.ID = T1.LOCATION_FILTER_ID)
+                           INNER JOIN &quot;sap.tm.trp.db.pipeline::cv_get_plan_list&quot; AS T4
+                           ON T1.SD_PLAN_ID = T4.ID
+                           WHERE (T1.VISIBILITY = 'G' OR (T1.VISIBILITY = 'P' AND T1.CREATED_BY = :USER_NAME))*/
+                           WHERE (T1.RESOURCE_FILTER_ID IS NULL OR T1.RESOURCE_FILTER_ID = 0)
+                           UNION
+                           SELECT T1.ID,
+			                      T1.RULE_NAME,
+			                      T1.DESCRIPTION,
+			                      T1.RULE_TYPE,
+			                      T1.SD_PLAN_ID,
+			                      T1.SUPPLY_DEMAND_PLAN,
+			                      T1.TIME_RANGE,
+			                      T1.TIME_RANGE_INTERVAL,
+			                      T1.TIME_RANGE_UNIT,
+			                      T1.RESOURCE_FILTER_ID,
+			                      T1.RESOURCE_FILTER_DESC,
+			                      T1.LOCATION_FILTER_ID,
+			                      T1.LOCATION_FILTER_DESC,
+			                      T1.NETWORK_SETTING_GROUP_ID,
+			                      T1.NETWORK_SETTING_GROUP,
+			                      T1.LOCATION_DETERMIN_ID,
+			                      T1.LOCATION_DETERMINATION_RULE,
+			                      T1.SCHEDULE_TIME_TYPE,
+			                      T1.RECURRENCE_INTERVAL,
+			                      T1.RECURRENCE_TYPE,
+			                      T1.RECURRENCE_DAY,
+			                      T1.START_DATETIME,
+			                      T1.END_DATETIME,
+			                      T1.OP_SETTING_TYPE,
+			                      T1.OPTIMIZATION,
+			                      T1.CREATED_BY,
+			                      T1.CREATED_ON,
+			                      T1.MODIFIED_BY,
+			                      T1.MODIFIED_ON,
+			                      T1.LAST_EXECUTION_TIME,
+			                      T1.LAST_EXECUTION_STATUS,
+			                      T1.NEXT_EXECUTION_TIME,
+			                      T1.LAST_MODIFIED_TIME,
+			                      T1.VISIBILITY,
+			                      T1.CURRENCY,
+			                      T1.FILTER_EXECUTION,
+			                      T1.EXCLUSIVE_RULE_ID,
+			                      T1.EXCLUSIVE_RULE,
+			                      T1.TIME_WINDOW,
+                      			  T1.RANK_NUMBER,
+			                      T1.RESOURCE_CATEGORY,
+			                      T1.SELECTION_DATE,
+			                      T1.KEEP_EXECUTION_RUNS,
+			                      T1.EXECUTE_WORKING_HOUR,
+                                  T1.START_WORKING_HOUR_TIME,
+                                  T1.END_WORKING_HOUR_TIME,
+                                  T1.TIMEZONES
+                           FROM :lt_location_rule T1
+                           INNER JOIN &quot;sap.tm.trp.db.filter::cv_equipment_filter_optimized&quot; T2
+                           ON (T1.RESOURCE_FILTER_ID = T2.ID)
+                       /*    INNER JOIN &quot;sap.tm.trp.db.filter::cv_role_check_location_filter&quot; T3
+                           ON (T3.ID = T1.LOCATION_FILTER_ID)
+                           INNER JOIN &quot;sap.tm.trp.db.pipeline::cv_get_plan_list&quot; AS T4
+                           ON T1.SD_PLAN_ID = T4.ID
+                           INNER JOIN &quot;sap.tm.trp.db.filter::cv_equipment_filter&quot; T2
+                           ON (T1.RESOURCE_FILTER_ID = T2.ID)
+                           WHERE (T1.VISIBILITY = 'G' OR (T1.VISIBILITY = 'P' AND T1.CREATED_BY = :USER_NAME))*/
+                           WHERE (T1.RESOURCE_FILTER_ID IS NOT NULL AND T1.RESOURCE_FILTER_ID &lt;&gt; 0)
+                           ;
+
+      END IF;
+END
+</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="RULE_NAME" order="2">
+        <descriptions defaultDescription="RULE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="RULE_NAME"/>
+      </attribute>
+      <attribute id="DESCRIPTION" order="3">
+        <descriptions defaultDescription="DESCRIPTION"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESCRIPTION"/>
+      </attribute>
+      <attribute id="SUPPLY_DEMAND_PLAN" order="6">
+        <descriptions defaultDescription="SUPPLY_DEMAND_PLAN"/>
+        <keyMapping columnObjectName="Script_View" columnName="SUPPLY_DEMAND_PLAN"/>
+      </attribute>
+      <attribute id="RESOURCE_FILTER_DESC" order="11">
+        <descriptions defaultDescription="EQUIP_FILTER_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_FILTER_DESC"/>
+      </attribute>
+      <attribute id="LOCATION_FILTER_DESC" order="13">
+        <descriptions defaultDescription="LOCATION_FILTER_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_FILTER_DESC"/>
+      </attribute>
+      <attribute id="NETWORK_SETTING_GROUP" order="15">
+        <descriptions defaultDescription="COST_MODEL"/>
+        <keyMapping columnObjectName="Script_View" columnName="NETWORK_SETTING_GROUP"/>
+      </attribute>
+      <attribute id="LOCATION_DETERMINATION_RULE" order="17">
+        <descriptions defaultDescription="LOCATION_DETERMINATION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_DETERMINATION_RULE"/>
+      </attribute>
+      <attribute id="RECURRENCE_TYPE" order="20">
+        <descriptions defaultDescription="RECURRENCE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RECURRENCE_TYPE"/>
+      </attribute>
+      <attribute id="CREATED_BY" order="26">
+        <descriptions defaultDescription="CREATED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATED_BY"/>
+      </attribute>
+      <attribute id="MODIFIED_BY" order="28">
+        <descriptions defaultDescription="MODIFIED_BY"/>
+        <keyMapping columnObjectName="Script_View" columnName="MODIFIED_BY"/>
+      </attribute>
+      <attribute id="VISIBILITY" order="34">
+        <descriptions defaultDescription="VISIBILITY"/>
+        <keyMapping columnObjectName="Script_View" columnName="VISIBILITY"/>
+      </attribute>
+      <attribute id="CURRENCY" order="35">
+        <descriptions defaultDescription="CURRENCY"/>
+        <keyMapping columnObjectName="Script_View" columnName="CURRENCY"/>
+      </attribute>
+      <attribute id="FILTER_EXECUTION" order="36">
+        <descriptions defaultDescription="FILTER_EXECUTION"/>
+        <keyMapping columnObjectName="Script_View" columnName="FILTER_EXECUTION"/>
+      </attribute>
+      <attribute id="EXCLUSIVE_RULE" order="38">
+        <descriptions/>
+        <keyMapping columnObjectName="Script_View" columnName="EXCLUSIVE_RULE"/>
+      </attribute>
+      <attribute id="TIME_WINDOW" order="39">
+        <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_WINDOW"/>
+      </attribute>
+      <attribute id="RESOURCE_CATEGORY" order="41">
+        <descriptions defaultDescription="RESOURCE_CATEGORY"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_CATEGORY"/>
+      </attribute>
+      <attribute id="SELECTION_DATE" order="42">
+        <descriptions defaultDescription="SELECTION_DATE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SELECTION_DATE"/>
+      </attribute>
+      <attribute id="KEEP_EXECUTION_RUNS" order="43">
+        <descriptions defaultDescription="KEEP_EXECUTION_RUNS"/>
+        <keyMapping columnObjectName="Script_View" columnName="KEEP_EXECUTION_RUNS"/>
+      </attribute>
+      <attribute id="EXECUTE_WORKING_HOUR" order="44">
+        <descriptions defaultDescription="EXECUTE_WORKING_HOUR"/>
+        <keyMapping columnObjectName="Script_View" columnName="EXECUTE_WORKING_HOUR"/>
+      </attribute>
+      <attribute id="START_WORKING_HOUR_TIME" order="45">
+        <descriptions defaultDescription="START_WORKING_HOUR_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="START_WORKING_HOUR_TIME"/>
+      </attribute>
+      <attribute id="END_WORKING_HOUR_TIME" order="46">
+        <descriptions defaultDescription="END_WORKING_HOUR_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="END_WORKING_HOUR_TIME"/>
+      </attribute>
+
+      <attribute id="TIMEZONES" order="47">
+        <descriptions defaultDescription="TIMEZONES"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIMEZONES"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="ID" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="ID"/>
+      </measure>
+      <measure id="RULE_TYPE" order="4" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="RULE_TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="RULE_TYPE"/>
+      </measure>
+      <measure id="SD_PLAN_ID" order="5" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="SD_PLAN_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="SD_PLAN_ID"/>
+      </measure>
+      <measure id="TIME_RANGE" order="7" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TIME_RANGE"/>
+        <measureMapping columnObjectName="Script_View" columnName="TIME_RANGE"/>
+      </measure>
+      <measure id="TIME_RANGE_INTERVAL" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TIME_RANGE_INTERVAL"/>
+        <measureMapping columnObjectName="Script_View" columnName="TIME_RANGE_INTERVAL"/>
+      </measure>
+      <measure id="TIME_RANGE_UNIT" order="9" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="TIME_RANGE_UNIT"/>
+        <measureMapping columnObjectName="Script_View" columnName="TIME_RANGE_UNIT"/>
+      </measure>
+      <measure id="RESOURCE_FILTER_ID" order="10" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="EQUIP_FILTER_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="RESOURCE_FILTER_ID"/>
+      </measure>
+      <measure id="LOCATION_FILTER_ID" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LOCATION_FILTER_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="LOCATION_FILTER_ID"/>
+      </measure>
+      <measure id="NETWORK_SETTING_GROUP_ID" order="14" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="COST_MODEL_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="NETWORK_SETTING_GROUP_ID"/>
+      </measure>
+      <measure id="LOCATION_DETERMIN_ID" order="16" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LOCATION_DETERMIN_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="LOCATION_DETERMIN_ID"/>
+      </measure>
+      <measure id="SCHEDULE_TIME_TYPE" order="18" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="SCHEDULE_TIME_TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="SCHEDULE_TIME_TYPE"/>
+      </measure>
+      <measure id="RECURRENCE_INTERVAL" order="19" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="RECURRENCE_INTERVAL"/>
+        <measureMapping columnObjectName="Script_View" columnName="RECURRENCE_INTERVAL"/>
+      </measure>
+      <measure id="RECURRENCE_DAY" order="21" aggregationType="sum" measureType="simple">
+        <descriptions/>
+        <measureMapping columnObjectName="Script_View" columnName="RECURRENCE_DAY"/>
+      </measure>
+      <measure id="START_DATETIME" order="22" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="START_DATETIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="START_DATETIME"/>
+      </measure>
+      <measure id="END_DATETIME" order="23" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="END_DATETIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="END_DATETIME"/>
+      </measure>
+      <measure id="OP_SETTING_TYPE" order="24" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="OP_SETTING_TYPE"/>
+        <measureMapping columnObjectName="Script_View" columnName="OP_SETTING_TYPE"/>
+      </measure>
+      <measure id="OPTIMIZATION" order="25" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="OPTIMIZATION"/>
+        <measureMapping columnObjectName="Script_View" columnName="OPTIMIZATION"/>
+      </measure>
+      <measure id="CREATED_ON" order="27" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="CREATED_ON"/>
+        <measureMapping columnObjectName="Script_View" columnName="CREATED_ON"/>
+      </measure>
+      <measure id="MODIFIED_ON" order="29" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="MODIFIED_ON"/>
+        <measureMapping columnObjectName="Script_View" columnName="MODIFIED_ON"/>
+      </measure>
+      <measure id="LAST_EXECUTION_TIME" order="30" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="LAST_EXECUTION_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="LAST_EXECUTION_TIME"/>
+      </measure>
+      <measure id="LAST_EXECUTION_STATUS" order="31" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LAST_EXECUTION_STATUS"/>
+        <measureMapping columnObjectName="Script_View" columnName="LAST_EXECUTION_STATUS"/>
+      </measure>
+      <measure id="NEXT_EXECUTION_TIME" order="32" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="NEXT_EXECUTION_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="NEXT_EXECUTION_TIME"/>
+      </measure>
+      <measure id="LAST_MODIFIED_TIME" order="33" aggregationType="min" measureType="simple">
+        <descriptions defaultDescription="LAST_MODIFIED_TIME"/>
+        <measureMapping columnObjectName="Script_View" columnName="LAST_MODIFIED_TIME"/>
+      </measure>
+      <measure id="EXCLUSIVE_RULE_ID" order="37" aggregationType="sum" measureType="simple">
+        <descriptions/>
+        <measureMapping columnObjectName="Script_View" columnName="EXCLUSIVE_RULE_ID"/>
+      </measure>
+      <measure id="RANK_NUMBER" order="40" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="RANK_NUMBER"/>
+        <measureMapping columnObjectName="Script_View" columnName="RANK_NUMBER"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

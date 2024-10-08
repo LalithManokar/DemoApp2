@@ -1,0 +1,45 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline.operator::p_add_six_demand_sources" (
+    IN input1 "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+	IN input2 "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+	IN input3 "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+	IN input4 "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+	IN input5 "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+	IN input6 "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets",
+	OUT sum "sap.tm.trp.db.pipeline.operator::tt_pipeline_output_datasets") 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+ 
+-- all the inputs have the same number of records and same GEO/EQUIP/INTERVAL information
+-- so just need to join with one of them to fetch the non-groupby attributes 
+sum = 
+	 SELECT 'DEMAND_ADD_SIX' AS NODE_ID,
+	         GEO_ID,GEO_NAME,GEO_FILTER_TYPE,
+	         EQUIP_TYPE,EQUIP_NAME,EQUIP_FILTER_TYPE,
+	         TIME_INTERVAL_ID,SEQUENCE,START_TIME,END_TIME,INTER_SECONDS,
+	         'DEMAND' AS OUTPUT_KEY,	         
+	         SUM(OUTPUT_VALUE) AS OUTPUT_VALUE,
+	         UNIT
+	   FROM 
+			  (
+				SELECT * from :input1
+				UNION ALL
+				SELECT * from :input2
+				UNION ALL
+				SELECT * from :input3
+				UNION ALL
+				SELECT * from :input4
+				UNION ALL
+				SELECT * from :input5
+				UNION ALL
+				SELECT * from :input6
+			  ) 
+	GROUP BY  'DEMAND_ADD_SIX' ,
+	          GEO_ID,GEO_NAME,GEO_FILTER_TYPE,
+	          EQUIP_TYPE,EQUIP_NAME,EQUIP_FILTER_TYPE,
+	          TIME_INTERVAL_ID,SEQUENCE,START_TIME,END_TIME,INTER_SECONDS,
+	          'DEMAND' ,
+	          UNIT;	
+END;

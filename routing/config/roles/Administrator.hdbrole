@@ -1,0 +1,14 @@
+role sap.tm.trp.routing.config.roles::Administrator extends catalog role "AFL__SYS_AFL_TRP_AREA_EXECUTE"
+{
+system privilege: DATA ADMIN;
+
+catalog schema "_SYS_BIC": SELECT, EXECUTE;
+catalog schema "SAP_TM_ROUTING": CREATE ANY, EXECUTE, SELECT, DELETE, UPDATE, INSERT, DROP;
+catalog schema "_SYS_REPO": SELECT, EXECUTE;
+catalog schema "HANA_XS_BASE": EXECUTE, SELECT;
+
+catalog analytic privilege : "_SYS_BI_CP_ALL";
+
+package sap.tm.trp.routing: REPO.READ;
+
+}

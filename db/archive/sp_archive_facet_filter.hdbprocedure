@@ -1,0 +1,128 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_archive_facet_filter" (IN FUZZYSEARCH_TEXT VARCHAR(500),
+																		IN PAGE_TYPE INTEGER,
+																		IN TYPE_LIST_INPUT "sap.tm.trp.db.archive::tt_id_list",
+																		IN STATUS_LIST_INPUT "sap.tm.trp.db.archive::tt_id_list",
+																		OUT FILTERED_OUTPUT "sap.tm.trp.db.archive::tt_rule_facet_filter_output" ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+	
+	TYPE_LIST_CNT TINYINT;
+	STATUS_LIST_CNT TINYINT;
+	
+BEGIN
+	DECLARE UNIT VARCHAR(3);
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    SELECT ::SQL_ERROR_CODE, ::SQL_ERROR_MESSAGE FROM DUMMY;
+    
+    
+    IF PAGE_TYPE=1 THEN 
+	ARCHIVE_OUTPUT= SELECT TYPE, 0 AS STATUS FROM "_SYS_BIC"."sap.tm.trp.db.archive/cv_archive_rule" 
+	WHERE (
+	        LOWER(NAME) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+	        OR LOWER(DESC) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+	        OR LOWER(TABLE_NAME) LIKE '%'||LOWER(:FUZZYSEARCH_TEXT)||'%'
+	    );
+	SELECT COUNT(*) INTO TYPE_LIST_CNT FROM :TYPE_LIST_INPUT;
+
+    IF :TYPE_LIST_CNT = 0
+        THEN TYPE_LIST_INPUT = SELECT DISTINCT TYPE AS ID FROM :ARCHIVE_OUTPUT;
+    END IF;	
+    
+    
+  /*   FILTERED_OUTPUT = SELECT DISTINCT
+        --MASTER_TBL.*
+        MASTER_TBL.TYPE,
+        NULL AS STATUS
+        FROM :ARCHIVE_OUTPUT AS MASTER_TBL
+        INNER JOIN :TYPE_LIST_INPUT AS TYPE_TBL
+            ON MASTER_TBL.TYPE = TYPE_TBL.ID
+                OR (MASTER_TBL.TYPE IS NULL AND TYPE_TBL.ID IS NULL);     */
+
+ --Refactored code start   
+ FILTERED_OUTPUT = SELECT DISTINCT  
+                   TYPE,
+                   NULL AS STATUS
+      FROM(
+        SELECT MASTER_TBL.TYPE,
+               NULL AS STATUS
+        FROM :ARCHIVE_OUTPUT AS MASTER_TBL
+        INNER JOIN :TYPE_LIST_INPUT AS TYPE_TBL
+            ON MASTER_TBL.TYPE = TYPE_TBL.ID 
+    UNION ALL 
+        SELECT MASTER_TBL.TYPE,
+               NULL AS STATUS
+        FROM :ARCHIVE_OUTPUT AS MASTER_TBL
+        INNER JOIN :TYPE_LIST_INPUT AS TYPE_TBL
+            ON MASTER_TBL.TYPE IS NULL AND TYPE_TBL.ID IS NULL);
+--Refactored code end  
+	
+	ELSE IF PAGE_TYPE=2 THEN 
+		ARCHIVE_OUTPUT= SELECT TYPE,STATUS FROM "_SYS_BIC"."sap.tm.trp.db.archive/cv_archive_history" ;
+
+	
+	SELECT COUNT(*) INTO TYPE_LIST_CNT FROM :TYPE_LIST_INPUT;
+		
+	SELECT COUNT(*) INTO STATUS_LIST_CNT FROM :STATUS_LIST_INPUT;
+
+    IF :TYPE_LIST_CNT = 0
+        THEN TYPE_LIST_INPUT = SELECT DISTINCT TYPE AS ID FROM :ARCHIVE_OUTPUT;
+    END IF;	
+    
+    IF :STATUS_LIST_CNT = 0
+        THEN STATUS_LIST_INPUT = SELECT DISTINCT STATUS AS ID FROM :ARCHIVE_OUTPUT;
+    END IF;    
+        
+ 
+                     
+   /*  FILTERED_OUTPUT = SELECT DISTINCT
+        --MASTER_TBL.*
+        MASTER_TBL.TYPE,
+        MASTER_TBL.STATUS
+        FROM :ARCHIVE_OUTPUT AS MASTER_TBL
+        INNER JOIN :TYPE_LIST_INPUT AS TYPE_TBL
+            ON MASTER_TBL.TYPE = TYPE_TBL.ID
+                OR (MASTER_TBL.TYPE IS NULL AND TYPE_TBL.ID IS NULL)
+        INNER JOIN :STATUS_LIST_INPUT AS STATUS_TBL
+           ON MASTER_TBL.STATUS = STATUS_TBL.ID
+               OR (MASTER_TBL.STATUS IS NULL AND STATUS_TBL.ID IS NULL)   ;   */
+
+
+--Refactored code start    
+    RS1 = SELECT DISTINCT
+            MASTER_TBL.TYPE,
+            MASTER_TBL.STATUS
+          FROM :ARCHIVE_OUTPUT AS MASTER_TBL
+          INNER JOIN :TYPE_LIST_INPUT AS TYPE_TBL
+             ON MASTER_TBL.TYPE = TYPE_TBL.ID
+    UNION ALL
+         SELECT DISTINCT
+            MASTER_TBL.TYPE,
+           MASTER_TBL.STATUS
+        FROM :ARCHIVE_OUTPUT AS MASTER_TBL
+        INNER JOIN :TYPE_LIST_INPUT AS TYPE_TBL
+            ON MASTER_TBL.TYPE IS NULL AND TYPE_TBL.ID IS NULL;
+            
+ FILTERED_OUTPUT = SELECT DISTINCT
+                        TYPE,
+                        STATUS
+                    FROM (SELECT DISTINCT
+                            MASTER_TBL.TYPE,
+                            MASTER_TBL.STATUS
+                          FROM :RS1 AS MASTER_TBL
+                          INNER JOIN :STATUS_LIST_INPUT AS STATUS_TBL
+                            ON MASTER_TBL.STATUS = STATUS_TBL.ID
+                UNION ALL
+                          SELECT DISTINCT
+                             MASTER_TBL.TYPE,
+                             MASTER_TBL.STATUS
+                          FROM :RS1 AS MASTER_TBL
+                          INNER JOIN :STATUS_LIST_INPUT AS STATUS_TBL
+                             ON MASTER_TBL.STATUS IS NULL AND STATUS_TBL.ID IS NULL);
+--Refactored code end
+                
+	END IF;
+	END IF;                
+	    
+END

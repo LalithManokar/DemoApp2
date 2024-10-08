@@ -1,0 +1,69 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.filter::p_ext_location_filter_create"(
+    IN NAME VARCHAR(50),
+    IN DESC VARCHAR(500),
+    IN VISIBLE_FLAG VARCHAR(3),
+    IN ITEMS "sap.tm.trp.db.pipeline::tt_geo_id",
+    IN LOCATION_TYPE INTEGER,
+    IN RESOURCE_CATEGORY NVARCHAR(50),
+    OUT FILTER_ID BIGINT,
+    OUT MESSAGE VARCHAR(100)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE DUP_FLAG INTEGER;
+    
+    -- One location can only be set to the primary location of one aggreage location in the same location filter
+    -- otherwise there would be troubles in resource balance
+    IF :LOCATION_TYPE > 1 THEN
+       CALL "sap.tm.trp.db.filter::p_primary_location_unique_check"(:ITEMS, :LOCATION_TYPE, DUP_FLAG);
+       
+       IF DUP_FLAG > 0 THEN 
+          MESSAGE := 'MSG_DUPLICATE_PRIMARY_LOC_USED';
+          RETURN;
+       END IF;
+       
+    END IF;
+    
+    SELECT IFNULL(MAX(ID),-100) INTO USER_ID FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    SELECT IFNULL(MAX(SPRAS),'E') INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+    
+    SELECT "sap.tm.trp.db.filter::s_location_filter".NEXTVAL INTO FILTER_ID FROM DUMMY;
+    
+    INSERT INTO "sap.tm.trp.db.filter::t_location_filter"(ID, DESC, VISIBLE_FLAG, LOCATION_TYPE, CREATE_BY, CREATE_AT, LAST_MODIFIED_BY, LAST_MODIFIED_AT, CODE, RESOURCE_CATEGORY)
+    VALUES(:FILTER_ID, :NAME, :VISIBLE_FLAG, :LOCATION_TYPE, :USER_ID, CURRENT_UTCTIMESTAMP, :USER_ID, CURRENT_UTCTIMESTAMP, UPPER(:NAME), :RESOURCE_CATEGORY);
+    
+    INSERT INTO "sap.tm.trp.db.filter::t_location_filter_t"(ID, SPRAS, DESC)
+    VALUES(:FILTER_ID, :SPRAS, :DESC);
+    
+    IF :LOCATION_TYPE = 1 THEN
+        INSERT INTO "sap.tm.trp.db.filter::t_location_filter_location"(LOCATION_FILTER_ID, LOCATION_ID)
+        SELECT :FILTER_ID, ID FROM :ITEMS;
+    ELSEIF :LOCATION_TYPE = 2 THEN
+        INSERT INTO "sap.tm.trp.db.filter::t_location_filter_location"(LOCATION_FILTER_ID, LOCATION_GROUP_ID)
+        --SELECT :FILTER_ID, TO_INTEGER(ID) FROM :ITEMS;
+        SELECT :FILTER_ID, ID FROM :ITEMS;
+    ELSEIF :LOCATION_TYPE = 3 THEN
+        INSERT INTO "sap.tm.trp.db.filter::t_location_filter_zone"(LOCATION_FILTER_ID, ZONE_ID)
+        SELECT :FILTER_ID, ID FROM :ITEMS;
+    ELSEIF :LOCATION_TYPE = 4 THEN
+        INSERT INTO "sap.tm.trp.db.filter::t_location_filter_zone"(LOCATION_FILTER_ID, ZONE_GROUP_ID)
+        --SELECT :FILTER_ID, TO_INTEGER(ID) FROM :ITEMS;
+        SELECT :FILTER_ID, ID FROM :ITEMS;
+    ELSEIF :LOCATION_TYPE = 5 THEN
+        INSERT INTO "sap.tm.trp.db.filter::t_location_filter_region"(LOCATION_FILTER_ID, ZONE_ID)
+        SELECT :FILTER_ID, ID FROM :ITEMS;
+    ELSE
+        INSERT INTO "sap.tm.trp.db.filter::t_location_filter_region"(LOCATION_FILTER_ID, REGION_GROUP_ID)
+        --SELECT :FILTER_ID, TO_INTEGER(ID) FROM :ITEMS;
+        SELECT :FILTER_ID, ID FROM :ITEMS;
+    END IF;
+    
+    MESSAGE := 'MSG_SUCCESS_STATUS';
+END;

@@ -1,0 +1,178 @@
+procedure "SAP_TM_TRP"."sap.tm.trp.db.streetturn::p_streetturn_controller" (
+    in pickup_rule_id bigint,
+    in return_rule_id bigint,
+    out t_result "sap.tm.trp.db.streetturn.algorithm::tt_streetturn_result",
+    out t_message "sap.tm.trp.db.common::tt_message"
+) 
+	language sqlscript
+	sql security invoker
+	default schema "SAP_TM_TRP"
+	as
+begin
+    declare v_count int;
+    declare v_pickup_sd_plan_id bigint;
+    declare v_return_sd_plan_id bigint;
+    declare v_pickup_equip_filter_id bigint;
+    declare v_return_equip_filter_id bigint;
+    declare v_pickup_location_filter_id bigint;
+    declare v_return_location_filter_id bigint;
+    declare v_pickup_cost_model_id bigint;
+    declare v_return_cost_model_id bigint;
+    
+    declare v_execution_id bigint;
+    declare v_node_id bigint;
+    declare v_success_flag int;
+    
+    -- Pickup rule is mandatory
+    if pickup_rule_id = 0 then
+        t_message = select 'E' as severity, 'MSG_PICKUP_RULE_ID_MISSING' as message_id,
+        '' as message, '' as var0, '' as var1, '' AS var2, '' as var3, '' as var4 from dummy;
+        return;
+    end if;
+    
+    -- Return rule is mandatory
+    if return_rule_id = 0 then
+        t_message = select 'E' as severity, 'MSG_RETURN_RULE_ID_MISSING' as message_id,
+        '' as message, '' as var0, '' as var1, '' AS var2, '' as var3, '' as var4 from dummy;
+        return;
+    end if;
+    
+    -- Pickup rule exists
+    select count(*) into v_count
+    from  "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    where id = :pickup_rule_id and rule_type = 1;  -- pickup rule
+    
+    if v_count = 0 then
+        t_message = select 'E' as severity, 'MSG_LOCATION_RULE_NOT_FOUND' as message_id,
+        '' as message, :pickup_rule_id as var0, '' as var1, '' AS var2, '' as var3, 
+        '' as var4 from dummy;
+        return;
+    end if;
+    
+    -- Return rule exists
+    select count(*) into v_count
+    from  "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    where id = :return_rule_id and rule_type = 2;  -- return rule
+    
+    if v_count = 0 then
+        t_message = select 'E' as severity, 'MSG_LOCATION_RULE_NOT_FOUND' as message_id,
+        '' as message, :return_rule_id as var0, '' as var1, '' AS var2, '' as var3, 
+        '' as var4 from dummy;
+        return;
+    end if;
+    
+    -- Get rule details
+    select sd_plan_id, equip_filter_id, location_filter_id, cost_model_id
+    into v_pickup_sd_plan_id, v_pickup_equip_filter_id, 
+    v_pickup_location_filter_id, v_pickup_cost_model_id
+    from  "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    where id = :pickup_rule_id and rule_type = 1; 
+    
+    select sd_plan_id, equip_filter_id, location_filter_id, cost_model_id
+    into v_return_sd_plan_id, v_return_equip_filter_id, 
+    v_return_location_filter_id, v_return_cost_model_id
+    from  "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+    where id = :return_rule_id and rule_type = 2;  -- return rule
+    
+    -- Select the transportation cost. 
+    -- The cost is saved in global temporary table filled by streeturn.xsjs
+    -- It is a must to integrate with TM
+    t_transport_cost = select c.from_location, c.to_location,
+    c.equipment_id as container_type, c.transport_mode as mtr, c.cost
+    from "sap.tm.trp.db.costmodel::t_transportation_cost_global_temporary" as c;
+    
+    select count(*) into v_count from  :t_transport_cost;
+    
+    if v_count = 0 then
+        t_message = select 'E' as severity, 'MSG_TRANSPORT_COST_MISSING' as message_id,
+        '' as message, '' as var0, '' as var1, '' AS var2, '' as var3, 
+        '' as var4 from dummy;
+        return;
+    end if;
+    
+    -- The booking is saved in global temporary table filled by streeturn.xsjs
+    -- In order to get container types, we must find all the related TU
+    -- And we cannot afford to doing it twice
+    t_booking = select * from "sap.tm.trp.db.streetturn::t_booking_temp";
+    
+    -- Get exeuction id, node id of supply demand node                  
+    select max(id) into v_execution_id from "sap.tm.trp.db.pipeline::t_plan_execution"
+    where plan_model_id = :v_pickup_sd_plan_id;
+    
+    -- Exception might be raised
+    if :v_execution_id = 0 then
+        t_message = select 'E' as severity, 'MSG_NO_PLAN_MODEL_EXECUTION' as message_id,
+        '' as message, :v_return_sd_plan_id as var0, '' as var1, '' AS var2, '' as var3, 
+        '' as var4 from dummy;
+        return;
+    end if;
+    
+    call  "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid"(:v_execution_id, v_node_id);
+    
+    if :v_node_id = 0 then
+        t_message = select 'E' as severity, 'MSG_NO_DEFALT_PLAN_MODEL_NODE' as message_id,
+        '' as message, :v_pickup_sd_plan_id as var0, '' as var1, '' AS var2, '' as var3, 
+        '' as var4 from dummy;
+        return;
+    end if;
+    
+    -- Prepare the stock, supply and demand
+    t_pickup_depot = select location_name as depot_id, location_id, 
+    equip_type_id as equipment_id, t1.start_time as planned_date, supply, 
+    demand, stock, min_safety_stock as safety_stock, max_safety_stock as max_stock
+    from "sap.tm.trp.db.planningcockpit::cv_get_all_plan_data_with_alert" 
+    (placeholder."$$IN_EXECUTION_ID$$"=>:v_execution_id) t1
+    where t1.node_id = :v_node_id;
+    
+    -- Get execution id
+    select max(id) into v_execution_id from "sap.tm.trp.db.pipeline::t_plan_execution"
+    where plan_model_id = :v_return_sd_plan_id;
+    
+    if :v_execution_id = 0 then
+        t_message = select 'E' as severity, 'MSG_NO_PLAN_MODEL_EXECUTION' as message_id,
+        '' as message, :v_return_sd_plan_id as var0, '' as var1, '' AS var2, '' as var3, 
+        '' as var4 from dummy;
+        return;
+    end if;
+    
+    -- Get default node
+    call  "sap.tm.trp.db.pipeline::p_get_default_node_by_executionid"(:v_execution_id, v_node_id); 
+    
+    if :v_node_id = 0 then
+        t_message = select 'E' as severity, 'MSG_NO_DEFALT_PLAN_MODEL_NODE' as message_id,
+        '' as message, :v_return_sd_plan_id as var0, '' as var1, '' AS var2, '' as var3, 
+        '' as var4 from dummy;
+        return;
+    end if;
+    
+    -- Prepare the stock, supply and demand
+    t_return_depot = select location_name as depot_id, location_id, 
+    equip_type_id as equipment_id, t1.start_time as planned_date, supply, 
+    demand, stock, min_safety_stock as safety_stock, max_safety_stock as max_stock
+    from "sap.tm.trp.db.planningcockpit::cv_get_all_plan_data_with_alert" 
+    (placeholder."$$IN_EXECUTION_ID$$"=>:v_execution_id) t1
+    where t1.node_id = :v_node_id;
+    
+    t_depot = select * from :t_pickup_depot
+    union all select * from :t_return_depot;
+    
+    -- Get location equipment map
+    t_location_equip_map = select distinct A.LOCATION_ID AS LOCID , 
+        case trim(A.RESOURCE_TYPE)
+        when '' then 'x'
+        else A.RESOURCE_TYPE
+        end as EQUI_CODE
+	    --from "sap.tm.trp.db.transportation::v_location_equip_map" as A
+	    FROM "sap.tm.trp.db.semantic.location::v_location_resource" AS A
+		inner join :t_depot as B on B.LOCATION_ID=A.LOCATION_ID;
+		--where A.RESOURCE_GROUP_TYPE = '12';
+    
+    call "sap.tm.trp.db.streetturn.algorithm::p_streetturn"(
+        :t_booking,
+        :t_depot,
+        :t_transport_cost,
+        :t_location_equip_map,
+        t_result
+    );
+
+end;

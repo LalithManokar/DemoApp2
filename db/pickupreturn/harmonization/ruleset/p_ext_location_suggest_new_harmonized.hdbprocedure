@@ -1,0 +1,52 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_ext_location_suggest_new_harmonized" (
+    IN RULE_ID  BIGINT,
+    IN TU_IDS_INPUT CLOB,
+    --IN TU_IDS "sap.tm.trp.db.pickupreturn::tt_tu_list", 
+    OUT result "sap.tm.trp.db.pickupreturn::tt_suggestion_data"
+   )
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS 
+BEGIN
+
+	DECLARE COST_MODEL BIGINT;
+	DECLARE IV_LOCATION_BASED_COST CLOB;
+	
+	CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:TU_IDS_INPUT,',',TU_IDS_INPUT_STRING);
+	
+    TU_IDS = SELECT string as TU_ID FROM :TU_IDS_INPUT_STRING;
+   
+    CALL "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_ext_get_location_equip_type" (:RULE_ID, :TU_IDS, COST_MODEL, LT_FROM_LOC, LT_TO_LOC);
+    
+    CALL "sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_get_lanes_wrapper" (:LT_FROM_LOC, :LT_TO_LOC, LANE_LIST, CARRIER_LIST);
+    
+    CALL "sap.tm.trp.db.pickupreturn.harmonization.ruleset::p_ext_prepare_info_for_cost"(
+        :RULE_ID,
+        :LANE_LIST,
+        :CARRIER_LIST,
+        DATASET_CONNECTION_INFO,
+        MISSING_COST,
+        MISSING_FILTER_MESSAGE,
+        LANE_OUTPUT
+    );
+    
+    LANE_OUTPUT_CLOB=SELECT IFNULL(FROM_LOCATION,' ') AS FROM_LOCATION,
+                       IFNULL(TO_LOCATION,' ') AS TO_LOCATION,
+                       IFNULL(MTR,' ') AS MTR,
+                       IFNULL(RESOURCE_TYPE,' ') AS RESOURCE_TYPE,
+                       IFNULL(CARRIER,' ') AS CARRIER,
+                       IFNULL(DISTANCE,0) AS DISTANCE,
+                       IFNULL(DURATION,0) AS DURATION
+                FROM :LANE_OUTPUT;
+    
+    SELECT STRING_AGG(FROM_LOCATION ||','|| TO_LOCATION  ||','|| MTR  ||','|| RESOURCE_TYPE ||','|| CARRIER ||','|| DISTANCE ||','|| DURATION ||'~','')
+    INTO IV_LOCATION_BASED_COST FROM :LANE_OUTPUT_CLOB;
+    
+    CALL "sap.tm.trp.db.pickupreturn::p_ext_location_suggest_new_c" (
+        :RULE_ID,
+        :TU_IDS_INPUT,
+        :IV_LOCATION_BASED_COST,
+        result
+    );
+END

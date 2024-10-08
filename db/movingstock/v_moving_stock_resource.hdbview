@@ -1,0 +1,19 @@
+schema = "SAP_TM_TRP";
+
+query = "
+SELECT
+     CASE WHEN T1.VESSEL <> '' THEN T1.VESSEL ELSE T4.VESSEL END AS \"VesselID\",
+     T3.SCHEDULE as \"ScheduleID\",
+     T3.MOT,
+     T4.VOYAGE as \"VoyageID\",
+     T1.LOC_SEQ as \"SequenceNumber\",
+     T1.LOCATION_NAME AS  \"Location\",
+     T1.DEPARTURE_UTC as \"DepartureTime\",
+     T1.ARRIVAL_UTC as \"ArrivalTime\"
+FROM \"sap.tm.trp.db.semantic.schedule::v_departure_location\" T1
+INNER JOIN \"sap.tm.trp.db.semantic.schedule::v_schedule\" T3 ON (T1.ROOT_KEY = T3.DB_KEY)
+INNER JOIN \"sap.tm.trp.db.semantic.schedule::v_departure\" T4 ON (T1.PARENT_KEY = T4.DB_KEY)
+         
+        ";
+    
+depends_on_view = ["sap.tm.trp.db.semantic.schedule::v_departure_location", "sap.tm.trp.db.semantic.schedule::v_schedule","sap.tm.trp.db.semantic.schedule::v_departure"];  

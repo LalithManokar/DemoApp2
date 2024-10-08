@@ -1,0 +1,22 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.dataset::p_filter_conn_by_from_to_loc_mtr" (
+	IN conn_data TABLE(id BIGINT, dataset_id BIGINT, from_location NVARCHAR(50), to_location NVARCHAR(50), mtr NVARCHAR(10), action CHAR, source CHAR, hash VARBINARY(32)),
+	IN from_location NVARCHAR(50),
+	IN to_location NVARCHAR(50),
+	IN mtr NVARCHAR(10),
+	OUT conn_signature TABLE(id BIGINT, dataset_id BIGINT, action CHAR, source CHAR, hash VARBINARY(32))
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING
+   READS SQL DATA AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+	conn_signature = 
+	SELECT DISTINCT id, dataset_id, action, source, hash
+	FROM :conn_data
+	WHERE (:from_location IS NULL OR :from_location = '' OR from_location = :from_location)
+    AND (:to_location IS NULL OR :to_location = '' OR to_location = :to_location)
+    AND (:mtr IS NULL OR :mtr = '' OR mtr = :mtr);
+END

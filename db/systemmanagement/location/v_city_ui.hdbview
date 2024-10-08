@@ -1,0 +1,16 @@
+schema = "SAP_TM_TRP";
+query = "SELECT DISTINCT T1.CODE AS CODE,
+                T1.COUNTRY_CODE AS COUNTRY_CODE,
+                T2.COUNTRY_NAME AS COUNTRY_NAME,
+                T1.STATE_CODE AS STATE_CODE,
+                T1.NAME AS CITY_NAME,
+                T1.NAME AS NAME
+                
+           FROM \"sap.tm.trp.db.semantic.location::v_city\" as T1
+                INNER JOIN \"sap.tm.trp.db.systemmanagement.location::v_country_ui\" AS T2
+                ON T1.COUNTRY_CODE = T2.CODE
+               
+                ";
+                
+depends_on_view = ["sap.tm.trp.db.semantic.location::v_city", "sap.tm.trp.db.systemmanagement.location::v_country_ui"];
+              

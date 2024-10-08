@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_archive_schedule_next_execution_detail" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="$$client$$" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_archive_schedule_next_execution_detail"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="BIGINT" id="ID"/>
+        <viewAttribute datatype="BIGINT" id="ARCHIVE_SCHEDULE_ID"/>
+        <viewAttribute datatype="VARCHAR" id="RECURRENCE_TYPE" length="50"/>
+        <viewAttribute datatype="INTEGER" id="RECURRENCE_INTERVAL"/>
+        <viewAttribute datatype="INTEGER" id="RECURRENCE_DAY"/>
+        <viewAttribute datatype="VARCHAR" id="START_TIME" length="30"/>
+        <viewAttribute datatype="VARCHAR" id="EXPIRY_TIME" length="30"/>
+        <viewAttribute datatype="VARCHAR" id="NEXT_EXECUTION_TIME" length="30"/>
+        <viewAttribute datatype="VARCHAR" id="LAST_EXECUTION_TIME" length="30"/>
+        <viewAttribute datatype="TINYINT" id="LAST_EXECUTION_STATUS"/>
+        <viewAttribute datatype="NVARCHAR" id="STATUS_DESC" length="50"/>
+
+        <viewAttribute id="TIMEZONES" datatype="NVARCHAR" length="40"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition>
+ /********* Begin Procedure Script ************/
+ BEGIN
+
+    DECLARE AUTH SMALLINT;
+ 	DECLARE CUSTOMCONDITION CONDITION FOR SQL_ERROR_CODE 10001;/* Custom Error Code = 10001*/
+
+	/*User Defined exception handler */
+
+	DECLARE EXIT HANDLER FOR CUSTOMCONDITION RESIGNAL ;
+
+	CALL &quot;sap.tm.trp.db.archive::p_check_archive_authorization&quot;(
+	  	:AUTH
+		);
+
+
+	IF AUTH = 0 THEN
+		--Signaling Custom error and setting the Custom Error Message
+		SIGNAL CUSTOMCONDITION SET MESSAGE_TEXT = 'USER DOES NOT HAVE READ ACCESS';
+	END IF;
+
+	---information for the JOB run
+     sql0 =  SELECT A.MODEL_ID AS &quot;RULE_ID&quot;,A.SCHEDULE_ID AS &quot;XS_JOB_ID&quot;,
+                IFNULL(C.PLANNED_TIME, A.CREATE_DATE) AS &quot;PLANNED_TIME&quot;,
+                 C.STATUS AS &quot;STATUS&quot;,
+             B.EXPIRY_TIME,A.SCHEDULE_FLAG AS &quot;LATEST_JOB_FLAG&quot;
+             FROM &quot;sap.tm.trp.db.job::t_job_schedule&quot; A
+             INNER JOIN &quot;sap.tm.trp.db.job::t_archive_schedule_detail&quot; B ON B.RULE_ID = A.MODEL_ID AND B.SCHEDULE_TYPE = 'ARCHIVE'
+             LEFT OUTER JOIN &quot;_SYS_XS&quot;.&quot;JOB_LOG&quot; C ON C.ID = A.SCHEDULE_ID
+             WHERE A.SCHEDULE_TYPE = 'ARCHIVE';
+
+	var_out =
+		SELECT
+                T1.RULE_ID AS ID,
+                T1.ID AS ARCHIVE_SCHEDULE_ID,
+                T1.RECURRENCE_TYPE,
+                T1.RECURRENCE_INTERVAL,
+                T1.RECURRENCE_DAY,
+                TO_VARCHAR(UTCTOLOCAL(T1.START_TIME, IFNULL(T1.TIMEZONES,'UTC'), 'platform'),'YYYY-MM-DD HH24:MI:SS') AS START_TIME,
+                TO_VARCHAR(UTCTOLOCAL(T1.EXPIRY_TIME, IFNULL(T1.TIMEZONES,'UTC'), 'platform'),'YYYY-MM-DD HH24:MI:SS') AS EXPIRY_TIME,
+                TO_VARCHAR(UTCTOLOCAL(T10.PLANNED_TIME, IFNULL(T1.TIMEZONES,'UTC'), 'platform'),'YYYY-MM-DD HH24:MI:SS') AS NEXT_EXECUTION_TIME,
+                TO_VARCHAR(UTCTOLOCAL(T18.LAST_EXECUTION_TIME, IFNULL(T1.TIMEZONES,'UTC'), 'platform'),'YYYY-MM-DD HH24:MI:SS') AS LAST_EXECUTION_TIME,
+                T18.LAST_EXECUTION_STATUS,
+                T18.STATUS_DESC,
+                T1.TIMEZONES
+         from &quot;sap.tm.trp.db.job::t_archive_schedule_detail&quot; T1
+         LEFT OUTER JOIN
+                    (SELECT RULE_ID, PLANNED_TIME, EXPIRY_TIME FROM :SQL0
+                    WHERE STATUS = 'SCHEDULED' AND LATEST_JOB_FLAG = 1) T10
+                    ON T1.RULE_ID = T10.RULE_ID
+			LEFT OUTER JOIN
+                    (
+                        SELECT T180.ID AS EXECUTION_ID, T180.RULE_ID, T180.START_TIME AS LAST_EXECUTION_TIME, T180.STATUS AS LAST_EXECUTION_STATUS,T3.STATUS_DESC
+						FROM &quot;sap.tm.trp.db.archive::t_archive_execution_detail&quot; T180
+                        INNER JOIN (SELECT MAX(ID) AS MAX_ID ,RULE_ID FROM &quot;sap.tm.trp.db.archive::t_archive_execution_detail&quot; GROUP BY RULE_ID) T181
+                        ON T180.ID = T181.MAX_ID
+						INNER JOIN &quot;sap.tm.trp.db.archive::t_archive_status&quot; T3
+						ON T180.STATUS = T3.STATUS
+                    ) T18 ON T1.RULE_ID = T18.RULE_ID
+         WHERE T1.SCHEDULE_TYPE = 'ARCHIVE';
+
+END /********* End Procedure Script ************/</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="ARCHIVE_SCHEDULE_ID" order="2">
+        <descriptions defaultDescription="ARCHIVE_SCHEDULE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ARCHIVE_SCHEDULE_ID"/>
+      </attribute>
+      <attribute id="RECURRENCE_TYPE" order="3">
+        <descriptions defaultDescription="RECURRENCE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RECURRENCE_TYPE"/>
+      </attribute>
+      <attribute id="RECURRENCE_INTERVAL" order="4">
+        <descriptions defaultDescription="RECURRENCE_INTERVAL"/>
+        <keyMapping columnObjectName="Script_View" columnName="RECURRENCE_INTERVAL"/>
+      </attribute>
+      <attribute id="RECURRENCE_DAY" order="5">
+        <descriptions defaultDescription="RECURRENCE_DAY"/>
+        <keyMapping columnObjectName="Script_View" columnName="RECURRENCE_DAY"/>
+      </attribute>
+      <attribute id="START_TIME" order="6">
+        <descriptions defaultDescription="START_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </attribute>
+      <attribute id="EXPIRY_TIME" order="7">
+        <descriptions defaultDescription="EXPIRY_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="EXPIRY_TIME"/>
+      </attribute>
+      <attribute id="NEXT_EXECUTION_TIME" order="8">
+        <descriptions defaultDescription="NEXT_EXECUTION_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NEXT_EXECUTION_TIME"/>
+      </attribute>
+      <attribute id="LAST_EXECUTION_TIME" order="9">
+        <descriptions defaultDescription="LAST_EXECUTION_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="LAST_EXECUTION_TIME"/>
+      </attribute>
+      <attribute id="STATUS_DESC" order="11">
+        <descriptions defaultDescription="STATUS_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="STATUS_DESC"/>
+      </attribute>
+
+      <attribute id="TIMEZONES" order="12">
+        <descriptions defaultDescription="TIMEZONES"/>
+
+        <keyMapping columnObjectName="Script_View" columnName="TIMEZONES"/>
+
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="LAST_EXECUTION_STATUS" order="10" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LAST_EXECUTION_STATUS"/>
+        <measureMapping columnObjectName="Script_View" columnName="LAST_EXECUTION_STATUS"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

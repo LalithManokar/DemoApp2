@@ -1,0 +1,21 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.leasecontract::sp_lease_materialization_running" ( OUT STATUS INTEGER ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+DECLARE ACTIVE_CNT INTEGER;
+
+select count(1) into STATUS from "sap.tm.trp.db.leasecontract::t_lease_object_change_track"  where status in (2,3);
+
+/* Check actuall SP is running in active statements */
+IF :STATUS  > 0 THEN
+	select count(1) into ACTIVE_CNT from M_ACTIVE_STATEMENTS WHERE STATEMENT_STRING like '%CALL "sp_lease_contract_hire_term_materialized%';
+	IF :ACTIVE_CNT < 2 THEN
+		STATUS := 0;
+		call "sap.tm.trp.db.leasecontract::sp_lease_object_change_status"(3,1);
+		call "sap.tm.trp.db.leasecontract::sp_lease_object_change_status"(2,1);
+	END IF ;
+END IF;
+
+END;

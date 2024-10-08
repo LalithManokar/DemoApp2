@@ -1,0 +1,235 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit.reposition::p_genios_path_cap_types_solve" (
+IN pt_mode INT,
+IN pt_init "sap.tm.trp.db.planningcockpit.reposition::tt_pathbased_res",
+IN pt_node "sap.tm.trp.db.planningcockpit.reposition::tt_pathbased_node",
+IN pt_path "sap.tm.trp.db.planningcockpit.reposition::tt_pathbased_path",
+IN pt_cap_cons "sap.tm.trp.db.planningcockpit.reposition::tt_pathbased_cap_types_cons",
+OUT pt_res "sap.tm.trp.db.planningcockpit.reposition::tt_pathbased_res",
+OUT pt_obj DOUBLE,
+OUT flag VARCHAR(20) 
+) 
+LANGUAGE SQLSCRIPT 
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN 
+
+DECLARE num_constraints INT;
+DECLARE num_var INT;
+DECLARE num_var2 INT;
+DECLARE var_type VARCHAR(1);
+DECLARE maximum_runtime INT DEFAULT 10000;
+DECLARE BM_COST DOUBLE;
+
+SELECT MAX("COST") INTO BM_COST FROM :pt_path;
+
+IF pt_mode > 0 THEN
+	var_type := 'D';
+	maximum_runtime := pt_mode;
+ELSE
+	var_type := 'C';
+END IF;
+
+pt_init_r = SELECT A."PATH_ID",
+				   B."FLOW"
+			FROM :pt_path A
+			LEFT JOIN :pt_init B ON A."PATH_ID"=B."PATH_ID";
+
+it_variables_temp = SELECT ROW_NUMBER() OVER() AS "VARIABLEID",
+							A."PATH_ID",
+							A."PATH_ID" || '_'|| A."SOURCE_NODE_ID" || '_' || A."SINK_NODE_ID" AS "VARIABLENAME",
+							var_type AS "TYPE",
+							A."LOWER" AS "LOWERBOUND",
+							A."CAPACITY" AS "UPPERBOUND",
+							B."FLOW" AS "INITIALVALUE",
+							A."SOURCE_NODE_ID",
+							A."SINK_NODE_ID",
+							A."COST"
+					FROM :pt_path A
+					INNER JOIN :pt_init_r B ON A."PATH_ID"=B."PATH_ID";
+
+
+
+it_variables = SELECT "VARIABLEID",
+					  "VARIABLENAME",
+					  "TYPE",
+					  "LOWERBOUND",
+					  "UPPERBOUND",
+					  "INITIALVALUE"
+			   FROM :it_variables_temp; 		
+					  					
+SELECT COUNT(*) INTO num_var FROM :it_variables;
+
+it_linear_constraints_fb = SELECT "NODE_ID" || '_fb' AS "CONSTRAINTNAME",
+								  'E' AS "TYPE",
+								  -"SUPPLY_DEMAND" AS "RHS",
+								  "NODE_ID",
+								  "SUPPLY_DEMAND"
+						   FROM :pt_node;							
+
+							
+it_linear_constraints_cap = SELECT DISTINCT "CONSTRAINT_ID", "CAPACITY",
+							 			    "CONSTRAINT_ID"|| '_' ||  "CAPACITY" ||  '_capacity' AS "CONSTRAINTNAME",
+							        	    'L' AS "TYPE",
+							  			    "CAPACITY" AS "RHS"							  
+							FROM :pt_cap_cons;			
+							  						  
+							  
+
+SELECT COUNT(*) INTO num_constraints FROM :it_linear_constraints_fb;
+						  				
+it_linear_constraints_fb_temp = SELECT ROW_NUMBER() OVER() AS "CONSTRAINTID",
+									   "CONSTRAINTNAME",
+									   "TYPE",
+									   "RHS",
+									   "NODE_ID",
+									   "SUPPLY_DEMAND"
+								FROM :it_linear_constraints_fb;  
+
+it_variables_dump_in = SELECT "CONSTRAINTID"+:num_var AS "VARIABLEID",
+							  "CONSTRAINTNAME" || '_dump_in' AS "VARIABLENAME",
+							  var_type AS "TYPE",
+							  0 AS "LOWERBOUND",
+							  100000 AS "UPPERBOUND",
+							  NULL AS "INITIALVALUE"
+					   FROM :it_linear_constraints_fb_temp;
+ 
+ SELECT COUNT(*) INTO num_var2 FROM :it_variables_dump_in;
+ 
+ 
+ it_variables_dump_out = SELECT "CONSTRAINTID"+:num_var+:num_var2 AS "VARIABLEID",
+								"CONSTRAINTNAME" || '_dump_out' AS "VARIABLENAME",
+								var_type AS "TYPE",
+								0 AS "LOWERBOUND",
+								100000 AS "UPPERBOUND",
+								NULL AS "INITIALVALUE"
+						 FROM :it_linear_constraints_fb_temp; 
+ 
+ it_variables = SELECT * FROM :it_variables
+				UNION ALL
+				SELECT * FROM :it_variables_dump_in
+				UNION ALL
+				SELECT * FROM :it_variables_dump_out;			
+		
+it_constraint_cap_ids = SELECT ROW_NUMBER() OVER() + :num_constraints AS "CONSTRAINTID",
+							   "CONSTRAINT_ID",
+							   "CONSTRAINTNAME",
+							   "TYPE",
+							   "RHS",
+							   "CAPACITY"
+						FROM :it_linear_constraints_cap;										 
+
+it_linear_constraints_cap_temp = SELECT "CONSTRAINTNAME",
+										 "TYPE",
+										 "RHS",
+							  			 "CAPACITY",
+							  			 "CONSTRAINTID"
+							  	 FROM :it_constraint_cap_ids;
+
+it_linear_constraints = SELECT "CONSTRAINTID",
+							   "CONSTRAINTNAME",
+							   "TYPE",
+							   "RHS"
+						FROM :it_linear_constraints_fb_temp
+						UNION ALL
+						SELECT "CONSTRAINTID",
+							   "CONSTRAINTNAME",
+							   "TYPE",
+							   "RHS" 
+						FROM :it_linear_constraints_cap_temp;
+							  
+it_linear_constraint_monomes_fb_in = SELECT A."CONSTRAINTID",
+										    B."VARIABLEID",
+										 	1 AS "COEFFICIENT"
+									 FROM :it_linear_constraints_fb_temp A
+									 INNER JOIN :it_variables_temp B ON B."SINK_NODE_ID"=A."NODE_ID";
+
+it_linear_constraint_monomes_fb_out = SELECT A."CONSTRAINTID",
+											 B."VARIABLEID",
+											-1 AS "COEFFICIENT"
+									  FROM :it_linear_constraints_fb_temp A
+									  INNER JOIN :it_variables_temp B ON B."SOURCE_NODE_ID"=A."NODE_ID";
+								
+it_linear_constraint_monomes_cap = SELECT A."CONSTRAINTID",
+										  C."VARIABLEID",
+										  B."TEU" AS "COEFFICIENT"
+								   FROM :it_constraint_cap_ids A
+								   INNER JOIN :pt_cap_cons B ON A."CONSTRAINT_ID" = B."CONSTRAINT_ID"
+								   INNER JOIN :it_variables_temp C ON B."PATH_ID" = C."PATH_ID";
+
+it_linear_constraint_dump_in = SELECT A."CONSTRAINTID",
+								      B."VARIABLEID",
+								      1 AS "COEFFICIENT"
+							   FROM :it_linear_constraints_fb_temp A
+							   INNER JOIN :it_variables_dump_in B ON A."CONSTRAINTID"+:num_var=B."VARIABLEID";
+
+
+it_linear_constraint_dump_out = SELECT A."CONSTRAINTID",
+								       B."VARIABLEID",
+								       -1 AS "COEFFICIENT"
+							    FROM :it_linear_constraints_fb_temp A
+								INNER JOIN :it_variables_dump_out B 
+								ON A."CONSTRAINTID"+:num_var+:num_var2=B."VARIABLEID";
+
+it_linear_constraint_monomes =  SELECT * FROM :it_linear_constraint_monomes_fb_in
+							    UNION ALL
+								SELECT * FROM :it_linear_constraint_monomes_fb_out
+								UNION ALL
+								SELECT * FROM :it_linear_constraint_monomes_cap
+								UNION ALL
+								SELECT * FROM :it_linear_constraint_dump_in
+								UNION ALL
+								SELECT * FROM :it_linear_constraint_dump_out;					
+						
+it_obj_penalty = SELECT "VARIABLEID",
+						100*BM_COST AS "COEFFICIENT"
+				 FROM :it_variables_dump_in
+				 UNION ALL
+				 SELECT "VARIABLEID",
+				 100*BM_COST AS "COEFFICIENT"
+				 FROM :it_variables_dump_out;
+				
+it_objective_monomes = SELECT "VARIABLEID", 
+							  "COST" AS "COEFFICIENT"
+					   FROM :it_variables_temp
+					   UNION ALL
+					   SELECT * FROM :it_obj_penalty;
+
+it_parameters = SELECT TOP 0 NULL AS "NAME", NULL AS "VALUE" FROM dummy;
+
+CALL "_SYS_AFL"."OFL_AREA_GENIOS_SOLVE_PROC"(
+'I',
+:maximum_runtime,
+:it_variables,
+:it_linear_constraints,
+:it_linear_constraint_monomes,
+:it_objective_monomes,
+:it_parameters,
+et_var,
+et_cons,
+et_solver);
+
+SELECT (CASE WHEN "SOLUTION_STATUS"=0 THEN 'OPTIMAL SOLUTION' 
+		WHEN "SOLUTION_STATUS"=1 THEN 'FEASIBLE SOLUTION'
+		WHEN "SOLUTION_STATUS"=2 THEN 'INFEASIBLE SOLUTION'
+		WHEN "SOLUTION_STATUS"=3 THEN 'INFEASIBLE PROBLEM'
+		WHEN "SOLUTION_STATUS"=4 THEN 'UNBOUNDED PROBLEM'
+		WHEN "SOLUTION_STATUS"=5 THEN 'CORRUPT INPUT DATA'
+		WHEN "SOLUTION_STATUS"=6 THEN 'INTERNAL ERROR'
+		ELSE 'UNKNOWN STATUS'
+		END) INTO flag FROM :et_solver;
+
+pt_res = SELECT A."PATH_ID",
+				B."VALUE" AS "FLOW"
+		 FROM :it_variables_temp A
+		 INNER JOIN :et_var B ON A."VARIABLEID"=B."VARIABLEID";
+
+pt_res_aug = SELECT A."PATH_ID",
+					A."FLOW",
+					B."COST"*A."FLOW" AS "COST"
+			 FROM :pt_res A
+			 LEFT JOIN :pt_path B ON A."PATH_ID"=B."PATH_ID";
+					
+SELECT SUM("COST") INTO pt_obj FROM :pt_res_aug;
+
+END;

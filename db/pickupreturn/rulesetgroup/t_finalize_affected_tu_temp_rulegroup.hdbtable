@@ -1,0 +1,26 @@
+table.schemaName = "SAP_TM_TRP";
+table.temporary = true;
+table.tableType = COLUMNSTORE;
+table.description = "final list";
+table.columns = [
+    {name = "RULE_ID"; sqlType = BIGINT; },
+    {name = "RULE_TYPE"; sqlType = INTEGER; comment="1:pick up  2:return";}, 
+    {name = "TRANSPORTATION_ID"; sqlType = NVARCHAR; length = 20;},
+    {name = "ORIGINAL_PICKUP_DATE";sqlType= TIMESTAMP;},
+    {name = "ORIGINAL_PICKUP_LOCATION_ID"; sqlType = VARCHAR; length = 22;},
+    {name = "ORIGINAL_PICKUP_LOCATION"; sqlType = VARCHAR; length = 20;},
+    {name = "PICKUP_DATE"; sqlType = TIMESTAMP;},
+    {name = "PICKUP_LOCATION_ID"; sqlType = VARCHAR; length = 22;},
+    {name = "PICKUP_LOCATION"; sqlType = VARCHAR; length = 20;},
+    {name = "ORIGINAL_RETURN_DATE";sqlType= TIMESTAMP;},
+    {name = "ORIGINAL_RETURN_LOCATION_ID"; sqlType = VARCHAR; length = 22;},
+    {name = "ORIGINAL_RETURN_LOCATION"; sqlType = VARCHAR; length = 20;},
+    {name = "RETURN_DATE"; sqlType = TIMESTAMP;},
+    {name = "RETURN_LOCATION_ID"; sqlType = VARCHAR; length = 22;},
+    {name = "RETURN_LOCATION"; sqlType = VARCHAR; length = 20;},
+    {name = "USER"; sqlType = NVARCHAR; length = 60;},
+    {name = "TU_UUID";sqlType = VARCHAR; length = 32;},
+    {name = "TR_TU_UUID";sqlType = VARCHAR; length = 16;},
+    {name = "RUN_ID"; sqlType = VARCHAR; length = 200;},
+    {name = "RULE_NAME"; sqlType = VARCHAR; length = 200;}
+    ];   

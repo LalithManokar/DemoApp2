@@ -1,0 +1,29 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.consistencycheck::p_drop_temp_tables_p7" (
+)
+ LANGUAGE SQLSCRIPT
+ SQL SECURITY INVOKER
+ DEFAULT SCHEMA SAP_TM_TRP
+ AS 
+ v_schema_name varchar(256);
+ v_table_name varchar(256);
+ 
+   CURSOR C1 
+         FOR select t.schema_name, t.table_name 
+               From "sap.tm.trp.db.consistencycheck::t_temp_tables_to_be_dropped" t;
+               
+BEGIN
+	-- Drop the temparate tables during the depolyment of Patch 7 because their structures have 
+  	-- been changed in Patch 7, otherwise it will cause inconsistency issue.
+	OPEN C1;
+    Fetch C1 into v_schema_name,v_table_name;
+                   
+	    While v_table_name is not null do            	
+	            	
+	        CALL "sap.tm.trp.db.consistencycheck::p_drop_table"(v_schema_name,v_table_name);
+	            	
+	 	    Fetch C1 into v_schema_name,v_table_name;
+	    End while;
+            
+    Close C1;
+END
+;

@@ -1,0 +1,19 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "NAME"; sqlType = VARCHAR; length = 500;},
+    {name = "CODE"; sqlType = VARCHAR; length = 500;},    
+    {name = "DESC"; sqlType = VARCHAR; length = 500;},	
+	{name = "USAGE"; sqlType = VARCHAR; length = 50;},	
+	{name = "MANDATORY"; sqlType = INTEGER;},
+	{name = "VALUE_TYPE"; sqlType = VARCHAR; length = 50;},
+	{name = "COMMENT"; sqlType = VARCHAR; length = 500;},
+	{name = "DEFAULT_VALUE"; sqlType = VARCHAR; length = 500;},
+	{name = "AVAILABLE_VALUE"; sqlType = VARCHAR; length = 500;},
+	{name = "LIMIT_VALUE"; sqlType = VARCHAR; length = 500;},
+	{name = "LIMIT_OPERATOR_CODE"; sqlType = VARCHAR; length = 50;},
+	{name = "UNIT"; sqlType = VARCHAR; length = 50;}
+    
+ ]; 
+table.primaryKey.pkcolumns = ["ID"];

@@ -1,0 +1,10 @@
+schema = "SAP_TM_TRP";
+
+query = "SELECT T1.TOR_ID AS TU_ID, TO_VARCHAR(MAX(T2.DB_KEY)) as ITE_KEY 
+         FROM  \"sap.tm.trp.db.semantic.order::v_transportation_unit\" T1 
+         INNER JOIN \"sap.tm.trp.db.semantic.order::v_transportation_unit_item\" T2 ON (t2.TU_KEY = T1.DB_KEY AND T2.ITEM_CAT = 'TUR' ) 
+         WHERE t1.MOVEMENT_CAT IN( 'EP','ER','RP')  
+         GROUP BY T1.TOR_ID
+        ";
+        
+depends_on_view = ["sap.tm.trp.db.semantic.order::v_transportation_unit","sap.tm.trp.db.semantic.order::v_transportation_unit_item"];           

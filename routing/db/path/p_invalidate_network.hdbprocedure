@@ -1,0 +1,92 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_invalidate_network" (
+    IN network_id BIGINT,
+    IN reason_code CHAR(1), -- D for delta
+    OUT return_code TINYINT,
+    OUT message "sap.tm.trp.routing.db.common::tt_message",
+    OUT log "sap.tm.trp.routing.db.common::tt_message"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_ROUTING"
+   AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+    DECLARE count INTEGER;
+    DECLARE network_code NVARCHAR(50);
+	DECLARE msg_params TABLE(placeholder INTEGER, value NVARCHAR(100));
+	DECLARE delta_network TABLE(id BIGINT, code VARCHAR(50));
+	DECLARE REASON_CODE_BASE VARCHAR(10) = 'B';
+	DECLARE REASON_DELTA_CHANGE VARCHAR(10) := 'D';
+	DECLARE CURSOR c_network (delta_network "sap.tm.trp.routing.db.path::t_network_model") 
+	FOR SELECT id, code FROM :delta_network;
+	
+	return_code = 0;
+	message = SELECT '' AS severity, '' AS message FROM DUMMY WHERE 1 <> 1;
+	log = SELECT '' AS severity, '' AS message FROM DUMMY WHERE 1 <> 1;
+	
+	network = SELECT id, code FROM "sap.tm.trp.routing.db.path::t_network_model"
+	WHERE id = :network_id FOR UPDATE;
+    
+    SELECT COUNT(*) INTO count FROM :network;
+    
+    IF COUNT = 0 THEN
+        RETURN;
+    END IF;
+    
+    -- Invalidate the network model and set the reason code
+    UPDATE "sap.tm.trp.routing.db.path::t_network_model"
+	SET invalidated = 'X',
+	invalidation_reason_code = :reason_code,
+	changed_by = SESSION_CONTEXT('APPLICATIONUSER'),
+	changed_on = CURRENT_UTCTIMESTAMP
+	WHERE id = :network_id;
+	
+	SELECT TOP 1 code INTO network_code FROM :network;
+	
+	msg_param = SELECT 0 AS PLACEHOLDER, :network_code AS VALUE FROM DUMMY;
+    call "sap.tm.trp.routing.db.common::p_get_text"
+    ('MSG_NETWORK_INVALIDATED', :msg_param, 'I', :message_tmp);
+    
+    message = SELECT * FROM :message 
+    UNION ALL SELECT * FROM :message_tmp;
+    
+    -- Get delta network model
+    network = SELECT m.id, code FROM "sap.tm.trp.routing.db.path::t_network_model" AS m
+    WHERE base_network_id = :network_id AND 
+    (invalidated <> 'X' OR invalidation_reason_code <> :REASON_CODE_BASE);
+    
+    SELECT COUNT(*) INTO count FROM :network; 
+    
+    WHILE count > 0 DO
+        -- Invalidate delta network found
+	    FOR row AS c_network(:network) DO
+	    -- To-do: check whether we need to lock the network model
+	        UPDATE "sap.tm.trp.routing.db.path::t_network_model"
+        	SET invalidated = 'X', 
+        	invalidation_reason_code = :REASON_CODE_BASE,
+        	changed_by = SESSION_CONTEXT('APPLICATIONUSER'),
+        	changed_on = CURRENT_UTCTIMESTAMP
+        	WHERE id = row.id;
+	        
+	        msg_param = SELECT 0 AS PLACEHOLDER, row.code AS VALUE FROM DUMMY;
+            call "sap.tm.trp.routing.db.common::p_get_text"
+            ('MSG_NETWORK_INVALIDATED', :msg_param, 'I', :message_tmp);
+            
+            message = SELECT * FROM :message 
+            UNION ALL SELECT * FROM :message_tmp;
+	    END FOR;
+	    
+	    network = SELECT m.id, code FROM "sap.tm.trp.routing.db.path::t_network_model" AS m
+	    INNER JOIN 
+	    (
+	        SELECT id FROM :network
+	    ) AS b
+	    ON m.id = b.id
+	    WHERE m.invalidated <> 'X';
+	    
+	    SELECT COUNT(*) INTO count FROM :network;
+    
+    END WHILE;
+END

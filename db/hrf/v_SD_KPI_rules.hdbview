@@ -1,0 +1,53 @@
+//To define the HDB view file use the following syntax: 
+schema = "SAP_TM_TRP";
+query = "
+select 
+    PLAN_EXECUTION_ID,
+    PLAN_MODEL_ID,
+    PLAN_MODEL_TYPE_ID,
+    PIPELINE_MODEL_ID,
+    NODE_ID,
+    METADATA_NODE_ID,
+    LOCATION_TYPE,
+    LOCATION_ID,
+    EQUIP_TYPE_TYPE,
+    EQUIP_TYPE_ID,
+    TIME_INTERVAL_ID,
+    MESSAGE,
+    ALERT_SCORE_NORMALIZING,
+    ALERT_REASON  
+from
+    (select T1.PLAN_EXECUTION_ID,
+            T1.PLAN_MODEL_ID,
+            T1.PLAN_MODEL_TYPE_ID,
+            T1.PIPELINE_MODEL_ID,
+            T1.NODE_ID,
+            T1.METADATA_NODE_ID,
+            T1.LOCATION_TYPE,
+            T1.LOCATION_ID,
+            T1.EQUIP_TYPE_TYPE,
+            T1.EQUIP_TYPE_ID,
+            T1.TIME_INTERVAL_ID,
+            T1.MESSAGE,
+            T1.ALERT_SCORE_NORMALIZING,
+            T1.ALERT_REASON
+    from \"sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_normalizedAlertScore\" T1) 
+    union 
+    (select T2.PLAN_EXECUTION_ID,
+            T2.PLAN_MODEL_ID,
+            T2.PLAN_MODEL_TYPE_ID,
+            T2.PIPELINE_MODEL_ID,
+            T2.NODE_ID,
+            T2.METADATA_NODE_ID,
+            T2.LOCATION_TYPE,
+            T2.LOCATION_ID,
+            T2.EQUIP_TYPE_TYPE,
+            T2.EQUIP_TYPE_ID,
+            T2.TIME_INTERVAL_ID,
+            T2.MESSAGE,
+            T2.ALERT_SCORE_NORMALIZING,
+            T2.ALERT_REASON 
+    from \"sap.tm.trp.db.hrf.kpi::t_trp_hrf_KPI_cus_output_normalizedAlertScore\" T2)
+ ";
+ 
+ depends_on_table = ["sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_normalizedAlertScore","sap.tm.trp.db.hrf.kpi::t_trp_hrf_KPI_cus_output_normalizedAlertScore"];

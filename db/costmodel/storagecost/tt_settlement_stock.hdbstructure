@@ -1,0 +1,10 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "settlement stock";
+table.columns = [
+  	{name = "LOCATION"; sqlType = VARCHAR; length = 20;},
+    {name = "RESOURCE_TYPE"; sqlType = NVARCHAR; length = 20;}, 
+  	{name = "SETTLEMENT_TIME"; sqlType = TIMESTAMP; },  
+  	{name = "VALID_TO"; sqlType = TIMESTAMP; },  
+    {name = "STOCK"; sqlType = DECIMAL; precision = 13; scale = 3;}
+];

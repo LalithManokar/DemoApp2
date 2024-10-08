@@ -1,0 +1,27 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.costmodel::sp_quantity_based_storage_cost_connection_result_upsert"(
+   IN COST_DATASET_ID BIGINT,
+   IN QUANTITY_BASED_COST "sap.tm.trp.db.costmodel::tt_quantity_based_storage_cost_trigger_refersh"
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+   DECLARE DATA_SOURCE_TM VARCHAR(10) := 'TM';
+   DECLARE ACTION_UPDATEBYCONNECTION_CODE VARCHAR(20) := 'UPDATEBYCONNECTION';
+     DECLARE USER_ID BIGINT;
+     
+      CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(USER_ID);
+   
+    UPSERT "sap.tm.trp.db.costmodel::t_quantity_based_storage_cost"(COST_DATASET_ID,LOCATION_NAME,RESOURCE_TYPE,
+     FREE_POOL_TYPE,START_AT,START_TIME,THRESHOLD_FROM,THRESHOLD_TO,UOM_CODE,PER_DIEM_COST,DATA_SOURCE_CODE,LAST_MODIFIED_ON)
+     SELECT COST_DATASET_ID,LOCATION_NAME,RESOURCE_TYPE,
+     FREE_POOL_TYPE,START_AT,START_TIME,THRESHOLD_FROM,THRESHOLD_TO,UOM_CODE,PER_DIEM_COST,:DATA_SOURCE_TM,CURRENT_UTCTIMESTAMP
+     FROM :QUANTITY_BASED_COST T1;
+     
+        --insert into history
+    INSERT INTO "sap.tm.trp.db.costmodel::t_cost_dataset_history"(ID,COST_DATASET_ID,USER_ID,ACTION_CODE,ACTION_TIME)
+	VALUES ("sap.tm.trp.db.costmodel::s_cost_dataset_history".nextVal,:COST_DATASET_ID,:USER_ID,:ACTION_UPDATEBYCONNECTION_CODE,CURRENT_UTCTIMESTAMP);
+   
+   
+END;

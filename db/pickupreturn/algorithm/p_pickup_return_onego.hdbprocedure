@@ -1,0 +1,739 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn.algorithm::p_pickup_return_onego" (
+IN t_trans "sap.tm.trp.db.pickupreturn.algorithm::tt_trans_types",
+IN name_value_conf "sap.tm.trp.db.planningcockpit.reposition::tt_name_value_conf",
+IN t_supply_demand "sap.tm.trp.db.pickupreturn.algorithm::tt_provision_stock",
+IN t_booking "sap.tm.trp.db.pickupreturn.algorithm::tt_onego_tu",
+IN t_stock_conf "sap.tm.trp.db.pickupreturn.algorithm::tt_onego_stock_configure",
+IN t_depot_cost "sap.tm.trp.db.pickupreturn.algorithm::tt_depot_cost_trp11",
+OUT t_fulfill_booking "sap.tm.trp.db.pickupreturn.algorithm::tt_res_haulage"
+ )
+LANGUAGE SQLSCRIPT 
+SQL SECURITY INVOKER
+DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN 
+
+DECLARE IDSEC0 INTEGER;
+DECLARE IDSEC1 INTEGER;
+DECLARE IDSEC2 INTEGER;
+
+DECLARE IDSEC3 INTEGER;
+DECLARE IDSEC4 INTEGER;
+DECLARE IDSEC5 INTEGER;
+DECLARE IDSEC6 INTEGER;
+
+DECLARE IDSEC7 INTEGER;
+
+
+DECLARE MAX_TCOST INTEGER;
+DECLARE MAX_DCOST INTEGER;
+DECLARE MAX_COST BIGINT;
+
+DECLARE maximum_runtime INT DEFAULT 10000;
+
+IDSEC0 := 0;
+IDSEC1 := 0;
+IDSEC2 := 0;
+IDSEC3 := 0;
+IDSEC4 := 0;
+IDSEC5 := 0;
+IDSEC6 := 0;
+IDSEC7 := 0;
+
+SELECT MAX(COST) INTO MAX_TCOST FROM :t_trans;
+SELECT MAX(STORAGE_COSTUNIT+HANDLING_COSTUNIT) INTO MAX_DCOST FROM :t_depot_cost;
+
+MAX_COST := 10*(:MAX_TCOST+:MAX_DCOST);
+
+t_distinct_sd = SELECT DISTINCT START_TIME,
+								END_TIME
+				FROM :t_supply_demand ORDER BY START_TIME;
+				
+t_interval_id = SELECT ROW_NUMBER() OVER() AS INTERVAL_ID,
+					   START_TIME,
+					   END_TIME
+				FROM :t_distinct_sd;
+
+t_supply_demand_id = SELECT B.INTERVAL_ID, 
+							A.START_TIME,
+				    		A.END_TIME,
+				    		A.LOCATION,
+				    		A.CONTAINER_TYPE,
+				    		A.PROVISION_STOCK,
+				    		IFNULL(C.MIN_STOCK,0) AS MIN_STOCK,
+				    		IFNULL(C.MAX_STOCK,10000) AS MAX_STOCK,
+				    		IFNULL(C.MAX_STOCK,10000) AS MAX_PHY_STOCK	   
+					 FROM :t_supply_demand A
+					 INNER JOIN :t_interval_id B
+					 ON A.START_TIME=B.START_TIME
+					 AND A.END_TIME=B.END_TIME
+					 LEFT JOIN :t_stock_conf C
+					 ON A.LOCATION=C.LOCATION
+					 AND A.CONTAINER_TYPE=C.CONTAINER_TYPE;
+
+-- find valid suggest location for tus
+t_valid_pickup = SELECT A.MTR,
+						A.DURATION,
+						A.COST,
+						B.BOOKING_ID,
+						B.CUSTOMER_LOCATION,
+						B.START_TIME AS CUR_TIME,
+						B.PLANNED_TIME,
+						B.CONTAINER_TYPE,
+						B.QUANTITY,
+						B.MODE,
+						B.HAULAGE_TYPE,
+						C.INTERVAL_ID,
+						C.START_TIME,
+						C.END_TIME,
+						C.LOCATION AS DEPOT_LOCATION
+				  FROM :t_trans A
+				  INNER JOIN :t_booking B
+				  ON A.TO_LOCATION=B.CUSTOMER_LOCATION
+				  AND A.CONTAINER_TYPE=B.CONTAINER_TYPE
+				  AND B.MODE='PICKUP'
+				  AND A.DURATION<SECONDS_BETWEEN(B.START_TIME,B.PLANNED_TIME)
+				  INNER JOIN :t_supply_demand_id C
+				  ON A.FROM_LOCATION=C.LOCATION
+				  AND A.CONTAINER_TYPE=C.CONTAINER_TYPE
+				  AND B.PLANNED_TIME>=C.START_TIME
+				  AND B.PLANNED_TIME<C.END_TIME;
+
+												
+t_valid_return = SELECT A.MTR,
+						A.DURATION,
+						A.COST,
+						B.BOOKING_ID,
+						B.CUSTOMER_LOCATION,
+						B.START_TIME AS CUR_TIME,
+						B.PLANNED_TIME,
+						B.CONTAINER_TYPE,
+						B.QUANTITY,
+						B.MODE,
+						B.HAULAGE_TYPE,
+						C.INTERVAL_ID,
+						C.START_TIME,
+						C.END_TIME,
+						C.LOCATION AS DEPOT_LOCATION
+				  FROM :t_trans A
+				  INNER JOIN :t_booking B
+				  ON A.FROM_LOCATION=B.CUSTOMER_LOCATION
+				  AND A.CONTAINER_TYPE=B.CONTAINER_TYPE
+				  AND B.MODE='RETURN'
+				  AND A.DURATION<SECONDS_BETWEEN(B.START_TIME,B.PLANNED_TIME)
+				  INNER JOIN :t_supply_demand_id C
+				  ON A.TO_LOCATION=C.LOCATION
+				  AND A.CONTAINER_TYPE=C.CONTAINER_TYPE
+				  AND B.PLANNED_TIME>=C.START_TIME
+				  AND B.PLANNED_TIME<C.END_TIME;
+												
+
+-- variables
+t_pickup_var = SELECT ROW_NUMBER() OVER() AS VARIABLEID,
+					  'PICKUP-' || BOOKING_ID || '-' || DEPOT_LOCATION AS VARIABLENAME,
+					  'B' AS TYPE,
+					  0 AS LOWERBOUND,
+					  1 AS UPPERBOUND,
+					  NULL AS INITIALVALUE,
+					  MTR,
+					  DURATION,
+					  COST,
+					  BOOKING_ID,
+					  CUSTOMER_LOCATION,
+					  CUR_TIME,
+					  PLANNED_TIME,
+					  CONTAINER_TYPE,
+					  QUANTITY,
+					  MODE,
+					  HAULAGE_TYPE,
+					  INTERVAL_ID,
+					  START_TIME,
+					  END_TIME,
+					  DEPOT_LOCATION
+				FROM :t_valid_pickup;
+
+SELECT IFNULL(MAX(VARIABLEID),0) INTO IDSEC0 FROM :t_pickup_var;
+
+t_return_var = SELECT ROW_NUMBER() OVER() + :IDSEC0 + 1 AS VARIABLEID,
+					  'RETURN-' || BOOKING_ID || '-' || DEPOT_LOCATION AS VARIABLENAME,
+					  'B' AS TYPE,
+					  0 AS LOWERBOUND,
+					  1 AS UPPERBOUND,
+					  NULL AS INITIALVALUE,
+					  MTR,
+					  DURATION,
+					  COST,
+					  BOOKING_ID,
+					  CUSTOMER_LOCATION,
+					  CUR_TIME,
+					  PLANNED_TIME,
+					  CONTAINER_TYPE,
+					  QUANTITY,
+					  MODE,
+					  HAULAGE_TYPE,
+					  INTERVAL_ID,
+					  START_TIME,
+					  END_TIME,
+					  DEPOT_LOCATION
+				FROM :t_valid_return;
+
+SELECT IFNULL(MAX(VARIABLEID),0)+:IDSEC0 INTO IDSEC1 FROM :t_return_var;
+
+
+
+t_penalty1 = SELECT ROW_NUMBER() OVER() + :IDSEC1 + 1 AS VARIABLEID,
+					'PENALTY1-' || INTERVAL_ID || '-' || LOCATION AS VARIABLENAME,
+					'C' AS TYPE,
+					0 AS LOWERBOUND,
+					10000 AS UPPERBOUND,
+					NULL AS INITIALVALUE,
+					INTERVAL_ID, 
+					START_TIME,
+				    END_TIME,
+				    LOCATION,
+				    CONTAINER_TYPE,
+				    PROVISION_STOCK
+			 FROM :t_supply_demand_id;
+			 
+SELECT IFNULL(MAX(VARIABLEID),0)+:IDSEC1 INTO IDSEC2 FROM :t_penalty1;			 
+
+t_penalty2 = SELECT ROW_NUMBER() OVER() + :IDSEC2 + 1 AS VARIABLEID,
+					'PENALTY2-' || INTERVAL_ID || '-' || LOCATION AS VARIABLENAME,
+					'C' AS TYPE,
+					0 AS LOWERBOUND,
+					10000 AS UPPERBOUND,
+					NULL AS INITIALVALUE,
+					INTERVAL_ID, 
+					START_TIME,
+				    END_TIME,
+				    LOCATION,
+				    CONTAINER_TYPE,
+				    PROVISION_STOCK
+			 FROM :t_supply_demand_id;
+
+SELECT IFNULL(MAX(VARIABLEID),0)+:IDSEC2 INTO IDSEC7 FROM :t_penalty2;	
+
+
+t_penalty3 = SELECT ROW_NUMBER() OVER() + :IDSEC7 + 1 AS VARIABLEID,
+				  'PENALTY3-' || BOOKING_ID || '-' || MODE AS VARIABLENAME,
+				  'C' AS TYPE,
+				  0 AS LOWERBOUND,
+				  1 AS UPPERBOUND,
+				  NULL AS INITIALVALUE,
+				  BOOKING_ID,
+				  CUSTOMER_LOCATION,
+				  START_TIME AS CUR_TIME,
+				  PLANNED_TIME,
+				  CONTAINER_TYPE,
+				  QUANTITY,
+				  MODE,
+				  HAULAGE_TYPE
+			FROM :t_booking;
+
+
+-- constraints
+--- 1TU->1LOC
+t_1loc_constraint = SELECT ROW_NUMBER() OVER() AS CONSTRAINTID,
+						  MODE || '-' || BOOKING_ID AS CONSTRAINTNAME,
+						  'E' AS TYPE,
+						  1 AS RHS,
+						  BOOKING_ID,
+						  CONTAINER_TYPE,
+						  MODE
+				   FROM :t_booking;
+				   
+SELECT IFNULL(MAX(CONSTRAINTID),0) INTO IDSEC3 FROM :t_1loc_constraint;
+
+
+--- >= minsafety
+t_minsafety_constraint = SELECT ROW_NUMBER() OVER() + :IDSEC3 + 1 AS CONSTRAINTID,
+						 		'MIN_STOCK' || '-' || INTERVAL_ID || '-' || LOCATION AS CONSTRAINTNAME,
+								'G' TYPE,
+								MIN_STOCK-PROVISION_STOCK AS RHS,
+								INTERVAL_ID, 
+								START_TIME,
+				    			END_TIME,
+				    			LOCATION,
+				    			CONTAINER_TYPE,
+				    			PROVISION_STOCK,
+				    			MIN_STOCK,
+				    			MAX_STOCK,
+				    			MAX_PHY_STOCK
+				    	  FROM :t_supply_demand_id;
+
+SELECT IFNULL(MAX(CONSTRAINTID),0)+:IDSEC3 INTO IDSEC4 FROM :t_minsafety_constraint;
+
+--- <= maxsafety
+t_maxsafety_constraint = SELECT ROW_NUMBER() OVER() + :IDSEC4 + 1 AS CONSTRAINTID,
+						 		'MAX_STOCK' || '-' || INTERVAL_ID || '-' || LOCATION AS CONSTRAINTNAME,
+								'L' TYPE,
+								MAX_STOCK-PROVISION_STOCK AS RHS,
+								INTERVAL_ID, 
+								START_TIME,
+				    			END_TIME,
+				    			LOCATION,
+				    			CONTAINER_TYPE,
+				    			PROVISION_STOCK,
+				    			MIN_STOCK,
+				    			MAX_STOCK,
+				    			MAX_PHY_STOCK
+				    	  FROM :t_supply_demand_id;
+
+SELECT IFNULL(MAX(CONSTRAINTID),0)+:IDSEC4 INTO IDSEC5 FROM :t_maxsafety_constraint;
+
+-- >= available stock
+t_availablestock_constraint = SELECT ROW_NUMBER() OVER() + :IDSEC5 + 1 AS CONSTRAINTID,
+							 		'AVAILABLE_STOCK' || '-' || INTERVAL_ID || '-' || LOCATION AS CONSTRAINTNAME,
+									'G' TYPE,
+									-PROVISION_STOCK AS RHS,
+									INTERVAL_ID, 
+									START_TIME,
+					    			END_TIME,
+					    			LOCATION,
+					    			CONTAINER_TYPE,
+					    			PROVISION_STOCK,
+					    			MIN_STOCK,
+					    			MAX_STOCK,
+					    			MAX_PHY_STOCK
+					    	  FROM :t_supply_demand_id;
+
+
+SELECT IFNULL(MAX(CONSTRAINTID),0)+:IDSEC5 INTO IDSEC6 FROM :t_availablestock_constraint;
+				    	  
+-- <= max physical stock
+t_maxphystock_constraint = SELECT ROW_NUMBER() OVER() + :IDSEC6 + 1 AS CONSTRAINTID,
+							 		'MAX_PHY_STOCK' || '-' || INTERVAL_ID || '-' || LOCATION AS CONSTRAINTNAME,
+									'L' TYPE,
+									MAX_PHY_STOCK-PROVISION_STOCK AS RHS,
+									INTERVAL_ID, 
+									START_TIME,
+					    			END_TIME,
+					    			LOCATION,
+					    			CONTAINER_TYPE,
+					    			PROVISION_STOCK,
+					    			MIN_STOCK,
+					    			MAX_STOCK,
+					    			MAX_PHY_STOCK
+					    	  FROM :t_supply_demand_id;
+
+-- constraintmonomes
+t_1loc_pickup_consmonomes = SELECT A.CONSTRAINTID,
+								   B.VARIABLEID,
+								   1 AS COEFFICIENT
+							FROM :t_1loc_constraint A
+							INNER JOIN :t_pickup_var B
+							ON A.BOOKING_ID=B.BOOKING_ID
+							AND A.CONTAINER_TYPE=B.CONTAINER_TYPE
+							AND A.MODE=B.MODE;
+
+t_1loc_return_consmonomes = SELECT A.CONSTRAINTID,
+								   B.VARIABLEID,
+								   1 AS COEFFICIENT
+							FROM :t_1loc_constraint A
+							INNER JOIN :t_return_var B
+							ON A.BOOKING_ID=B.BOOKING_ID
+							AND A.CONTAINER_TYPE=B.CONTAINER_TYPE
+							AND A.MODE=B.MODE;
+
+t_1loc_penalty_consmonomes = SELECT A.CONSTRAINTID,
+								   B.VARIABLEID,
+								   1 AS COEFFICIENT
+								FROM :t_1loc_constraint A
+								INNER JOIN :t_penalty3 B
+								ON A.BOOKING_ID=B.BOOKING_ID
+								AND A.CONTAINER_TYPE=B.CONTAINER_TYPE
+								AND A.MODE=B.MODE;
+
+
+t_minsafety_penalty1_consmonomes = SELECT A.CONSTRAINTID,
+										  B.VARIABLEID,
+										  1 AS COEFFICIENT 
+								   FROM :t_minsafety_constraint A
+								   INNER JOIN :t_penalty1 B
+								   ON A.INTERVAL_ID=B.INTERVAL_ID
+								   AND A.LOCATION=B.LOCATION
+								   AND A.CONTAINER_TYPE=B.CONTAINER_TYPE;
+
+t_maxsafety_penalty1_consmonomes = SELECT A.CONSTRAINTID,
+										  B.VARIABLEID,
+										  1 AS COEFFICIENT 
+								   FROM :t_maxsafety_constraint A
+								   INNER JOIN :t_penalty1 B
+								   ON A.INTERVAL_ID=B.INTERVAL_ID
+								   AND A.LOCATION=B.LOCATION
+								   AND A.CONTAINER_TYPE=B.CONTAINER_TYPE;
+
+
+t_minsafety_penalty2_consmonomes = SELECT A.CONSTRAINTID,
+										  B.VARIABLEID,
+										  -1 AS COEFFICIENT 
+								   FROM :t_minsafety_constraint A
+								   INNER JOIN :t_penalty2 B
+								   ON A.INTERVAL_ID=B.INTERVAL_ID
+								   AND A.LOCATION=B.LOCATION
+								   AND A.CONTAINER_TYPE=B.CONTAINER_TYPE;
+
+t_maxsafety_penalty2_consmonomes = SELECT A.CONSTRAINTID,
+										  B.VARIABLEID,
+										  -1 AS COEFFICIENT 
+								   FROM :t_maxsafety_constraint A
+								   INNER JOIN :t_penalty2 B
+								   ON A.INTERVAL_ID=B.INTERVAL_ID
+								   AND A.LOCATION=B.LOCATION
+								   AND A.CONTAINER_TYPE=B.CONTAINER_TYPE;
+
+t_minsafety_return_consmonomes = SELECT A.CONSTRAINTID,
+										B.VARIABLEID,
+										B.QUANTITY AS COEFFICIENT
+								 FROM :t_minsafety_constraint A
+								 INNER JOIN :t_return_var B
+								 ON B.DEPOT_LOCATION=A.LOCATION
+								 AND B.CONTAINER_TYPE=A.CONTAINER_TYPE
+								 AND B.INTERVAL_ID<=A.INTERVAL_ID;
+								 
+t_maxsafety_return_consmonomes = SELECT A.CONSTRAINTID,
+										B.VARIABLEID,
+										B.QUANTITY AS COEFFICIENT
+								 FROM :t_maxsafety_constraint A
+								 INNER JOIN :t_return_var B
+								 ON B.DEPOT_LOCATION=A.LOCATION
+								 AND B.CONTAINER_TYPE=A.CONTAINER_TYPE
+								 AND B.INTERVAL_ID<=A.INTERVAL_ID;
+
+t_minsafety_pickup_consmonomes = SELECT A.CONSTRAINTID,
+										B.VARIABLEID,
+										-B.QUANTITY AS COEFFICIENT
+								 FROM :t_minsafety_constraint A
+								 INNER JOIN :t_pickup_var B
+								 ON B.DEPOT_LOCATION=A.LOCATION
+								 AND B.CONTAINER_TYPE=A.CONTAINER_TYPE
+								 AND B.INTERVAL_ID<=A.INTERVAL_ID;
+								 
+t_maxsafety_pickup_consmonomes = SELECT A.CONSTRAINTID,
+										B.VARIABLEID,
+										-B.QUANTITY AS COEFFICIENT
+								 FROM :t_maxsafety_constraint A
+								 INNER JOIN :t_pickup_var B
+								 ON B.DEPOT_LOCATION=A.LOCATION
+								 AND B.CONTAINER_TYPE=A.CONTAINER_TYPE
+								 AND B.INTERVAL_ID<=A.INTERVAL_ID;
+
+/***/
+t_availablestock_return_consmonomes = SELECT A.CONSTRAINTID,
+										B.VARIABLEID,
+										B.QUANTITY AS COEFFICIENT
+								 FROM :t_availablestock_constraint A
+								 INNER JOIN :t_return_var B
+								 ON B.DEPOT_LOCATION=A.LOCATION
+								 AND B.CONTAINER_TYPE=A.CONTAINER_TYPE
+								 AND B.INTERVAL_ID<=A.INTERVAL_ID;
+								 
+t_maxphystock_return_consmonomes = SELECT A.CONSTRAINTID,
+										B.VARIABLEID,
+										B.QUANTITY AS COEFFICIENT
+								 FROM :t_maxphystock_constraint A
+								 INNER JOIN :t_return_var B
+								 ON B.DEPOT_LOCATION=A.LOCATION
+								 AND B.CONTAINER_TYPE=A.CONTAINER_TYPE
+								 AND B.INTERVAL_ID<=A.INTERVAL_ID;
+
+t_availablestock_pickup_consmonomes = SELECT A.CONSTRAINTID,
+										     B.VARIABLEID,
+											 -B.QUANTITY AS COEFFICIENT
+									 FROM :t_availablestock_constraint A
+									 INNER JOIN :t_pickup_var B
+									 ON B.DEPOT_LOCATION=A.LOCATION
+									 AND B.CONTAINER_TYPE=A.CONTAINER_TYPE
+									 AND B.INTERVAL_ID<=A.INTERVAL_ID;
+								 
+t_maxphystock_pickup_consmonomes = SELECT A.CONSTRAINTID,
+										  B.VARIABLEID,
+										  -B.QUANTITY AS COEFFICIENT
+									 FROM :t_maxphystock_constraint A
+									 INNER JOIN :t_pickup_var B
+									 ON B.DEPOT_LOCATION=A.LOCATION
+									 AND B.CONTAINER_TYPE=A.CONTAINER_TYPE
+									 AND B.INTERVAL_ID<=A.INTERVAL_ID;
+
+
+/***/
+
+
+-- objectivemonomes
+t_depot_pickup_monomes = SELECT A.VARIABLEID,
+								IFNULL(-B.STORAGE_COSTUNIT+B.HANDLING_COSTUNIT,0) AS COEFFICIENT
+						 FROM :t_pickup_var A
+						 LEFT JOIN :t_depot_cost B
+						 ON A.DEPOT_LOCATION=B.LOCATION
+						 AND A.CONTAINER_TYPE=B.CONTAINER_TYPE;
+
+
+
+t_depot_return_monomes = SELECT A.VARIABLEID,
+								IFNULL(B.STORAGE_COSTUNIT+B.HANDLING_COSTUNIT,0) AS COEFFICIENT
+						 FROM :t_return_var A
+						 LEFT JOIN :t_depot_cost B
+						 ON A.DEPOT_LOCATION=B.LOCATION
+						 AND A.CONTAINER_TYPE=B.CONTAINER_TYPE;
+						 
+t_trans_pickup_monomes = SELECT VARIABLEID,
+								COST AS COEFFICIENT
+						 FROM :t_pickup_var;
+
+t_trans_return_monomes = SELECT VARIABLEID,
+								COST AS COEFFICIENT
+						 FROM :t_return_var;
+
+t_penalty1_monomes = SELECT VARIABLEID,
+							:MAX_COST AS COEFFICIENT
+					 FROM :t_penalty1;
+
+t_penalty2_monomes = SELECT VARIABLEID,
+							:MAX_COST AS COEFFICIENT
+					 FROM :t_penalty2;
+					 
+t_penalty3_monomes = SELECT VARIABLEID,
+							100*:MAX_COST AS COEFFICIENT
+					 FROM :t_penalty3;					 
+
+-- call GENIOS
+
+it_variables = SELECT VARIABLEID,
+					  VARIABLENAME,
+					  TYPE,
+					  LOWERBOUND,
+					  UPPERBOUND,
+					  INITIALVALUE
+			   FROM :t_pickup_var
+			   UNION ALL
+			   SELECT VARIABLEID,
+					  VARIABLENAME,
+					  TYPE,
+					  LOWERBOUND,
+					  UPPERBOUND,
+					  INITIALVALUE
+			   FROM :t_return_var
+			   UNION ALL
+			   SELECT VARIABLEID,
+					  VARIABLENAME,
+					  TYPE,
+					  LOWERBOUND,
+					  UPPERBOUND,
+					  INITIALVALUE
+			   FROM :t_penalty1
+			   UNION ALL
+			   SELECT VARIABLEID,
+					  VARIABLENAME,
+					  TYPE,
+					  LOWERBOUND,
+					  UPPERBOUND,
+					  INITIALVALUE
+			   FROM :t_penalty2
+			   UNION ALL
+			   SELECT VARIABLEID,
+					  VARIABLENAME,
+					  TYPE,
+					  LOWERBOUND,
+					  UPPERBOUND,
+					  INITIALVALUE
+			   FROM :t_penalty3;
+
+			   
+it_linearconstraints = SELECT CONSTRAINTID,
+							  CONSTRAINTNAME,
+							  TYPE,
+							  RHS
+					   FROM :t_1loc_constraint
+					   UNION ALL
+					   SELECT CONSTRAINTID,
+							  CONSTRAINTNAME,
+							  TYPE,
+							  RHS
+					   FROM :t_minsafety_constraint
+					   UNION ALL
+					   SELECT CONSTRAINTID,
+							  CONSTRAINTNAME,
+							  TYPE,
+							  RHS
+					   FROM :t_maxsafety_constraint
+					   UNION ALL
+					   SELECT CONSTRAINTID,
+							  CONSTRAINTNAME,
+							  TYPE,
+							  RHS
+					   FROM :t_availablestock_constraint
+					   UNION ALL
+					   SELECT CONSTRAINTID,
+							  CONSTRAINTNAME,
+							  TYPE,
+							  RHS
+					   FROM :t_maxphystock_constraint;
+					   
+it_linearconstraintmonomes = SELECT CONSTRAINTID,
+									VARIABLEID,
+									COEFFICIENT
+							 FROM :t_1loc_pickup_consmonomes
+							 UNION ALL
+							 SELECT CONSTRAINTID,
+									VARIABLEID,
+									COEFFICIENT
+							 FROM :t_1loc_return_consmonomes
+							 UNION ALL
+							 SELECT CONSTRAINTID,
+									VARIABLEID,
+									COEFFICIENT
+							 FROM :t_1loc_penalty_consmonomes
+							 UNION ALL
+							 SELECT CONSTRAINTID,
+									VARIABLEID,
+									COEFFICIENT
+							 FROM :t_minsafety_penalty1_consmonomes
+							 UNION ALL
+							 SELECT CONSTRAINTID,
+									VARIABLEID,
+									COEFFICIENT
+							 FROM :t_maxsafety_penalty1_consmonomes
+							 UNION ALL
+							 SELECT CONSTRAINTID,
+									VARIABLEID,
+									COEFFICIENT
+							 FROM :t_minsafety_penalty2_consmonomes
+							 UNION ALL
+							 SELECT CONSTRAINTID,
+									VARIABLEID,
+									COEFFICIENT
+							 FROM :t_maxsafety_penalty2_consmonomes
+							 UNION ALL
+							 SELECT CONSTRAINTID,
+									VARIABLEID,
+									COEFFICIENT
+							 FROM :t_minsafety_return_consmonomes
+							 UNION ALL
+							 SELECT CONSTRAINTID,
+									VARIABLEID,
+									COEFFICIENT
+							 FROM :t_maxsafety_return_consmonomes
+							 UNION ALL
+							 SELECT CONSTRAINTID,
+									VARIABLEID,
+									COEFFICIENT
+							 FROM :t_minsafety_pickup_consmonomes
+							 UNION ALL
+							 SELECT CONSTRAINTID,
+									VARIABLEID,
+									COEFFICIENT
+							 FROM :t_maxsafety_pickup_consmonomes
+							 
+							 UNION ALL
+							 SELECT CONSTRAINTID,
+									VARIABLEID,
+									COEFFICIENT
+							 FROM :t_availablestock_return_consmonomes
+							 UNION ALL
+							 SELECT CONSTRAINTID,
+									VARIABLEID,
+									COEFFICIENT
+							 FROM :t_maxphystock_return_consmonomes
+							 UNION ALL
+							 SELECT CONSTRAINTID,
+									VARIABLEID,
+									COEFFICIENT
+							 FROM :t_availablestock_pickup_consmonomes
+							 UNION ALL
+							 SELECT CONSTRAINTID,
+									VARIABLEID,
+									COEFFICIENT
+							 FROM :t_maxphystock_pickup_consmonomes;
+							 
+it_objectivemonomes = SELECT VARIABLEID,
+							 COEFFICIENT
+					  FROM :t_depot_pickup_monomes
+					  UNION ALL
+					  SELECT VARIABLEID,
+							 COEFFICIENT
+					  FROM :t_depot_return_monomes
+					  UNION ALL
+					  SELECT VARIABLEID,
+							 COEFFICIENT
+					  FROM :t_trans_pickup_monomes
+					  UNION ALL
+					  SELECT VARIABLEID,
+							 COEFFICIENT
+					  FROM :t_trans_return_monomes
+					  UNION ALL
+					  SELECT VARIABLEID,
+							 COEFFICIENT
+					  FROM :t_penalty1_monomes
+					  UNION ALL
+					  SELECT VARIABLEID,
+							 COEFFICIENT
+					  FROM :t_penalty2_monomes
+					  UNION ALL
+					  SELECT VARIABLEID,
+							 COEFFICIENT
+					  FROM :t_penalty3_monomes;
+					  
+it_parameters = SELECT TOP 0 NULL NAME, NULL VALUE FROM DUMMY;			   
+
+CALL "_SYS_AFL"."OFL_AREA_GENIOS_SOLVE_PROC"(
+'I',
+:maximum_runtime,
+:it_variables,
+:it_linearconstraints,
+:it_linearconstraintmonomes,
+:it_objectivemonomes,
+:it_parameters,
+et_var,
+et_cons,
+et_solver);
+
+
+et_sel_var = SELECT * FROM :et_var WHERE VALUE=1;
+
+
+
+pickup_location_finding = SELECT A.BOOKING_ID,
+								 A.DEPOT_LOCATION AS FROM_LOCATION,
+								 A.CUSTOMER_LOCATION AS TO_LOCATION,
+								 A.CUR_TIME AS FROM_TIME,
+								 A.PLANNED_TIME AS TO_TIME,
+								 A.CONTAINER_TYPE,
+								 A.QUANTITY,
+								 IFNULL(-C.STORAGE_COSTUNIT*A.QUANTITY,0) AS STORAGE_COST,
+								 IFNULL(C.HANDLING_COSTUNIT*A.QUANTITY,0) AS HANDLING_COST,
+								 CASE WHEN A.HAULAGE_TYPE=0 THEN 0 ELSE A.COST*A.QUANTITY END AS TRANSPORTATION_COST,
+								 IFNULL(-C.STORAGE_COSTUNIT*A.QUANTITY,0)+IFNULL(C.HANDLING_COSTUNIT*A.QUANTITY,0)+(CASE WHEN A.HAULAGE_TYPE=0 THEN 0 ELSE A.COST*A.QUANTITY END) AS TOTAL_COST,
+								 A.MODE,
+								 A.HAULAGE_TYPE
+							FROM :t_pickup_var A
+							INNER JOIN :et_sel_var B
+							ON A.VARIABLEID=B.VARIABLEID
+							LEFT JOIN :t_depot_cost C
+							ON A.DEPOT_LOCATION=C.LOCATION
+							AND A.CONTAINER_TYPE=C.CONTAINER_TYPE;
+
+return_location_finding = SELECT A.BOOKING_ID,
+								 A.CUSTOMER_LOCATION AS FROM_LOCATION,
+								 A.DEPOT_LOCATION AS TO_LOCATION,
+								 A.CUR_TIME AS FROM_TIME,
+								 A.PLANNED_TIME AS TO_TIME,
+								 A.CONTAINER_TYPE,
+								 A.QUANTITY,
+								 IFNULL(C.STORAGE_COSTUNIT*A.QUANTITY,0) AS STORAGE_COST,
+								 IFNULL(C.HANDLING_COSTUNIT*A.QUANTITY,0) AS HANDLING_COST,
+								 CASE WHEN A.HAULAGE_TYPE=0 THEN 0 ELSE A.COST*A.QUANTITY END AS TRANSPORTATION_COST,
+								 IFNULL(C.STORAGE_COSTUNIT*A.QUANTITY,0)+IFNULL(C.HANDLING_COSTUNIT*A.QUANTITY,0)+(CASE WHEN A.HAULAGE_TYPE=0 THEN 0 ELSE A.COST*A.QUANTITY END) AS TOTAL_COST,
+								 A.MODE,
+								 A.HAULAGE_TYPE
+							FROM :t_return_var A
+							INNER JOIN :et_sel_var B
+							ON A.VARIABLEID=B.VARIABLEID
+							LEFT JOIN :t_depot_cost C
+							ON A.DEPOT_LOCATION=C.LOCATION
+							AND A.CONTAINER_TYPE=C.CONTAINER_TYPE;
+
+t_fulfill_booking = SELECT * FROM :pickup_location_finding
+					UNION ALL
+					SELECT * FROM :return_location_finding;
+
+END;

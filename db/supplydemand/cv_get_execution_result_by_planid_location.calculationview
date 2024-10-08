@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_execution_result_by_planid_location" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_get_execution_result_ by_planid_location"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="IN_PLAN_MODEL_ID" parameter="true">
+      <descriptions defaultDescription="IN_PLAN_MODEL_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_LOCATION_ID" parameter="true">
+      <descriptions defaultDescription="IN_LOCATION_ID"/>
+      <variableProperties datatype="VARCHAR" length="32" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+    <variable id="IN_NODE_ID" parameter="true">
+      <descriptions defaultDescription="IN_NODE_ID"/>
+      <variableProperties datatype="BIGINT" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="GEO_ID" length="32"/>
+        <viewAttribute datatype="VARCHAR" id="GEO_NAME" length="20"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_TYPE_CODE" length="32"/>
+        <viewAttribute datatype="NVARCHAR" id="RESOURCE_TYPE_NAME" length="40"/>
+        <viewAttribute datatype="VARCHAR" id="OUTPUT_KEY" length="30"/>
+        <viewAttribute datatype="DOUBLE" id="OUTPUT_VALUE"/>
+        <viewAttribute datatype="TIMESTAMP" id="START_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="END_TIME"/>
+        <viewAttribute datatype="INTEGER" id="SEQUENCE"/>
+        <viewAttribute datatype="INTEGER" id="ALERT_STATUS"/>
+        <viewAttribute datatype="INTEGER" id="OUT_EXECUTION_ID"/>
+        <viewAttribute datatype="BIGINT" id="OUT_NODE_ID"/>
+        <viewAttribute datatype="INTEGER" id="HAS_DRILLDOWN_FLAG"/>
+        <viewAttribute datatype="BIGINT" id="TIME_INTERVAL"/>
+        <viewAttribute datatype="INTEGER" id="PLAN_STATUS"/>
+        <viewAttribute datatype="VARCHAR" id="OUT_NODE_NAME" length="255"/>
+        <viewAttribute datatype="VARCHAR" id="OUT_NODE_NAV_TYPE" length="32"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_PLAN_MODEL_ID</localVariable>
+      <localVariable>#IN_LOCATION_ID</localVariable>
+      <localVariable>#IN_NODE_ID</localVariable>
+      <definition> 
+  
+ BEGIN 
+	DECLARE EXECUTION_ID BIGINT;
+	DECLARE PLAN_STATUS INTEGER;
+	DECLARE STATUS_VALID SMALLINT := 0;
+	DECLARE STATUS_SUSPEND SMALLINT := 1;
+	DECLARE STATUS_INVALID SMALLINT := 2;
+	
+	SELECT IFNULL(MAX(STATUS),:STATUS_SUSPEND) INTO PLAN_STATUS FROM &quot;sap.tm.trp.db.pipeline::t_plan_model&quot; WHERE ID = :IN_PLAN_MODEL_ID;
+   /* IF PLAN_STATUS = :STATUS_SUSPEND
+	THEN
+		RETURN;
+	END IF;
+*/
+	
+	SQL0 = SELECT * FROM &quot;sap.tm.trp.db.supplydemand::cv_get_executionid_of_the_planmodelid&quot; (placeholder.&quot;$$IN_PLAN_MODEL_ID$$&quot; => :IN_PLAN_MODEL_ID);
+       
+	SELECT EXECUTION_ID INTO EXECUTION_ID
+	FROM :SQL0;
+            
+	SQL1 = SELECT * FROM &quot;sap.tm.trp.db.supplydemand::cv_get_execution_result_by_executionid_location&quot;(placeholder.&quot;$$IN_LOCATION_ID$$&quot;=>:IN_LOCATION_ID,placeholder.&quot;$$IN_EXECUTION_ID$$&quot;=>:EXECUTION_ID,placeholder.&quot;$$IN_NODE_ID$$&quot;=>:IN_NODE_ID);
+
+	var_out = SELECT T1.GEO_ID,T1.GEO_NAME,T1.RESOURCE_TYPE_CODE,T1.RESOURCE_TYPE_NAME,T1.OUTPUT_KEY,T1.OUTPUT_VALUE,
+		T1.START_TIME,T1.END_TIME,T1.SEQUENCE,T1.ALERT_STATUS,:EXECUTION_ID AS OUT_EXECUTION_ID,
+		T1.OUT_NODE_ID,T1.HAS_DRILLDOWN_FLAG,T1.TIME_INTERVAL,:PLAN_STATUS AS PLAN_STATUS, T1.OUT_NODE_NAME, T1.OUT_NODE_NAV_TYPE
+		FROM :SQL1 T1;
+		
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="GEO_ID" order="1">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="GEO_ID"/>
+      </attribute>
+      <attribute id="GEO_NAME" order="2">
+        <descriptions defaultDescription="GEO_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="GEO_NAME"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE_CODE" order="3">
+        <descriptions defaultDescription="EQUIP_TYPE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE_CODE"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE_NAME" order="4">
+        <descriptions defaultDescription="EQUIP_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE_NAME"/>
+      </attribute>
+      <attribute id="OUTPUT_KEY" order="5">
+        <descriptions defaultDescription="OUTPUT_KEY"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUTPUT_KEY"/>
+      </attribute>
+      <attribute id="OUTPUT_VALUE" order="6">
+        <descriptions defaultDescription="OUTPUT_VALUE"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUTPUT_VALUE"/>
+      </attribute>
+      <attribute id="START_TIME" order="7">
+        <descriptions defaultDescription="TIME_DURATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="START_TIME"/>
+      </attribute>
+      <attribute id="END_TIME" order="8">
+        <descriptions defaultDescription="TIME_DURATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="END_TIME"/>
+      </attribute>
+      <attribute id="SEQUENCE" order="9">
+        <descriptions defaultDescription="SEQUENCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SEQUENCE"/>
+      </attribute>
+      <attribute id="ALERT_STATUS" order="10">
+        <descriptions defaultDescription="ALERT_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="ALERT_STATUS"/>
+      </attribute>
+      <attribute id="OUT_EXECUTION_ID" order="11">
+        <descriptions defaultDescription="OUT_EXECUTION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUT_EXECUTION_ID"/>
+      </attribute>
+      <attribute id="OUT_NODE_ID" order="12">
+        <descriptions defaultDescription="OUT_NODE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUT_NODE_ID"/>
+      </attribute>
+      <attribute id="HAS_DRILLDOWN_FLAG" order="13">
+        <descriptions defaultDescription="HAS_DRILLDOWN_FLAG"/>
+        <keyMapping columnObjectName="Script_View" columnName="HAS_DRILLDOWN_FLAG"/>
+      </attribute>
+      <attribute id="TIME_INTERVAL" order="14">
+        <descriptions defaultDescription="TIME_INTERVAL"/>
+        <keyMapping columnObjectName="Script_View" columnName="TIME_INTERVAL"/>
+      </attribute>
+      <attribute id="OUT_NODE_NAME" order="16">
+        <descriptions defaultDescription="OUT_NODE_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUT_NODE_NAME"/>
+      </attribute>
+      <attribute id="OUT_NODE_NAV_TYPE" order="17">
+        <descriptions defaultDescription="OUT_NODE_NAV_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="OUT_NODE_NAV_TYPE"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="PLAN_STATUS" order="15" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="PLAN_STATUS"/>
+        <measureMapping columnObjectName="Script_View" columnName="PLAN_STATUS"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

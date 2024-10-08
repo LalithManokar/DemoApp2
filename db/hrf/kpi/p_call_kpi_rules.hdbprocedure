@@ -1,0 +1,111 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.kpi::p_call_kpi_rules" ( 
+in IN_LDR_NAME VARCHAR(50),
+in IN_TBL "sap.tm.trp.db.hrf.kpi::t_kpiRule_input"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    DECLARE SCRIPT VARCHAR(5000);
+    DECLARE RULE_SP VARCHAR(200);
+  select T1.SP into RULE_SP
+  from "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_rule" T1
+  where T1.NAME = :IN_LDR_NAME;
+      
+  truncate table "sap.tm.trp.db.hrf.kpi::t_hrf_KPI_inputGlobalTemp";
+  truncate table "sap.tm.trp.db.hrf.kpi::t_hrf_KPI_outputGlobalTemp";
+  insert into "sap.tm.trp.db.hrf.kpi::t_hrf_KPI_inputGlobalTemp"
+    (
+    select 	 
+     "UNIT",
+	 "IMPORT_EXPORT",
+	 "DWELL_TIME",
+	 "STORAGE_COST",
+	 "IDLE_RATE",
+	 "TIME_STEP",
+	 "START_TIME",
+	 "SEQUENCE",
+	 "TIME_FILTER_DESC",
+	 "TIME_INTERVAL_ID",
+	 "EQUIP_TYPE_TYPE",
+	 "EQUIP_TYPE_NAME",
+	 "EQUIP_TYPE_ID",
+	 "LOCATION_TYPE",
+	 "LOCATION_NAME",
+	 "LOCATION_ID",
+	 "DATA_OBJECT_FORMAT",
+	 "METADATA_NODE_ID",
+	 "NODE_OUTPUT_KEYS",
+	 "NODE_VISIBLE",
+	 "NODE_NAME",
+	 "NODE_ID",
+	 "PIPELINE_MODEL_ID",
+	 "FILTER_GROUP_ID",
+	 "FILTER_TYPE",
+	 "PLAN_MODEL_CATEGORY_ID",
+	 "PLAN_MODEL_TYPE_ID",
+	 "PLAN_MODEL_ID",
+	 "PLAN_EXECUTION_ID"                     
+     from :IN_TBL);
+
+  SCRIPT := 'call '|| escape_single_quotes(:RULE_SP) ||'("sap.tm.trp.db.hrf.kpi::t_hrf_KPI_inputGlobalTemp" ,"sap.tm.trp.db.hrf.kpi::t_hrf_KPI_outputGlobalTemp","sap.tm.trp.db.hrf.ruleManage::t_hrf_actions_results") with overview'; 
+  --  select :SCRIPT from dummy;
+--tbl = 
+
+ 
+    execute immediate(:SCRIPT); 
+    insert into "sap.tm.trp.db.hrf.kpi::t_trp_hrf_kpi_output_test"
+    (
+    select 	distinct
+     T1."PLAN_EXECUTION_ID",
+     "PLAN_MODEL_ID",
+     "PLAN_MODEL_TYPE_ID",
+     "PLAN_MODEL_CATEGORY_ID",
+     "FILTER_TYPE",    
+     "FILTER_GROUP_ID",
+     "PIPELINE_MODEL_ID",
+     T1."NODE_ID",
+     "NODE_NAME",
+     "NODE_VISIBLE",
+     "NODE_OUTPUT_KEYS",
+     "METADATA_NODE_ID",
+     "DATA_OBJECT_FORMAT",
+    
+     T1."LOCATION_ID",
+     "LOCATION_NAME",
+     T1."LOCATION_TYPE",
+    
+     T1."EQUIP_TYPE_ID",
+     "EQUIP_TYPE_NAME",
+     T1."EQUIP_TYPE_TYPE",
+    
+     "TIME_INTERVAL_ID",
+     "TIME_FILTER_DESC",
+     "SEQUENCE",
+    
+     T1."START_TIME",
+     "TIME_STEP",
+     
+     "IDLE_RATE",
+     "STORAGE_COST",
+     "DWELL_TIME",
+     "IMPORT_EXPORT",
+     "UNIT",
+     T2."ROW_ID", 
+     T2."MESSAGE", 
+     T2."ALERT_REASON", 
+     T2."ALERT_SCORE_IMP", 
+     T2."ALERT_SCORE_EMER"
+    from "sap.tm.trp.db.hrf.kpi::t_hrf_KPI_outputGlobalTemp" T2
+    inner join "sap.tm.trp.db.hrf.kpi::t_hrf_KPI_inputGlobalTemp" T1
+    on T1.PLAN_EXECUTION_ID = T2.PLAN_EXECUTION_ID and 
+       T1.NODE_ID = T2.NODE_ID and  
+       T1.EQUIP_TYPE_TYPE = T2.EQUIP_TYPE_TYPE and 
+       T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID and 
+       T1.LOCATION_TYPE = T2.LOCATION_TYPE and 
+       T1.LOCATION_ID = T2.LOCATION_ID and 
+       T1.START_TIME = T2.START_TIME  
+    );
+    
+END;

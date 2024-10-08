@@ -1,0 +1,46 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.columns = [
+    {name = "ID"; sqlType = BIGINT; nullable = false;},
+    {name = "RULE_NAME"; sqlType = VARCHAR; length = 200;nullable = false;},
+    {name = "RULE_TYPE"; sqlType = INTEGER; comment="1:pick up  2:return";},
+    {name = "TIME_RANGE";sqlType= INTEGER; comment="Transfer to seconds";},
+    {name = "TIME_RANGE_UINT";sqlType= INTEGER; comment="1:hours 2:days 3:weeks";},
+    {name = "EQUIP_FILTER_ID"; sqlType = BIGINT;},
+    {name = "LOCATION_FILTER_ID"; sqlType = BIGINT;nullable = false;},
+    {name = "SD_PLAN_ID"; sqlType = BIGINT;nullable = false;},
+    {name = "COST_MODEL_ID"; sqlType = BIGINT;},
+    {name = "SCHEDULE_TIME_TYPE";sqlType= INTEGER; comment="0:manual 1:automatic";},
+    {name = "EXECUTE_INTERVAL"; sqlType = INTEGER;},
+    {name = "EXECUTE_TIME_UINT"; sqlType = VARCHAR; length = 50;},
+    {name = "EXECUTE_DAY"; sqlType = INTEGER;},
+    {name = "START_DATETIME"; sqlType =TIMESTAMP;},
+    {name = "END_DATETIME"; sqlType =TIMESTAMP;},
+    {name = "OP_SETTING_TYPE"; sqlType = INTEGER;comment="1:location 2:Opt 3:location+Opt 4:Nothing";},
+    {name = "LOCATION_DETERMIN_ID"; sqlType = BIGINT;},
+    {name = "OPTIMIZATION"; sqlType = INTEGER;comment="1:cost based 3:cost+balancing";},
+    {name = "CREATE_BY"; sqlType = BIGINT;},
+    {name = "CREATE_ON"; sqlType = TIMESTAMP;},
+    {name = "MODIFIED_BY"; sqlType = BIGINT;},
+    {name = "MODIFIED_ON"; sqlType = TIMESTAMP;},
+    {name = "ALLOWED_USAGE"; sqlType = VARCHAR; length = 3;},
+    {name = "CODE";sqlType = NVARCHAR; length = 200; nullable = true; unique = true;},
+    {name = "STATUS"; sqlType = SMALLINT; comment = "0 for Valid; 1 - Need Check; 2 for Invalid";},
+    {name = "FILTER_EXECUTION";sqlType = SMALLINT; comment = "0:false 1:true";},
+    {name = "EXCLUSIVE_RULE_ID"; sqlType = BIGINT;},
+    {name = "NETWORK_SETTING_GROUP_ID"; sqlType = BIGINT;},
+    {name = "TIME_WINDOW_SECONDS"; sqlType = BIGINT;},
+    {name = "RANK_NUMBER"; sqlType = INTEGER;},
+    {name = "RESOURCE_CATEGORY";  sqlType = VARCHAR; length = 50;},
+    {name = "SELECTION_DATE";  sqlType = VARCHAR; length = 200;},
+    {name = "KEEP_EXECUTION_RUNS"; sqlType = BIGINT; nullable = true;},
+    {name = "EXECUTE_WORKING_HOUR"; sqlType = VARCHAR; length = 1;},
+    {name = "START_WORKING_HOUR_TIME"; sqlType = TIMESTAMP;},
+    {name = "END_WORKING_HOUR_TIME"; sqlType = TIMESTAMP;},
+    {name = "TIMEZONES"; sqlType = VARCHAR; length = 40;}
+    ];
+
+table.indexes = [
+    {name = "RULE_NAME_INDEX"; unique = true; indexColumns = ["RULE_NAME"];}
+];
+table.primaryKey.pkcolumns = ["ID"];

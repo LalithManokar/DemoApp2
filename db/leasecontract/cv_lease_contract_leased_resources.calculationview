@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_lease_contract_leased_resources" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_lease_contract_leased_resources"/>
+  <localVariables>
+    <variable id="LEASE_CONTRACT_REFERENCE" parameter="true">
+      <descriptions defaultDescription="LEASE_CONTRACT_REFERENCE"/>
+      <variableProperties datatype="VARCHAR" length="100" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+    <variable id="LEASE_TYPE" parameter="true">
+      <descriptions defaultDescription="LEASE_TYPE"/>
+      <variableProperties datatype="INTEGER" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+        <defaultRange/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="EQUIP_ID" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE" length="40"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_TYPE" length="10"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_TYPE_DESC" length="100"/>
+        <viewAttribute datatype="VARCHAR" id="LAST_LOCATION" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_STATUS_CODE" length="3"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_STATUS" length="40"/>
+        <viewAttribute datatype="VARCHAR" id="MOVEMENT_STATUS" length="3"/>
+        <viewAttribute datatype="VARCHAR" id="MOVEMENT_STATUS_DESCRIPTION" length="60"/>
+        <viewAttribute datatype="VARCHAR" id="OWNERSHIP_CODE" length="1"/>
+        <viewAttribute datatype="VARCHAR" id="OWNERSHIP" length="50"/>
+        <viewAttribute datatype="VARCHAR" id="LEASING_ID" length="40"/>
+        <viewAttribute datatype="DECIMAL" id="MAX_GROSS_WEIGHT" length="13" scale="3"/>
+        <viewAttribute datatype="VARCHAR" id="FOOD_GRADE_CODE" length="1"/>
+        <viewAttribute datatype="VARCHAR" id="FOOD_GRADE" length="60"/>
+        <viewAttribute datatype="DATE" id="BUILT_DATE"/>
+        <viewAttribute datatype="VARCHAR" id="RESOURCE_CONDITION" length="5"/>
+        <viewAttribute datatype="TIMESTAMP" id="ON_HIRE_DATE"/>
+        <viewAttribute datatype="VARCHAR" id="SPECIAL_INSTRUCTION_CODE" length="3"/>
+        <viewAttribute datatype="VARCHAR" id="SPECIAL_INSTRUCTION_NAME" length="60"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#LEASE_CONTRACT_REFERENCE</localVariable>
+      <localVariable>#LEASE_TYPE</localVariable>
+      <definition>
+ BEGIN
+   hire_resources = SELECT LEASE_CONTRACT_REFERENCE,RESOURCE_ID,HIRE_TYPE,
+                           RANK() OVER (PARTITION BY LEASE_CONTRACT_REFERENCE,RESOURCE_ID ORDER BY EVENT_TIME DESC) AS HIRE_SEQ
+				    FROM &quot;sap.tm.trp.db.semantic.event::v_lease_resource_history&quot;
+				    WHERE LEASE_CONTRACT_REFERENCE = :LEASE_CONTRACT_REFERENCE;
+
+   var_out = SELECT T2.EQUIP_ID,
+ 	                T2.RESOURCE,
+ 	                T2.RESOURCE_TYPE,
+                    t2.TYPE_DESC AS RESOURCE_TYPE_DESC,
+                    T2.LAST_LOCATION,
+                    T2.RESOURCE_STATUS_CODE,
+                    T2.RESOURCE_STATUS,
+                    T2.MOVEMENT_STATUS,
+                    T2.MOVEMENT_STATUS_DESCRIPTION,
+                    T2.OWNERSHIP_CODE,
+                    T2.OWNERSHIP,
+                    T2.LEASING_ID,
+                    T2.MAX_GROSS_WEIGHT,
+                    T2.FOOD_GRADE_CODE,
+                    T2.FOOD_GRADE,
+                    T2.BUILT_DATE,
+                    T2.RESOURCE_CONDITION,
+                    T2.ON_HIRE_DATE,
+                    T2.SPECIAL_INSTRUCTION_CODE,
+                    T2.SPECIAL_INSTRUCTION_NAME
+             FROM :hire_resources T1
+             LEFT JOIN &quot;sap.tm.trp.db.equipment::v_resources_info&quot; T2
+             ON T1.RESOURCE_ID = T2.EQUIP_ID
+             WHERE T1.HIRE_TYPE = :LEASE_TYPE
+             AND T1.HIRE_SEQ = 1;
+
+END</definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="EQUIP_ID" order="1">
+        <descriptions defaultDescription="RESID"/>
+        <keyMapping columnObjectName="Script_View" columnName="EQUIP_ID"/>
+      </attribute>
+      <attribute id="RESOURCE" order="2">
+        <descriptions defaultDescription="RESOURCE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE" order="3">
+        <descriptions defaultDescription="RESOURCE_TYPE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE"/>
+      </attribute>
+      <attribute id="RESOURCE_TYPE_DESC" order="4">
+        <descriptions defaultDescription="RESOURCE_TYPE_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_TYPE_DESC"/>
+      </attribute>
+      <attribute id="LAST_LOCATION" order="5">
+        <descriptions defaultDescription="LAST_LOCATION"/>
+        <keyMapping columnObjectName="Script_View" columnName="LAST_LOCATION"/>
+      </attribute>
+      <attribute id="RESOURCE_STATUS_CODE" order="6">
+        <descriptions defaultDescription="RESOURCE_STATUS_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_STATUS_CODE"/>
+      </attribute>
+      <attribute id="RESOURCE_STATUS" order="7">
+        <descriptions defaultDescription="LAST_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_STATUS"/>
+      </attribute>
+      <attribute id="MOVEMENT_STATUS" order="8">
+        <descriptions defaultDescription="MOVE_STATUS"/>
+        <keyMapping columnObjectName="Script_View" columnName="MOVEMENT_STATUS"/>
+      </attribute>
+      <attribute id="MOVEMENT_STATUS_DESCRIPTION" order="9">
+        <descriptions defaultDescription="MOVEMENT_STATUS_DESCRIPTION"/>
+        <keyMapping columnObjectName="Script_View" columnName="MOVEMENT_STATUS_DESCRIPTION"/>
+      </attribute>
+      <attribute id="OWNERSHIP_CODE" order="10">
+        <descriptions defaultDescription="OWNERSHIP_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="OWNERSHIP_CODE"/>
+      </attribute>
+      <attribute id="OWNERSHIP" order="11">
+        <descriptions defaultDescription="OWNERSHIP"/>
+        <keyMapping columnObjectName="Script_View" columnName="OWNERSHIP"/>
+      </attribute>
+      <attribute id="LEASING_ID" order="12">
+        <descriptions defaultDescription="LEASING_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LEASING_ID"/>
+      </attribute>
+      <attribute id="FOOD_GRADE_CODE" order="14">
+        <descriptions defaultDescription="FOOD_GRADE_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="FOOD_GRADE_CODE"/>
+      </attribute>
+      <attribute id="FOOD_GRADE" order="15">
+        <descriptions defaultDescription="FOOD_GRADE"/>
+        <keyMapping columnObjectName="Script_View" columnName="FOOD_GRADE"/>
+      </attribute>
+      <attribute id="BUILT_DATE" order="16">
+        <descriptions defaultDescription="BUILT_DATE"/>
+        <keyMapping columnObjectName="Script_View" columnName="BUILT_DATE"/>
+      </attribute>
+      <attribute id="RESOURCE_CONDITION" order="17">
+        <descriptions defaultDescription="RES_CONDITION"/>
+        <keyMapping columnObjectName="Script_View" columnName="RESOURCE_CONDITION"/>
+      </attribute>
+      <attribute id="ON_HIRE_DATE" order="18">
+        <descriptions defaultDescription="ON_HIRE_DATE"/>
+        <keyMapping columnObjectName="Script_View" columnName="ON_HIRE_DATE"/>
+      </attribute>
+      <attribute id="SPECIAL_INSTRUCTION_CODE" order="19">
+        <descriptions defaultDescription="SPECIAL_INSTRUCTION_CODE"/>
+        <keyMapping columnObjectName="Script_View" columnName="SPECIAL_INSTRUCTION_CODE"/>
+      </attribute>
+      <attribute id="SPECIAL_INSTRUCTION_NAME" order="20">
+        <descriptions defaultDescription="SPECIAL_INSTRUCTION_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="SPECIAL_INSTRUCTION_NAME"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="MAX_GROSS_WEIGHT" order="13" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="MAX_GROSS_WEIGHT"/>
+        <measureMapping columnObjectName="Script_View" columnName="MAX_GROSS_WEIGHT"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_get_locations_of_regions" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_role_check_zone_group"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="VARCHAR" id="ZONE_ID" length="22"/>
+        <viewAttribute datatype="VARCHAR" id="LOCATION_ID" length="22"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition> 
+  
+ BEGIN 
+ 	 DECLARE I_COUNT INTEGER :=0;
+     DECLARE TM_HIERARCHY_NAME VARCHAR(20) := 'RELH_ZONE';
+     
+     --Check if TRP use the TM hierarchy as the TRP hierarchy:
+	SELECT COUNT(1) INTO I_COUNT
+	FROM &quot;sap.tm.trp.db.semantic.location::v_zone_hierarchy&quot; T1
+	WHERE T1.NAME = :TM_HIERARCHY_NAME;
+    
+    --The TRP Hierarchy is use TM hierarchy:
+    IF I_COUNT = 1 THEN 
+    --get zone and all the locations belongs to the zone it's self and the locations belongs to the zone's children from shadow table:
+
+	    ZONE_LOCATION_ALL = SELECT T1.ID AS ZONE_ID,T2.LOCATION_ID
+	    FROM &quot;sap.tm.trp.db.semantic.location::v_zone&quot; T1
+	    INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_zone_location_shadow&quot; T2 ON (T1.ID = T2.ZONE_ID)
+	    --NOTE: to ensure the location of the region must be the location that can store resources. 
+	   INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_loc&quot; T7 ON (T2.LOCATION_ID = T7.ID);
+	   
+	  
+    --TRP use different hierarchy with TM hierarchy
+    ELSE
+           
+      ZONE_LOCATION_ALL = 
+       SELECT T6.ROOT_ID AS ZONE_ID,T5.LOCATION_ID
+       FROM
+       (    --ZONE AND THE LEAF ZONES:
+			SELECT T3.ROOT_ID, T3.CHILDREN_ID AS LEAF_ZONE_ID
+			FROM
+			(
+				SELECT T1.ROOT_ID, T1.ZONE_ID AS CHILDREN_ID 
+				FROM  &quot;sap.tm.trp.db.systemmanagement.location::t_region_item&quot; t1
+			)T3
+			LEFT OUTER JOIN(
+			  SELECT ROOT_ID
+			  FROM &quot;sap.tm.trp.db.systemmanagement.location::t_region_item&quot; 
+			  WHERE ROOT_ID &lt;> ZONE_ID
+			)T4 ON (T3.CHILDREN_ID = T4.ROOT_ID)
+			WHERE T4.ROOT_ID IS NULL
+	   )T6
+	   --shadow table only contains the zones in the tree which named 'RELH_ZONE', if we do not use this tree of TM table,
+      --we should not use the shadow table:
+	  -- INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_zone_location_shadow&quot; T5 ON (T6.LEAF_ZONE_ID = T5.ZONE_ID)
+       INNER JOIN &quot;sap.tm.trp.db.systemmanagement.location::v_zone_loc_for_boundary&quot; T5 ON (T6.LEAF_ZONE_ID = T5.ZONE_ID )
+	   --NOTE: to ensure the location of the region must be the location that can store resources. 
+	   INNER JOIN &quot;sap.tm.trp.db.semantic.location::v_loc&quot; T7 ON (T5.LOCATION_ID = T7.ID);
+	   
+	   
+      
+    END IF;
+    
+    VAR_OUT = SELECT ZONE_ID,LOCATION_ID FROM :ZONE_LOCATION_ALL;
+    
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ZONE_ID" order="1">
+        <descriptions defaultDescription="ZONE_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ZONE_ID"/>
+      </attribute>
+      <attribute id="LOCATION_ID" order="2">
+        <descriptions defaultDescription="LOCATION_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="LOCATION_ID"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures/>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

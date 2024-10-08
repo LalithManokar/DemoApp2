@@ -1,0 +1,91 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.massupload::p_location_filter_upload" (
+ 	IN LOCATION_FILTER_INPUT "sap.tm.trp.db.massupload::tt_location_filter_upload",
+    IN RESOURCE_CATEGORY_ID VARCHAR(20),  
+    IN CONNECTION_ID VARCHAR(100)
+     ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+
+	--Declarations
+    DECLARE USER_ID BIGINT;    
+    DECLARE VAR_CURRENT_UTCTIMESTAMP TIMESTAMP := CURRENT_UTCTIMESTAMP;
+	 
+	 ---Get Source data
+    SOURCE = 
+			 SELECT TRIM(LOCATION_FILTER_NAME) AS LOCATION_FILTER_NAME ,DESCRIPTION,TRIM(LOCATION_FILTER_TYPE) AS LOCATION_FILTER_TYPE ,TRIM(VISIBILITY) AS VISIBILITY,
+			 TRIM(LOCATION_NAME) AS LOCATION_NAME,ROW_INDEX
+			 FROM :LOCATION_FILTER_INPUT;
+			 
+			 
+	--Get User
+    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(:USER_ID);
+    
+     --Get Locations / Regions
+    LOC_REGION = 
+						SELECT ID , NAME AS CODE
+						FROM "sap.tm.trp.db.semantic.location::v_location"
+						UNION
+						SELECT ID , NAME AS CODE
+						FROM "sap.tm.trp.db.semantic.location::v_zone"
+  						UNION
+        				SELECT ID, CODE
+						FROM "sap.tm.trp.db.systemmanagement::t_location_group"
+						WHERE RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID
+						UNION
+						SELECT ID, CODE 
+						FROM "sap.tm.trp.db.systemmanagement::t_region_group"
+    					WHERE RESOURCE_CATEGORY = :RESOURCE_CATEGORY_ID;	
+    					
+    --Delete the records in temporary table in case there're already some uploaded data with same db connection
+    DELETE FROM "sap.tm.trp.db.massupload::t_locations_filter_temporary" 
+    WHERE CONNECTION_ID = :CONNECTION_ID;
+ 
+    --Add records to temporary table
+    INSERT INTO "sap.tm.trp.db.massupload::t_locations_filter_temporary"
+    (ROW_NUM,LOCATION_FILTER_ID,LOCATION_FILTER_NAME,DESCRIPTION,LOCATION_FILTER_TYPE,VISIBILITY,LOCATION_ID,LOCATION_NAME,RESOURCE_CATEGORY,USER_ID,ACTION_TIME,CONNECTION_ID,IND_UPD)
+    SELECT 
+       LF.ROW_INDEX AS ROW_INDEX,
+       LFE.ID AS ID,
+       UPPER(LF.LOCATION_FILTER_NAME) AS LOCATION_FILTER_NAME, 
+       LF.DESCRIPTION,                  
+       (CASE 
+       WHEN UPPER(LF.LOCATION_FILTER_TYPE) = 'LOCATION'
+       THEN '1'
+       WHEN UPPER(LF.LOCATION_FILTER_TYPE) = 'REGION'
+       THEN '5'
+       WHEN UPPER(LF.LOCATION_FILTER_TYPE) = 'LOCATION GROUP'
+       THEN '2'
+       WHEN UPPER(LF.LOCATION_FILTER_TYPE) = 'REGION GROUP'
+       THEN '6'
+       END) AS LOCATION_FILTER_TYPE,
+       
+       (CASE 
+       WHEN UPPER(LF.VISIBILITY) = 'GLOBAL'
+       THEN 'G'
+       WHEN UPPER(LF.VISIBILITY) = 'PERSONAL'
+       THEN 'P' 
+       END) AS VISIBILITY,
+       
+       LR_G.ID AS LOCATION_ID,    
+       UPPER(LF.LOCATION_NAME) AS LOCATION_NAME, 	   
+       :RESOURCE_CATEGORY_ID AS RESOURCE_CATEGORY_ID ,
+       :USER_ID AS USER_ID,
+       :VAR_CURRENT_UTCTIMESTAMP AS TIMESTAMPIN,
+       :CONNECTION_ID AS CONNECTION_ID,
+       (CASE
+       WHEN LFE.ID IS NULL
+       THEN '0'
+       ELSE '1'
+       END) AS IND_UPD 
+      FROM :SOURCE AS LF
+      LEFT OUTER JOIN  "sap.tm.trp.db.filter::t_location_filter" AS LFE
+      ON UPPER (LF.LOCATION_FILTER_NAME) = LFE.CODE      
+      INNER JOIN :LOC_REGION AS LR_G
+      ON LR_G.CODE = UPPER(LF.LOCATION_NAME);	
+    
+    
+    						 
+END;

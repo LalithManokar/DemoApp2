@@ -1,0 +1,109 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.dataprotectionprivacy::p_sd_alert_owner_convert"(
+IN IN_PLAN_EXECUTION_ID "sap.tm.trp.db.dataprotectionprivacy::tt_execution_id",
+OUT OUT_TBL "sap.tm.trp.db.dataprotectionprivacy::tt_location_owners"
+) 
+    LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+    DECLARE PLAN_MODEL_TYPE_ID INTEGER;
+    DECLARE FILTER_TYPE INTEGER;
+    DECLARE LOCATION_EQUIP INTEGER:=1;
+	DECLARE LOCATION_EQUIP_GROUP INTEGER :=7;
+		    
+	DECLARE LOCATION_GROUP_EQUIP INTEGER := 3;
+	DECLARE LOCATION_GROUP_EQUIP_GROUP INTEGER := 9;
+	    
+	DECLARE REGION_EQUIP INTEGER := 4;
+	DECLARE REGION_EQUIP_GROUP INTEGER :=10;
+		    
+	DECLARE REGION_GROUP_EQUIP INTEGER :=6;
+	DECLARE REGION_GROUP_EQUIP_GROUP INTEGER := 12;
+	
+	PLAN_EXECUTION_STATUS = SELECT DISTINCT T4.EXECUTION_ID,
+						       CASE T3.LOCATION_TYPE || T3.EQUI_TYPE
+						       WHEN '11' THEN 1
+						       WHEN '31' THEN 2
+						       WHEN '51' THEN 3
+						       WHEN '21' THEN 4
+						       WHEN '41' THEN 5
+						       WHEN '61' THEN 6
+						       WHEN '12' THEN 7
+						       WHEN '32' THEN 8
+						       WHEN '52' THEN 9
+						       WHEN '22' THEN 10
+						       WHEN '42' THEN 11
+						       WHEN '62' THEN 12
+						     END AS FILTER_TYPE,
+						     T2.PLAN_MODEL_TYPE_ID
+					      FROM "sap.tm.trp.db.pipeline::t_plan_execution" T1
+					      INNER JOIN "sap.tm.trp.db.hrf::v_plan_model" T2 ON (T2.EXECUTION_ID = T1.ID)
+					      INNER JOIN "sap.tm.trp.db.filter::v_filter_group_generic" AS T3 ON (T2.FILTER_GROUP_ID = T3.ID)
+					      INNER JOIN :IN_PLAN_EXECUTION_ID T4
+					      ON (T1.ID = T4.EXECUTION_ID);
+					      
+    USER_LOCATION = SELECT DISTINCT T1.ROOT_ID,
+                           T3.USERNAME
+                    FROM "sap.tm.trp.db.systemmanagement.user::t_role_region" T1
+			        INNER JOIN "sap.tm.trp.db.systemmanagement.user::t_user_role" T2 ON (T2.ROLE_ID = T1.ROLE_ID)
+			        LEFT JOIN "sap.tm.trp.db.dataprotectionprivacy::v_user_for_join" T3 ON (T2.USER_ID = T3.ID);
+    
+    PLAN_MODEL_TYPE = SELECT DISTINCT LOCATION_ID, FILTER_TYPE	 
+                      FROM ( SELECT DISTINCT T5.LOCATION_ID,
+						            T1.FILTER_TYPE
+					         FROM :PLAN_EXECUTION_STATUS T1
+					         INNER JOIN "sap.tm.trp.db.hrf.supplyDemand::t_trp_hrf_SD_output_DeltaFlag" T5
+					         ON (T1.EXECUTION_ID = T5.PLAN_EXECUTION_ID)
+					         WHERE (T1.PLAN_MODEL_TYPE_ID = 1 OR T1.PLAN_MODEL_TYPE_ID = 2 OR T1.PLAN_MODEL_TYPE_ID = 99)
+					         UNION ALL
+					         SELECT DISTINCT T5.LOCATION_ID,
+						            T1.FILTER_TYPE
+					         FROM :PLAN_EXECUTION_STATUS T1
+					         INNER JOIN "sap.tm.trp.db.hrf.kpi::t_trp_hrf_KPI_cus_output_withoutDelta" T5
+					         ON (T1.EXECUTION_ID = T5.PLAN_EXECUTION_ID)
+					         WHERE (T1.PLAN_MODEL_TYPE_ID = 4)
+					      );
+ 
+		LOCATION_USER =  
+			SELECT DISTINCT T1.LOCATION_ID,T1.FILTER_TYPE,T3.USERNAME
+			FROM :PLAN_MODEL_TYPE T1
+			INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T2 ON (T1.LOCATION_ID = T2.LOCATION_ID)
+			INNER JOIN :USER_LOCATION T3 ON (T2.ZONE_ID = T3.ROOT_ID)
+			WHERE (T1.FILTER_TYPE = :LOCATION_EQUIP OR T1.FILTER_TYPE = :LOCATION_EQUIP_GROUP)
+			UNION ALL
+			SELECT DISTINCT T1.LOCATION_ID,T1.FILTER_TYPE,T2.USERNAME
+			FROM :PLAN_MODEL_TYPE as T1
+			INNER JOIN :USER_LOCATION T2 ON (T1.LOCATION_ID = T2.ROOT_ID)
+			WHERE (T1.FILTER_TYPE = :REGION_EQUIP OR T1.FILTER_TYPE = :REGION_EQUIP_GROUP)
+			UNION ALL 
+			SELECT DISTINCT T1.LOCATION_ID,T1.FILTER_TYPE,T3.USERNAME
+			FROM :PLAN_MODEL_TYPE T1 
+			INNER JOIN "sap.tm.trp.db.systemmanagement::t_location_group_item" T5 ON (T1.LOCATION_ID = T5.LOCATION_GROUP_ID)
+            INNER JOIN "sap.tm.trp.db.systemmanagement.location::cv_get_locations_of_regions" T2 ON (T5.LOCATION_ID = T2.LOCATION_ID)
+			INNER JOIN :USER_LOCATION T3 ON (T2.ZONE_ID = T3.ROOT_ID)
+			WHERE (T1.FILTER_TYPE = :LOCATION_GROUP_EQUIP OR T1.FILTER_TYPE = :LOCATION_GROUP_EQUIP_GROUP)
+			UNION ALL
+			SELECT DISTINCT T1.LOCATION_ID,T1.FILTER_TYPE,T2.USERNAME
+		    FROM :PLAN_MODEL_TYPE as T1
+		    INNER JOIN "sap.tm.trp.db.systemmanagement::t_region_group_item" T5 ON (T1.LOCATION_ID = T5.REGION_GROUP_ID)
+		    INNER JOIN :USER_LOCATION T2 ON (T5.ZONE_ID = T2.ROOT_ID)
+		    WHERE (T1.FILTER_TYPE = :REGION_GROUP_EQUIP OR T1.FILTER_TYPE = :REGION_GROUP_EQUIP_GROUP);	 
+    
+    OUT_LOCATION_USER = SELECT T1.LOCATION_ID,T1.FILTER_TYPE,
+                          CASE WHEN PRIVILEGE.USER_DATA_PRIVILEGE_FLAG <> 1 THEN '***'
+                               WHEN T2.USERNAME IS NOT NULL THEN T2.USERNAME
+                               ELSE '***' END AS USERNAME
+                        FROM :LOCATION_USER T1
+                        LEFT JOIN "sap.tm.trp.db.dataprotectionprivacy::v_unblock_users" T2
+                        ON (T1.USERNAME = T2.USERNAME)
+                        CROSS JOIN "sap.tm.trp.db.dataprotectionprivacy::v_user_data_privilege" PRIVILEGE;
+    
+    OUT_TBL = SELECT T1.LOCATION_ID,T1.FILTER_TYPE,RTRIM(T1.USERNAME,',') AS OWNERS
+	FROM
+	(
+		SELECT LOCATION_ID,FILTER_TYPE,string_agg(concat(USERNAME,',')) AS USERNAME
+		FROM :OUT_LOCATION_USER 
+		GROUP BY LOCATION_ID, FILTER_TYPE
+	)T1;
+END;

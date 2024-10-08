@@ -1,0 +1,16 @@
+schema = "SAP_TM_TRP";
+
+                
+query = "SELECT T1.ZONE_ID AS ID,
+                T1.ZONE_HIERARCHY_ID AS HIERARCHY_ID,
+                T1.ZONE_ID,
+                T1.PARENT_ZONE_ID,
+                T1.LEVEL,
+                T2.NAME AS NAME,
+                T2.DESC
+           FROM \"sap.tm.trp.db.semantic.location::v_hierarchy_item\" T1
+           INNER JOIN \"sap.tm.trp.db.semantic.location::v_zone\" T2 ON (T1.ZONE_ID = T2.ID)
+                ";
+               
+                
+depends_on_view = ["sap.tm.trp.db.semantic.location::v_hierarchy_item", "sap.tm.trp.db.semantic.location::v_zone"];

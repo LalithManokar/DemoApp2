@@ -1,0 +1,116 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_archive_schoption_archivedata"
+(IN RULE_ID BIGINT,
+ IN EXECUTION_ID BIGINT,
+ OUT STATUS_CODE INTEGER,
+ OUT RECORD_COUNT BIGINT,
+ OUT MESSAGE NVARCHAR(5000) 
+) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP" 
+AS 
+BEGIN
+
+    DECLARE TABLE_ID BIGINT;
+    DECLARE TABLE_NAME NVARCHAR(500);
+    DECLARE DATE_COLUMN_NAME NVARCHAR(500);
+    DECLARE DATE_FROM TIMESTAMP;
+    DECLARE DATE_TO TIMESTAMP;
+    DECLARE ARR_IND INT;
+    DECLARE SCH_OPTION TINYINT;
+    DECLARE NUM_DAYS BIGINT;
+    DECLARE NUM_EXEC BIGINT; 
+    
+    DECLARE ARCHERROR CONDITION FOR SQL_ERROR_CODE 10001;
+    DECLARE EXIT HANDLER FOR ARCHERROR
+    BEGIN
+        --nothing need to do
+    END;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        STATUS_CODE := 1;
+        SELECT ::SQL_ERROR_MESSAGE INTO MESSAGE FROM DUMMY;
+    END;  
+  
+    --initialize status code
+    STATUS_CODE := 0;
+    MESSAGE := 'Success';
+    RECORD_COUNT := 0; 
+    
+    --get table id and table name
+    SELECT A.TABLE_ID, B.TABLE_NAME, B.DATE_COLUMN_NAME, C.SCH_OPTION, C.NUM_DAYS, C.NUM_EXEC
+    INTO TABLE_ID, TABLE_NAME, DATE_COLUMN_NAME, SCH_OPTION, NUM_DAYS, NUM_EXEC
+    FROM "sap.tm.trp.db.archive::t_archive_rule" AS A 
+    INNER JOIN "sap.tm.trp.db.archive::t_archive_metadata" AS B
+    ON A.TABLE_ID = B.ID
+    INNER JOIN "sap.tm.trp.db.archive::t_archive_rule_with_schedule_option" AS C
+    ON A.ID = C.ID AND A.RULE_NAME = C.RULE_NAME
+    WHERE A.ID = :RULE_ID;
+    
+    IF (:SCH_OPTION = 1) THEN
+    
+        CALL "sap.tm.trp.db.archive::sp_archive_schoption_x_days"(
+            :RULE_ID,
+            :EXECUTION_ID,
+            :TABLE_ID,
+            :TABLE_NAME,
+            :DATE_COLUMN_NAME,
+            :SCH_OPTION,
+            :NUM_DAYS,
+            :STATUS_CODE,
+            :RECORD_COUNT,
+            :MESSAGE
+        );
+        
+        IF :STATUS_CODE != 0 THEN
+            SIGNAL ARCHERROR;  --Stop procedure
+        END IF;
+    
+    ELSEIF (:SCH_OPTION = 2) THEN
+    
+	    CALL "sap.tm.trp.db.archive::sp_archive_schoption_y_runs"(
+	            :RULE_ID,
+	            :EXECUTION_ID,
+	            :TABLE_ID,
+	            :TABLE_NAME,
+	            :DATE_COLUMN_NAME,
+	            :SCH_OPTION,
+	            :NUM_EXEC,
+	            :STATUS_CODE,
+	            :RECORD_COUNT,
+	            :MESSAGE
+	        );
+	        
+	    IF :STATUS_CODE != 0 THEN
+            SIGNAL ARCHERROR;  --Stop procedure
+        END IF;
+    
+    ELSEIF (:SCH_OPTION = 3) THEN
+    
+	    CALL "sap.tm.trp.db.archive::sp_archive_schoption_x_days_y_runs"(
+	            :RULE_ID,
+	            :EXECUTION_ID,
+	            :TABLE_ID,
+	            :TABLE_NAME,
+	            :DATE_COLUMN_NAME,
+	            :SCH_OPTION,
+	            :NUM_EXEC,
+	            :NUM_DAYS,
+	            :STATUS_CODE,
+	            :RECORD_COUNT,
+	            :MESSAGE
+	        );
+	        
+	    IF :STATUS_CODE != 0 THEN
+            SIGNAL ARCHERROR;  --Stop procedure
+        END IF;
+    
+    ELSE
+    
+        STATUS_CODE := 1;
+        MESSAGE := 'Functionality not implemented';
+        
+    END IF ;
+    
+END;

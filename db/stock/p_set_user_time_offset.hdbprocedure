@@ -1,0 +1,14 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.stock::p_set_user_time_offset" (
+    IN USERNAME VARCHAR(50),
+    IN TIME_OFFSET INTEGER
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA SAP_TM_TRP
+AS
+BEGIN
+
+    UPSERT "sap.tm.trp.db.stock::t_start_time_for_user" (USER, DATE_OFFSET)
+    VALUES (:USERNAME, :TIME_OFFSET)  WITH PRIMARY KEY;
+
+END;

@@ -1,0 +1,76 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_eac_configuration_create" (
+    IN NAME VARCHAR(200), --should be mapped to code field in the tables
+    IN DESCRIPTION VARCHAR(500),
+    IN SP VARCHAR(200), -- from UI, send SP as SCHEMA + SP
+    IN LOCATIONS_LIST_STRING CLOB,
+    
+    OUT ID BIGINT,
+    OUT STATUS INTEGER, --0 error 1 successs
+    OUT MESSAGE VARCHAR(200)
+) 
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS  
+    
+BEGIN
+    DECLARE V_USER_ID BIGINT;
+    DECLARE V_USERNAME VARCHAR(200);
+    DECLARE V_SPRAS VARCHAR(10);
+    DECLARE V_TIMESTAMP_START DATETIME := CURRENT_UTCTIMESTAMP;
+    
+    CALL "sap.tm.trp.db.dashboard::sp_splitter_clob" (:LOCATIONS_LIST_STRING,',',LOCATION_ID_INPUT_STRING);
+        LOCATIONS_LIST = SELECT string as ID FROM :LOCATION_ID_INPUT_STRING;
+    
+    CALL "sap.tm.trp.db.hrf.ruleManage.ruleGroup::p_eac_configuration_check"(
+		NULL,
+		:NAME,
+		:DESCRIPTION,
+		:SP,
+		:LOCATIONS_LIST,
+        STATUS,
+        MESSAGE
+	);
+    
+    IF :STATUS = 1 THEN
+    
+
+		    
+	    SELECT IFNULL(MAX(USERNAME), '') INTO V_USERNAME
+	    FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username";
+	
+	    CALL "sap.tm.trp.db.systemmanagement.user::p_get_current_user_id"(V_USER_ID);
+	
+	    SELECT "sap.tm.trp.db.hrf.ruleManage.ruleGroup::s_loc_eac_rule_group".NEXTVAL INTO ID FROM DUMMY;
+	    SELECT IFNULL ( MAX (SPRAS),'') INTO V_SPRAS
+	    FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+    
+		INSERT INTO "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group"
+		            (  ID,
+		               DESC,
+		               SP,
+		               CREATED_BY,
+		               CREATED_AT,
+		               LAST_MODIFIED_BY,
+		               LAST_MODIFIED_AT,
+                       CODE
+		            )
+		     SELECT :ID,
+		            :NAME,
+		            :SP,
+		            :V_USER_ID,
+		            :V_TIMESTAMP_START,
+		            :V_USER_ID,
+		            :V_TIMESTAMP_START,
+                    :NAME
+		       FROM DUMMY;
+
+		    INSERT INTO "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group_t"(ID, SPRAS, DESC)
+		    VALUES (:ID, :V_SPRAS, :DESCRIPTION);
+		    
+		    INSERT INTO "sap.tm.trp.db.hrf.ruleManage.ruleGroup::t_loc_eac_rule_group_item" (LOCATION_RULE_ID,LOCATION_ID)
+		    SELECT :ID, ID FROM :LOCATIONS_LIST;
+		    
+		    
+	END IF;
+END;

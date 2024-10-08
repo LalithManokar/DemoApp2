@@ -1,0 +1,11 @@
+schema = "SAP_TM_TRP"; 
+query = "SELECT DESC
+           FROM \"sap.tm.trp.db.systemmanagement::t_location_group\"
+          UNION
+         SELECT DESC
+           FROM \"sap.tm.trp.db.systemmanagement::t_zone_group\"
+          UNION
+         SELECT DESC
+           FROM \"sap.tm.trp.db.systemmanagement::t_region_group\"";
+
+depends_on_table = ["sap.tm.trp.db.systemmanagement::t_location_group","sap.tm.trp.db.systemmanagement::t_zone_group","sap.tm.trp.db.systemmanagement::t_region_group"];

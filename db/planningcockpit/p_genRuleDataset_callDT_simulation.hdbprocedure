@@ -1,0 +1,418 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_genRuleDataset_callDT_simulation" (
+IN PLAN_MODEL_ID BIGINT,
+IN SCENARIO_ID BIGINT,
+IN EXECUTION_ID BIGINT,
+IN NODE_ID BIGINT,
+OUT OUTPUT_RECORDS INTEGER
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+
+        DECLARE SP VARCHAR(500);
+        DECLARE SCRIPT VARCHAR(5000);
+  
+        CALL "sap.tm.trp.db.planningcockpit::p_prepare_sd_for_alert_regenerate"(:SCENARIO_ID,:PLAN_MODEL_ID,:EXECUTION_ID,:NODE_ID,new_sd); 
+        
+        time_intervals = SELECT DISTINCT TIME_INTERVAL_ID, START_TIME, END_TIME FROM :new_sd;  
+          
+        TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_inputGlobalTemp";   
+        INSERT INTO "sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_inputGlobalTemp" 
+               (SELECT   TIME_INTERVAL_ID,
+			 			 EQUIP_TYPE_TYPE,   
+						 EQUIP_TYPE_NAME,    
+						 EQUIP_TYPE_ID,
+						 LOCATION_TYPE,
+						 LOCATION_NAME,
+						 LOCATION_ID, 
+						 DATA_OBJECT_FORMAT,      
+						 METADATA_NODE_ID,
+						 NODE_OUTPUT_KEYS,
+						 NODE_VISIBLE,  
+						 NODE_NAME,    
+						 NODE_ID,   
+						 PIPELINE_MODEL_ID,      
+						 FILTER_GROUP_ID,         
+						 FILTER_TYPE, 
+						 PLAN_EXECUTION_ID,
+						 PLAN_MODEL_ID,
+						 PLAN_MODEL_TYPE_ID,
+						 PLAN_MODEL_CATEGORY_ID,           
+						 UNIT,
+						 MAX_CAPACITY,
+						 MAX_SAFETY_STOCK,    
+						 MIN_SAFETY_STOCK,
+						 (SUPPLY-DEMAND) AS BALANCE_SUPPLY_DEMAND,
+						 (STOCK+SUPPLY-DEMAND) AS BALANCE_STOCK_SUPPLY_DEMAND,   
+						 DEMAND,
+						 SUPPLY,     
+						 STOCK,
+						 TIME_STEP,  
+						 START_TIME,
+						 SEQUENCE,   
+						 TIME_FILTER_DESC
+			      FROM :new_sd			 
+		         );
+          
+        SELECT IFNULL(MAX(T1.SP),'') INTO SP
+        FROM "sap.tm.trp.db.hrf.ruleManage::t_rule_dispatch_node_to_sp" T1
+        WHERE T1.PLAN_EXECUTION_ID  = :EXECUTION_ID AND 
+                T1.NODE_ID = :NODE_ID;
+          
+       --call DT_storage_procedure SP  
+        --truncate table "sap.tm.trp.db.alert::t_output_GlobalTemporary";
+       TRUNCATE TABLE "SAP_TM_TRP"."sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_outputGlobalTemp";  
+       
+       IF :SP <> '' OR :SP <> NULL THEN
+       --SCRIPT := 'call '|| :SP ||'(' || :SP_PARAM || ',"sap.tm.trp.db.alert::t_DT_input_GlobalTemporary","sap.tm.trp.db.alert::t_DT_output_GlobalTemporary") with overview';  
+         SCRIPT := 'call '|| :SP || '("sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_inputGlobalTemp","sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_outputGlobalTemp","sap.tm.trp.db.hrf.ruleManage::t_hrf_actions_results") with overview';
+         EXECUTE IMMEDIATE(:SCRIPT);
+       END IF ;
+       --add by henry  
+       /*
+        DELETE FROM "sap.tm.trp.db.planningcockpit::t_alert_output_simulation" 
+        WHERE SCENARIO_ID = :SCENARIO_ID
+        AND PLAN_EXECUTION_ID = :EXECUTION_ID;
+        */
+
+        /*INSERT INTO "sap.tm.trp.db.planningcockpit::t_alert_output_simulation" 
+        (SELECT :SCENARIO_ID,
+               T1.PLAN_EXECUTION_ID,
+               T1.PLAN_MODEL_ID,    
+               T1.PLAN_MODEL_TYPE_ID,                   
+               T1.PLAN_MODEL_CATEGORY_ID,                 
+               T1.FILTER_TYPE,
+               T1.FILTER_GROUP_ID,
+               T1.PIPELINE_MODEL_ID,
+               T1.NODE_ID,
+               T1.NODE_NAME,
+               T1.NODE_VISIBLE,
+               T1.NODE_OUTPUT_KEYS,
+               T1.METADATA_NODE_ID,              
+               T1.DATA_OBJECT_FORMAT,
+               T1.LOCATION_TYPE,
+               T1.LOCATION_ID,
+               T1.LOCATION_NAME,
+               T1.EQUIP_TYPE_TYPE,
+               T1.EQUIP_TYPE_ID,
+               T1.EQUIP_TYPE_NAME,
+               T1.TIME_FILTER_DESC,
+               T1.TIME_INTERVAL_ID,
+               T1.SEQUENCE,
+               T1.START_TIME,
+               T1.TIME_STEP,
+               T1.STOCK,
+               T1.SUPPLY,
+               T1.DEMAND,
+               T1.BALANCE_SUPPLY_DEMAND,
+               T1.BALANCE_STOCK_SUPPLY_DEMAND,
+               T1.MIN_SAFETY_STOCK,
+               T1.MAX_SAFETY_STOCK,
+               T1.MAX_CAPACITY,
+               T1.UNIT,
+               T2.ROW_ID, 
+		       T2.MESSAGE, 
+		       T2.ALERT_REASON,
+               T2.ALERT_SCORE_EMER,
+               ABS(T2.ALERT_SCORE_IMP) AS ALERT_SCORE_IMP
+		    FROM "sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_inputGlobalTemp" T1
+		    LEFT JOIN "sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_outputGlobalTemp" T2
+		    ON T1.PLAN_EXECUTION_ID = T2.PLAN_EXECUTION_ID AND
+		       T1.NODE_ID = T2.NODE_ID AND
+		       T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID AND 
+		       T1.LOCATION_TYPE = T2.LOCATION_TYPE AND 
+		       T1.LOCATION_ID = T2.LOCATION_ID AND 
+		       T1.START_TIME = T2.START_TIME
+         );
+         */
+       
+         
+         sql_t_alert_output_simulation = SELECT :SCENARIO_ID  AS SCENARIO_ID,
+               T1.PLAN_EXECUTION_ID,
+               T1.PLAN_MODEL_ID,    
+               T1.PLAN_MODEL_TYPE_ID,                   
+               T1.PLAN_MODEL_CATEGORY_ID,                 
+               T1.FILTER_TYPE,
+               T1.FILTER_GROUP_ID,
+               T1.PIPELINE_MODEL_ID,
+               T1.NODE_ID,
+               T1.NODE_NAME,
+               T1.NODE_VISIBLE,
+               T1.NODE_OUTPUT_KEYS,
+               T1.METADATA_NODE_ID,              
+               T1.DATA_OBJECT_FORMAT,
+               T1.LOCATION_TYPE,
+               T1.LOCATION_ID,
+               T1.LOCATION_NAME,
+               T1.EQUIP_TYPE_TYPE,
+               T1.EQUIP_TYPE_ID,
+               T1.EQUIP_TYPE_NAME,
+               T1.TIME_FILTER_DESC,
+               T1.TIME_INTERVAL_ID,
+               T1.SEQUENCE,
+               T1.START_TIME,
+               T1.TIME_STEP,
+               T1.STOCK,
+               T1.SUPPLY,
+               T1.DEMAND,
+               T1.BALANCE_SUPPLY_DEMAND,
+               T1.BALANCE_STOCK_SUPPLY_DEMAND,
+               T1.MIN_SAFETY_STOCK,
+               T1.MAX_SAFETY_STOCK,
+               T1.MAX_CAPACITY,
+               T1.UNIT,
+               T2.ROW_ID, 
+		       T2.MESSAGE, 
+		       T2.ALERT_REASON,
+               T2.ALERT_SCORE_EMER,
+               ABS(T2.ALERT_SCORE_IMP) AS ALERT_SCORE_IMP
+		    FROM "sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_inputGlobalTemp" T1
+		    LEFT JOIN "sap.tm.trp.db.hrf.supplyDemand::t_hrf_SD_outputGlobalTemp" T2
+		    ON T1.PLAN_EXECUTION_ID = T2.PLAN_EXECUTION_ID AND
+		       T1.NODE_ID = T2.NODE_ID AND
+		       T1.EQUIP_TYPE_ID = T2.EQUIP_TYPE_ID AND 
+		       T1.LOCATION_TYPE = T2.LOCATION_TYPE AND 
+		       T1.LOCATION_ID = T2.LOCATION_ID AND 
+		       T1.START_TIME = T2.START_TIME
+		    WHERE T1.NODE_ID = :NODE_ID;
+		    
+/*
+  SELECT COUNT(1) 
+    INTO OUTPUT_RECORDS 
+    FROM "sap.tm.trp.db.planningcockpit::t_alert_output_simulation" T1
+   WHERE T1.PLAN_EXECUTION_ID = :EXECUTION_ID
+     AND T1.SCENARIO_ID = :SCENARIO_ID;
+     */
+    
+   -- truncate table "sap.tm.trp.db.planningcockpit::t_DT_input_GlobalTemporary";  
+   -- truncate table "sap.tm.trp.db.alert::t_DT_output_GlobalTemporary";
+   
+   --do normalization:
+   ALERT_INFO_AFTER_NORMALIZATION = SELECT T0.PLAN_EXECUTION_ID,
+               T0.PLAN_MODEL_ID,    
+               T0.PLAN_MODEL_TYPE_ID,                   
+               T0.PLAN_MODEL_CATEGORY_ID,                 
+               T0.FILTER_TYPE,
+               T0.FILTER_GROUP_ID,
+               T0.PIPELINE_MODEL_ID,
+               T0.NODE_ID,
+               T0.NODE_NAME,
+               T0.NODE_VISIBLE,
+               T0.NODE_OUTPUT_KEYS,
+               T0.METADATA_NODE_ID,
+               T0.DATA_OBJECT_FORMAT,
+               T0.LOCATION_TYPE,
+               T0.LOCATION_ID,
+               T0.LOCATION_NAME,
+               T0.EQUIP_TYPE_TYPE,
+               T0.EQUIP_TYPE_ID,
+               T0.EQUIP_TYPE_NAME,
+               T0.TIME_FILTER_DESC,
+               T0.TIME_INTERVAL_ID,
+               T0.SEQUENCE,
+               T0.START_TIME,
+               T0.TIME_STEP,
+               T0.STOCK,
+               T0.SUPPLY,
+               T0.DEMAND,
+               T0.BALANCE_SUPPLY_DEMAND,
+               T0.BALANCE_STOCK_SUPPLY_DEMAND,
+               T0.MIN_SAFETY_STOCK,
+               T0.MAX_SAFETY_STOCK,
+               T0.MAX_CAPACITY,
+               T0.UNIT,
+               T0.ROW_ID,
+               T0.MESSAGE,
+               T0.ALERT_REASON,
+               T0.ALERT_SCORE_EMER,
+               T0.ALERT_SCORE_IMP,
+               T6.ALERT_SCORE_IMP_EMER,
+               (CASE WHEN T6.ALERT_SCORE_IMP_EMER_RANGE >0.0001 
+               THEN T6.ALERT_SCORE_NORMALIZING 
+               ELSE 50 
+               END) AS ALERT_SCORE_NORMALIZING  
+          --FROM "sap.tm.trp.db.planningcockpit::t_alert_output_simulation" T0
+          FROM :sql_t_alert_output_simulation T0
+          INNER JOIN
+          (
+             SELECT T5.NODE_ID,
+                    T5.LOCATION_ID,
+                    T5.EQUIP_TYPE_ID,
+                    T5.SEQUENCE,
+                    T5.ALERT_SCORE_IMP_EMER,
+                    T5.ALERT_SCORE_IMP_EMER_RANGE, 
+                    T5.ALERT_SCORE_NORMALIZING         
+             FROM
+             (     
+                    SELECT T41.NODE_ID,
+                           T41.LOCATION_ID,
+                           T41.EQUIP_TYPE_ID,
+                           T41.SEQUENCE,
+                           T41.ALERT_SCORE_IMP_EMER,
+                           T42.ALERT_SCORE_IMP_EMER_RANGE,
+                           CEIL(T41.FILTER_TYPE*(T41.ALERT_SCORE_IMP_EMER - T42.ALERT_SCORE_IMP_EMER_MIN)/T42.ALERT_SCORE_IMP_EMER_RANGE*(100-1)) AS ALERT_SCORE_NORMALIZING
+                    FROM
+                    (
+                         SELECT T1.SCENARIO_ID,
+                                T1.FILTER_TYPE, 
+                                T1.NODE_ID,
+                                T1.LOCATION_ID,
+                                T1.EQUIP_TYPE_ID,
+                                T1.SEQUENCE,
+                                (T1.ALERT_SCORE_EMER + T1.ALERT_SCORE_IMP) AS ALERT_SCORE_IMP_EMER
+                         --FROM "sap.tm.trp.db.planningcockpit::t_alert_output_simulation" T1
+                           FROM :sql_t_alert_output_simulation T1
+                         WHERE PLAN_EXECUTION_ID = :EXECUTION_ID AND
+                         --??? SHOULD i ADD THIS CRITERIA?
+                               SCENARIO_ID = :SCENARIO_ID
+                    )T41,
+                    (     
+                         SELECT  T4_1.ALERT_SCORE_IMP_EMER_RANGE AS ALERT_SCORE_IMP_EMER_RANGE,
+                                 T4_1.ALERT_SCORE_IMP_EMER_MIN
+                         FROM
+                         (
+                             SELECT (MAX(T4.ALERT_SCORE_IMP_EMER) - MIN(T4.ALERT_SCORE_IMP_EMER)) AS ALERT_SCORE_IMP_EMER_RANGE,
+                                    MIN(T4.ALERT_SCORE_IMP_EMER) AS ALERT_SCORE_IMP_EMER_MIN
+                             FROM
+                             (
+                                 SELECT  T1.SCENARIO_ID,
+                                         T1.FILTER_TYPE, 
+                                        (T1.ALERT_SCORE_EMER  + T1.ALERT_SCORE_IMP) AS ALERT_SCORE_IMP_EMER
+                                 --FROM "sap.tm.trp.db.planningcockpit::t_alert_output_simulation" T1
+                                 FROM :sql_t_alert_output_simulation T1
+                                 WHERE PLAN_EXECUTION_ID = :EXECUTION_ID AND
+                                       SCENARIO_ID = :SCENARIO_ID
+                             )T4
+                          )T4_1
+                   )T42
+               )T5
+          )T6 ON (T0.NODE_ID       = T6.NODE_ID 
+              AND T0.LOCATION_ID   = T6.LOCATION_ID 
+              AND T0.EQUIP_TYPE_ID = T6.EQUIP_TYPE_ID
+              AND T0.SEQUENCE      = T6.SEQUENCE )
+           WHERE T0.PLAN_EXECUTION_ID = :EXECUTION_ID
+             AND T0.SCENARIO_ID = :SCENARIO_ID; 
+             
+           --ADD LOCATION ALERT OWNER:
+            LOC_OWN_TBL = 
+       SELECT DISTINCT T1.LOCATION_ID,T1.OWNER,T1.LOCATION_FILTER_TYPE
+       FROM "sap.tm.trp.db.alert::t_planModel_alert_forUI_timeInterval_withoutGis" T1
+       WHERE T1.PLAN_EXECUTION_ID = :EXECUTION_ID AND
+             T1.NODE_ID = :NODE_ID;
+             
+       PLAN_MODEL_ALERT_FOR_UI_TBL = SELECT :SCENARIO_ID AS SCENARIO_ID,  
+							         T01.PLAN_EXECUTION_ID,
+							         PLAN_MODEL_ID,
+							         PLAN_MODEL_TYPE_ID,
+							         PLAN_MODEL_CATEGORY_ID,
+							         FILTER_TYPE,  
+							         FILTER_GROUP_ID,
+							         PIPELINE_MODEL_ID,
+							         NODE_ID,
+							         NODE_NAME,
+							         NODE_VISIBLE,
+							         DATA_OBJECT_FORMAT,
+							         T01.LOCATION_ID,
+							         LOCATION_NAME,
+							         EQUIP_TYPE_ID, 
+							         EQUIP_TYPE_NAME,
+							         TIME_INTERVAL_ID,
+							         SEQUENCE,
+							         START_TIME,
+							         TIME_STEP,     
+							         STOCK,
+							         SUPPLY,
+							         DEMAND,
+							         BALANCE_SUPPLY_DEMAND,
+							         BALANCE_STOCK_SUPPLY_DEMAND,
+							         MIN_SAFETY_STOCK,
+							         MAX_SAFETY_STOCK,
+							         MESSAGE,
+							         ALERT_REASON, 
+							         T01.ALERT_SCORE_NORMALIZING AS ALERT_SCORE,
+							         T02.OWNER,
+							         T02.LOCATION_FILTER_TYPE
+                                FROM :ALERT_INFO_AFTER_NORMALIZATION AS T01
+                                LEFT OUTER JOIN  :LOC_OWN_TBL AS T02
+                                ON (T01.LOCATION_ID = T02.LOCATION_ID);
+                                
+           SELECT COUNT(1) INTO OUTPUT_RECORDS FROM :PLAN_MODEL_ALERT_FOR_UI_TBL;
+      
+       -- need to clean the previous data of the scenario before re-calculate
+       DELETE FROM "sap.tm.trp.db.planningcockpit::t_simulationModel_alert_forUI" WHERE SCENARIO_ID = :SCENARIO_ID;
+                                
+       INSERT INTO "sap.tm.trp.db.planningcockpit::t_simulationModel_alert_forUI" 
+       (SCENARIO_ID,
+        PLAN_EXECUTION_ID, 
+        PLAN_MODEL_ID, 
+        PLAN_MODEL_TYPE_ID,  
+        PLAN_MODEL_CATEGORY_ID,
+        FILTER_TYPE,
+        FILTER_GROUP_ID, 
+        PIPELINE_MODEL_ID, 
+        NODE_ID,
+        NODE_NAME,
+        NODE_VISIBLE,
+        DATA_OBJECT_FORMAT, 
+        LOCATION_ID,
+        LOCATION_NAME,
+        EQUIP_TYPE_ID,
+        EQUIP_TYPE_NAME,
+        TIME_INTERVAL_ID,
+        SEQUENCE,     
+        START_TIME,
+        END_TIME,
+        TIME_STEP,
+        STOCK,
+        SUPPLY,
+        DEMAND,
+        BALANCE_SUPPLY_DEMAND,
+        BALANCE_STOCK_SUPPLY_DEMAND,
+        MIN_SAFETY_STOCK, 
+        MAX_SAFETY_STOCK,
+        MESSAGE,
+        ALERT_REASON, 
+        ALERT_SCORE,
+        OWNER,
+        LOCATION_FILTER_TYPE)
+     SELECT 
+        SCENARIO_ID,
+        PLAN_EXECUTION_ID, 
+        PLAN_MODEL_ID, 
+        PLAN_MODEL_TYPE_ID,  
+        PLAN_MODEL_CATEGORY_ID,
+        FILTER_TYPE,
+        FILTER_GROUP_ID, 
+        PIPELINE_MODEL_ID, 
+        NODE_ID,
+        NODE_NAME,
+        NODE_VISIBLE,
+        DATA_OBJECT_FORMAT, 
+        LOCATION_ID,
+        LOCATION_NAME,
+        EQUIP_TYPE_ID,
+        EQUIP_TYPE_NAME,
+        T1.TIME_INTERVAL_ID,
+        SEQUENCE,     
+        T1.START_TIME,
+        T2.END_TIME,
+        TIME_STEP,
+        STOCK,
+        SUPPLY,
+        DEMAND,
+        BALANCE_SUPPLY_DEMAND,
+        BALANCE_STOCK_SUPPLY_DEMAND,
+        MIN_SAFETY_STOCK, 
+        MAX_SAFETY_STOCK,
+        MESSAGE,
+        ALERT_REASON, 
+        ALERT_SCORE,
+        OWNER,
+        LOCATION_FILTER_TYPE 
+     FROM :PLAN_MODEL_ALERT_FOR_UI_TBL T1
+     INNER JOIN :time_intervals T2 ON(T1.TIME_INTERVAL_ID = T2.TIME_INTERVAL_ID);
+     --WHERE T1.PLAN_EXECUTION_ID = :EXECUTION_ID;
+   
+END;

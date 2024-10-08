@@ -1,0 +1,16 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_get_default_node_by_executionid" (
+IN EXECUTION_ID BIGINT,
+OUT NODE_ID BIGINT) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	READS SQL DATA AS
+BEGIN
+	SELECT COALESCE(max(ID),-1) INTO NODE_ID FROM (
+		SELECT T0.DEFAULT_NODE_ID AS ID
+		FROM "sap.tm.trp.db.pipeline::v_pipeline_default_node" T0
+		INNER JOIN "sap.tm.trp.db.pipeline::t_execution_context" T1 ON T0.PIPELINE_MODEL_ID = T1.VALUE
+		WHERE T1.EXECUTION_ID = :EXECUTION_ID AND T1.KEY = 'PIPELINE_MODEL_ID'
+	);
+	
+END;

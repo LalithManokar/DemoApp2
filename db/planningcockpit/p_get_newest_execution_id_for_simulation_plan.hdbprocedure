@@ -1,0 +1,17 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_newest_execution_id_for_simulation_plan" (
+	IN SIMULATION_ID BIGINT,
+	OUT NEWEST_EXECUTION_ID BIGINT
+ ) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA 
+AS
+BEGIN
+
+    SELECT IFNULL(MAX(T2.ID),-1) INTO NEWEST_EXECUTION_ID
+	FROM  "sap.tm.trp.db.planningcockpit::t_simulation_plan" T1 
+	INNER JOIN "sap.tm.trp.db.pipeline::t_plan_execution" T2 ON (T2.PLAN_MODEL_ID = T1.SD_PLAN_ID)
+	WHERE T1.ID = :SIMULATION_ID;
+
+END;

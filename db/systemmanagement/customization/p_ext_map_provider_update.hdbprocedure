@@ -1,0 +1,113 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.customization::p_ext_map_provider_update"(
+    IN ID INTEGER,
+    IN NAME VARCHAR(20),
+    IN DESC VARCHAR(500),
+    IN COPYRIGHT VARCHAR(250),
+    IN ENABLE_FLAG INTEGER,
+    IN URL "sap.tm.trp.db.systemmanagement.customization::tt_map_provider_url",
+    OUT PROVIDER_ID INTEGER,
+    OUT MESSAGE VARCHAR(500)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+
+    DECLARE CURRENT_USER_ID BIGINT;
+    DECLARE SPRAS VARCHAR(10);
+    DECLARE MAP_PROVIDER_COUNT INTEGER;
+    DECLARE ID_COUNT INTEGER;
+    SELECT IFNULL(MAX(ID),-100) INTO CURRENT_USER_ID FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    SELECT IFNULL(MAX(SPRAS),'E') INTO SPRAS FROM "sap.tm.trp.db.semantic.common::v_lang_code";
+    
+    SELECT COUNT (*) INTO MAP_PROVIDER_COUNT
+    FROM (SELECT ID, FLAG FROM "sap.tm.trp.db.systemmanagement::t_map_provider"
+          WHERE ID <> :ID
+          UNION
+          SELECT :ID AS ID, :ENABLE_FLAG AS FLAG FROM DUMMY)
+    WHERE FLAG = 1;
+
+    IF :MAP_PROVIDER_COUNT = 0 THEN
+              PROVIDER_ID :=0;
+              --At least one map provider should be enabled
+              MESSAGE :='MSG_ONE_PROVIDER_SHOULD_BE_ENABLE';
+
+    ELSE
+              IF :ENABLE_FLAG = 0 THEN
+                  UPDATE "sap.tm.trp.db.systemmanagement::t_map_provider"
+                  SET NAME = :NAME,
+                      FLAG = :ENABLE_FLAG,
+                      LAST_MODIFIED_BY = :CURRENT_USER_ID,
+                      LAST_MODIFIED_AT = CURRENT_UTCTIMESTAMP
+                  WHERE ID = :ID;
+              
+            UPDATE "sap.tm.trp.db.systemmanagement.customization::t_map_provider_t"
+            SET SPRAS = :SPRAS,
+                DESC = :DESC
+            WHERE ID = :ID;
+            
+            UPDATE "sap.tm.trp.db.systemmanagement::t_mapprovider_copyright"
+            SET COPYRIGHT = :COPYRIGHT
+            WHERE P_ID = :ID;
+                       
+            select count(*) into ID_COUNT from "sap.tm.trp.db.systemmanagement::t_mapprovider_copyright" where P_ID = :ID;
+              IF :ID_COUNT = 0 THEN
+            Insert into "sap.tm.trp.db.systemmanagement::t_mapprovider_copyright"
+            values(:ID ,:COPYRIGHT); 
+              END IF; 
+            
+            DELETE FROM "sap.tm.trp.db.systemmanagement::t_map_provider_url"
+            WHERE PROVIDER_ID =:ID;
+            
+            INSERT INTO "sap.tm.trp.db.systemmanagement::t_map_provider_url"
+            SELECT :ID AS PROVIDER_ID,
+                   'SERVER'||RANK AS SERVER_ID,
+                   URL
+            FROM (SELECT URL,
+                         ROW_NUMBER() OVER (ORDER BY URL) AS RANK
+                  FROM :URL);
+                  
+            PROVIDER_ID :=:ID;
+            MESSAGE :='';
+        ELSE
+              UPDATE "sap.tm.trp.db.systemmanagement::t_map_provider"
+              SET FLAG = 0
+              WHERE FLAG = 1;
+              
+              UPDATE "sap.tm.trp.db.systemmanagement::t_map_provider"
+              SET FLAG = 1
+              WHERE ID = :ID;
+              
+              UPDATE "sap.tm.trp.db.systemmanagement.customization::t_map_provider_t"
+            SET SPRAS = :SPRAS,
+                DESC = :DESC
+            WHERE ID = :ID;
+            
+            UPDATE "sap.tm.trp.db.systemmanagement::t_mapprovider_copyright"
+            SET COPYRIGHT = :COPYRIGHT
+            WHERE P_ID = :ID;
+            
+             
+         
+            
+            
+            DELETE FROM "sap.tm.trp.db.systemmanagement::t_map_provider_url"
+            WHERE PROVIDER_ID =:ID;
+            
+            INSERT INTO "sap.tm.trp.db.systemmanagement::t_map_provider_url"
+            SELECT :ID AS PROVIDER_ID,
+                   'SERVER'||RANK AS SERVER_ID,
+                   URL
+            FROM (SELECT URL,
+                         ROW_NUMBER() OVER (ORDER BY URL) AS RANK
+                  FROM :URL);
+            
+            PROVIDER_ID :=:ID;
+            MESSAGE :='';      
+        END IF ;
+    END IF ;
+    
+END;

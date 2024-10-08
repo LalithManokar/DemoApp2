@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_role_check_region_ui" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="internal" calculationScenarioType="SCRIPT_BASED" dataCategory="DEFAULT" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_role_check_zone_ui"/>
+  <localVariables/>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="NVARCHAR" id="ID" length="22"/>
+        <viewAttribute datatype="NVARCHAR" id="NAME" length="20"/>
+        <viewAttribute datatype="NVARCHAR" id="DESC" length="40"/>
+        <viewAttribute datatype="TIMESTAMP" id="CREATED_TIME"/>
+        <viewAttribute datatype="TIMESTAMP" id="MODIFIED_TIME"/>
+        <viewAttribute datatype="DOUBLE" id="LOCATION_XPOS"/>
+        <viewAttribute datatype="DOUBLE" id="LOCATION_YPOS"/>
+        <viewAttribute datatype="DOUBLE" id="ADMIN_GIS_XPOS"/>
+        <viewAttribute datatype="DOUBLE" id="ADMIN_GIS_YPOS"/>
+        <viewAttribute datatype="DOUBLE" id="POSTAL_GIS_XPOS"/>
+        <viewAttribute datatype="DOUBLE" id="POSTAL_GIS_YPOS"/>
+        <viewAttribute datatype="DOUBLE" id="XPOS"/>
+        <viewAttribute datatype="DOUBLE" id="YPOS"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <definition>  BEGIN 
+ 
+     --DECLARE USERTYPE INTEGER;
+     DECLARE LOCATION_TYPE_REGION INTEGER :=5; 
+     
+     --SELECT USERNAME INTO NAME FROM &quot;sap.tm.trp.db.systemmanagement.user::cv_get_username&quot;;
+     
+     --SELECT USER_TYPE_ID INTO USERTYPE FROM &quot;sap.tm.trp.db.systemmanagement.user::t_user&quot;
+     --WHERE USERNAME = :NAME;
+     
+     --IF :USERTYPE = 99 THEN
+     DECLARE HAS_AUTHORIZATION_FLAG TINYINT; 
+     call &quot;sap.tm.trp.db.systemmanagement::p_check_location_full_authorization&quot; (
+		 	HAVE_AUTHORIZATION_FLAG => HAS_AUTHORIZATION_FLAG
+		 ); 
+	 IF :HAS_AUTHORIZATION_FLAG = 1 THEN 
+         var_out = SELECT
+                   T1.ID,
+                   T1.NAME,
+                   T1.DESC,
+                   T1.CREATED_TIME,
+                   T1.MODIFIED_TIME,
+                   T1.LOCATION_XPOS,
+                   T1.LOCATION_YPOS,
+                   T1.XPOS AS ADMIN_GIS_XPOS,
+                   T1.YPOS AS ADMIN_GIS_YPOS,
+                   T1.XPOS AS POSTAL_GIS_XPOS,
+                   T1.YPOS AS POSTAL_GIS_YPOS,
+                   T1.XPOS,
+                   T1.YPOS
+                   FROM &quot;sap.tm.trp.db.systemmanagement.location::v_zone_ui&quot; T1;                                               
+     ELSE
+     
+         var_out = SELECT
+                   T1.ID,
+                   T1.NAME,
+                   T1.DESC,
+                   T1.CREATED_TIME,
+                   T1.MODIFIED_TIME,
+                   T1.LOCATION_XPOS,
+                   T1.LOCATION_YPOS,
+                   T1.XPOS AS ADMIN_GIS_XPOS,
+                   T1.YPOS AS ADMIN_GIS_YPOS,
+                   T1.XPOS AS POSTAL_GIS_XPOS,
+                   T1.YPOS AS POSTAL_GIS_YPOS,
+                   T1.XPOS,
+                   T1.YPOS
+                   FROM &quot;sap.tm.trp.db.systemmanagement.location::v_zone_ui&quot; T1
+                   INNER JOIN &quot;sap.tm.trp.db.systemmanagement::cv_getlocations_of_user_of_locationtype&quot;(PLACEHOLDER.&quot;$$IN_LOCATION_TYPE$$&quot;=>:LOCATION_TYPE_REGION) T2
+                   ON T1.ID = T2.LOCATION_ID;
+     END IF;
+     
+ 	
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="ID" order="1">
+        <descriptions defaultDescription="ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="ID"/>
+      </attribute>
+      <attribute id="NAME" order="2">
+        <descriptions defaultDescription="NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="NAME"/>
+      </attribute>
+      <attribute id="DESC" order="3">
+        <descriptions defaultDescription="DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DESC"/>
+      </attribute>
+      <attribute id="CREATED_TIME" order="4">
+        <descriptions defaultDescription="CREATED_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="CREATED_TIME"/>
+      </attribute>
+      <attribute id="MODIFIED_TIME" order="5">
+        <descriptions defaultDescription="MODIFIED_TIME"/>
+        <keyMapping columnObjectName="Script_View" columnName="MODIFIED_TIME"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="LOCATION_XPOS" order="6" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LOCATION_XPOS"/>
+        <measureMapping columnObjectName="Script_View" columnName="LOCATION_XPOS"/>
+      </measure>
+      <measure id="LOCATION_YPOS" order="7" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="LOCATION_YPOS"/>
+        <measureMapping columnObjectName="Script_View" columnName="LOCATION_YPOS"/>
+      </measure>
+      <measure id="ADMIN_GIS_XPOS" order="8" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ADMIN_GIS_XPOS"/>
+        <measureMapping columnObjectName="Script_View" columnName="ADMIN_GIS_XPOS"/>
+      </measure>
+      <measure id="ADMIN_GIS_YPOS" order="9" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="ADMIN_GIS_YPOS"/>
+        <measureMapping columnObjectName="Script_View" columnName="ADMIN_GIS_YPOS"/>
+      </measure>
+      <measure id="POSTAL_GIS_XPOS" order="10" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="POSTAL_GIS_XPOS"/>
+        <measureMapping columnObjectName="Script_View" columnName="POSTAL_GIS_XPOS"/>
+      </measure>
+      <measure id="POSTAL_GIS_YPOS" order="11" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="POSTAL_GIS_YPOS"/>
+        <measureMapping columnObjectName="Script_View" columnName="POSTAL_GIS_YPOS"/>
+      </measure>
+      <measure id="XPOS" order="12" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="XPOS"/>
+        <measureMapping columnObjectName="Script_View" columnName="XPOS"/>
+      </measure>
+      <measure id="YPOS" order="13" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="YPOS"/>
+        <measureMapping columnObjectName="Script_View" columnName="YPOS"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

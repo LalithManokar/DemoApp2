@@ -1,0 +1,9 @@
+schema = "SAP_TM_TRP";
+query  = "SELECT T1.PLAN_MODEL_ID, T1.ID AS EXECUTION_ID, T1.EXECUTE_ON AS EXECUTION_TIME 
+          FROM \"sap.tm.trp.db.pipeline::t_plan_execution\" T1
+          INNER JOIN \"sap.tm.trp.db.pipeline::t_plan_model\" T2 ON (T1.PLAN_MODEL_ID = T2.ID)
+          INNER JOIN \"sap.tm.trp.db.pipeline::t_pipeline_model\" T3 ON (T2.PIPELINE_MODEL_ID = T3.ID)
+          WHERE T1.EXECUTE_ON > IFNULL(T3.LAST_MODIFIED_ON, T3.CREATE_ON) 
+        ";
+
+depends_on_table = ["sap.tm.trp.db.pipeline::t_plan_execution", "sap.tm.trp.db.pipeline::t_plan_model", "sap.tm.trp.db.pipeline::t_pipeline_model"];

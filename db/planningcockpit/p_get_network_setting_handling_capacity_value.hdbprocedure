@@ -1,0 +1,60 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_network_setting_handling_capacity_value" (
+	IN NETWORK_SETTING_GROUP_ID BIGINT,
+	IN SD_PLAN_ID BIGINT,
+	OUT HANDLING_CAPA INTEGER
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA 
+AS
+BEGIN
+    DECLARE COUNT_HANDLING_CAPA INTEGER;	
+	DECLARE HAVE_HANDLING_CAPA VARCHAR1;
+	DECLARE V_TIME_FILTER_ID BIGINT;
+	DECLARE V_TIME_INTERVAL_NOT_DAYS INTEGER;
+	
+	--Get the parameter handling capacity set in network if checked or not
+	SELECT count(*)
+	INTO COUNT_HANDLING_CAPA
+    FROM "sap.tm.trp.db.planningcockpit::v_network_setting_group_parameter_group" as T0
+    WHERE T0.NETWORK_SETTING_GROUP_ID = :NETWORK_SETTING_GROUP_ID AND
+          T0.PARAMETER_ID             = '19';  --Handling capacity
+	
+	IF COUNT_HANDLING_CAPA > 0 THEN	
+		SELECT T0.VALUE 
+		INTO HAVE_HANDLING_CAPA
+	    FROM "sap.tm.trp.db.planningcockpit::v_network_setting_group_parameter_group" as T0
+	    WHERE T0.NETWORK_SETTING_GROUP_ID = :NETWORK_SETTING_GROUP_ID AND
+	          T0.PARAMETER_ID             = '19';  --Handling capacity
+    ELSE
+        HAVE_HANDLING_CAPA := '0';
+    END IF;
+	
+	IF HAVE_HANDLING_CAPA = '1' THEN
+		
+		--Get time filter from SD Plan
+		SELECT T2.TIME_FILTER_ID
+		  INTO V_TIME_FILTER_ID
+		  FROM "sap.tm.trp.db.pipeline::t_plan_model" T1 
+		INNER JOIN "sap.tm.trp.db.filter::t_filter_group" T2 ON T2.ID = T1.FILTER_GROUP_ID
+		WHERE T1.ID = :SD_PLAN_ID;
+
+		--Get the time interval, only Day type time interval is considerred for using handling capacity    
+	    SELECT COUNT(*) 
+		  INTO V_TIME_INTERVAL_NOT_DAYS
+		  FROM "sap.tm.trp.db.filter::t_time_filter_item" 
+	     WHERE TIME_FILTER_ID = :V_TIME_FILTER_ID AND
+	           TIME_DIMENSION_UNIT_ID <> 2;   --Days
+	    
+	    --Only all the time interval type are Days consider handling capacity       
+	    IF  V_TIME_INTERVAL_NOT_DAYS = 0 THEN 
+	      	HANDLING_CAPA := 1;
+	    ELSE
+	    	HANDLING_CAPA := 0;
+	    END IF ;
+    ELSE
+	  HANDLING_CAPA := 0;
+	END IF;
+
+END;

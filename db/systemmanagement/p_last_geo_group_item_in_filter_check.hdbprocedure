@@ -1,0 +1,55 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement::p_last_geo_group_item_in_filter_check"(
+    IN GROUP_ID VARCHAR(22),
+    IN TYPE INTEGER,
+    OUT ERR_NUM INTEGER,
+    OUT FILTER_NAME VARCHAR(50)
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    IF :TYPE = 1 THEN
+        GEO_ITEMS = SELECT DISTINCT LOCATION_FILTER_ID
+                      FROM "sap.tm.trp.db.filter::t_location_filter_location"
+                     WHERE LOCATION_GROUP_ID = :GROUP_ID;
+    
+        GEO_COUNT = SELECT A.LOCATION_FILTER_ID, COUNT(LOCATION_GROUP_ID) AS C
+                     FROM "sap.tm.trp.db.filter::t_location_filter_location" AS A
+                           INNER JOIN :GEO_ITEMS AS B
+                           ON A.LOCATION_FILTER_ID = B.LOCATION_FILTER_ID
+                  GROUP BY A.LOCATION_FILTER_ID;
+    ELSEIF :TYPE = 2 THEN
+        GEO_ITEMS = SELECT DISTINCT LOCATION_FILTER_ID
+                      FROM "sap.tm.trp.db.filter::t_location_filter_zone"
+                     WHERE ZONE_GROUP_ID = :GROUP_ID;
+    
+        GEO_COUNT = SELECT A.LOCATION_FILTER_ID, COUNT(ZONE_GROUP_ID) AS C
+                      FROM "sap.tm.trp.db.filter::t_location_filter_zone" AS A
+                           INNER JOIN :GEO_ITEMS AS B
+                           ON A.LOCATION_FILTER_ID = B.LOCATION_FILTER_ID
+                  GROUP BY A.LOCATION_FILTER_ID;
+    ELSEIF :TYPE = 3 THEN
+        GEO_ITEMS = SELECT DISTINCT LOCATION_FILTER_ID
+                      FROM "sap.tm.trp.db.filter::t_location_filter_region"
+                     WHERE REGION_GROUP_ID = :GROUP_ID;
+    
+        GEO_COUNT = SELECT A.LOCATION_FILTER_ID, COUNT(REGION_GROUP_ID) AS C
+                      FROM "sap.tm.trp.db.filter::t_location_filter_region" AS A
+                           INNER JOIN :GEO_ITEMS AS B
+                           ON A.LOCATION_FILTER_ID = B.LOCATION_FILTER_ID
+                  GROUP BY A.LOCATION_FILTER_ID;
+    END IF;
+    
+    SELECT COUNT(C) INTO ERR_NUM
+      FROM :GEO_COUNT
+     WHERE C < 2;
+    
+    IF :ERR_NUM > 0 THEN
+        SELECT TOP 1 DESC INTO FILTER_NAME
+          FROM :GEO_COUNT AS A
+               INNER JOIN "sap.tm.trp.db.filter::t_location_filter" AS B
+               ON A.LOCATION_FILTER_ID = B.ID
+         WHERE A.C < 2;
+    END IF;
+END;

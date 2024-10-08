@@ -1,0 +1,32 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.dashboard::p_ext_tile_get" (
+    IN RESOURCE_CATEGORY NVARCHAR(50),
+    OUT TILES "sap.tm.trp.db.dashboard::tt_tile",
+    OUT TILE_ITEMS "sap.tm.trp.db.dashboard::tt_tile_item"
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+USER_ID BIGINT;
+BEGIN
+    SELECT ID INTO USER_ID
+    FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+    
+    IF :RESOURCE_CATEGORY = '' THEN
+        TILES = 
+        SELECT ID, SEQ, TYPE FROM "sap.tm.trp.db.dashboard::t_tile" WHERE CREATED_BY = :USER_ID;
+   
+    ELSE
+    
+        TILES = 
+        SELECT ID, SEQ, TYPE FROM "sap.tm.trp.db.dashboard::t_tile" WHERE CREATED_BY = :USER_ID AND RESOURCE_CATEGORY = :RESOURCE_CATEGORY;
+    END IF;
+    
+    TILE_ITEMS = 
+    SELECT TILE_ID, KEY, VALUE FROM "sap.tm.trp.db.dashboard::t_tile_item" AS a
+    INNER JOIN :TILES AS b
+    ON a.TILE_ID = b.ID;
+    
+    
+END

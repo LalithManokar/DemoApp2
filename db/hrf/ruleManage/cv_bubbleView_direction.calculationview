@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Calculation:scenario xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:Calculation="http://www.sap.com/ndb/BiModelCalculation.ecore" schemaVersion="2.3" id="cv_bubbleView_direction" applyPrivilegeType="ANALYTIC_PRIVILEGE" checkAnalyticPrivileges="true" defaultClient="crossClient" defaultLanguage="$$language$$" hierarchiesSQLEnabled="false" translationRelevant="true" visibility="reportingEnabled" calculationScenarioType="SCRIPT_BASED" dataCategory="CUBE" enforceSqlExecution="false" executionSemantic="UNDEFINED" scriptParametersCaseSensitive="true">
+  <descriptions defaultDescription="cv_bubbleView_direction"/>
+  <defaultSchema schemaName="SAP_TM_TRP"/>
+  <localVariables>
+    <variable id="IN_SPRAS" parameter="true">
+      <descriptions defaultDescription="IN_SPRAS"/>
+      <variableProperties datatype="VARCHAR" defaultValue="E" length="10" mandatory="true">
+        <valueDomain type="empty"/>
+        <selection multiLine="false" type="SingleValue"/>
+      </variableProperties>
+    </variable>
+  </localVariables>
+  <variableMappings/>
+  <informationModelLayout relativeWidthScenario="27"/>
+  <dataSources/>
+  <calculationViews>
+    <calculationView xsi:type="Calculation:SqlScriptView" id="Script_View">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute datatype="INTEGER" id="BUBBLE_VIEW_ID"/>
+        <viewAttribute datatype="VARCHAR" id="BUBBLE_VIEW_NAME" length="50"/>
+        <viewAttribute datatype="INTEGER" id="DIRECTION_TYPE_ID"/>
+        <viewAttribute datatype="VARCHAR" id="DIRECTION_TYPE_DESC" length="50"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <localVariable>#IN_SPRAS</localVariable>
+      <definition> 
+  
+ BEGIN 
+ 	 var_out = 
+ 	 select T1.ID as BUBBLE_VIEW_ID,
+       T2.DESC as  BUBBLE_VIEW_NAME,
+       T1.DIRECTION_TYPE_ID,
+       T3.DESC as DIRECTION_TYPE_DESC
+     from &quot;sap.tm.trp.db.hrf.ruleManage::t_bubbleView&quot; T1
+     inner join &quot;sap.tm.trp.db.hrf.ruleManage::t_bubbleView_t&quot; T2
+     on T1.ID = T2.ID and 
+         T2.SPRAS = :IN_SPRAS
+     inner join &quot;sap.tm.trp.db.hrf.ruleManage::t_bubbleView_direction_t&quot; T3
+     on T1.DIRECTION_TYPE_ID = T3.ID and 
+         T3.SPRAS = :IN_SPRAS;
+
+END </definition>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Script_View">
+    <descriptions/>
+    <attributes>
+      <attribute id="BUBBLE_VIEW_ID" order="1">
+        <descriptions defaultDescription="BUBBLE_VIEW_ID"/>
+        <keyMapping columnObjectName="Script_View" columnName="BUBBLE_VIEW_ID"/>
+      </attribute>
+      <attribute id="BUBBLE_VIEW_NAME" order="2">
+        <descriptions defaultDescription="BUBBLE_VIEW_NAME"/>
+        <keyMapping columnObjectName="Script_View" columnName="BUBBLE_VIEW_NAME"/>
+      </attribute>
+      <attribute id="DIRECTION_TYPE_DESC" order="4">
+        <descriptions defaultDescription="DIRECTION_TYPE_DESC"/>
+        <keyMapping columnObjectName="Script_View" columnName="DIRECTION_TYPE_DESC"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="DIRECTION_TYPE_ID" order="3" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DIRECTION_TYPE_ID"/>
+        <measureMapping columnObjectName="Script_View" columnName="DIRECTION_TYPE_ID"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="40" y="85"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>

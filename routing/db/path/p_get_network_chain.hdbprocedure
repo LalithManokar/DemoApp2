@@ -1,0 +1,40 @@
+PROCEDURE "SAP_TM_ROUTING"."sap.tm.trp.routing.db.path::p_get_network_chain"(
+    IN network_id BIGINT,
+    OUT id_chain TABLE(id BIGINT, level INTEGER)
+)
+   LANGUAGE SQLSCRIPT
+   SQL SECURITY INVOKER
+   DEFAULT SCHEMA SAP_TM_ROUTING
+   READS SQL DATA AS
+BEGIN
+   /*************************************
+       Write your procedure logic 
+   *************************************/
+	DECLARE chainid_arr BIGINT ARRAY;
+	DECLARE cur_network_id, base_network_id BIGINT;
+	DECLARE arr_len BIGINT = 0;
+	DECLARE exist_flag INTEGER;
+
+	-- check whether network_id exist
+	SELECT COUNT(*) INTO exist_flag
+	FROM "sap.tm.trp.routing.db.path::t_network_model"
+	WHERE id = :network_id;
+	
+	IF :exist_flag = 1 THEN
+    	cur_network_id = :network_id;
+    	WHILE :cur_network_id IS NOT NULL DO
+    	    -- Append the base network id to chainid_arr
+    	    arr_len = :arr_len + 1;
+    		chainid_arr[:arr_len] = :cur_network_id;
+    		-- Look for next base network id
+    		SELECT base_network_id INTO base_network_id
+    		FROM "sap.tm.trp.routing.db.path::t_network_model"
+    		WHERE id = :cur_network_id;
+    		
+    		cur_network_id = :base_network_id;
+    	END WHILE;
+    END IF;
+
+	-- convert chainid_arr to table
+	id_chain = UNNEST(:chainid_arr) WITH ORDINALITY AS (id, level);
+END

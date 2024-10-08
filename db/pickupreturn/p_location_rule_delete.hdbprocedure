@@ -1,0 +1,65 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pickupreturn::p_location_rule_delete" (
+    IN RULE_ID    BIGINT,
+    OUT STATUS INTEGER,  --0 error  1 success
+    OUT MESSAGE VARCHAR(200)
+   )
+	 LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE V_CNT INT;
+    DECLARE V_SCHEDULE_TIME_TYPE INT;
+    DECLARE V_START_DATETIME TIMESTAMP ;
+    DECLARE V_END_DATETIME TIMESTAMP ;
+
+    SELECT count(*) into V_CNT  FROM  "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" WHERE ID=:RULE_ID;
+
+    IF   V_CNT=0
+
+        THEN      STATUS :=0;
+  	              MESSAGE :='MSG_ERROR_NODATA';
+
+  	ELSE
+
+  	    SELECT  IFNULL(MAX(SCHEDULE_TIME_TYPE), 0) into V_SCHEDULE_TIME_TYPE
+  	      FROM  "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" WHERE ID=:RULE_ID;
+
+
+  	    IF  V_SCHEDULE_TIME_TYPE=0
+
+  	    THEN     DELETE FROM  "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+  	       			   WHERE  ID= :RULE_ID;
+
+                 DELETE FROM "sap.tm.trp.db.pickupreturn::t_location_rule_t"
+                       WHERE  ID= :RULE_ID;
+
+  	             STATUS :=1;
+  	             MESSAGE :='MSG_SUCCESS_STATUS';
+
+  	    ELSE
+  	        SELECT  IFNULL(MAX(END_DATETIME), CURRENT_UTCTIMESTAMP) into V_END_DATETIME
+  	          FROM  "sap.tm.trp.db.pickupreturn::t_location_assignment_rule" WHERE ID=:RULE_ID;
+
+
+  	       IF   :V_END_DATETIME  > CURRENT_UTCTIMESTAMP
+  	             THEN 	     STATUS :=0;
+  	                         MESSAGE :='MSG_ERROR_AUTO_NOT_EXPIRED';
+
+  	       ELSE
+  	             DELETE FROM  "sap.tm.trp.db.pickupreturn::t_location_assignment_rule"
+  	       			   WHERE  ID= :RULE_ID;
+
+                 DELETE FROM "sap.tm.trp.db.pickupreturn::t_location_rule_t"
+                       WHERE  ID= :RULE_ID;
+
+  	             STATUS :=1;
+  	             MESSAGE :='MSG_SUCCESS_STATUS';
+
+  	      END IF;
+
+     END IF;
+
+ END IF;
+
+END;

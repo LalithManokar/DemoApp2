@@ -1,0 +1,33 @@
+schema = "SAP_TM_TRP";
+query  ="
+SELECT
+	T4.CODE AS OBJECT_CODE
+	,T0.ID AS PLAN_ID
+	,T0.NAME
+    ,T0.CODE
+    ,T1.DESC AS CATEGORY
+    ,T0.DESC AS DESC
+    ,MAP(T0.VISIBILITY_FLAG,1,'G',0,'P') AS VISIBILITY
+    ,T2.USERNAME AS CREATED_BY
+    ,T3.USERNAME AS MODIFIED_BY
+    ,T0.LAST_MODIFIED_ON AS MODIFIED_TIME
+    ,T5.RESOURCE_CATEGORY    
+FROM \"sap.tm.trp.db.pipeline::t_plan_model\" T0
+INNER JOIN \"sap.tm.trp.db.pipeline::t_plan_model_type\" T1 ON T1.ID = T0.PLAN_MODEL_TYPE_ID
+LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T2 ON T2.ID = T0.CREATE_BY
+LEFT JOIN \"sap.tm.trp.db.dataprotectionprivacy::v_user_for_join\" T3 ON T3.ID = T0.LAST_MODIFIED_BY
+INNER JOIN \"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group\" T4 ON T4.ALERT_RULE_GROUP_ID = T0.ALERT_RULE_GROUP_ID
+INNER JOIN \"sap.tm.trp.db.filter::t_filter_group\" T5 ON T5.ID = T0.FILTER_GROUP_ID
+";
+               
+
+depends_on_table = ["sap.tm.trp.db.pipeline::t_plan_model",
+					"sap.tm.trp.db.pipeline::t_plan_model_type",
+					"sap.tm.trp.db.alert.alert_rule_group::t_alert_rule_group",
+					"sap.tm.trp.db.filter::t_filter_group"];
+					
+depends_on_view = ["sap.tm.trp.db.dataprotectionprivacy::v_user_for_join"];
+               
+               
+               
+            

@@ -1,0 +1,24 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.systemmanagement.user::p_role_update" (
+  IN ROLE_ID BIGINT,
+  IN ROLE_GROUP_ID INTEGER,
+  IN NAME NVARCHAR(50),
+  IN DESC NVARCHAR(50)) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER
+DEFAULT SCHEMA "SAP_TM_TRP"
+AS
+BEGIN
+    DECLARE USER_ID BIGINT;
+    
+    SELECT IFNULL(MAX(ID),-100) INTO USER_ID FROM "sap.tm.trp.db.systemmanagement.user::t_user"
+    WHERE USERNAME = (SELECT USERNAME FROM "sap.tm.trp.db.systemmanagement.user::cv_get_username");
+  
+    UPDATE "sap.tm.trp.db.systemmanagement.user::t_role" 
+    SET ROLE_GROUP_ID = :ROLE_GROUP_ID, 
+        NAME = :NAME,
+        DESC = :DESC,
+        LAST_MODIFIED_BY = :USER_ID,
+        LAST_MODIFIED_AT = CURRENT_UTCTIMESTAMP
+    WHERE ID = :ROLE_ID;
+
+END;

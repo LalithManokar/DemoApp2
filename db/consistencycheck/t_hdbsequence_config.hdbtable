@@ -1,0 +1,13 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE; 
+
+table.columns =
+ [
+    {name = "SEQUENCE_NAME"; sqlType = VARCHAR; length = 250; nullable = false;},
+    {name = "TABLE_NAME"; sqlType =VARCHAR; length = 250; nullable = false;},
+    {name = "COLUMN_NAME"; sqlType =VARCHAR; length = 50; nullable = false;},
+    {name = "SCHEMA_NAME"; sqlType =NVARCHAR; length = 256; nullable = false; defaultValue = "SAP_TM_TRP";}   
+     
+]; 
+
+table.primaryKey.pkcolumns = ["SEQUENCE_NAME", "TABLE_NAME"]; 

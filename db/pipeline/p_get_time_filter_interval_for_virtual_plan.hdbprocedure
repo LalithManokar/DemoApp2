@@ -1,0 +1,383 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_get_time_filter_interval_for_virtual_plan" ( 
+  IN IN_TIME_FILTER_ID BIGINT,
+  IN IN_EXECUTION_IDS "sap.tm.trp.db.pipeline::tt_id_list",
+  OUT OUT_TIME_FILTER_INTERVAL "sap.tm.trp.db.pipeline::tt_time_filter_interval_result"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA AS
+BEGIN  
+ 
+   DECLARE HOUR_START INTEGER;
+    DECLARE MINUTE_START INTEGER;
+    DECLARE WEEK_START INTEGER;
+    DECLARE MONTH_START INTEGER;
+    DECLARE TIME_ZONE VARCHAR(50);
+    DECLARE FLAG INTEGER;
+    DECLARE OFFSET INTEGER;
+    DECLARE ITEM_ID BIGINT; 
+    DECLARE UNIT_ID BIGINT;-- 0:hour 1:day 2:week 3:month 4:year
+    DECLARE UTC_START_FROM TIMESTAMP;
+    DECLARE REPEAT INTEGER;
+    
+    /*
+     CALL "sap.tm.trp.db.pipeline::p_get_utc_time_for_virtual_plan"
+     (:IN_TIME_FILTER_ID,:IN_EXECUTION_IDS,SQL_OUT_UTC_START_TIME); 
+ */
+ 
+ --Get the Unit of the first interval of the time filter: 
+ 	sql0_UTC = SELECT A.ID,B.TIME_DIMENSION_UNIT_ID AS UNIT_ID
+                  FROM 
+                  (SELECT MIN(ID) AS ID
+                  FROM "sap.tm.trp.db.filter::t_time_filter_item" A
+                  WHERE TIME_FILTER_ID = :IN_TIME_FILTER_ID
+                  GROUP BY TIME_FILTER_ID ) A
+                  INNER JOIN "sap.tm.trp.db.filter::t_time_filter_item" B ON A.ID = B.ID;                 
+    
+    --convert the execution on time                 
+    sql1_UTC = 
+          SELECT 
+                 T1.ID AS EXECUTION_ID,
+                 --T4.ID AS TIME_FILTER_ID,
+                 T5.ID AS ITEM_ID,                 
+                 T4.TIMEZONE_ID,
+                 T1.EXECUTE_ON,
+                 UTCTOLOCAL(T1.EXECUTE_ON,T4.TIMEZONE_ID,'platform') AS LOCAL_TIMESTAMP,
+                 SUBSTRING(TO_VARCHAR(UTCTOLOCAL(T1.EXECUTE_ON,T4.TIMEZONE_ID,'platform'),'YYYY-MM-DD HH24:MI:SS'),1,10) AS LOCAL_TIMESTAMP_STR,
+                 T5.UNIT_ID,
+                 T4.HOUR_START_FROM,
+                 T4.MINUTE_START_FROM,
+                 T4.WEEK_START_FROM,
+                 T4.MONTH_START_FROM,
+                 T4.DIRECTION_FLAG,
+                 T4.OFFSET_FLAG
+                 FROM "sap.tm.trp.db.pipeline::t_plan_execution" T1
+                 INNER JOIN :IN_EXECUTION_IDS T2 ON (T1.ID = T2.ID),
+                 "sap.tm.trp.db.filter::t_time_filter" T4 
+                 ,:sql0_UTC T5
+           --WHERE T1.ID = :IN_EXECUTION_ID AND T4.ID = :IN_TIME_FILTER_ID ;
+            WHERE T4.ID = :IN_TIME_FILTER_ID ;
+                    
+    -- month type
+    sql2_UTC = SELECT 
+                  A.EXECUTION_ID,
+                  --A.TIME_FILTER_ID,
+                  A.ITEM_ID, 
+                  A.TIMEZONE_ID,      
+                  A.EXECUTE_ON,            
+                  A.UNIT_ID,
+                  A.HOUR_START_FROM,
+                  A.MINUTE_START_FROM,
+                  A.WEEK_START_FROM,
+                  A.MONTH_START_FROM,
+                  A.DIRECTION_FLAG,
+                  A.OFFSET_FLAG,
+                  --sometimes the MONTH START DAY is 31 while current month doesn't contain this day
+				  --change automatically to the last day of the month
+                  CASE WHEN A.UNIT_ID = 4 THEN
+	                  CASE WHEN A.MONTH_START_FROM <= DAYOFMONTH(LAST_DAY(TO_DATE(LOCAL_TIMESTAMP))) 
+	                  	then CONCAT (SUBSTRING(A.LOCAL_TIMESTAMP_STR,1,8), TO_VARCHAR(A.MONTH_START_FROM))
+	                  ELSE
+	                  	CONCAT (SUBSTRING(A.LOCAL_TIMESTAMP_STR,1,8), TO_VARCHAR(DAYOFMONTH(LAST_DAY(TO_DATE(LOCAL_TIMESTAMP)))))
+	                  END
+	              WHEN A.UNIT_ID = 3 THEN
+	              	  SUBSTRING(TO_VARCHAR(ADD_DAYS(A.LOCAL_TIMESTAMP,(A.WEEK_START_FROM-(WEEKDAY(A.LOCAL_TIMESTAMP)+1))),'YYYY-MM-DD HH24:MI:SS'),1,10)
+	              WHEN A.UNIT_ID = 2 THEN
+	              	  SUBSTRING(TO_VARCHAR(A.LOCAL_TIMESTAMP,'YYYY-MM-DD HH24:MI:SS'),1,10)
+	              END AS MONTH_AND_DAY                    
+                  FROM :sql1_UTC A WHERE A.UNIT_ID = 4 OR A.UNIT_ID = 3 OR A.UNIT_ID = 2;                                           
+    
+    
+                 
+    -- MONTH_DAY_HOUR              
+    sql6_UTC = SELECT 
+                 A.EXECUTION_ID,
+                 A.ITEM_ID, 
+                 A.TIMEZONE_ID,
+                 A.EXECUTE_ON,  
+                 A.UNIT_ID,
+                 A.HOUR_START_FROM,
+                 A.MINUTE_START_FROM,
+                 A.WEEK_START_FROM,
+                 A.MONTH_START_FROM,  
+                 A.DIRECTION_FLAG,
+                 A.OFFSET_FLAG,   
+                 TO_TIMESTAMP(A.MONTH_AND_DAY || ' ' || TO_VARCHAR(A.HOUR_START_FROM) || ':' || TO_VARCHAR(A.MINUTE_START_FROM) || ':00',
+                 	'YYYY-MM-DD HH24:MI:SS') AS LOCAL_START_TIMESTAMP 
+                 FROM :sql2_UTC A; 
+                 
+                    
+    --UTC_START_TIMESTAMP
+    sql9_UTC = SELECT 
+                 A.EXECUTION_ID,
+                 A.ITEM_ID, 
+                 A.UNIT_ID,
+                 A.TIMEZONE_ID,
+                 A.EXECUTE_ON,  
+                 A.DIRECTION_FLAG,
+                 A.OFFSET_FLAG,
+                 A.MONTH_START_FROM,
+                 LOCALTOUTC (A.LOCAL_START_TIMESTAMP, A.TIMEZONE_ID,'platform') AS UTC_START_TIMESTAMP
+                 FROM :sql6_UTC A
+              UNION ALL
+              -- hout type(UNIT_ID = 1) : UTC_START_TIMESTAMP IS NULL
+              SELECT 
+                 A.EXECUTION_ID,
+                 A.ITEM_ID, 
+                 A.UNIT_ID,          
+                 A.TIMEZONE_ID,
+                 A.EXECUTE_ON,  
+                 A.DIRECTION_FLAG,
+                 A.OFFSET_FLAG,
+                 A.MONTH_START_FROM,
+                 A.EXECUTE_ON AS UTC_START_TIMESTAMP
+                 FROM :sql1_UTC A WHERE A.UNIT_ID = 1  AND A.OFFSET_FLAG =0
+                 UNION ALL 
+                 --HOUR , OFFSET =1 , 
+            --To avoid the issue of the end time of the pps is not the same for the virtual plan 
+            -- when the time filter of the virtual pan's unit is hour , should set the minute and 
+           --second to 00:00.000
+              SELECT 
+                A.EXECUTION_ID,
+                 A.ITEM_ID, 
+                 A.UNIT_ID,          
+                 A.TIMEZONE_ID,
+                 A.EXECUTE_ON,  
+                 A.DIRECTION_FLAG,
+                 A.OFFSET_FLAG,
+                 A.MONTH_START_FROM,
+                 TO_TIMESTAMP(SUBSTRING(TO_VARCHAR(A.EXECUTE_ON,'YYYY-MM-DD HH24:MI:SS'),1,13)|| ':00:00' ,'YYYY-MM-DD HH24:MI:SS') AS UTC_START_TIMESTAMP
+                 FROM :sql1_UTC A WHERE A.UNIT_ID = 1 AND A.OFFSET_FLAG =1; 
+                 
+     SQL_OUT_UTC_START_TIME = SELECT 
+                 EXECUTION_ID,
+                 EXECUTE_ON,
+                 DIRECTION_FLAG,
+                 OFFSET_FLAG,
+                 UNIT_ID,
+                 TIMEZONE_ID,
+                 CASE WHEN DIRECTION_FLAG = 1 AND UTC_START_TIMESTAMP > EXECUTE_ON AND UNIT_ID = 2 THEN ADD_DAYS(UTC_START_TIMESTAMP,-1)
+                      WHEN DIRECTION_FLAG = 1 AND UTC_START_TIMESTAMP > EXECUTE_ON AND UNIT_ID = 3 THEN ADD_DAYS(UTC_START_TIMESTAMP,-7)
+                      --MONTH_START_FROM greater than UTC_START_TIMESTAMP, then next month use day MONTH_START_FROM
+                      WHEN DIRECTION_FLAG = 1 AND UTC_START_TIMESTAMP > CURRENT_UTCTIMESTAMP AND UNIT_ID = 4 THEN ADD_MONTHS(UTC_START_TIMESTAMP,-1)
+                      WHEN DIRECTION_FLAG = 2 AND UTC_START_TIMESTAMP < EXECUTE_ON AND UNIT_ID = 2 THEN ADD_DAYS(UTC_START_TIMESTAMP,1)
+                      WHEN DIRECTION_FLAG = 2 AND UTC_START_TIMESTAMP < EXECUTE_ON AND UNIT_ID = 3 THEN ADD_DAYS(UTC_START_TIMESTAMP,7)
+                      WHEN DIRECTION_FLAG = 2 AND UTC_START_TIMESTAMP < CURRENT_UTCTIMESTAMP AND UNIT_ID = 4 THEN ADD_MONTHS(UTC_START_TIMESTAMP,1)                            
+                 ELSE UTC_START_TIMESTAMP 
+                 END AS UTC_START_TIMESTAMP
+                 FROM :sql9_UTC;
+                 
+ 
+       
+    
+    sql0 = SELECT
+                 --B.PLAN_MODEL_ID,
+                 B.EXECUTION_ID,
+                 B.EXECUTE_ON,
+                 --B.TIME_FILTER_ID,
+                 A.ID AS TIME_INTERVAL_ID,
+                 A.SEQUENCE,
+                 A.START_OFFSET,
+                 A.END_OFFSET,               
+                 B.UNIT_ID,
+                 B.TIMEZONE_ID,
+                 B.DIRECTION_FLAG,
+                 B.OFFSET_FLAG,
+                 B.UTC_START_TIMESTAMP
+                 FROM "sap.tm.trp.db.filter::t_time_filter_interval" A,
+                 --"sap.tm.trp.db.pipeline::cv_get_utc_start_time_by_execute_on_of_execution_ids_of_the_time_filter" (placeholder."$$IN_EXECUTION_IDS$$"=>:IN_EXECUTION_IDS,PLACEHOLDER."$$IN_TIME_FILTER_ID$$"=>:IN_TIME_FILTER_ID) B
+                 :SQL_OUT_UTC_START_TIME B
+                 WHERE A.TIME_FILTER_ID = :IN_TIME_FILTER_ID;
+                 --ORDER BY A.SEQUENCE;
+                 
+     -- no offset,history or unit type is hour
+     TIME_INTERVAL_LIST1 = 
+                 SELECT 
+                       --A.PLAN_MODEL_ID,
+                       A.EXECUTION_ID,
+                       A.EXECUTE_ON,
+                        --A.TIME_FILTER_ID,
+                       A.TIME_INTERVAL_ID,
+                       (ROW_NUMBER() OVER (PARTITION BY A.EXECUTION_ID ORDER BY A.SEQUENCE DESC)) AS SEQUENCE,                     
+                       ADD_SECONDS(A.EXECUTE_ON,A.START_OFFSET) AS START_TIME,
+                       ADD_SECONDS(A.EXECUTE_ON,A.END_OFFSET) AS END_TIME,
+                       SECONDS_BETWEEN(ADD_SECONDS(A.EXECUTE_ON,A.START_OFFSET),ADD_SECONDS(A.EXECUTE_ON,A.END_OFFSET)) AS INTERVAL,
+                       A.EXECUTE_ON AS UTC_START_TIMESTAMP
+                       FROM :sql0 A 
+                       WHERE (A.OFFSET_FLAG = 0 AND A.DIRECTION_FLAG = 1) -- offset = 0,history 
+                 UNION ALL
+                SELECT 
+                      -- A.PLAN_MODEL_ID,
+                       A.EXECUTION_ID,
+                      A.EXECUTE_ON,
+                      -- A.TIME_FILTER_ID,
+                       A.TIME_INTERVAL_ID,
+                       (ROW_NUMBER() OVER (PARTITION BY A.EXECUTION_ID ORDER BY A.SEQUENCE DESC)) AS SEQUENCE,             
+                       --ADD_SECONDS(A.EXECUTE_ON,A.START_OFFSET) AS START_TIME,
+                       ADD_SECONDS(A.UTC_START_TIMESTAMP,A.START_OFFSET) AS START_TIME,
+                       --ADD_SECONDS(A.EXECUTE_ON,A.END_OFFSET) AS END_TIME,
+                       ADD_SECONDS(A.UTC_START_TIMESTAMP,A.END_OFFSET) AS END_TIME,
+                       --SECONDS_BETWEEN(ADD_SECONDS(A.EXECUTE_ON,A.START_OFFSET),ADD_SECONDS(A.EXECUTE_ON,A.END_OFFSET)) AS INTERVAL,
+                       SECONDS_BETWEEN(ADD_SECONDS(A.UTC_START_TIMESTAMP,A.START_OFFSET),ADD_SECONDS(A.UTC_START_TIMESTAMP,A.END_OFFSET)) AS INTERVAL,
+                       --A.EXECUTE_ON AS UTC_START_TIMESTAMP
+                       A.UTC_START_TIMESTAMP 
+                       FROM :sql0 A 
+                       WHERE (A.OFFSET_FLAG = 1 AND  A.DIRECTION_FLAG = 1 AND A.UNIT_ID = 1);-- offset = 1,but unit type is hour,so ignore the offset,history
+        
+     -- no offset,future or unit type is hour
+     TIME_INTERVAL_LIST2 = 
+                 SELECT 
+                       --A.PLAN_MODEL_ID,
+                       A.EXECUTION_ID,
+                       A.EXECUTE_ON,
+                       --A.TIME_FILTER_ID,
+                       A.TIME_INTERVAL_ID,
+                       A.SEQUENCE,
+                       ADD_SECONDS(A.EXECUTE_ON,A.START_OFFSET) AS START_TIME,
+                       ADD_SECONDS(A.EXECUTE_ON,A.END_OFFSET) AS END_TIME,
+                       SECONDS_BETWEEN(ADD_SECONDS(A.EXECUTE_ON,A.START_OFFSET),ADD_SECONDS(A.EXECUTE_ON,A.END_OFFSET)) AS INTERVAL,
+                       A.EXECUTE_ON AS UTC_START_TIMESTAMP
+                       FROM :sql0 A
+                       WHERE (A.OFFSET_FLAG = 0 AND A.DIRECTION_FLAG = 2) -- offset = 0, future
+                 UNION ALL
+                SELECT 
+                      -- A.PLAN_MODEL_ID,
+                       A.EXECUTION_ID,
+                       A.EXECUTE_ON,
+                       --A.TIME_FILTER_ID,
+                       A.TIME_INTERVAL_ID,
+                       A.SEQUENCE,
+                       --ADD_SECONDS(A.EXECUTE_ON,A.START_OFFSET) AS START_TIME,
+                       ADD_SECONDS(A.UTC_START_TIMESTAMP,A.START_OFFSET) AS START_TIME,
+                       ADD_SECONDS(A.UTC_START_TIMESTAMP,A.END_OFFSET) AS END_TIME,
+                       --SECONDS_BETWEEN(ADD_SECONDS(A.EXECUTE_ON,A.START_OFFSET),ADD_SECONDS(A.EXECUTE_ON,A.END_OFFSET)) AS INTERVAL,
+                       SECONDS_BETWEEN(ADD_SECONDS(A.UTC_START_TIMESTAMP,A.START_OFFSET),ADD_SECONDS(A.UTC_START_TIMESTAMP,A.END_OFFSET)) AS INTERVAL,
+                       --A.EXECUTE_ON AS UTC_START_TIMESTAMP
+                       A.UTC_START_TIMESTAMP
+                       FROM :sql0 A
+                       WHERE (A.OFFSET_FLAG = 1 AND A.DIRECTION_FLAG = 2 AND A.UNIT_ID = 1); -- offset = 1,but unit type is hour,so ignore the offset,history
+          
+     --unit type is not hour, offset is active, history                                                                                                                                                                               
+         sqlA1 = SELECT 
+                       --A.PLAN_MODEL_ID,
+                       A.EXECUTION_ID,
+                       A.EXECUTE_ON,
+                       --A.TIME_FILTER_ID,
+                       A.TIME_INTERVAL_ID,
+                       A.SEQUENCE,                  
+                       A.UTC_START_TIMESTAMP AS START_TIME,
+                       A.EXECUTE_ON AS END_TIME,
+                       A.UTC_START_TIMESTAMP
+                       FROM :sql0 A 
+                       WHERE A.OFFSET_FLAG = 1 AND A.DIRECTION_FLAG = 1 --AND A.UNIT_ID != 1 
+                      AND A.UNIT_ID > 1 --NOTE: TO UPDATE FROM !=1 TO >1 IN ORDER TO IMPROVE PERFORMANCE
+                       AND A.SEQUENCE = 1;
+                       
+         sqlA2 = SELECT 
+                       --A.PLAN_MODEL_ID,
+                       A.EXECUTION_ID,
+                       A.EXECUTE_ON,
+                       --A.TIME_FILTER_ID , 
+                       A.TIME_INTERVAL_ID,  
+                       A.SEQUENCE,              
+                       ADD_SECONDS(A.UTC_START_TIMESTAMP,A.START_OFFSET - B.START_OFFSET) AS START_TIME,
+                       ADD_SECONDS(A.UTC_START_TIMESTAMP,A.END_OFFSET - B.START_OFFSET) AS END_TIME,
+                       A.UTC_START_TIMESTAMP
+                       FROM :sql0 A 
+                       INNER JOIN :sql0 B 
+                       ON --A.TIME_FILTER_ID = B.TIME_FILTER_ID AND
+                       A.EXECUTION_ID = B.EXECUTION_ID AND 
+                       B.SEQUENCE = 1
+                       WHERE A.OFFSET_FLAG = 1 AND A.DIRECTION_FLAG = 1 --AND A.UNIT_ID != 1 AND A.SEQUENCE != 1;
+                       AND A.UNIT_ID>1 AND A.SEQUENCE >1;
+                       
+         sqlA = SELECT * FROM
+                       (
+                         SELECT * FROM :sqlA1
+                         UNION ALL
+                         SELECT * FROM :sqlA2
+                       );
+                                                                                   
+         TIME_INTERVAL_LIST3 = SELECT 
+                       --A.PLAN_MODEL_ID,
+                       A.EXECUTION_ID,
+                       A.EXECUTE_ON,
+                       --A.TIME_FILTER_ID,
+                       A.TIME_INTERVAL_ID,
+                       (ROW_NUMBER() OVER (PARTITION BY A.EXECUTION_ID ORDER BY A.START_TIME)) AS SEQUENCE,-- recount sequence
+                       A.START_TIME,
+                       A.END_TIME,
+                       SECONDS_BETWEEN(A.START_TIME,A.END_TIME) AS INTERVAL,
+                       A.UTC_START_TIMESTAMP
+                       FROM :sqlA A
+                       ORDER BY A.START_TIME DESC;
+                                                                                                                                          
+    -- unit type is not hour, offset is active, future                                                                                                                                                                                                                          
+         sqlB1 = SELECT 
+                      -- A.PLAN_MODEL_ID,
+                       A.EXECUTION_ID,
+                       A.EXECUTE_ON,
+                       --A.TIME_FILTER_ID,
+                       A.TIME_INTERVAL_ID,
+                       A.SEQUENCE,
+                       A.EXECUTE_ON AS START_TIME,
+                       A.UTC_START_TIMESTAMP AS END_TIME,
+                       A.UTC_START_TIMESTAMP
+                       FROM :sql0 A 
+                       WHERE A.OFFSET_FLAG = 1 AND A.DIRECTION_FLAG = 2-- AND A.UNIT_ID != 1
+                       AND A.UNIT_ID>1
+                        AND A.SEQUENCE = 1;
+                       
+         sqlB2 = SELECT 
+                       --A.PLAN_MODEL_ID,
+                       A.EXECUTION_ID,
+                       A.EXECUTE_ON,
+                       --A.TIME_FILTER_ID,  
+                       A.TIME_INTERVAL_ID,     
+                       A.SEQUENCE,         
+                       ADD_SECONDS(A.UTC_START_TIMESTAMP,A.START_OFFSET - B.END_OFFSET) AS START_TIME,
+                       ADD_SECONDS(A.UTC_START_TIMESTAMP,A.END_OFFSET - B.END_OFFSET) AS END_TIME,
+                       A.UTC_START_TIMESTAMP
+                       FROM :sql0 A 
+                       INNER JOIN :sql0 B 
+                       ON --A.TIME_FILTER_ID = B.TIME_FILTER_ID 
+                       --AND 
+                       A.EXECUTION_ID = B.EXECUTION_ID AND
+                       B.SEQUENCE = 1
+                       WHERE A.OFFSET_FLAG = 1 AND A.DIRECTION_FLAG = 2 --AND A.UNIT_ID != 1 AND A.SEQUENCE != 1;
+                       AND A.UNIT_ID > 1 AND A.SEQUENCE > 1;
+         sqlB = SELECT * FROM
+                       (
+                         SELECT * FROM :sqlB1
+                         UNION ALL
+                         SELECT * FROM :sqlB2
+                       );
+                                
+         TIME_INTERVAL_LIST4 = SELECT 
+                      -- A.PLAN_MODEL_ID,
+                      A.EXECUTION_ID,
+                       A.EXECUTE_ON,
+                       --A.TIME_FILTER_ID,
+                       A.TIME_INTERVAL_ID,
+                       (ROW_NUMBER() OVER (PARTITION BY A.EXECUTION_ID ORDER BY A.START_TIME)) AS SEQUENCE,-- recount sequence
+                       A.START_TIME,
+                       A.END_TIME,
+                       SECONDS_BETWEEN(A.START_TIME, A.END_TIME) AS INTERVAL,
+                       A.UTC_START_TIMESTAMP
+                       FROM :sqlB A
+                       ORDER BY A.START_TIME; 
+                               
+         OUT_TIME_FILTER_INTERVAL = SELECT EXECUTION_ID, EXECUTE_ON,TIME_INTERVAL_ID,SEQUENCE,START_TIME,END_TIME,INTERVAL,UTC_START_TIMESTAMP
+                  FROM 
+                   (
+                       SELECT * FROM :TIME_INTERVAL_LIST1 -- no offset,history or unit type is hour
+                       UNION ALL
+                       SELECT * FROM :TIME_INTERVAL_LIST2 -- no offset,future or unit type is hour
+                       UNION ALL
+                       SELECT * FROM :TIME_INTERVAL_LIST3 -- offset = 1 , history , unit type is not hour  
+                       UNION ALL
+                       SELECT * FROM :TIME_INTERVAL_LIST4 -- offset = 1 , future , unit type is not hour
+                   )A
+                   ORDER BY A.EXECUTION_ID, A.SEQUENCE;
+      END

@@ -1,0 +1,22 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.planningcockpit::p_get_network_setting_group_parameter_value" (
+	IN NETWORK_SETTING_GROUP_ID BIGINT,
+	OUT OUTPUT "sap.tm.trp.db.planningcockpit::tt_get_network_setting_group_parameter_value_output"
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA SAP_TM_TRP
+	READS SQL DATA 
+AS
+BEGIN
+
+OUTPUT =
+	SELECT 
+		T1.CODE AS PARAMETER_CODE
+		,T1.USAGE
+		,T0.VALUE
+	FROM "sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter_value" T0
+	INNER JOIN "sap.tm.trp.db.planningcockpit::t_network_setting_group_parameter" T1 ON T1.ID = T0.PARAMETER_ID
+	WHERE T0.NETWORK_SETTING_GROUP_ID = :NETWORK_SETTING_GROUP_ID
+	;
+
+END;

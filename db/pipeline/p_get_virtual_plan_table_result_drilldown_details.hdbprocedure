@@ -1,0 +1,195 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.pipeline::p_get_virtual_plan_table_result_drilldown_details" (
+	IN PLAN_MODEL_ID BIGINT,
+	IN NODE_NAME VARCHAR(32),
+	IN RESOURCE_ID VARCHAR(32),
+	IN START_TIME INTEGER,
+	IN LOCATION_ID_LIST "sap.tm.trp.db.pipeline::tt_get_virtual_plan_table_result_drilldown_details_location_id_list",
+	IN OUTPUT_KEY_LIST "sap.tm.trp.db.pipeline::tt_get_virtual_plan_table_result_drilldown_details_output_key_list",
+	IN IN_PP_EXECUTION_ID BIGINT,
+	OUT OUTPUT "sap.tm.trp.db.pipeline::tt_get_virtual_plan_table_result_drilldown_details_output",
+	OUT PLAN_STATUS INTEGER
+)
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER
+	DEFAULT SCHEMA SAP_TM_TRP
+	--READS SQL DATA
+AS
+	IN_OUTPUT_KEY_CNT INTEGER;
+BEGIN
+
+
+
+DECLARE STATUS_VALID SMALLINT := 0;
+DECLARE STATUS_SUSPEND SMALLINT := 1;
+DECLARE STATUS_INVALID SMALLINT := 2;
+DECLARE  NON_EXISTS_EQUIP_ID VARCHAR(30) := '';
+DECLARE  NON_OUTPUT_KEY INTEGER := 0;
+
+-- CHECK WHETHER THE PLAN IS VALID
+SELECT IFNULL(MAX(STATUS),:STATUS_SUSPEND) INTO PLAN_STATUS FROM "sap.tm.trp.db.pipeline::t_plan_model" WHERE ID = :PLAN_MODEL_ID;
+
+IF PLAN_STATUS = :STATUS_INVALID THEN
+	RETURN;
+ ELSEIF PLAN_STATUS = :STATUS_SUSPEND THEN
+     CALL "sap.tm.trp.db.pipeline::p_virtual_plan_valid_check" (:PLAN_MODEL_ID,PLAN_STATUS);
+     IF :PLAN_STATUS = :STATUS_INVALID THEN
+       RETURN;
+     END IF;
+ END IF;
+
+
+		-- GET VIRTUAL PLAN RESULT
+		--CALL "sap.tm.trp.db.pipeline::p_get_execution_result_for_virtual_plan_of_execution_id_new"(:PLAN_MODEL_ID,:LOCATION_ID_LIST,:NODE_NAME,PLAN_RESULT,NO_DATA_PLAN_LIST);
+		 CALL "sap.tm.trp.db.pipeline::p_get_aggregate_execution_result_for_virtual_plan"(:PLAN_MODEL_ID,:IN_PP_EXECUTION_ID,:LOCATION_ID_LIST,:NODE_NAME,PLAN_RESULT,NO_DATA_PLAN_LIST);
+		
+		PLAN_RESULT = select * from :PLAN_RESULT T1 where T1.OUTPUT_VALUE>0 ;
+		
+		IF :RESOURCE_ID = :NON_EXISTS_EQUIP_ID THEN
+		    OUTPUT =
+		        SELECT
+		            T1.LOCATION_ID AS LOCATION_ID
+		            ,T1.OUTPUT_KEY --T3.OUTPUT_KEY AS OUTPUT_KEY NOTE: Actually, the output key of parent node and the node is the same
+		            ,T1.METADATA_NODE_ID AS DRILLDOWN_OUTPUT_KEY
+		            ,SUM(TO_DOUBLE(T1.OUTPUT_VALUE)) AS OUTPUT_VALUE
+		            ,T1.DRILLDOWN_NODE_NAV_TYPE as DRILLDOWN_NODE_NAV_TYPE
+		            FROM :PLAN_RESULT T1
+		            INNER JOIN :LOCATION_ID_LIST T2 ON T2.ID = T1.LOCATION_ID -- filter the output data which does not match the location
+		            INNER JOIN :OUTPUT_KEY_LIST T4 ON T4.OUTPUT_KEY = T1.OUTPUT_KEY -- filter the output data which does not match the outputKey
+		            WHERE  T1.PARENT_METADATA_NODE_ID = :NODE_NAME AND T1.HAS_DRILLDOWN_FLAG = 3 --T3.NODE_NAME = :NODE_NAME -- filter the node which matches the input node name
+		            AND T1.SEQUENCE = :START_TIME
+		            GROUP BY  T1.LOCATION_ID,T1.OUTPUT_KEY,T1.METADATA_NODE_ID,T1.DRILLDOWN_NODE_NAV_TYPE
+		            ORDER BY T1.OUTPUT_KEY,T1.METADATA_NODE_ID;
+		ELSE
+		    OUTPUT =
+		        SELECT
+		            T1.LOCATION_ID AS LOCATION_ID
+		            ,T1.OUTPUT_KEY--T3.OUTPUT_KEY AS OUTPUT_KEY
+		            ,T1.METADATA_NODE_ID AS DRILLDOWN_OUTPUT_KEY
+		            ,SUM(TO_DOUBLE(T1.OUTPUT_VALUE)) AS OUTPUT_VALUE
+		            ,T1.DRILLDOWN_NODE_NAV_TYPE as DRILLDOWN_NODE_NAV_TYPE
+		            FROM :PLAN_RESULT T1
+		            INNER JOIN :LOCATION_ID_LIST T2 ON T2.ID = T1.LOCATION_ID -- filter the output data which does not match the location
+		            INNER JOIN :OUTPUT_KEY_LIST T4 ON T4.OUTPUT_KEY = T1.OUTPUT_KEY -- filter the output data which does not match the outputKey
+		            WHERE T1.PARENT_METADATA_NODE_ID = :NODE_NAME AND T1.HAS_DRILLDOWN_FLAG = 3--T3.NODE_NAME = :NODE_NAME -- filter the node which matches the input node name
+		            AND T1.SEQUENCE = :START_TIME
+		            AND T1.EQUIP_TYPE_ID = :RESOURCE_ID
+		            GROUP BY  T1.LOCATION_ID,T1.OUTPUT_KEY,T1.METADATA_NODE_ID,T1.DRILLDOWN_NODE_NAV_TYPE
+		            ORDER BY T1.OUTPUT_KEY,T1.METADATA_NODE_ID;
+		END IF;
+
+
+ /*
+IF :PLAN_STATUS = :STATUS_SUSPEND
+THEN
+	CALL "sap.tm.trp.db.pipeline::p_virtual_plan_valid_check"(:PLAN_MODEL_ID,PLAN_STATUS);
+	IF :PLAN_STATUS = :STATUS_INVALID
+	THEN
+		OUTPUT =
+	        SELECT
+	            NULL AS LOCATION_ID
+	            ,NULL AS OUTPUT_KEY
+	            ,NULL AS DRILLDOWN_OUTPUT_KEY
+	            ,NULL AS OUTPUT_VALUE
+	        FROM DUMMY
+	        WHERE 1 = 2
+	        ;
+	ELSEIF :PLAN_STATUS = :STATUS_VALID
+	THEN
+
+
+		-- GENERATE PARENT NODE LIST
+
+		-- GET VIRTUAL PLAN RESULT
+		--CALL "sap.tm.trp.db.pipeline::p_get_execution_result_by_virtual_plan_id_new"(:PLAN_MODEL_ID,:LOCATION_ID_LIST,PLAN_RESULT,NO_DATA_PLAN_LIST);
+		CALL "sap.tm.trp.db.pipeline::p_get_execution_result_for_virtual_plan_of_execution_id_new"(:PLAN_MODEL_ID,:LOCATION_ID_LIST,:NODE_NAME,PLAN_RESULT,NO_DATA_PLAN_LIST);
+
+		IF :RESOURCE_ID = :NON_EXISTS_EQUIP_ID THEN
+		    OUTPUT =
+		        SELECT
+		            T1.LOCATION_ID AS LOCATION_ID
+		            ,T1.OUTPUT_KEY --T3.OUTPUT_KEY AS OUTPUT_KEY NOTE: Actually, the output key of parent node and the node is the same
+		            ,T1.METADATA_NODE_ID AS DRILLDOWN_OUTPUT_KEY
+		            ,SUM(TO_DOUBLE(T1.OUTPUT_VALUE)) AS OUTPUT_VALUE
+		            FROM :PLAN_RESULT T1
+		            INNER JOIN :LOCATION_ID_LIST T2 ON T2.ID = T1.LOCATION_ID -- filter the output data which does not match the location
+		            --INNER JOIN :PARENT_NODE_LIST T3 ON T3.DRILLDOWN_NODE_NAME = T1.OUT_NODE_NAME -- filter the data which is the drilldown detail data of the input node
+		            INNER JOIN :OUTPUT_KEY_LIST T4 ON T4.OUTPUT_KEY = T1.OUTPUT_KEY -- filter the output data which does not match the outputKey
+		            WHERE  T1.PARENT_METADATA_NODE_ID = :NODE_NAME AND T1.HAS_DRILLDOWN_FLAG = 3 --T3.NODE_NAME = :NODE_NAME -- filter the node which matches the input node name
+		            AND T1.SEQUENCE = :START_TIME
+		            --GROUP BY  T1.LOCATION_ID,T3.OUTPUT_KEY,T1.METADATA_NODE_ID
+		            GROUP BY  T1.LOCATION_ID,T1.OUTPUT_KEY,T1.METADATA_NODE_ID
+		            ;
+		ELSE
+		    OUTPUT =
+		        SELECT
+		            T1.LOCATION_ID AS LOCATION_ID
+		            ,T1.OUTPUT_KEY--T3.OUTPUT_KEY AS OUTPUT_KEY
+		            ,T1.METADATA_NODE_ID AS DRILLDOWN_OUTPUT_KEY
+		            ,SUM(TO_DOUBLE(T1.OUTPUT_VALUE)) AS OUTPUT_VALUE
+		            FROM :PLAN_RESULT T1
+		            INNER JOIN :LOCATION_ID_LIST T2 ON T2.ID = T1.LOCATION_ID -- filter the output data which does not match the location
+		            --INNER JOIN :PARENT_NODE_LIST T3 ON T3.DRILLDOWN_NODE_NAME = T1.OUT_NODE_NAME -- filter the data which is the drilldown detail data of the input node
+		            INNER JOIN :OUTPUT_KEY_LIST T4 ON T4.OUTPUT_KEY = T1.OUTPUT_KEY -- filter the output data which does not match the outputKey
+		            WHERE T1.PARENT_METADATA_NODE_ID = :NODE_NAME AND T1.HAS_DRILLDOWN_FLAG = 3--T3.NODE_NAME = :NODE_NAME -- filter the node which matches the input node name
+		            AND T1.SEQUENCE = :START_TIME
+		            AND T1.EQUIP_TYPE_ID = :RESOURCE_ID
+		            --GROUP BY  T1.LOCATION_ID,T3.OUTPUT_KEY,T1.METADATA_NODE_ID
+		            GROUP BY  T1.LOCATION_ID,T1.OUTPUT_KEY,T1.METADATA_NODE_ID
+		            ;
+		END IF;
+	END IF;
+ELSEIF :PLAN_STATUS = :STATUS_INVALID
+THEN
+	OUTPUT =
+        SELECT
+            NULL AS LOCATION_ID
+            ,NULL AS OUTPUT_KEY
+            ,NULL AS DRILLDOWN_OUTPUT_KEY
+            ,NULL AS OUTPUT_VALUE
+        FROM DUMMY
+        WHERE 1 = 2
+        ;
+ELSE
+
+
+	-- GET VIRTUAL PLAN RESULT
+	--CALL "sap.tm.trp.db.pipeline::p_get_execution_result_by_virtual_plan_id_new"(:PLAN_MODEL_ID,:LOCATION_ID_LIST,PLAN_RESULT,NO_DATA_PLAN_LIST);
+	CALL "sap.tm.trp.db.pipeline::p_get_execution_result_for_virtual_plan_of_execution_id_new"(:PLAN_MODEL_ID,:LOCATION_ID_LIST,:NODE_NAME,PLAN_RESULT,NO_DATA_PLAN_LIST);
+
+	IF :RESOURCE_ID = :NON_EXISTS_EQUIP_ID THEN
+	    OUTPUT =
+	        SELECT
+	            T1.LOCATION_ID AS LOCATION_ID
+	            ,T1.OUTPUT_KEY--T3.OUTPUT_KEY AS OUTPUT_KEY
+	            ,T1.METADATA_NODE_ID AS DRILLDOWN_OUTPUT_KEY
+	            ,SUM(TO_DOUBLE(T1.OUTPUT_VALUE)) AS OUTPUT_VALUE
+	            FROM :PLAN_RESULT T1
+	            INNER JOIN :LOCATION_ID_LIST T2 ON T2.ID = T1.LOCATION_ID -- filter the output data which does not match the location
+	            --INNER JOIN :PARENT_NODE_LIST T3 ON T3.DRILLDOWN_NODE_NAME = T1.OUT_NODE_NAME -- filter the data which is the drilldown detail data of the input node
+	            INNER JOIN :OUTPUT_KEY_LIST T4 ON T4.OUTPUT_KEY = T1.OUTPUT_KEY -- filter the output data which does not match the outputKey
+	            WHERE  T1.PARENT_METADATA_NODE_ID = :NODE_NAME AND T1.HAS_DRILLDOWN_FLAG = 3  --T3.NODE_NAME = :NODE_NAME -- filter the node which matches the input node name
+	            AND T1.SEQUENCE = :START_TIME
+	            --GROUP BY  T1.LOCATION_ID,T3.OUTPUT_KEY,T1.METADATA_NODE_ID
+	            GROUP BY  T1.LOCATION_ID,T1.OUTPUT_KEY,T1.METADATA_NODE_ID
+	            ;
+	ELSE
+	    OUTPUT =
+	        SELECT
+	            T1.LOCATION_ID AS LOCATION_ID
+	            ,T1.OUTPUT_KEY--T3.OUTPUT_KEY AS OUTPUT_KEY
+	            ,T1.METADATA_NODE_ID AS DRILLDOWN_OUTPUT_KEY
+	            ,SUM(TO_DOUBLE(T1.OUTPUT_VALUE)) AS OUTPUT_VALUE
+	            FROM :PLAN_RESULT T1
+	            INNER JOIN :LOCATION_ID_LIST T2 ON T2.ID = T1.LOCATION_ID -- filter the output data which does not match the location
+	            --INNER JOIN :PARENT_NODE_LIST T3 ON T3.DRILLDOWN_NODE_NAME = T1.OUT_NODE_NAME -- filter the data which is the drilldown detail data of the input node
+	            INNER JOIN :OUTPUT_KEY_LIST T4 ON T4.OUTPUT_KEY = T1.OUTPUT_KEY -- filter the output data which does not match the outputKey
+	            WHERE  T1.PARENT_METADATA_NODE_ID = :NODE_NAME AND T1.HAS_DRILLDOWN_FLAG = 3--T3.NODE_NAME = :NODE_NAME -- filter the node which matches the input node name
+	            AND T1.SEQUENCE = :START_TIME
+	            AND T1.EQUIP_TYPE_ID = :RESOURCE_ID
+	            --GROUP BY  T1.LOCATION_ID,T3.OUTPUT_KEY,T1.METADATA_NODE_ID
+	            GROUP BY  T1.LOCATION_ID,T1.OUTPUT_KEY,T1.METADATA_NODE_ID
+	            ;
+	END IF;
+END IF;
+*/
+END;

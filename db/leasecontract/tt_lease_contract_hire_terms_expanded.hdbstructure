@@ -1,0 +1,34 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "lease contract hire terms";
+table.columns = [
+{name = "ID";sqlType = BIGINT;},
+{name = "LEASE_CONTRACT_ID";sqlType = BIGINT;},
+{name = "LEASE_CONTRACT_REFERENCE";sqlType = NVARCHAR;length=100;},
+{name = "LESSOR";sqlType = NVARCHAR;length=100;},
+{name = "LEASE_CONTRACT_TYPE";sqlType = NVARCHAR;length=100;},
+{name = "START_TIME";sqlType = TIMESTAMP;},
+{name = "END_TIME";sqlType = TIMESTAMP;},
+{name = "LOCATION_TYPE";sqlType = TINYINT;},
+{name = "LOCATION_GROUP_NAME";sqlType = NVARCHAR;length=22;},
+{name = "LOCATION";sqlType = NVARCHAR;length=22;},
+{name = "LOCATION_GUID";sqlType = NVARCHAR;length=32;},
+{name = "EQUIPMENT_CODE_TYPE";sqlType = TINYINT;},
+{name = "EQUIPMENT_CODE";sqlType = NVARCHAR;length=22;},
+{name = "EQUIPMENT_GROUP_NAME";sqlType = NVARCHAR;length=22;},
+{name = "TERM_MAX_HIRE_QUANTITY";sqlType = INTEGER;},
+{name = "TERM_MIN_HIRE_QUANTITY";sqlType = INTEGER;},
+{name = "CONSOLIDATED_MIN_HIRE_QUANTITY";sqlType = INTEGER;},
+{name = "COND_MAX_HIRE_QUANTITY_EL";sqlType = INTEGER;},
+{name = "COND_MAX_HIRE_QUANTITY_L";sqlType = INTEGER;},
+{name = "COND_MAX_HIRE_QUANTITY_E";sqlType = INTEGER;},
+{name = "COND_EL_ID";sqlType = BIGINT;},
+{name = "COND_E_ID";sqlType = BIGINT;},
+{name = "COND_L_ID";sqlType = BIGINT;},
+{name = "CONTRACT_MAX_HIRE_QUANTITY";sqlType = INTEGER;},
+{name = "CONTRACT_MIN_HIRE_QUANTITY";sqlType = INTEGER;},
+{name = "HIRE_FEE";sqlType = DECIMAL; precision = 13; scale = 3;},
+{name = "CURRENCY";sqlType = NVARCHAR;length=3;},
+{name = "UNIT";sqlType = NVARCHAR;length=3;},
+{name = "RESOURCE_CATEGORY";sqlType = NVARCHAR;length=50;}
+];

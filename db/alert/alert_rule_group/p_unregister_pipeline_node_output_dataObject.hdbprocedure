@@ -1,0 +1,11 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert.alert_rule_group::p_unregister_pipeline_node_output_dataObject" ( 
+IN PIPELINE_NODE_NAME VARCHAR(32)
+) 
+	LANGUAGE SQLSCRIPT
+	SQL SECURITY INVOKER 
+	DEFAULT SCHEMA "SAP_TM_TRP"
+	AS
+BEGIN
+    delete from "sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_dataObject_map_nodeName" T1
+    where T1.PIPELINE_NODE_NAME = :PIPELINE_NODE_NAME;
+END;

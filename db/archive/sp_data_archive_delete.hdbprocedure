@@ -1,0 +1,133 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.archive::sp_data_archive_delete"
+(IN TABLE_ID BIGINT,
+ IN EXE_DETAIL_SEQ BIGINT,
+ IN DATE_FROM TIMESTAMP,
+ IN DATE_TO TIMESTAMP,
+ IN DATE_COLUMN_NAME NVARCHAR(250),
+ IN PARENT_FLAG TINYINT,
+ IN ARCHIVE_FLAG TINYINT,
+ IN IS_TM TINYINT,
+ IN DATE_FROM_TM NVARCHAR(8),
+ IN DATE_TO_TM NVARCHAR(8)) 
+LANGUAGE SQLSCRIPT
+SQL SECURITY INVOKER 
+DEFAULT SCHEMA "SAP_TM_TRP" AS  
+	TABLE_NAME_HOT NVARCHAR(500);
+	TABLE_NAME_WARM NVARCHAR(500);
+	EXE_LOG_SEQ BIGINT;
+	SQL_FOR_DELETE NVARCHAR(5000);
+	SQL_FOR_UPDATE_LOG NVARCHAR(5000);
+	PARENT_TABLE_HOT NVARCHAR(500);
+	PARENT_TABLE_WARM NVARCHAR(500);
+	PARENT_REF_COL NVARCHAR(250);
+	CHILD_REF_COL NVARCHAR(250);
+	EXECUTION_TYPE TINYINT;
+	MANDT VARCHAR(10);
+BEGIN
+	--Insert execution_log for INPROGRESS status & for DELETE operation
+	IF :ARCHIVE_FLAG = 1 THEN 
+		EXECUTION_TYPE := 2; --DELETE FROM HOT
+	ELSE 
+		EXECUTION_TYPE := 4; --DELETE FROM WARM
+	END IF;
+	SELECT "sap.tm.trp.db.archive::s_archive_execution_log".NEXTVAL INTO EXE_LOG_SEQ FROM DUMMY;
+	INSERT INTO "sap.tm.trp.db.archive::t_archive_execution_log" 
+	(ID,EXECUTION_ID,TABLE_ID,EXECUTION_TYPE,STATUS,RECORD_COUNT,MESSAGE,START_TIME)
+	VALUES(:EXE_LOG_SEQ,:EXE_DETAIL_SEQ,:TABLE_ID,:EXECUTION_TYPE,3,0,'',CURRENT_UTCTIMESTAMP);
+	
+	IF :PARENT_FLAG = 0 AND :ARCHIVE_FLAG = 1 THEN 
+		--Extra Code Start
+		SELECT IFNULL(TABLE_NAME,'') INTO PARENT_TABLE_HOT FROM "sap.tm.trp.db.archive::t_archive_metadata" 
+		WHERE ID=(SELECT PARENT_ID FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE ID = :TABLE_ID);
+		PARENT_TABLE_WARM := :PARENT_TABLE_HOT || '_warm'; 
+		SELECT IFNULL(PARENT_REF_COL,'') INTO PARENT_REF_COL FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE ID = :TABLE_ID; 
+		SELECT IFNULL(CHILD_REF_COL,'') INTO CHILD_REF_COL FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE ID = :TABLE_ID;
+		--Extra Code End
+	END IF;
+	
+	--General Start
+	SELECT IFNULL(TABLE_NAME,'') INTO TABLE_NAME_HOT FROM "sap.tm.trp.db.archive::t_archive_metadata" WHERE ID = :TABLE_ID; 
+	IF :IS_TM = 0 THEN 
+		TABLE_NAME_WARM := :TABLE_NAME_HOT ||'_warm';
+	ELSE 
+		TABLE_NAME_WARM := :TABLE_NAME_HOT ||'_warm';
+	END IF;
+	SELECT IFNULL(MANDT,'') INTO MANDT FROM "sap.tm.trp.db.semantic.common::v_client_code";
+	--General End
+	
+	--Core Logic Starts Here
+	IF :ARCHIVE_FLAG = 1 THEN 
+		IF :IS_TM = 0 THEN 
+			IF :PARENT_FLAG = 1 THEN 
+				--Update execution_log for SUCCESS status & for DELETE operation
+				SQL_FOR_UPDATE_LOG :='UPDATE "sap.tm.trp.db.archive::t_archive_execution_log" SET RECORD_COUNT = (SELECT COUNT(1) FROM "'||:TABLE_NAME_HOT||'" WHERE TO_TIMESTAMP('||escape_single_quotes(:DATE_COLUMN_NAME)||') BETWEEN '||''''||:DATE_FROM||''''||' AND '||''''||:DATE_TO||''''||') WHERE ID = '||:EXE_LOG_SEQ;
+				EXECUTE IMMEDIATE :SQL_FOR_UPDATE_LOG;
+				--Delete from HOT
+				SQL_FOR_DELETE :='DELETE FROM "'||:TABLE_NAME_HOT||'" WHERE TO_TIMESTAMP('||escape_single_quotes(:DATE_COLUMN_NAME)||') BETWEEN '||''''||:DATE_FROM||''''||' AND '||''''||:DATE_TO||'''';
+				EXECUTE IMMEDIATE :SQL_FOR_DELETE;
+			ELSE 
+				--Update execution_log for SUCCESS status & for DELETE operation
+				SQL_FOR_UPDATE_LOG :='UPDATE "sap.tm.trp.db.archive::t_archive_execution_log" SET RECORD_COUNT = (SELECT COUNT(1) FROM "'||:TABLE_NAME_HOT||'" WHERE ('||:CHILD_REF_COL||') IN (SELECT '||:PARENT_REF_COL||' FROM "'||:PARENT_TABLE_WARM||'" WHERE TO_TIMESTAMP('||escape_single_quotes(:DATE_COLUMN_NAME)||') BETWEEN '||''''||:DATE_FROM||''''||' AND '||''''||:DATE_TO||''''||')'||') WHERE ID = '||:EXE_LOG_SEQ;
+				EXECUTE IMMEDIATE :SQL_FOR_UPDATE_LOG;
+				--Delete from HOT
+				SQL_FOR_DELETE :='DELETE FROM "'||:TABLE_NAME_HOT||'" WHERE ('||:CHILD_REF_COL||') IN (SELECT '||:PARENT_REF_COL||' FROM "'||:PARENT_TABLE_WARM||'" WHERE TO_TIMESTAMP('||escape_single_quotes(:DATE_COLUMN_NAME)||') BETWEEN '||''''||:DATE_FROM||''''||' AND '||''''||:DATE_TO||''''||')';
+				EXECUTE IMMEDIATE :SQL_FOR_DELETE;
+			END IF;
+		ELSE 
+			IF :PARENT_FLAG = 1 THEN 
+				--Update execution_log for SUCCESS status & for DELETE operation
+				SQL_FOR_UPDATE_LOG :='UPDATE "sap.tm.trp.db.archive::t_archive_execution_log" SET RECORD_COUNT = (SELECT COUNT(1) FROM "'||:TABLE_NAME_HOT||'" WHERE MANDT='||:MANDT||' AND TO_TIMESTAMP('||escape_single_quotes(:DATE_COLUMN_NAME)||') BETWEEN '||''''||:DATE_FROM||''''||' AND '||''''||:DATE_TO||''''||') WHERE ID = '||:EXE_LOG_SEQ;
+				EXECUTE IMMEDIATE :SQL_FOR_UPDATE_LOG;
+				--Delete from HOT
+				SQL_FOR_DELETE :='DELETE FROM "'||:TABLE_NAME_HOT||'" WHERE MANDT='||:MANDT||' AND TO_TIMESTAMP('||escape_single_quotes(:DATE_COLUMN_NAME)||') BETWEEN '||''''||:DATE_FROM||''''||' AND '||''''||:DATE_TO||'''';
+				EXECUTE IMMEDIATE :SQL_FOR_DELETE;
+			ELSE 
+				--Update execution_log for SUCCESS status & for DELETE operation
+				SQL_FOR_UPDATE_LOG :='UPDATE "sap.tm.trp.db.archive::t_archive_execution_log" SET RECORD_COUNT = (SELECT COUNT(1) FROM "'||:TABLE_NAME_HOT||'" WHERE MANDT='||:MANDT||' AND ('||:CHILD_REF_COL||') IN (SELECT '||:PARENT_REF_COL||' FROM "'||:PARENT_TABLE_WARM||'" WHERE MANDT='||:MANDT||' AND TO_TIMESTAMP('||escape_single_quotes(:DATE_COLUMN_NAME)||') BETWEEN '||''''||:DATE_FROM||''''||' AND '||''''||:DATE_TO||''''||')'||') WHERE ID = '||:EXE_LOG_SEQ;
+				EXECUTE IMMEDIATE :SQL_FOR_UPDATE_LOG;
+				--Delete from HOT
+				SQL_FOR_DELETE :='DELETE FROM "'||:TABLE_NAME_HOT||'" WHERE MANDT='||:MANDT||' AND ('||:CHILD_REF_COL||') IN (SELECT '||:PARENT_REF_COL||' FROM "'||:PARENT_TABLE_WARM||'" WHERE MANDT='||:MANDT||' AND TO_TIMESTAMP('||escape_single_quotes(:DATE_COLUMN_NAME)||') BETWEEN '||''''||:DATE_FROM||''''||' AND '||''''||:DATE_TO||''''||')';
+				EXECUTE IMMEDIATE :SQL_FOR_DELETE;
+			END IF;
+		END IF;
+	ELSE 
+		IF :IS_TM = 0 THEN 
+			IF :PARENT_FLAG = 1 THEN 
+				--Update execution_log for SUCCESS status & for DELETE operation
+				SQL_FOR_UPDATE_LOG :='UPDATE "sap.tm.trp.db.archive::t_archive_execution_log" SET RECORD_COUNT = (SELECT COUNT(1) FROM "'||:TABLE_NAME_WARM||'" WHERE TO_TIMESTAMP('||escape_single_quotes(:DATE_COLUMN_NAME)||') BETWEEN '||''''||:DATE_FROM||''''||' AND '||''''||:DATE_TO||''''||') WHERE ID = '||:EXE_LOG_SEQ;
+				EXECUTE IMMEDIATE :SQL_FOR_UPDATE_LOG;
+				--Delete from HOT
+				SQL_FOR_DELETE :='DELETE FROM "'||:TABLE_NAME_WARM||'" WHERE TO_TIMESTAMP('||escape_single_quotes(:DATE_COLUMN_NAME)||') BETWEEN '||''''||:DATE_FROM||''''||' AND '||''''||:DATE_TO||'''';
+				EXECUTE IMMEDIATE :SQL_FOR_DELETE;
+			ELSE 
+				--Update execution_log for SUCCESS status & for DELETE operation
+				SQL_FOR_UPDATE_LOG :='UPDATE "sap.tm.trp.db.archive::t_archive_execution_log" SET RECORD_COUNT = (SELECT COUNT(1) FROM "'||:TABLE_NAME_WARM||'" WHERE TO_TIMESTAMP('||escape_single_quotes(:DATE_COLUMN_NAME)||') BETWEEN '||''''||:DATE_FROM||''''||' AND '||''''||:DATE_TO||''''||') WHERE ID = '||:EXE_LOG_SEQ;
+				EXECUTE IMMEDIATE :SQL_FOR_UPDATE_LOG;
+				--Delete from WARM
+				SQL_FOR_DELETE :='DELETE FROM "'||:TABLE_NAME_WARM||'" WHERE TO_TIMESTAMP('||escape_single_quotes(:DATE_COLUMN_NAME)||') BETWEEN '||''''||:DATE_FROM||''''||' AND '||''''||:DATE_TO||'''';
+				EXECUTE IMMEDIATE :SQL_FOR_DELETE;
+			END IF;
+		ELSE 
+			IF :PARENT_FLAG = 1 THEN 
+				--Update execution_log for SUCCESS status & for DELETE operation
+				SQL_FOR_UPDATE_LOG :='UPDATE "sap.tm.trp.db.archive::t_archive_execution_log" SET RECORD_COUNT = (SELECT COUNT(1) FROM "'||:TABLE_NAME_WARM||'" WHERE MANDT='||:MANDT||' AND SUBSTR('||escape_single_quotes(:DATE_COLUMN_NAME)||',1,8) BETWEEN '||''''||escape_single_quotes(:DATE_FROM_TM)||''''||' AND '||''''||escape_single_quotes(:DATE_TO_TM)||''''||') WHERE ID = '||:EXE_LOG_SEQ;
+				EXECUTE IMMEDIATE :SQL_FOR_UPDATE_LOG;
+				--Delete from HOT
+				SQL_FOR_DELETE :='DELETE FROM "'||:TABLE_NAME_WARM||'" WHERE MANDT='||:MANDT||' AND SUBSTR('||escape_single_quotes(:DATE_COLUMN_NAME)||',1,8) BETWEEN '||''''||escape_single_quotes(:DATE_FROM_TM)||''''||' AND '||''''||escape_single_quotes(:DATE_TO_TM)||'''';
+				EXECUTE IMMEDIATE :SQL_FOR_DELETE;
+			ELSE 
+				--Update execution_log for SUCCESS status & for DELETE operation
+				SQL_FOR_UPDATE_LOG :='UPDATE "sap.tm.trp.db.archive::t_archive_execution_log" SET RECORD_COUNT = (SELECT COUNT(1) FROM "'||:TABLE_NAME_WARM||'" WHERE MANDT='||:MANDT||' AND SUBSTR('||escape_single_quotes(:DATE_COLUMN_NAME)||',1,8) BETWEEN '||''''||escape_single_quotes(:DATE_FROM_TM)||''''||' AND '||''''||escape_single_quotes(:DATE_TO_TM)||''''||') WHERE ID = '||:EXE_LOG_SEQ;
+				EXECUTE IMMEDIATE :SQL_FOR_UPDATE_LOG;
+				--Delete from WARM
+				SQL_FOR_DELETE :='DELETE FROM "'||:TABLE_NAME_WARM||'" WHERE MANDT='||:MANDT||' AND SUBSTR('||escape_single_quotes(:DATE_COLUMN_NAME)||',1,8) BETWEEN '||''''||escape_single_quotes(:DATE_FROM_TM)||''''||' AND '||''''||escape_single_quotes(:DATE_TO_TM)||'''';
+				EXECUTE IMMEDIATE :SQL_FOR_DELETE;
+			END IF;	
+		END IF;
+	END IF;
+	--Core Logic Ends Here
+	
+	--Update execution_log for SUCCESS status & for DELETE operation
+	SQL_FOR_UPDATE_LOG :='UPDATE "sap.tm.trp.db.archive::t_archive_execution_log" SET STATUS=1,END_TIME=CURRENT_UTCTIMESTAMP WHERE ID = '||:EXE_LOG_SEQ;
+	EXECUTE IMMEDIATE :SQL_FOR_UPDATE_LOG;
+END;

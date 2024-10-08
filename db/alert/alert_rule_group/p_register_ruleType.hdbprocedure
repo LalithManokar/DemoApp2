@@ -1,0 +1,63 @@
+PROCEDURE "SAP_TM_TRP"."sap.tm.trp.db.alert.alert_rule_group::p_register_ruleType"(
+    IN ALERT_RULE_TYPE_DESC VARCHAR(50),
+    IN DATA_OBJECT_FORMAT VARCHAR(200),
+    IN OBJECT_TYPE_NAME VARCHAR(50),
+    IN PROCEDURE_CONSTRAINT VARCHAR(100),
+    OUT SUCCESS_FLAG INTEGER 
+)
+    LANGUAGE SQLSCRIPT
+    SQL SECURITY INVOKER 
+    DEFAULT SCHEMA "SAP_TM_TRP"
+    AS
+BEGIN
+    DECLARE ALERT_RULE_TYPE_ID INTEGER;
+    DECLARE DATA_OBJECT_ID INTEGER;
+    DECLARE EXECUTE_CONTEXT_ID INTEGER;
+    DECLARE EXECUTE_CONTEXT_FORMAT VARCHAR(400);
+    DECLARE OBJECT_TYPE_ID INTEGER;
+
+    EXECUTE_CONTEXT_ID := '3';
+    EXECUTE_CONTEXT_FORMAT := 'THRESHOLD';
+    
+    --select MAX(T1.ALERT_RULE_TYPE_ID) + 1 into ALERT_RULE_TYPE_ID 
+    --from "sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_map_node_metaData" T1;
+    SELECT "sap.tm.trp.db.alert.alert_rule_group::s_alert_ruletype_map_node".NEXTVAL INTO ALERT_RULE_TYPE_ID
+    FROM DUMMY;
+    
+    DATA_OBJECT_ID := ALERT_RULE_TYPE_ID;
+    
+    select IFNULL(MAX(T1.ID),0) into OBJECT_TYPE_ID 
+    from "sap.tm.trp.db.objectregistration::t_object_type" T1
+    where T1.NAME = :OBJECT_TYPE_NAME;
+    
+    /*  select T1.ID into USER_ID
+        from "sap.tm.trp.db.systemmanagement.user::t_user" T1
+        where T1.USERNAME = SESSION_USER;
+    */
+     
+    insert into "sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_map_node_metaData" 
+    (
+           ALERT_RULE_TYPE_ID,
+           ALERT_RULE_TYPE_DESC,
+           DATA_OBJECT_ID,
+           DATA_OBJECT_FORMAT,
+           EXECUTE_CONTEXT_ID,
+           EXECUTE_CONTEXT_FORMAT,
+           OBJECT_TYPE_ID,
+           PROCEDURE_CONSTRAINT
+    )
+    values(ALERT_RULE_TYPE_ID,
+           ALERT_RULE_TYPE_DESC,
+           DATA_OBJECT_ID,
+           DATA_OBJECT_FORMAT,
+           EXECUTE_CONTEXT_ID,
+           EXECUTE_CONTEXT_FORMAT,
+           OBJECT_TYPE_ID,
+           PROCEDURE_CONSTRAINT
+          );
+          
+    select count(*) into SUCCESS_FLAG
+    from  "sap.tm.trp.db.alert.alert_rule_group::t_alert_ruleType_map_node_metaData" T1
+    where T1.PROCEDURE_CONSTRAINT = :PROCEDURE_CONSTRAINT;
+
+END;

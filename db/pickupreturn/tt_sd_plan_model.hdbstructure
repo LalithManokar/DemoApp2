@@ -1,0 +1,26 @@
+table.schemaName = "SAP_TM_TRP";
+table.tableType = COLUMNSTORE;
+table.description = "used for plan model api";
+table.columns = [
+    {name = "ID"; sqlType = BIGINT;},
+    {name = "NAME"; sqlType = VARCHAR; length = 200;},
+    {name = "DESC"; sqlType = VARCHAR; length = 500;},
+    {name = "PLAN_TYPE_ID"; sqlType = INTEGER;},
+    {name = "PLAN_TYPE_NAME"; sqlType = VARCHAR; length = 32;},
+    {name = "VISIBILITY"; sqlType = VARCHAR; length = 10;},
+    {name = "CREATED_BY"; sqlType = VARCHAR; length = 60;},
+    {name = "CREATED_TIME"; sqlType = TIMESTAMP;},
+    {name = "MODIFIED_BY"; sqlType = VARCHAR; length = 60;},
+    {name = "MODIFIED_TIME"; sqlType = TIMESTAMP;},
+    {name = "EQUIPMENT_FILTER_ID"; sqlType = BIGINT;},
+    {name = "EQUIPMENT_FILTER_NAME"; sqlType = VARCHAR; length = 50;},
+    {name = "LOCATION_FILTER_ID"; sqlType = BIGINT;},
+    {name = "LOCATION_FILTER_NAME"; sqlType = VARCHAR; length = 50;},
+    {name = "LOCATION_FILTER_TYPE"; sqlType = INTEGER;},
+    {name = "TIME_FILTER_ID"; sqlType = BIGINT;},
+    {name = "TIME_FILTER_NAME"; sqlType = VARCHAR; length = 50;},
+    {name = "CALCULATION_MODEL_ID"; sqlType = BIGINT;},
+    {name = "CALCULATION_MODEL_NAME"; sqlType = VARCHAR; length = 50;},
+    {name = "ALERT_RULE_GROUP_ID"; sqlType = BIGINT;},
+    {name = "ALERT_RULE_GROUP_NAME"; sqlType = VARCHAR; length = 50;}
+];
